@@ -1,8 +1,9 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { GameState } from '../GlassBeadGame';
+import { useAudio } from '../audio/AudioEngine';
+import { SynesthesiaVisualizer } from '../audio/SynesthesiaVisualizer';
 
 interface GameCanvasProps {
   disciplines: any[];
@@ -42,8 +43,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [syntheses, setSyntheses] = useState<any[]>([]);
+  const [activeFrequencies, setActiveFrequencies] = useState<number[]>([]);
+  
+  const { playDisciplineSound, playSynthesisSound, isAudioEnabled } = useAudio();
 
-  // Initialize nodes for selected disciplines
   useEffect(() => {
     if (gameState.selectedDisciplines.length > 0) {
       const newNodes: Node[] = gameState.selectedDisciplines.map((disciplineId, index) => {
@@ -64,19 +67,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [gameState.selectedDisciplines]);
 
-  // Animation loop
+  // Enhanced animation loop with audio integration
   useEffect(() => {
     if (!isPlaying) return;
 
     const animate = () => {
-      setNodes(prevNodes => 
-        prevNodes.map(node => ({
+      setNodes(prevNodes => {
+        const updatedNodes = prevNodes.map(node => ({
           ...node,
           energy: node.energy + (Math.random() - 0.5) * 2,
           resonance: Math.sin(Date.now() * 0.001 + node.x * 0.01) * 0.5 + 0.5,
           z: node.z + Math.sin(Date.now() * 0.001 + node.x * 0.01) * 2
-        }))
-      );
+        }));
+
+        // Update audio frequencies based on node energies
+        if (isAudioEnabled) {
+          const frequencies = updatedNodes.map(node => {
+            const baseDisciplineFreqs = {
+              mathematics: 261.63,
+              music: 220.00,
+              philosophy: 196.00,
+              physics: 174.61,
+              art: 146.83
+            };
+            const baseFreq = baseDisciplineFreqs[node.discipline as keyof typeof baseDisciplineFreqs] || 220;
+            return baseFreq * (1 + node.energy * 0.01);
+          });
+          setActiveFrequencies(frequencies);
+        }
+
+        return updatedNodes;
+      });
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -86,9 +107,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, isAudioEnabled]);
 
-  // Canvas drawing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -209,7 +229,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   }, [nodes, connections, selectedNode, syntheses, disciplines]);
 
-  // Handle canvas click
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -225,8 +244,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     });
 
     if (clickedNode) {
+      playDisciplineSound(clickedNode.discipline, clickedNode.energy / 100);
+      
       if (selectedNode && selectedNode !== clickedNode.id) {
-        // Create connection between selected node and clicked node
         const newConnection: Connection = {
           from: selectedNode,
           to: clickedNode.id,
@@ -235,14 +255,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         };
         setConnections(prev => [...prev, newConnection]);
 
-        // Create synthesis event
+        const fromNode = nodes.find(n => n.id === selectedNode);
         const synthesis = {
           text: 'Synthesis Achieved!',
-          x: (nodes.find(n => n.id === selectedNode)?.x || 0 + clickedNode.x) / 2,
-          y: (nodes.find(n => n.id === selectedNode)?.y || 0 + clickedNode.y) / 2,
+          x: (fromNode?.x || 0 + clickedNode.x) / 2,
+          y: (fromNode?.y || 0 + clickedNode.y) / 2,
           timestamp: Date.now()
         };
         setSyntheses(prev => [...prev, synthesis]);
+        
+        const involvedDisciplines = [fromNode?.discipline, clickedNode.discipline].filter(Boolean) as string[];
+        playSynthesisSound(involvedDisciplines, (fromNode?.resonance || 0 + clickedNode.resonance) / 2);
 
         setSelectedNode(null);
       } else {
@@ -253,7 +276,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
-  // Clean up old syntheses
   useEffect(() => {
     const interval = setInterval(() => {
       setSyntheses(prev => prev.filter(s => Date.now() - s.timestamp < 3000));
@@ -261,42 +283,54 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  const averageResonance = nodes.length > 0 ? 
+    nodes.reduce((sum, node) => sum + node.resonance, 0) / nodes.length : 0;
+
   return (
-    <Card className="bg-gray-900 border-gray-700 p-4 h-[600px]">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-white">Synthesis Space</h3>
-        <div className="flex gap-2">
-          <Badge variant="outline" className="border-blue-400 text-blue-400">
-            {nodes.length} Active Nodes
-          </Badge>
-          <Badge variant="outline" className="border-green-400 text-green-400">
-            {connections.length} Connections
-          </Badge>
+    <div className="space-y-4">
+      <Card className="bg-gray-900 border-gray-700 p-4 h-[400px]">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-white">Synthesis Space</h3>
+          <div className="flex gap-2">
+            <Badge variant="outline" className="border-blue-400 text-blue-400">
+              {nodes.length} Active Nodes
+            </Badge>
+            <Badge variant="outline" className="border-green-400 text-green-400">
+              {connections.length} Connections
+            </Badge>
+          </div>
         </div>
-      </div>
-      
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full bg-gradient-to-br from-indigo-950 to-purple-950 rounded-lg cursor-crosshair"
-        onClick={handleCanvasClick}
-        onMouseMove={(e) => {
-          const rect = canvasRef.current?.getBoundingClientRect();
-          if (rect) {
-            setMousePos({
-              x: e.clientX - rect.left,
-              y: e.clientY - rect.top
-            });
-          }
-        }}
+        
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full bg-gradient-to-br from-indigo-950 to-purple-950 rounded-lg cursor-crosshair"
+          onClick={handleCanvasClick}
+          onMouseMove={(e) => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) {
+              setMousePos({
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+              });
+            }
+          }}
+        />
+        
+        {selectedNode && (
+          <div className="absolute top-4 right-4 bg-gray-800 p-2 rounded-lg border border-gray-600">
+            <p className="text-sm text-gray-300">
+              Click another node to create a synthesis
+            </p>
+          </div>
+        )}
+      </Card>
+
+      <SynesthesiaVisualizer
+        activeFrequencies={activeFrequencies}
+        resonanceLevel={averageResonance}
+        disciplines={gameState.selectedDisciplines}
+        className="h-[200px]"
       />
-      
-      {selectedNode && (
-        <div className="absolute top-4 right-4 bg-gray-800 p-2 rounded-lg border border-gray-600">
-          <p className="text-sm text-gray-300">
-            Click another node to create a synthesis
-          </p>
-        </div>
-      )}
-    </Card>
+    </div>
   );
 };

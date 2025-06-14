@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { useAudio } from '../audio/AudioEngine';
 
 interface DisciplinePanelProps {
   selectedDisciplines: string[];
@@ -16,6 +17,7 @@ export const DisciplinePanel: React.FC<DisciplinePanelProps> = ({
   disciplines,
   onDisciplineInteract
 }) => {
+  const { playDisciplineSound } = useAudio();
   const activeDisciplines = disciplines.filter(d => selectedDisciplines.includes(d.id));
 
   const getDisciplineData = (disciplineId: string) => {
@@ -52,6 +54,12 @@ export const DisciplinePanel: React.FC<DisciplinePanelProps> = ({
       }
     };
     return baseData[disciplineId as keyof typeof baseData] || baseData.mathematics;
+  };
+
+  const handleModulateField = (disciplineId: string) => {
+    const data = getDisciplineData(disciplineId);
+    playDisciplineSound(disciplineId, data.energy / 100);
+    onDisciplineInteract(disciplineId);
   };
 
   return (
@@ -114,7 +122,7 @@ export const DisciplinePanel: React.FC<DisciplinePanelProps> = ({
                 variant="outline" 
                 size="sm" 
                 className="w-full mt-3 border-gray-600 text-gray-300 hover:bg-gray-700"
-                onClick={() => onDisciplineInteract(discipline.id)}
+                onClick={() => handleModulateField(discipline.id)}
               >
                 Modulate Field
               </Button>
