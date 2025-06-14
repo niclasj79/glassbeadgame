@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { useAudio } from './AudioEngine';
-import { Volume2, VolumeX, Music, Headphones } from 'lucide-react';
+import { Volume2, VolumeX, Music, Headphones, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface AudioControlsProps {
   className?: string;
@@ -22,6 +22,7 @@ export const AudioControls: React.FC<AudioControlsProps> = ({ className = '' }) 
   
   const [volume, setVolume] = useState([30]);
   const [activeAmbients, setActiveAmbients] = useState<string[]>([]);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   const handleVolumeChange = (newVolume: number[]) => {
     setVolume(newVolume);
@@ -45,80 +46,79 @@ export const AudioControls: React.FC<AudioControlsProps> = ({ className = '' }) 
   ];
 
   return (
-    <Card className={`bg-gray-800 border-gray-700 p-4 ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Headphones className="w-5 h-5" />
-          Synesthetic Audio
-        </h3>
-        <Badge variant={isAudioEnabled ? "default" : "secondary"}>
-          {isAudioEnabled ? 'Active' : 'Inactive'}
-        </Badge>
-      </div>
-
-      <div className="space-y-4">
-        {/* Master Controls */}
-        <div className="flex items-center gap-4">
+    <div className={`fixed bottom-4 right-4 z-50 ${className}`}>
+      <Card className="bg-gray-800/90 backdrop-blur border-gray-700">
+        {/* Collapsed Header */}
+        <div className="flex items-center justify-between p-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={isAudioEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={toggleAudio}
+              className={isAudioEnabled ? "bg-green-600 hover:bg-green-700" : "border-gray-600"}
+            >
+              {isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+            <Badge variant={isAudioEnabled ? "default" : "secondary"} className="text-xs">
+              {isAudioEnabled ? 'ON' : 'OFF'}
+            </Badge>
+          </div>
           <Button
-            variant={isAudioEnabled ? "default" : "outline"}
-            onClick={toggleAudio}
-            className={isAudioEnabled ? "bg-green-600 hover:bg-green-700" : "border-gray-600"}
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-gray-400 hover:text-white"
           >
-            {isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </Button>
-          
-          <div className="flex-1">
-            <label className="text-sm text-gray-400 mb-1 block">
-              Master Volume: {volume[0]}%
-            </label>
-            <Slider
-              value={volume}
-              onValueChange={handleVolumeChange}
-              max={100}
-              step={1}
-              disabled={!isAudioEnabled}
-              className="w-full"
-            />
-          </div>
         </div>
 
-        {/* Ambient Layers */}
-        <div>
-          <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-            <Music className="w-4 h-4" />
-            Ambient Layers
-          </h4>
-          <div className="grid grid-cols-1 gap-2">
-            {ambientLayers.map(layer => (
-              <Button
-                key={layer.id}
-                variant={activeAmbients.includes(layer.id) ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleAmbientLayer(layer.id)}
+        {/* Expanded Controls */}
+        {!isCollapsed && (
+          <div className="px-3 pb-3 space-y-3 border-t border-gray-700 pt-3">
+            {/* Volume Control */}
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">
+                Volume: {volume[0]}%
+              </label>
+              <Slider
+                value={volume}
+                onValueChange={handleVolumeChange}
+                max={100}
+                step={1}
                 disabled={!isAudioEnabled}
-                className={`justify-start text-left ${
-                  activeAmbients.includes(layer.id) 
-                    ? 'bg-purple-600 hover:bg-purple-700' 
-                    : 'border-gray-600 text-gray-300'
-                }`}
-              >
-                <div>
-                  <div className="font-medium">{layer.name}</div>
-                  <div className="text-xs text-gray-400">{layer.description}</div>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </div>
+                className="w-full"
+              />
+            </div>
 
-        {/* Audio Status */}
-        <div className="text-xs text-gray-400 text-center pt-2 border-t border-gray-700">
-          {isAudioEnabled 
-            ? `${activeAmbients.length} ambient layers active`
-            : 'Click to enable synesthetic audio experience'
-          }
-        </div>
-      </div>
-    </Card>
+            {/* Ambient Layers */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-300 mb-2 flex items-center gap-1">
+                <Music className="w-3 h-3" />
+                Ambient Layers
+              </h4>
+              <div className="space-y-1">
+                {ambientLayers.map(layer => (
+                  <Button
+                    key={layer.id}
+                    variant={activeAmbients.includes(layer.id) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleAmbientLayer(layer.id)}
+                    disabled={!isAudioEnabled}
+                    className={`w-full text-xs ${
+                      activeAmbients.includes(layer.id) 
+                        ? 'bg-purple-600 hover:bg-purple-700' 
+                        : 'border-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {layer.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 };

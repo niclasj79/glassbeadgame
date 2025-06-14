@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { AudioProvider } from './audio/AudioEngine';
-import { GameControls, ActionButtons } from './game/GameControls';
-import { DisciplineSelector } from './game/DisciplineSelector';
-import { GameTabs } from './game/GameTabs';
-import { TheoreticalDepth } from './game/TheoreticalDepth';
+import { SessionStartFlow } from './game/SessionStartFlow';
+import { SphericalArena } from './game/SphericalArena';
+import { AIInterpretation } from './game/AIInterpretation';
+import { conceptGenerator, Concept } from './game/ConceptGenerator';
 
 export interface GameState {
   activePlayer: string;
@@ -23,17 +21,16 @@ export interface Player {
 }
 
 export const GlassBeadGame: React.FC = () => {
-  const [gameState, setGameState] = useState<GameState>({
-    activePlayer: 'player1',
-    selectedDisciplines: [],
-    currentSynthesis: null,
-    collaborators: [],
-    explorationDepth: 0
+  const [gamePhase, setGamePhase] = useState<'start' | 'arena' | 'interpretation'>('start');
+  const [sessionData, setSessionData] = useState({
+    disciplines: [],
+    concepts: [],
+    interactions: [],
+    duration: 0,
+    sessionType: 'exploration'
   });
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [activeTab, setActiveTab] = useState('play');
-  const [showDepth, setShowDepth] = useState(false);
+  const [currentConcepts, setCurrentConcepts] = useState<Concept[]>([]);
+  const [startTime, setStartTime] = useState<number>(0);
 
   const disciplines = [
     { id: 'mathematics', name: 'Mathematics', color: '#3B82F6', icon: '∑' },
@@ -44,76 +41,91 @@ export const GlassBeadGame: React.FC = () => {
     { id: 'history', name: 'History & Politics', color: '#06B6D4', icon: '⚖' }
   ];
 
-  const handleDisciplineSelect = (disciplineId: string) => {
-    setGameState(prev => ({
+  const handleSessionStart = (selectedDisciplines: string[], sessionType: string) => {
+    const concepts = conceptGenerator.generateConcepts(selectedDisciplines, 15);
+    setCurrentConcepts(concepts);
+    setSessionData(prev => ({
       ...prev,
-      selectedDisciplines: prev.selectedDisciplines.includes(disciplineId)
-        ? prev.selectedDisciplines.filter(id => id !== disciplineId)
-        : [...prev.selectedDisciplines, disciplineId]
+      disciplines: selectedDisciplines,
+      concepts,
+      sessionType,
+      interactions: []
     }));
+    setStartTime(Date.now());
+    setGamePhase('arena');
   };
 
-  const startGame = () => {
-    setIsPlaying(true);
-    setActiveTab('play');
+  const handleConceptInteraction = (conceptId: string, action: string) => {
+    const interaction = {
+      conceptId,
+      action,
+      timestamp: Date.now() - startTime
+    };
+    
+    setSessionData(prev => ({
+      ...prev,
+      interactions: [...prev.interactions, interaction]
+    }));
+
+    // Update concept energy based on interaction
+    setCurrentConcepts(prev => prev.map(concept => 
+      concept.id === conceptId 
+        ? { ...concept, energy: Math.min(1, concept.energy + 0.1) }
+        : concept
+    ));
   };
 
-  const toggleDepth = () => {
-    setShowDepth(!showDepth);
+  const handleSessionEnd = () => {
+    const duration = Math.floor((Date.now() - startTime) / 1000);
+    setSessionData(prev => ({
+      ...prev,
+      duration
+    }));
+    setGamePhase('interpretation');
+  };
+
+  const handleNewSession = () => {
+    setGamePhase('start');
+    setSessionData({
+      disciplines: [],
+      concepts: [],
+      interactions: [],
+      duration: 0,
+      sessionType: 'exploration'
+    });
+    setCurrentConcepts([]);
+  };
+
+  const handleBackToMenu = () => {
+    setGamePhase('start');
   };
 
   return (
     <AudioProvider>
-      <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white">
-        {/* Header */}
-        <div className="relative z-10 p-6">
-          <GameControls 
-            gameState={gameState}
-            onStartGame={startGame}
-            onToggleDepth={toggleDepth}
-          />
-
-          <DisciplineSelector 
+      <div className="min-h-screen">
+        {gamePhase === 'start' && (
+          <SessionStartFlow
             disciplines={disciplines}
-            selectedDisciplines={gameState.selectedDisciplines}
-            onDisciplineSelect={handleDisciplineSelect}
+            onSessionStart={handleSessionStart}
           />
-
-          <ActionButtons 
-            selectedDisciplines={gameState.selectedDisciplines}
-            onStartGame={startGame}
-            onToggleDepth={toggleDepth}
+        )}
+        
+        {gamePhase === 'arena' && (
+          <SphericalArena
+            disciplines={disciplines}
+            selectedDisciplines={sessionData.disciplines}
+            concepts={currentConcepts}
+            onConceptInteraction={handleConceptInteraction}
+            onSessionEnd={handleSessionEnd}
           />
-        </div>
-
-        {/* Main Game Interface */}
-        <GameTabs 
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          gameState={gameState}
-          onStateChange={setGameState}
-          disciplines={disciplines}
-          isPlaying={isPlaying}
-          onDisciplineSelect={handleDisciplineSelect}
-        />
-
-        {/* Theoretical Depth Overlay */}
-        {showDepth && (
-          <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-6">
-            <div className="bg-gray-900 rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Theoretical Foundations</h2>
-                <Button variant="outline" onClick={() => setShowDepth(false)}>
-                  Close
-                </Button>
-              </div>
-              <TheoreticalDepth 
-                disciplines={disciplines}
-                selectedDisciplines={gameState.selectedDisciplines}
-                explorationDepth={gameState.explorationDepth}
-              />
-            </div>
-          </div>
+        )}
+        
+        {gamePhase === 'interpretation' && (
+          <AIInterpretation
+            sessionData={sessionData}
+            onNewSession={handleNewSession}
+            onBackToMenu={handleBackToMenu}
+          />
         )}
       </div>
     </AudioProvider>
