@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Play, Users, Book, Sparkles, Headphones } from 'lucide-react';
+import { Play, Users, Book, Sparkles, Headphones, History } from 'lucide-react';
 
 export interface GameState {
   activePlayer: string;
@@ -46,7 +46,8 @@ export const GlassBeadGame: React.FC = () => {
     { id: 'music', name: 'Music Theory', color: '#10B981', icon: '♪' },
     { id: 'philosophy', name: 'Philosophy', color: '#8B5CF6', icon: 'Φ' },
     { id: 'physics', name: 'Physics', color: '#F59E0B', icon: 'Ψ' },
-    { id: 'art', name: 'Visual Arts', color: '#EF4444', icon: '◊' }
+    { id: 'art', name: 'Visual Arts', color: '#EF4444', icon: '◊' },
+    { id: 'history', name: 'History & Politics', color: '#06B6D4', icon: '⚖' }
   ];
 
   const handleDisciplineSelect = (disciplineId: string) => {
@@ -87,28 +88,31 @@ export const GlassBeadGame: React.FC = () => {
             </div>
           </div>
 
-          {/* Discipline Selection */}
+          {/* Enhanced Discipline Selection */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-3">Select Knowledge Domains</h3>
-            <div className="flex flex-wrap gap-3">
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Book className="w-5 h-5" />
+              Select Knowledge Domains
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {disciplines.map(discipline => (
                 <Card 
                   key={discipline.id}
                   className={`p-4 cursor-pointer transition-all duration-300 hover:scale-105 ${
                     gameState.selectedDisciplines.includes(discipline.id)
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 border-2 border-white'
-                      : 'bg-gray-800 hover:bg-gray-700'
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 border-2 border-white shadow-lg'
+                      : 'bg-gray-800 hover:bg-gray-700 border border-gray-600'
                   }`}
                   onClick={() => handleDisciplineSelect(discipline.id)}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="text-center">
                     <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold mx-auto mb-2"
                       style={{ backgroundColor: discipline.color }}
                     >
                       {discipline.icon}
                     </div>
-                    <span className="font-medium">{discipline.name}</span>
+                    <span className="text-sm font-medium">{discipline.name}</span>
                   </div>
                 </Card>
               ))}

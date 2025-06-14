@@ -23,31 +23,37 @@ export const DisciplinePanel: React.FC<DisciplinePanelProps> = ({
   const getDisciplineData = (disciplineId: string) => {
     const baseData = {
       mathematics: {
-        concepts: ['Topology', 'Group Theory', 'Category Theory', 'Fractals'],
+        concepts: ['Topology', 'Group Theory', 'Category Theory', 'Fractals', 'Number Theory'],
         energy: Math.random() * 100,
         resonance: Math.random() * 100,
         connections: Math.floor(Math.random() * 10)
       },
       music: {
-        concepts: ['Harmonic Series', 'Counterpoint', 'Spectral Analysis', 'Rhythmic Patterns'],
+        concepts: ['Harmonic Series', 'Counterpoint', 'Spectral Analysis', 'Rhythmic Patterns', 'Tonal Systems'],
         energy: Math.random() * 100,
         resonance: Math.random() * 100,
         connections: Math.floor(Math.random() * 10)
       },
       philosophy: {
-        concepts: ['Phenomenology', 'Dialectics', 'Hermeneutics', 'Ontology'],
+        concepts: ['Phenomenology', 'Dialectics', 'Hermeneutics', 'Ontology', 'Ethics'],
         energy: Math.random() * 100,
         resonance: Math.random() * 100,
         connections: Math.floor(Math.random() * 10)
       },
       physics: {
-        concepts: ['Quantum Mechanics', 'Relativity', 'Thermodynamics', 'Field Theory'],
+        concepts: ['Quantum Mechanics', 'Relativity', 'Thermodynamics', 'Field Theory', 'Particle Physics'],
         energy: Math.random() * 100,
         resonance: Math.random() * 100,
         connections: Math.floor(Math.random() * 10)
       },
       art: {
-        concepts: ['Color Theory', 'Composition', 'Perspective', 'Symbolism'],
+        concepts: ['Color Theory', 'Composition', 'Perspective', 'Symbolism', 'Art History'],
+        energy: Math.random() * 100,
+        resonance: Math.random() * 100,
+        connections: Math.floor(Math.random() * 10)
+      },
+      history: {
+        concepts: ['Political Theory', 'Social Movements', 'Governance', 'Cultural Evolution', 'Historical Patterns'],
         energy: Math.random() * 100,
         resonance: Math.random() * 100,
         connections: Math.floor(Math.random() * 10)

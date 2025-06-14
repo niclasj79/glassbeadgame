@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 interface AudioContextType {
@@ -85,7 +84,8 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
       music: [220.00, 277.18, 330.00], // A-C#-E major triad
       philosophy: [196.00, 246.94, 293.66], // G-B-D major triad
       physics: [174.61, 220.00, 261.63], // F-A-C major triad
-      art: [146.83, 185.00, 220.00] // D-F#-A major triad
+      art: [146.83, 185.00, 220.00], // D-F#-A major triad
+      history: [130.81, 164.81, 196.00] // C-E-G lower octave
     };
     return frequencies[disciplineId as keyof typeof frequencies] || frequencies.mathematics;
   };
