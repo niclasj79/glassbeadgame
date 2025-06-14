@@ -3,18 +3,17 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Play, Shuffle, Clock, ArrowRight, Sparkles } from 'lucide-react';
+import { Play, Shuffle, ArrowRight, Sparkles } from 'lucide-react';
 
 interface SessionStartFlowProps {
   disciplines: any[];
-  onSessionStart: (selectedDisciplines: string[], sessionType: string) => void;
+  onSessionStart: (selectedDisciplines: string[], conceptCount: number) => void;
 }
 
 export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   disciplines,
   onSessionStart
 }) => {
-  const [timeLeft, setTimeLeft] = useState(30);
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
   const [suggestedCombinations, setSuggestedCombinations] = useState<string[][]>([]);
   const [phase, setPhase] = useState<'disciplines' | 'concepts'>('disciplines');
@@ -30,13 +29,6 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     setSuggestedCombinations(combinations);
   }, [disciplines]);
 
-  useEffect(() => {
-    if (timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [timeLeft]);
-
   const handleQuickSelect = (combination: string[]) => {
     setSelectedDisciplines(combination);
     setPhase('concepts');
@@ -48,7 +40,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     const randomDisciplines = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
     const randomConceptCount = 10 + Math.floor(Math.random() * 11); // 10-20 concepts
     
-    onSessionStart(randomDisciplines.map(d => d.id), 'exploration');
+    onSessionStart(randomDisciplines.map(d => d.id), randomConceptCount);
   };
 
   const handleCustomStart = () => {
@@ -56,13 +48,13 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       if (phase === 'disciplines') {
         setPhase('concepts');
       } else {
-        onSessionStart(selectedDisciplines, 'exploration');
+        onSessionStart(selectedDisciplines, conceptCount);
       }
     }
   };
 
   const handleStartWithConcepts = () => {
-    onSessionStart(selectedDisciplines, 'exploration');
+    onSessionStart(selectedDisciplines, conceptCount);
   };
 
   const toggleDiscipline = (disciplineId: string) => {
@@ -164,11 +156,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
             Choose Your Disciplines
           </h1>
-          <div className="flex items-center justify-center gap-2 text-amber-400">
-            <Clock className="w-5 h-5" />
-            <span className="text-2xl font-mono">{timeLeft}s</span>
-          </div>
-          <p className="text-gray-300 mt-2">Select disciplines to explore their interconnections</p>
+          <p className="text-gray-300">Select disciplines to explore their interconnections</p>
         </div>
 
         {/* Surprise Me Option */}
