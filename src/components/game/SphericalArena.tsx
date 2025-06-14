@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,16 @@ interface Concept {
   energy: number;
   connections: string[];
 }
+
+// Helper function to convert hex color to RGB
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 0, g: 0, b: 0 };
+};
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -167,10 +176,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         const alpha = Math.max(0.3, projected.scale);
         const size = 8 + concept.energy * 4 * projected.scale;
         
+        // Convert hex color to RGB for proper alpha handling
+        const rgb = hexToRgb(discipline.color);
+        
         // Concept glow
         const gradient = ctx.createRadialGradient(projected.x, projected.y, 0, projected.x, projected.y, size * 2);
-        gradient.addColorStop(0, `${discipline.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(1, `${discipline.color}00`);
+        gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`);
+        gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
         
         ctx.fillStyle = gradient;
         ctx.beginPath();
