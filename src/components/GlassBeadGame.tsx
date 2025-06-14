@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AudioProvider } from './audio/AudioEngine';
 import { SessionStartFlow } from './game/SessionStartFlow';
@@ -41,14 +42,14 @@ export const GlassBeadGame: React.FC = () => {
     { id: 'history', name: 'History & Politics', color: '#06B6D4', icon: '⚖' }
   ];
 
-  const handleSessionStart = (selectedDisciplines: string[], sessionType: string) => {
-    const concepts = conceptGenerator.generateConcepts(selectedDisciplines, 15);
+  const handleSessionStart = (selectedDisciplines: string[], conceptCount: number = 15) => {
+    const concepts = conceptGenerator.generateConcepts(selectedDisciplines, conceptCount);
     setCurrentConcepts(concepts);
     setSessionData(prev => ({
       ...prev,
       disciplines: selectedDisciplines,
       concepts,
-      sessionType,
+      sessionType: 'exploration',
       interactions: []
     }));
     setStartTime(Date.now());

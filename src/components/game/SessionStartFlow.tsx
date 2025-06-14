@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Play, Shuffle, Clock } from 'lucide-react';
+import { Play, Shuffle, Clock, ArrowRight, Sparkles } from 'lucide-react';
 
 interface SessionStartFlowProps {
   disciplines: any[];
@@ -17,7 +17,8 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   const [timeLeft, setTimeLeft] = useState(30);
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
   const [suggestedCombinations, setSuggestedCombinations] = useState<string[][]>([]);
-  const [sessionType, setSessionType] = useState<string>('exploration');
+  const [phase, setPhase] = useState<'disciplines' | 'concepts'>('disciplines');
+  const [conceptCount, setConceptCount] = useState(12);
 
   useEffect(() => {
     // Generate 3 random discipline combinations
@@ -38,13 +39,30 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
 
   const handleQuickSelect = (combination: string[]) => {
     setSelectedDisciplines(combination);
-    onSessionStart(combination, sessionType);
+    setPhase('concepts');
+  };
+
+  const handleSurpriseMe = () => {
+    // Randomly select 2-4 disciplines
+    const shuffled = [...disciplines].sort(() => 0.5 - Math.random());
+    const randomDisciplines = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
+    const randomConceptCount = 10 + Math.floor(Math.random() * 11); // 10-20 concepts
+    
+    onSessionStart(randomDisciplines.map(d => d.id), 'exploration');
   };
 
   const handleCustomStart = () => {
     if (selectedDisciplines.length > 0) {
-      onSessionStart(selectedDisciplines, sessionType);
+      if (phase === 'disciplines') {
+        setPhase('concepts');
+      } else {
+        onSessionStart(selectedDisciplines, 'exploration');
+      }
     }
+  };
+
+  const handleStartWithConcepts = () => {
+    onSessionStart(selectedDisciplines, 'exploration');
   };
 
   const toggleDiscipline = (disciplineId: string) => {
@@ -55,119 +73,189 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     );
   };
 
-  const sessionTypes = [
-    { id: 'exploration', name: 'Exploration', description: 'Free-form discovery' },
-    { id: 'synthesis', name: 'Synthesis', description: 'Focused connection-making' },
-    { id: 'improvisation', name: 'Improvisation', description: 'Spontaneous expression' }
-  ];
+  const handleBack = () => {
+    setPhase('disciplines');
+    setSelectedDisciplines([]);
+  };
+
+  if (phase === 'concepts') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
+        <Card className="bg-gray-900 border-gray-700 p-8 max-w-2xl w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
+              How Many Concepts?
+            </h1>
+            <p className="text-gray-300">Choose the number of concepts to explore</p>
+          </div>
+
+          {/* Selected Disciplines Display */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3">Selected Disciplines</h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {selectedDisciplines.map(disciplineId => {
+                const discipline = disciplines.find(d => d.id === disciplineId);
+                return discipline ? (
+                  <Badge 
+                    key={disciplineId}
+                    style={{ backgroundColor: discipline.color }}
+                    className="text-white px-3 py-1"
+                  >
+                    {discipline.icon} {discipline.name}
+                  </Badge>
+                ) : null;
+              })}
+            </div>
+          </div>
+
+          {/* Concept Count Selection */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <Button
+                variant="outline"
+                onClick={() => setConceptCount(Math.max(8, conceptCount - 2))}
+                className="border-gray-600"
+              >
+                -
+              </Button>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-400">{conceptCount}</div>
+                <div className="text-sm text-gray-400">concepts</div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setConceptCount(Math.min(25, conceptCount + 2))}
+                className="border-gray-600"
+              >
+                +
+              </Button>
+            </div>
+            <div className="text-center text-sm text-gray-400">
+              {conceptCount < 12 ? 'Focused exploration' : 
+               conceptCount < 18 ? 'Balanced discovery' : 'Rich complexity'}
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-4">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              className="border-gray-600"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleStartWithConcepts}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Enter the Arena
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
       <Card className="bg-gray-900 border-gray-700 p-8 max-w-4xl w-full">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
-            Begin Your Synthesis
+            Choose Your Disciplines
           </h1>
           <div className="flex items-center justify-center gap-2 text-amber-400">
             <Clock className="w-5 h-5" />
             <span className="text-2xl font-mono">{timeLeft}s</span>
           </div>
-          <p className="text-gray-300 mt-2">Quick decisions lead to unexpected discoveries</p>
+          <p className="text-gray-300 mt-2">Select disciplines to explore their interconnections</p>
         </div>
 
-        {/* Session Type Selection */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4">Choose Your Approach</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {sessionTypes.map(type => (
-              <Button
-                key={type.id}
-                variant={sessionType === type.id ? "default" : "outline"}
-                onClick={() => setSessionType(type.id)}
-                className={`p-4 h-auto flex flex-col ${
-                  sessionType === type.id 
-                    ? 'bg-purple-600 hover:bg-purple-700' 
-                    : 'border-gray-600'
-                }`}
-              >
-                <div className="font-medium">{type.name}</div>
-                <div className="text-xs text-gray-400">{type.description}</div>
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Combinations */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Shuffle className="w-5 h-5" />
-            Instant Combinations
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {suggestedCombinations.map((combination, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                onClick={() => handleQuickSelect(combination)}
-                className="p-4 h-auto border-gray-600 hover:border-purple-400 hover:bg-purple-900/20"
-              >
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {combination.map(disciplineId => {
-                    const discipline = disciplines.find(d => d.id === disciplineId);
-                    return discipline ? (
-                      <Badge 
-                        key={disciplineId}
-                        style={{ backgroundColor: discipline.color }}
-                        className="text-white"
-                      >
-                        {discipline.icon} {discipline.name}
-                      </Badge>
-                    ) : null;
-                  })}
-                </div>
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Custom Selection */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4">Or Build Your Own</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-            {disciplines.map(discipline => (
-              <Button
-                key={discipline.id}
-                variant={selectedDisciplines.includes(discipline.id) ? "default" : "outline"}
-                onClick={() => toggleDiscipline(discipline.id)}
-                className={`p-2 h-auto text-xs ${
-                  selectedDisciplines.includes(discipline.id)
-                    ? 'bg-purple-600 hover:bg-purple-700'
-                    : 'border-gray-600'
-                }`}
-              >
-                <div className="text-center">
-                  <div 
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold mx-auto mb-1"
-                    style={{ backgroundColor: discipline.color }}
-                  >
-                    {discipline.icon}
-                  </div>
-                  <span>{discipline.name}</span>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex justify-center">
+        {/* Surprise Me Option */}
+        <div className="mb-8 text-center">
           <Button
-            onClick={handleCustomStart}
-            disabled={selectedDisciplines.length === 0}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8 py-3"
+            onClick={handleSurpriseMe}
+            className="bg-gradient-to-r from-pink-600 to-orange-600 hover:from-pink-700 hover:to-orange-700 px-8 py-4 text-lg"
           >
-            <Play className="w-4 h-4 mr-2" />
-            Enter the Arena
+            <Sparkles className="w-5 h-5 mr-2" />
+            I'm feeling serendipitous. Surprise me!
           </Button>
+          <p className="text-sm text-gray-400 mt-2">Let chance guide your exploration</p>
+        </div>
+
+        <div className="border-t border-gray-700 pt-8">
+          {/* Quick Combinations */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Shuffle className="w-5 h-5" />
+              Quick Combinations
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {suggestedCombinations.map((combination, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  onClick={() => handleQuickSelect(combination)}
+                  className="p-4 h-auto border-gray-600 hover:border-purple-400 hover:bg-purple-900/20"
+                >
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {combination.map(disciplineId => {
+                      const discipline = disciplines.find(d => d.id === disciplineId);
+                      return discipline ? (
+                        <Badge 
+                          key={disciplineId}
+                          style={{ backgroundColor: discipline.color }}
+                          className="text-white"
+                        >
+                          {discipline.icon} {discipline.name}
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Selection */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-4">Or Build Your Own</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              {disciplines.map(discipline => (
+                <Button
+                  key={discipline.id}
+                  variant={selectedDisciplines.includes(discipline.id) ? "default" : "outline"}
+                  onClick={() => toggleDiscipline(discipline.id)}
+                  className={`p-2 h-auto text-xs ${
+                    selectedDisciplines.includes(discipline.id)
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'border-gray-600'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div 
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold mx-auto mb-1"
+                      style={{ backgroundColor: discipline.color }}
+                    >
+                      {discipline.icon}
+                    </div>
+                    <span>{discipline.name}</span>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <Button
+              onClick={handleCustomStart}
+              disabled={selectedDisciplines.length === 0}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8 py-3"
+            >
+              <ArrowRight className="w-4 h-4 mr-2" />
+              Next: Choose Concepts
+            </Button>
+          </div>
         </div>
       </Card>
     </div>
