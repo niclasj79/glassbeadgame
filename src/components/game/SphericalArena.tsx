@@ -1,16 +1,11 @@
 
-import React, { useRef, useEffect, useState } from 'react';
-import { useAudio } from '../audio/AudioEngine';
+import React, { useState, useEffect } from 'react';
 import { CanvasRenderer } from './arena/CanvasRenderer';
-import { SessionInfo } from './arena/SessionInfo';
-import { HesseInsights } from './arena/HesseInsights';
+import { SessionHeader } from './arena/SessionHeader';
+import { BottomUI } from './arena/BottomUI';
 import { SphericalArenaProps } from './arena/types';
-import { useMovementTracking } from './arena/hooks/useMovementTracking';
-import { useTextGeneration } from './arena/hooks/useTextGeneration';
-import { useSessionTimer } from './arena/hooks/useSessionTimer';
-import { Button } from '@/components/ui/button';
-import { Clock, AlertCircle, ChevronUp, ChevronDown, BookOpen } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useSessionManagement } from './arena/hooks/useSessionManagement';
+import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -21,67 +16,36 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
-  const [concepts, setConcepts] = useState(initialConcepts);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [startTime] = useState(Date.now());
-  const [insightsExpanded, setInsightsExpanded] = useState(false);
-  const isDraggingRef = useRef(false);
-  const isMobile = useIsMobile();
-  
-  const { playDisciplineSound } = useAudio();
 
-  // Session management hooks with optimized movement tracking
-  const { sessionTime, remainingTime, isExpired, formatTime } = useSessionTimer(startTime, false);
-  const { updateConceptMovement, allConceptsStable, cleanup: cleanupMovement } = useMovementTracking(sessionId, concepts);
-  const { currentInsight, isGenerating, error, generateInsights } = useTextGeneration(sessionId);
+  // Session management
+  const {
+    sessionId,
+    concepts,
+    setConcepts,
+    remainingTime,
+    formatTime,
+    updateConceptMovement,
+    currentInsight,
+    isGenerating,
+    error,
+    cleanupMovement
+  } = useSessionManagement(initialConcepts, onSessionEnd);
 
-  // Generate session ID on mount
-  useEffect(() => {
-    const newSessionId = crypto.randomUUID();
-    setSessionId(newSessionId);
-    console.log('Created new session:', newSessionId);
-  }, []);
+  // Concept interactions
+  const { handleConceptClick, handleConceptMove } = useConceptInteractions(
+    concepts,
+    disciplines,
+    onConceptInteraction
+  );
 
-  // Update concepts when initial concepts change
-  useEffect(() => {
-    setConcepts(initialConcepts);
-  }, [initialConcepts]);
-
-  // Auto-end session when expired
-  useEffect(() => {
-    if (isExpired) {
-      console.log('Session expired, ending...');
-      // Cleanup before ending
-      cleanupMovement();
-      onSessionEnd();
-    }
-  }, [isExpired, onSessionEnd, cleanupMovement]);
-
-  // Generate insights when all concepts are stable
-  useEffect(() => {
-    if (allConceptsStable && concepts.length > 0 && sessionId) {
-      console.log('All concepts stable for 20 seconds, generating insights...');
-      generateInsights(concepts);
-    }
-  }, [allConceptsStable, concepts, generateInsights, sessionId]);
-
-  const handleConceptClick = (conceptId: string) => {
+  // Enhanced concept click handler
+  const enhancedConceptClick = (conceptId: string) => {
     setSelectedConcept(conceptId);
-    onConceptInteraction(conceptId, 'select');
-    
-    // Only play audio for clicks, not during dragging
-    if (!isDraggingRef.current) {
-      const concept = concepts.find(c => c.id === conceptId);
-      if (concept) {
-        const discipline = disciplines.find(d => d.id === concept.discipline);
-        if (discipline) {
-          playDisciplineSound(concept.discipline, concept.energy);
-        }
-      }
-    }
+    handleConceptClick(conceptId);
   };
 
-  const handleConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
+  // Enhanced concept move handler
+  const enhancedConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
     // Update concepts immediately for visual feedback
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
@@ -89,7 +53,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         : concept
     ));
     
-    onConceptInteraction(conceptId, 'move');
+    handleConceptMove(conceptId, newX, newY, newZ);
     
     // Update movement tracking (now optimized with batching and throttling)
     if (sessionId) {
@@ -97,28 +61,11 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     }
   };
 
-  // Track dragging state to prevent audio during drag
-  useEffect(() => {
-    const handleDragStart = () => { isDraggingRef.current = true; };
-    const handleDragEnd = () => { 
-      isDraggingRef.current = false;
-      // Play a single audio feedback when drag ends
-      if (selectedConcept) {
-        const concept = concepts.find(c => c.id === selectedConcept);
-        if (concept) {
-          playDisciplineSound(concept.discipline, 0.2);
-        }
-      }
-    };
-
-    window.addEventListener('conceptdragstart', handleDragStart);
-    window.addEventListener('conceptdragend', handleDragEnd);
-
-    return () => {
-      window.removeEventListener('conceptdragstart', handleDragStart);
-      window.removeEventListener('conceptdragend', handleDragEnd);
-    };
-  }, [selectedConcept, concepts, playDisciplineSound]);
+  // Handle session end
+  const handleSessionEnd = () => {
+    cleanupMovement();
+    onSessionEnd();
+  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -129,34 +76,12 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
-      {/* Header with timer and end session - Made responsive */}
-      <div className="absolute top-2 md:top-4 right-2 md:right-4 z-10 flex items-center gap-2 md:gap-4">
-        <div className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 rounded-lg backdrop-blur-sm text-xs md:text-sm ${
-          remainingTime <= 30 ? 'bg-red-900/80 text-red-200' : 'bg-gray-900/80 text-gray-200'
-        }`}>
-          <Clock className="h-3 w-3 md:h-4 md:w-4" />
-          <span className="font-mono">{formatTime()}</span>
-        </div>
-        
-        {remainingTime <= 30 && (
-          <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 rounded-lg bg-orange-900/80 text-orange-200">
-            <AlertCircle className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="text-xs md:text-sm hidden sm:inline">Session ending soon!</span>
-            <span className="text-xs md:text-sm sm:hidden">Ending!</span>
-          </div>
-        )}
-        
-        <Button
-          onClick={() => {
-            cleanupMovement();
-            onSessionEnd();
-          }}
-          size={isMobile ? "sm" : "default"}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 opacity-80 hover:opacity-100 transition-opacity text-xs md:text-sm"
-        >
-          End Session
-        </Button>
-      </div>
+      {/* Header with timer and end session */}
+      <SessionHeader
+        remainingTime={remainingTime}
+        formatTime={formatTime}
+        onEndSession={handleSessionEnd}
+      />
 
       {/* 3D Canvas - Full Screen */}
       <div className="flex-1 relative">
@@ -165,58 +90,19 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           disciplines={disciplines}
           isPaused={isPaused}
           selectedConcept={selectedConcept}
-          onConceptClick={handleConceptClick}
-          onConceptMove={handleConceptMove}
+          onConceptClick={enhancedConceptClick}
+          onConceptMove={enhancedConceptMove}
         />
         
-        {/* Bottom UI Elements - Responsive layout */}
-        <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 right-2 md:right-4 flex flex-col md:flex-row justify-between items-end gap-2 md:gap-4">
-          {/* Session Info - Hidden on mobile */}
-          <div className="hidden md:block">
-            <SessionInfo
-              disciplines={disciplines}
-              selectedDisciplines={selectedDisciplines}
-              concepts={concepts}
-            />
-          </div>
-          
-          {/* Hesse Insights - Collapsible on mobile */}
-          <div className="w-full md:max-w-md md:flex-shrink-0">
-            {isMobile ? (
-              <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg border border-gray-700">
-                <button
-                  onClick={() => setInsightsExpanded(!insightsExpanded)}
-                  className="w-full p-3 flex items-center justify-between text-white"
-                >
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-amber-400" />
-                    <span className="text-sm font-medium">Hesse Insights</span>
-                  </div>
-                  {insightsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                </button>
-                {insightsExpanded && (
-                  <div className="border-t border-gray-700">
-                    <HesseInsights
-                      conceptualText={currentInsight?.conceptualText || null}
-                      dimensionalText={currentInsight?.dimensionalText || null}
-                      isGenerating={isGenerating}
-                      error={error}
-                      className="border-0 bg-transparent"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <HesseInsights
-                conceptualText={currentInsight?.conceptualText || null}
-                dimensionalText={currentInsight?.dimensionalText || null}
-                isGenerating={isGenerating}
-                error={error}
-                className="max-w-md flex-shrink-0"
-              />
-            )}
-          </div>
-        </div>
+        {/* Bottom UI Elements */}
+        <BottomUI
+          disciplines={disciplines}
+          selectedDisciplines={selectedDisciplines}
+          concepts={concepts}
+          currentInsight={currentInsight}
+          isGenerating={isGenerating}
+          error={error}
+        />
       </div>
     </div>
   );
