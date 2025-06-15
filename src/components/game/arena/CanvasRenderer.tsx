@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
+
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Concept, DimensionalMapping } from './types';
 import { useInteractions } from './useInteractions';
 import { BackgroundRenderer } from './renderers/BackgroundRenderer';
@@ -29,6 +30,8 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [showDimensionalOverlay, setShowDimensionalOverlay] = useState(true);
+  const lastRenderTimeRef = useRef<number>(0);
+  const isDirtyRef = useRef<boolean>(true);
 
   // Updated dimensional mapping to use correct transcendental values
   const dimensionalMapping: DimensionalMapping = {
@@ -50,50 +53,75 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     getCursor
   } = useInteractions(concepts, onConceptClick, onConceptMove);
 
+  // Mark canvas as dirty when concepts change
   useEffect(() => {
+    isDirtyRef.current = true;
+  }, [concepts, selectedConcept, dragState, showDimensionalOverlay]);
+
+  // Optimized render function with RAF timing
+  const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    const now = performance.now();
+    
+    // Skip render if not enough time has passed (60fps throttling)
+    if (!isDirtyRef.current && now - lastRenderTimeRef.current < 16) {
+      return;
+    }
 
-    const draw = () => {
-      // Render background
-      BackgroundRenderer.render(ctx, canvas);
-      
-      // Render dimensional grid and axes (if enabled)
-      if (showDimensionalOverlay) {
-        DimensionalRenderer.render(ctx, canvas, rotationRef, dimensionalMapping);
-      }
-      
-      // Render sphere wireframe
-      SphereRenderer.render(ctx, canvas, rotationRef);
-      
-      // Render connections first (so they appear behind concepts)
-      ConnectionRenderer.render(ctx, canvas, concepts, rotationRef);
-      
-      // Render concepts on top
-      ConceptRenderer.render(ctx, canvas, concepts, disciplines, selectedConcept, dragState, rotationRef);
-    };
+    // Update canvas size if needed
+    if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+
+    // Render background
+    BackgroundRenderer.render(ctx, canvas);
+    
+    // Render dimensional grid and axes (if enabled)
+    if (showDimensionalOverlay) {
+      DimensionalRenderer.render(ctx, canvas, rotationRef, dimensionalMapping);
+    }
+    
+    // Render sphere wireframe
+    SphereRenderer.render(ctx, canvas, rotationRef);
+    
+    // Render connections first (so they appear behind concepts)
+    ConnectionRenderer.render(ctx, canvas, concepts, rotationRef);
+    
+    // Render concepts on top
+    ConceptRenderer.render(ctx, canvas, concepts, disciplines, selectedConcept, dragState, rotationRef);
+
+    lastRenderTimeRef.current = now;
+    isDirtyRef.current = false;
+  }, [concepts, disciplines, selectedConcept, rotationRef, dragState, showDimensionalOverlay]);
+
+  useEffect(() => {
+    let isActive = true;
 
     const animate = () => {
+      if (!isActive) return;
+      
       if (!isPaused) {
-        draw();
+        render();
       }
+      
       animationRef.current = requestAnimationFrame(animate);
     };
 
     animate();
 
     return () => {
+      isActive = false;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [concepts, disciplines, isPaused, selectedConcept, rotationRef, dragState, showDimensionalOverlay]);
+  }, [isPaused, render]);
 
   // Keyboard shortcuts
   useEffect(() => {

@@ -25,6 +25,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [startTime] = useState(Date.now());
   const [insightsExpanded, setInsightsExpanded] = useState(false);
+  const isDraggingRef = useRef(false);
   const isMobile = useIsMobile();
   
   const { playDisciplineSound } = useAudio();
@@ -66,34 +67,59 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     setSelectedConcept(conceptId);
     onConceptInteraction(conceptId, 'select');
     
-    const concept = concepts.find(c => c.id === conceptId);
-    if (concept) {
-      const discipline = disciplines.find(d => d.id === concept.discipline);
-      if (discipline) {
-        playDisciplineSound(concept.discipline, concept.energy);
+    // Only play audio for clicks, not during dragging
+    if (!isDraggingRef.current) {
+      const concept = concepts.find(c => c.id === conceptId);
+      if (concept) {
+        const discipline = disciplines.find(d => d.id === concept.discipline);
+        if (discipline) {
+          playDisciplineSound(concept.discipline, concept.energy);
+        }
       }
     }
   };
 
   const handleConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
+    // Update concepts immediately for visual feedback
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
         ? { ...concept, x: newX, y: newY, z: newZ }
         : concept
     ));
+    
     onConceptInteraction(conceptId, 'move');
     
-    // Update movement tracking
+    // Update movement tracking (debounced)
     if (sessionId) {
       updateConceptMovement(conceptId, newX, newY, newZ);
     }
     
-    // Play audio feedback for movement
-    const concept = concepts.find(c => c.id === conceptId);
-    if (concept) {
-      playDisciplineSound(concept.discipline, 0.3);
-    }
+    // No audio feedback during movement to improve performance
   };
+
+  // Track dragging state to prevent audio during drag
+  useEffect(() => {
+    const handleDragStart = () => { isDraggingRef.current = true; };
+    const handleDragEnd = () => { 
+      isDraggingRef.current = false;
+      // Play a single audio feedback when drag ends
+      if (selectedConcept) {
+        const concept = concepts.find(c => c.id === selectedConcept);
+        if (concept) {
+          playDisciplineSound(concept.discipline, 0.2);
+        }
+      }
+    };
+
+    // Listen for drag events (these would be set by the interaction handlers)
+    window.addEventListener('conceptdragstart', handleDragStart);
+    window.addEventListener('conceptdragend', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('conceptdragstart', handleDragStart);
+      window.removeEventListener('conceptdragend', handleDragEnd);
+    };
+  }, [selectedConcept, concepts, playDisciplineSound]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
