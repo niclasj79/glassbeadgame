@@ -30,9 +30,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   
   const { playDisciplineSound } = useAudio();
 
-  // Session management hooks
+  // Session management hooks with optimized movement tracking
   const { sessionTime, remainingTime, isExpired, formatTime } = useSessionTimer(startTime, false);
-  const { updateConceptMovement, allConceptsStable } = useMovementTracking(sessionId, concepts);
+  const { updateConceptMovement, allConceptsStable, cleanup: cleanupMovement } = useMovementTracking(sessionId, concepts);
   const { currentInsight, isGenerating, error, generateInsights } = useTextGeneration(sessionId);
 
   // Generate session ID on mount
@@ -51,9 +51,11 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   useEffect(() => {
     if (isExpired) {
       console.log('Session expired, ending...');
+      // Cleanup before ending
+      cleanupMovement();
       onSessionEnd();
     }
-  }, [isExpired, onSessionEnd]);
+  }, [isExpired, onSessionEnd, cleanupMovement]);
 
   // Generate insights when all concepts are stable
   useEffect(() => {
@@ -89,12 +91,10 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     
     onConceptInteraction(conceptId, 'move');
     
-    // Update movement tracking (debounced)
+    // Update movement tracking (now optimized with batching and throttling)
     if (sessionId) {
       updateConceptMovement(conceptId, newX, newY, newZ);
     }
-    
-    // No audio feedback during movement to improve performance
   };
 
   // Track dragging state to prevent audio during drag
@@ -111,7 +111,6 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       }
     };
 
-    // Listen for drag events (these would be set by the interaction handlers)
     window.addEventListener('conceptdragstart', handleDragStart);
     window.addEventListener('conceptdragend', handleDragEnd);
 
@@ -120,6 +119,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       window.removeEventListener('conceptdragend', handleDragEnd);
     };
   }, [selectedConcept, concepts, playDisciplineSound]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupMovement();
+    };
+  }, [cleanupMovement]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
@@ -141,7 +147,10 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         )}
         
         <Button
-          onClick={onSessionEnd}
+          onClick={() => {
+            cleanupMovement();
+            onSessionEnd();
+          }}
           size={isMobile ? "sm" : "default"}
           className="bg-gradient-to-r from-blue-600 to-purple-600 opacity-80 hover:opacity-100 transition-opacity text-xs md:text-sm"
         >
