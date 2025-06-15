@@ -31,11 +31,11 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const animationRef = useRef<number>();
   const [showDimensionalOverlay, setShowDimensionalOverlay] = useState(true);
 
-  // Updated dimensional mapping to AQAL framework
+  // Updated dimensional mapping to use correct transcendental values
   const dimensionalMapping: DimensionalMapping = {
-    x: { label: "Individual ↔ Collective", description: "From individual perspective to collective understanding" },
-    y: { label: "Interior ↔ Exterior", description: "From subjective experience to objective reality" },
-    z: { label: "Beautiful ↔ Good ↔ True", description: "The three transcendentals of being" }
+    x: { label: "Beautiful ↔ Ugly", description: "From aesthetic beauty to its negation" },
+    y: { label: "Good ↔ Evil", description: "From moral goodness to its negation" },
+    z: { label: "True ↔ False", description: "From truth to its negation" }
   };
 
   const {
@@ -155,7 +155,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
       {/* Dimensional Status - Made responsive */}
       {showDimensionalOverlay && (
         <div className="absolute top-4 left-4 bg-gray-800/90 backdrop-blur-sm p-2 md:p-3 rounded border border-gray-600 max-w-xs">
-          <h4 className="text-sm font-semibold text-white mb-2">AQAL Dimensions</h4>
+          <h4 className="text-sm font-semibold text-white mb-2">Transcendental Dimensions</h4>
           <div className="text-xs text-gray-300 space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-red-400"></div>
