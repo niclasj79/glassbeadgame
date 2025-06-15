@@ -6,7 +6,8 @@ import { useAudio } from '../../../audio/AudioEngine';
 export const useConceptInteractions = (
   concepts: Concept[],
   disciplines: any[],
-  onConceptInteraction: (conceptId: string, action: string) => void
+  onConceptInteraction: (conceptId: string, action: string) => void,
+  onConceptPositionUpdate?: (conceptId: string, x: number, y: number, z: number) => void
 ) => {
   const isDraggingRef = useRef(false);
   const { playDisciplineSound } = useAudio();
@@ -27,21 +28,47 @@ export const useConceptInteractions = (
     }
   }, [concepts, disciplines, onConceptInteraction, playDisciplineSound]);
 
-  // Handle concept movement
+  // Handle concept movement with position persistence
   const handleConceptMove = useCallback((conceptId: string, newX: number, newY: number, newZ: number) => {
+    console.log(`Moving concept ${conceptId} to:`, { newX, newY, newZ });
+    
+    // Update position through the callback
+    if (onConceptPositionUpdate) {
+      onConceptPositionUpdate(conceptId, newX, newY, newZ);
+    }
+    
+    // Handle business logic
     onConceptInteraction(conceptId, 'move');
-  }, [onConceptInteraction]);
+    
+    // Play movement completion sound
+    const concept = concepts.find(c => c.id === conceptId);
+    if (concept) {
+      const discipline = disciplines.find(d => d.id === concept.discipline);
+      if (discipline) {
+        playDisciplineSound(concept.discipline, concept.energy * 0.5, { 
+          x: newX, 
+          y: newY, 
+          z: newZ 
+        });
+      }
+    }
+  }, [concepts, disciplines, onConceptInteraction, onConceptPositionUpdate, playDisciplineSound]);
 
   // Track dragging state to prevent audio during drag
   useEffect(() => {
-    const handleDragStart = () => { isDraggingRef.current = true; };
+    const handleDragStart = () => { 
+      isDraggingRef.current = true; 
+      console.log('Concept drag started');
+    };
     const handleDragEnd = () => { 
       isDraggingRef.current = false;
-      // Play a single audio feedback when drag ends
+      console.log('Concept drag ended');
+      
+      // Play completion sound when drag ends
       if (concepts.length > 0) {
-        const concept = concepts[0]; // Use first concept as fallback
+        const concept = concepts[0];
         if (concept) {
-          playDisciplineSound(concept.discipline, 0.2);
+          playDisciplineSound(concept.discipline, 0.3);
         }
       }
     };

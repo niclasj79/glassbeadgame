@@ -57,6 +57,9 @@ export const useSimplifiedPointerHandlers = (
         offsetY: 0,
         touchDragMode: touchId !== undefined
       });
+      
+      // Dispatch drag start event
+      window.dispatchEvent(new CustomEvent('conceptdragstart'));
     } else {
       setInteractionMode('rotating');
     }
@@ -111,7 +114,7 @@ export const useSimplifiedPointerHandlers = (
   ) => {
     if (interactionMode === 'dragging' && dragState.isDragging && dragState.conceptId) {
       if (dragState.sphereX !== undefined && dragState.sphereY !== undefined && dragState.sphereZ !== undefined) {
-        console.log('Moving concept:', dragState.conceptId, 'to:', dragState.sphereX, dragState.sphereY, dragState.sphereZ);
+        console.log('Completing concept move:', dragState.conceptId, 'to:', dragState.sphereX, dragState.sphereY, dragState.sphereZ);
         onConceptMove(dragState.conceptId, dragState.sphereX, dragState.sphereY, dragState.sphereZ);
       }
     } else if (Math.abs(x - mouseRef.current.x) < 5 && Math.abs(y - mouseRef.current.y) < 5) {

@@ -62,11 +62,32 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     preloadInsights: false
   });
 
-  // Concept interactions
+  // Enhanced concept position update handler
+  const handleConceptPositionUpdate = (conceptId: string, newX: number, newY: number, newZ: number) => {
+    console.log(`Updating concept ${conceptId} position in SphericalArena:`, { newX, newY, newZ });
+    
+    // Update local state immediately for instant visual feedback
+    setConcepts(prev => prev.map(concept => 
+      concept.id === conceptId 
+        ? { ...concept, x: newX, y: newY, z: newZ }
+        : concept
+    ));
+    
+    // Update offline movement tracking
+    if (sessionId) {
+      updateConceptMovement(conceptId, newX, newY, newZ);
+    }
+
+    // Track render performance
+    trackRenderPerformance();
+  };
+
+  // Concept interactions with position update callback
   const { handleConceptClick, handleConceptMove } = useConceptInteractions(
     concepts,
     disciplines,
-    onConceptInteraction
+    onConceptInteraction,
+    handleConceptPositionUpdate
   );
 
   // Create background soundscape when concepts or rotation change
@@ -95,38 +116,12 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptClick(conceptId);
   };
 
-  // Enhanced concept move handler with instant feedback and 3D audio
+  // Enhanced concept move handler with proper position persistence
   const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
-    // Update local state immediately for instant visual feedback
-    setConcepts(prev => prev.map(concept => 
-      concept.id === conceptId 
-        ? { ...concept, x: newX, y: newY, z: newZ }
-        : concept
-    ));
+    console.log(`SphericalArena handling concept move for ${conceptId}:`, { newX, newY, newZ });
     
-    // Play movement sound with 3D positioning
-    const concept = concepts.find(c => c.id === conceptId);
-    if (concept) {
-      const discipline = disciplines.find(d => d.id === concept.discipline);
-      if (discipline) {
-        playDisciplineSound(discipline.id, concept.energy * 0.7, { 
-          x: newX, 
-          y: newY, 
-          z: newZ 
-        });
-      }
-    }
-    
-    // Handle business logic
+    // Handle the move through the concept interactions (this will trigger position update)
     handleConceptMove(conceptId, newX, newY, newZ);
-    
-    // Update offline movement tracking
-    if (sessionId) {
-      updateConceptMovement(conceptId, newX, newY, newZ);
-    }
-
-    // Track render performance
-    trackRenderPerformance();
   };
 
   // Handle rotation changes for dynamic panning

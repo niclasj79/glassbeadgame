@@ -1,6 +1,9 @@
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Concept, DimensionalMapping } from './types';
 import { useInteractions } from './useInteractions';
+import { useConceptAnimations } from './hooks/useConceptAnimations';
+import { useConceptState } from './hooks/useConceptState';
 import { BackgroundRenderer } from './renderers/BackgroundRenderer';
 import { SphereRenderer } from './renderers/SphereRenderer';
 import { ConceptRenderer } from './renderers/ConceptRenderer';
@@ -19,7 +22,7 @@ interface CanvasRendererProps {
 }
 
 export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
-  concepts,
+  concepts: initialConcepts,
   disciplines,
   isPaused,
   selectedConcept,
@@ -34,12 +37,52 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const isDirtyRef = useRef<boolean>(true);
   const lastRotationRef = useRef({ x: 0, y: 0 });
 
+  // Concept state management with persistence
+  const { concepts, updateConceptPosition, getConceptPosition, updateConcepts } = useConceptState(initialConcepts);
+  
+  // Animation system
+  const { startAnimation, getAnimatedPosition, hasActiveAnimations } = useConceptAnimations();
+
+  // Update concepts when props change
+  useEffect(() => {
+    updateConcepts(initialConcepts);
+  }, [initialConcepts, updateConcepts]);
+
   // Updated dimensional mapping with corrected labels and swapped Good/Not Good positions
   const dimensionalMapping: DimensionalMapping = {
     x: { positive: "Beautiful", negative: "Not Beautiful", description: "From aesthetic beauty to its negation" },
     y: { positive: "Not Good", negative: "Good", description: "From moral opposition to goodness" },
     z: { positive: "True", negative: "Not True", description: "From truth to its negation" }
   };
+
+  // Enhanced concept move handler with animation
+  const handleConceptMoveWithAnimation = useCallback((conceptId: string, newX: number, newY: number, newZ: number) => {
+    const currentPosition = getConceptPosition(conceptId);
+    if (!currentPosition) return;
+
+    console.log(`Starting animation for concept ${conceptId} from:`, currentPosition, 'to:', { newX, newY, newZ });
+
+    // Start animation from current position to new position
+    startAnimation(
+      conceptId,
+      currentPosition.x,
+      currentPosition.y,
+      currentPosition.z,
+      newX,
+      newY,
+      newZ,
+      600 // 600ms animation duration
+    );
+
+    // Update the actual position immediately (the animation will handle the visual transition)
+    updateConceptPosition(conceptId, newX, newY, newZ);
+    
+    // Call the parent callback
+    onConceptMove(conceptId, newX, newY, newZ);
+
+    // Dispatch custom events for drag tracking
+    window.dispatchEvent(new CustomEvent('conceptdragend'));
+  }, [getConceptPosition, startAnimation, updateConceptPosition, onConceptMove]);
 
   const {
     rotationRef,
@@ -52,7 +95,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     handleTouchMove,
     handleTouchEnd,
     getCursor
-  } = useInteractions(concepts, onConceptClick, onConceptMove);
+  } = useInteractions(concepts, onConceptClick, handleConceptMoveWithAnimation);
 
   // Track rotation changes and notify parent
   useEffect(() => {
@@ -67,12 +110,26 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     }
   });
 
-  // Mark canvas as dirty when concepts change
+  // Mark canvas as dirty when concepts change or animations are active
   useEffect(() => {
     isDirtyRef.current = true;
   }, [concepts, selectedConcept, dragState, showDimensionalOverlay]);
 
-  // Optimized render function with RAF timing
+  // Create animated concepts array for rendering
+  const getAnimatedConcepts = useCallback(() => {
+    return concepts.map(concept => {
+      const animated = getAnimatedPosition(concept.id, concept.x, concept.y, concept.z);
+      return {
+        ...concept,
+        x: animated.x,
+        y: animated.y,
+        z: animated.z,
+        isAnimating: animated.isAnimating
+      };
+    });
+  }, [concepts, getAnimatedPosition]);
+
+  // Optimized render function with animation support
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -82,16 +139,21 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
 
     const now = performance.now();
     
-    // Skip render if not enough time has passed (60fps throttling)
-    if (!isDirtyRef.current && now - lastRenderTimeRef.current < 16) {
-      return;
-    }
+    // Continue rendering during animations, otherwise use normal throttling
+    const shouldRender = hasActiveAnimations() || 
+                        isDirtyRef.current || 
+                        (now - lastRenderTimeRef.current >= 16);
+    
+    if (!shouldRender) return;
 
     // Update canvas size if needed
     if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
     }
+
+    // Get animated concept positions
+    const animatedConcepts = getAnimatedConcepts();
 
     // Render background
     BackgroundRenderer.render(ctx, canvas);
@@ -104,15 +166,19 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     // Render sphere wireframe
     SphereRenderer.render(ctx, canvas, rotationRef);
     
-    // Render connections first (so they appear behind concepts)
-    ConnectionRenderer.render(ctx, canvas, concepts, rotationRef);
+    // Render connections with animated positions
+    ConnectionRenderer.render(ctx, canvas, animatedConcepts, rotationRef);
     
-    // Render concepts on top
-    ConceptRenderer.render(ctx, canvas, concepts, disciplines, selectedConcept, dragState, rotationRef);
+    // Render concepts with animations
+    ConceptRenderer.render(ctx, canvas, animatedConcepts, disciplines, selectedConcept, dragState, rotationRef);
 
     lastRenderTimeRef.current = now;
-    isDirtyRef.current = false;
-  }, [concepts, disciplines, selectedConcept, rotationRef, dragState, showDimensionalOverlay, dimensionalMapping]);
+    
+    // Only mark as clean if no animations are active
+    if (!hasActiveAnimations()) {
+      isDirtyRef.current = false;
+    }
+  }, [concepts, disciplines, selectedConcept, rotationRef, dragState, showDimensionalOverlay, dimensionalMapping, hasActiveAnimations, getAnimatedConcepts]);
 
   useEffect(() => {
     let isActive = true;
