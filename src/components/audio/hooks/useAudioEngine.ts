@@ -2,13 +2,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAudioContext } from './useAudioContext';
 import { useAudioState } from './useAudioState';
-import { getDisciplineFrequencies, getLayerFrequencies } from '../utils/audioUtils';
+import { getDisciplineFrequencies } from '../utils/audioUtils';
+import { memoryManager } from '../../game/arena/utils/memoryManager';
 
 export const useAudioEngine = () => {
   const {
     audioContextRef,
-    oscillatorsRef,
-    gainNodesRef,
     masterGainRef,
     initializeAudioContext,
     updateMasterVolume,
@@ -27,6 +26,17 @@ export const useAudioEngine = () => {
 
   const backgroundOscillatorsRef = useRef<Map<string, { osc: OscillatorNode; gain: GainNode }>>(new Map());
   const pannerNodesRef = useRef<Map<string, PannerNode>>(new Map());
+  const lastAudioActionRef = useRef<number>(0);
+
+  // Throttle audio actions to prevent performance issues
+  const isAudioActionAllowed = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAudioActionRef.current < 50) { // 50ms throttle
+      return false;
+    }
+    lastAudioActionRef.current = now;
+    return true;
+  }, []);
 
   // Pre-load audio engine
   const preloadAudio = useCallback(async () => {
@@ -45,98 +55,87 @@ export const useAudioEngine = () => {
     return false;
   }, [isInitialized, initializeAudioContext, masterVolume, setIsInitialized]);
 
-  // Create continuous background soundscape
+  // Optimized background soundscape with reduced complexity
   const createBackgroundSoundscape = useCallback((concepts: any[], rotationX: number, rotationY: number) => {
     if (!isAudioEnabled || !isInitialized || !audioContextRef.current || !masterGainRef.current) return;
 
+    // Limit background sounds for better performance
+    const maxBackgroundSounds = 2;
+    
     // Stop existing background layers
-    backgroundOscillatorsRef.current.forEach((nodes, key) => {
-      nodes.osc.stop();
-      backgroundOscillatorsRef.current.delete(key);
-      pannerNodesRef.current.delete(key);
+    backgroundOscillatorsRef.current.forEach((nodes) => {
+      try {
+        nodes.osc.stop();
+      } catch (error) {
+        // Node might already be stopped
+      }
     });
+    backgroundOscillatorsRef.current.clear();
+    pannerNodesRef.current.clear();
 
-    // Create ambient layers based on concept density and positions
+    // Create ambient layers based on concept density
     const disciplineDensity = new Map();
     concepts.forEach(concept => {
       const count = disciplineDensity.get(concept.discipline) || 0;
       disciplineDensity.set(concept.discipline, count + 1);
     });
 
-    disciplineDensity.forEach((density, discipline) => {
+    // Take only the most prominent disciplines
+    const sortedDisciplines = Array.from(disciplineDensity.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxBackgroundSounds);
+
+    sortedDisciplines.forEach(([discipline, density]) => {
       const frequencies = getDisciplineFrequencies(discipline);
       const baseFreq = frequencies[0] * 0.5; // Lower octave for ambient layer
       
-      // Create oscillator with panner
+      // Create oscillator with simplified panner
       const oscillator = audioContextRef.current!.createOscillator();
       const gainNode = audioContextRef.current!.createGain();
-      const pannerNode = audioContextRef.current!.createPanner();
       
       // Configure oscillator
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(baseFreq, audioContextRef.current!.currentTime);
       
-      // Configure gain based on concept density
-      const volume = Math.min(0.1, density * 0.02);
+      // Configure gain based on concept density (reduced volume)
+      const volume = Math.min(0.05, density * 0.01);
       gainNode.gain.setValueAtTime(0, audioContextRef.current!.currentTime);
       gainNode.gain.linearRampToValueAtTime(volume, audioContextRef.current!.currentTime + 2);
       
-      // Configure 3D positioning
-      pannerNode.panningModel = 'HRTF';
-      pannerNode.distanceModel = 'inverse';
-      pannerNode.refDistance = 1;
-      pannerNode.maxDistance = 10;
-      pannerNode.rolloffFactor = 1;
-      
-      // Calculate position based on sphere rotation
-      const angle = Array.from(disciplineDensity.keys()).indexOf(discipline) * (Math.PI * 2 / disciplineDensity.size);
-      const x = Math.cos(angle + rotationY) * Math.cos(rotationX);
-      const y = Math.sin(rotationX);
-      const z = Math.sin(angle + rotationY) * Math.cos(rotationX);
-      
-      pannerNode.positionX.setValueAtTime(x * 2, audioContextRef.current!.currentTime);
-      pannerNode.positionY.setValueAtTime(y * 2, audioContextRef.current!.currentTime);
-      pannerNode.positionZ.setValueAtTime(z * 2, audioContextRef.current!.currentTime);
-      
-      // Connect audio graph
+      // Simplified audio chain without 3D positioning for better performance
       oscillator.connect(gainNode);
-      gainNode.connect(pannerNode);
-      pannerNode.connect(masterGainRef.current!);
+      gainNode.connect(masterGainRef.current!);
       
       oscillator.start();
       
       // Store references
       backgroundOscillatorsRef.current.set(discipline, { osc: oscillator, gain: gainNode });
-      pannerNodesRef.current.set(discipline, pannerNode);
     });
   }, [isAudioEnabled, isInitialized, audioContextRef, masterGainRef]);
 
-  // Update dynamic panning based on sphere rotation
+  // Simplified dynamic panning
   const updateDynamicPanning = useCallback((rotationX: number, rotationY: number) => {
     if (!isAudioEnabled || !isInitialized || !audioContextRef.current) return;
-
-    pannerNodesRef.current.forEach((pannerNode, discipline) => {
-      const disciplineIndex = Array.from(pannerNodesRef.current.keys()).indexOf(discipline);
-      const angle = disciplineIndex * (Math.PI * 2 / pannerNodesRef.current.size);
-      
-      const x = Math.cos(angle + rotationY) * Math.cos(rotationX);
-      const y = Math.sin(rotationX);
-      const z = Math.sin(angle + rotationY) * Math.cos(rotationX);
-      
-      pannerNode.positionX.setValueAtTime(x * 2, audioContextRef.current!.currentTime);
-      pannerNode.positionY.setValueAtTime(y * 2, audioContextRef.current!.currentTime);
-      pannerNode.positionZ.setValueAtTime(z * 2, audioContextRef.current!.currentTime);
+    
+    // Simplified panning - just adjust gain based on rotation
+    backgroundOscillatorsRef.current.forEach((nodes) => {
+      const panValue = Math.sin(rotationY) * 0.1; // Subtle effect
+      const currentGain = nodes.gain.gain.value;
+      if (currentGain > 0) {
+        nodes.gain.gain.setValueAtTime(currentGain * (1 + panValue), audioContextRef.current!.currentTime);
+      }
     });
   }, [isAudioEnabled, isInitialized, audioContextRef]);
 
-  // Play discipline sound with 3D positioning
+  // Optimized discipline sound with throttling
   const playDisciplineSound = useCallback((disciplineId: string, intensity: number = 0.5, position?: { x: number; y: number; z: number }) => {
     if (!isAudioEnabled || !isInitialized || !audioContextRef.current || !masterGainRef.current) return;
+    if (!isAudioActionAllowed()) return;
     
     const frequencies = getDisciplineFrequencies(disciplineId);
     const baseFreq = frequencies[0];
     
-    // Create oscillator with optional panner
+    // Create oscillator
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
     
@@ -144,27 +143,15 @@ export const useAudioEngine = () => {
     oscillator.frequency.setValueAtTime(baseFreq, audioContextRef.current.currentTime);
     
     gainNode.gain.setValueAtTime(0, audioContextRef.current.currentTime);
-    gainNode.gain.linearRampToValueAtTime(intensity * 0.2, audioContextRef.current.currentTime + 0.1);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current.currentTime + 0.8);
+    gainNode.gain.linearRampToValueAtTime(intensity * 0.15, audioContextRef.current.currentTime + 0.1); // Reduced volume
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current.currentTime + 0.6); // Shorter duration
     
-    if (position) {
-      const pannerNode = audioContextRef.current.createPanner();
-      pannerNode.panningModel = 'HRTF';
-      pannerNode.positionX.setValueAtTime(position.x, audioContextRef.current.currentTime);
-      pannerNode.positionY.setValueAtTime(position.y, audioContextRef.current.currentTime);
-      pannerNode.positionZ.setValueAtTime(position.z, audioContextRef.current.currentTime);
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(pannerNode);
-      pannerNode.connect(masterGainRef.current);
-    } else {
-      oscillator.connect(gainNode);
-      gainNode.connect(masterGainRef.current);
-    }
+    oscillator.connect(gainNode);
+    gainNode.connect(masterGainRef.current);
     
     oscillator.start();
-    oscillator.stop(audioContextRef.current.currentTime + 0.8);
-  }, [isAudioEnabled, isInitialized, audioContextRef, masterGainRef]);
+    oscillator.stop(audioContextRef.current.currentTime + 0.6);
+  }, [isAudioEnabled, isInitialized, audioContextRef, masterGainRef, isAudioActionAllowed]);
 
   // Initialize audio on session start
   const initializeAudio = useCallback(async () => {
@@ -192,7 +179,11 @@ export const useAudioEngine = () => {
       if (isAudioEnabled) {
         stopAllAmbientLayers();
         backgroundOscillatorsRef.current.forEach((nodes) => {
-          nodes.osc.stop();
+          try {
+            nodes.osc.stop();
+          } catch (error) {
+            // Oscillator might already be stopped
+          }
         });
         backgroundOscillatorsRef.current.clear();
         pannerNodesRef.current.clear();
@@ -200,20 +191,27 @@ export const useAudioEngine = () => {
     }
   }, [isAudioEnabled, isInitialized, initializeAudio, setIsAudioEnabled, stopAllAmbientLayers]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      backgroundOscillatorsRef.current.forEach((nodes) => {
-        try {
-          nodes.osc.stop();
-        } catch (error) {
-          // Oscillator might already be stopped
-        }
-      });
-      backgroundOscillatorsRef.current.clear();
-      pannerNodesRef.current.clear();
-    };
+  // Cleanup with memory management
+  const cleanup = useCallback(() => {
+    backgroundOscillatorsRef.current.forEach((nodes) => {
+      try {
+        nodes.osc.stop();
+      } catch (error) {
+        // Oscillator might already be stopped
+      }
+    });
+    backgroundOscillatorsRef.current.clear();
+    pannerNodesRef.current.clear();
   }, []);
+
+  // Register cleanup with memory manager
+  useEffect(() => {
+    memoryManager.registerCleanupTask(cleanup);
+    return () => {
+      memoryManager.unregisterCleanupTask(cleanup);
+      cleanup();
+    };
+  }, [cleanup]);
 
   return {
     isAudioEnabled,
@@ -227,6 +225,7 @@ export const useAudioEngine = () => {
     createBackgroundSoundscape,
     updateDynamicPanning,
     stopAmbientLayer,
-    stopAllAmbientLayers
+    stopAllAmbientLayers,
+    cleanup
   };
 };

@@ -6,8 +6,10 @@ import { BottomUI } from './arena/BottomUI';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
+import { usePerformanceOptimization } from './arena/hooks/usePerformanceOptimization';
 import { useAudio } from '../audio/AudioEngine';
 import { AudioControls } from '../audio/AudioControls';
+import { memoryManager } from './arena/utils/memoryManager';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -28,18 +30,32 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     initializeAudio
   } = useAudio();
 
+  // Performance optimization with adaptive settings
+  const { getPerformanceMetrics, optimizeForLowPerformance, isOptimal } = usePerformanceOptimization({
+    enableMemoryMonitoring: true,
+    enableFrameRateMonitoring: true,
+    targetFPS: 60,
+    memoryThreshold: 100
+  });
+
   // Automatically initialize audio when session starts
   useEffect(() => {
     const initSessionAudio = async () => {
       if (preloadAudio && initializeAudio) {
         await preloadAudio();
-        await initializeAudio(); // Automatically enable audio
+        await initializeAudio();
         console.log('Audio engine initialized and enabled for session');
       }
     };
     
     initSessionAudio();
   }, [preloadAudio, initializeAudio]);
+
+  // Start memory monitoring
+  useEffect(() => {
+    memoryManager.startMonitoring();
+    return () => memoryManager.stopMonitoring();
+  }, []);
 
   // Offline session management with performance monitoring
   const {
@@ -58,7 +74,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   } = useOfflineSessionManagement(initialConcepts, onSessionEnd, {
     enableBatchedUpdates: true,
     enableAggressiveCaching: true,
-    maxCacheSize: 100,
+    maxCacheSize: 50, // Reduced for better memory usage
     preloadInsights: false
   });
 
@@ -94,11 +110,20 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptPositionUpdate
   );
 
-  // Create background soundscape when concepts or rotation change
+  // Create background soundscape when concepts or rotation change (throttled)
   useEffect(() => {
+    let timeoutId: number;
+    
     if (isAudioEnabled && createBackgroundSoundscape && concepts.length > 0) {
-      createBackgroundSoundscape(concepts, rotationState.x, rotationState.y);
+      // Throttle background soundscape updates to every 500ms
+      timeoutId = window.setTimeout(() => {
+        createBackgroundSoundscape(concepts, rotationState.x, rotationState.y);
+      }, 500);
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [concepts, isAudioEnabled, createBackgroundSoundscape, rotationState]);
 
   // Enhanced concept click handler with 3D audio
@@ -131,17 +156,24 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptMove(conceptId, newX, newY, newZ);
   };
 
-  // Handle rotation changes for dynamic panning
+  // Handle rotation changes for dynamic panning (throttled)
   const handleRotationChange = (rotationX: number, rotationY: number) => {
     setRotationState({ x: rotationX, y: rotationY });
     if (updateDynamicPanning && isAudioEnabled) {
-      updateDynamicPanning(rotationX, rotationY);
+      // Throttle panning updates
+      const throttledUpdate = () => updateDynamicPanning(rotationX, rotationY);
+      setTimeout(throttledUpdate, 100);
     }
   };
 
   // Handle session end with cleanup
   const handleSessionEnd = () => {
-    console.log('Session ending - Performance metrics:', performanceMetrics);
+    const metrics = getPerformanceMetrics();
+    console.log('Session ending - Performance metrics:', {
+      ...performanceMetrics,
+      finalFPS: metrics.averageFPS,
+      finalMemory: memoryManager.getCurrentMemoryUsage()
+    });
     cleanup();
     onSessionEnd();
   };
@@ -153,19 +185,25 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     };
   }, [cleanup]);
 
-  // Performance monitoring effect
+  // Performance monitoring and optimization
   useEffect(() => {
     const interval = setInterval(() => {
-      if (performanceMetrics.averageFrameTime > 50) {
+      const metrics = getPerformanceMetrics();
+      
+      if (!isOptimal) {
         console.warn('Performance degradation detected:', {
-          avgFrameTime: performanceMetrics.averageFrameTime.toFixed(2) + 'ms',
-          renderCount: performanceMetrics.renderCount
+          fps: metrics.averageFPS.toFixed(1),
+          memory: memoryManager.getCurrentMemoryUsage(),
+          frameTime: metrics.frameTime.toFixed(2) + 'ms'
         });
+        
+        // Automatically optimize for low performance
+        optimizeForLowPerformance();
       }
-    }, 10000);
+    }, 10000); // Check every 10 seconds
 
     return () => clearInterval(interval);
-  }, [performanceMetrics]);
+  }, [getPerformanceMetrics, isOptimal, optimizeForLowPerformance]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
@@ -209,6 +247,8 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
           <div>Audio: {isAudioEnabled ? '3D Ready' : 'Disabled'}</div>
           <div>Concepts: {concepts.length}</div>
+          <div>Memory: {memoryManager.getCurrentMemoryUsage().used}</div>
+          <div>Status: {isOptimal ? '✅ Optimal' : '⚠️ Degraded'}</div>
         </div>
       )}
     </div>
