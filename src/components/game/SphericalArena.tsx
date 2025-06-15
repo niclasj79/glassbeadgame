@@ -1,11 +1,10 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { useAudio } from '../audio/AudioEngine';
-import { ArenaControls } from './arena/ArenaControls';
 import { CanvasRenderer } from './arena/CanvasRenderer';
-import { ConceptDisplay } from './arena/ConceptDisplay';
 import { SessionInfo } from './arena/SessionInfo';
 import { SphericalArenaProps, MouseRef, RotationRef } from './arena/types';
+import { Button } from '@/components/ui/button';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -45,19 +44,18 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black">
-      {/* Header Controls */}
-      <ArenaControls
-        sessionTime={sessionTime}
-        conceptCount={concepts.length}
-        isPaused={isPaused}
-        onPauseToggle={() => setIsPaused(!isPaused)}
-        onResetRotation={() => {}}
-        onSessionEnd={onSessionEnd}
-        rotationRef={rotationRef}
-      />
+    <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative">
+      {/* Minimal End Session Button */}
+      <div className="absolute top-4 right-4 z-10">
+        <Button
+          onClick={onSessionEnd}
+          className="bg-gradient-to-r from-blue-600 to-purple-600 opacity-80 hover:opacity-100 transition-opacity"
+        >
+          End Session
+        </Button>
+      </div>
 
-      {/* 3D Canvas */}
+      {/* 3D Canvas - Full Screen */}
       <div className="flex-1 relative">
         <CanvasRenderer
           concepts={concepts}
@@ -72,11 +70,6 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         <SessionInfo
           disciplines={disciplines}
           selectedDisciplines={selectedDisciplines}
-          concepts={concepts}
-        />
-        
-        <ConceptDisplay
-          selectedConcept={selectedConcept}
           concepts={concepts}
         />
       </div>
