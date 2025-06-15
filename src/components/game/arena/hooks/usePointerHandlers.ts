@@ -14,9 +14,11 @@ export const usePointerHandlers = (
       const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
       
       const distance = Math.sqrt((x - projected.x) ** 2 + (y - projected.y) ** 2);
-      const size = 8 + concept.energy * 4 * projected.scale;
+      // Increase touch target size for mobile
+      const baseSize = 8 + concept.energy * 4 * projected.scale;
+      const touchSize = Math.max(baseSize + 15, 30); // Minimum 30px touch target
       
-      if (distance < size + 10) {
+      if (distance < touchSize) {
         return { concept, projected };
       }
     }
@@ -52,44 +54,53 @@ export const usePointerHandlers = (
     
     const conceptHit = findConceptAtPosition(x, y, canvas, rotationRef);
     
-    if (conceptHit && touchId !== undefined) {
-      // Touch interaction with concept - start touch drag mode
+    if (conceptHit) {
+      // Always prioritize concept interaction
       setInteractionMode('selecting');
       
-      dragTimeoutRef.current = window.setTimeout(() => {
-        if (mouseRef.current.isDown) {
-          setInteractionMode('dragging');
-          setDragState({
-            isDragging: true,
-            conceptId: conceptHit.concept.id,
-            startX: x,
-            startY: y,
-            offsetX: 0,
-            offsetY: 0,
-            touchDragMode: true
-          });
-        }
-      }, 150);
-    } else if (conceptHit && touchId === undefined) {
-      // Mouse interaction with concept - normal 3D drag
-      setInteractionMode('selecting');
-      
-      dragTimeoutRef.current = window.setTimeout(() => {
-        if (mouseRef.current.isDown) {
-          setInteractionMode('dragging');
-          setDragState({
-            isDragging: true,
-            conceptId: conceptHit.concept.id,
-            startX: x,
-            startY: y,
-            offsetX: 0,
-            offsetY: 0,
-            touchDragMode: false
-          });
-        }
-      }, 200);
+      if (touchId !== undefined) {
+        // Touch interaction with concept - faster response
+        dragTimeoutRef.current = window.setTimeout(() => {
+          if (mouseRef.current.isDown) {
+            setInteractionMode('dragging');
+            setDragState({
+              isDragging: true,
+              conceptId: conceptHit.concept.id,
+              startX: x,
+              startY: y,
+              offsetX: 0,
+              offsetY: 0,
+              touchDragMode: true
+            });
+          }
+        }, 50); // Reduced from 150ms to 50ms
+      } else {
+        // Mouse interaction with concept
+        dragTimeoutRef.current = window.setTimeout(() => {
+          if (mouseRef.current.isDown) {
+            setInteractionMode('dragging');
+            setDragState({
+              isDragging: true,
+              conceptId: conceptHit.concept.id,
+              startX: x,
+              startY: y,
+              offsetX: 0,
+              offsetY: 0,
+              touchDragMode: false
+            });
+          }
+        }, 100); // Slightly reduced for mouse too
+      }
     } else {
-      setInteractionMode('rotating');
+      // Empty space interaction
+      if (touchId !== undefined) {
+        // Touch on empty space - only allow rotation with two fingers
+        // Single finger does nothing initially
+        setInteractionMode('selecting');
+      } else {
+        // Mouse on empty space - allow rotation immediately
+        setInteractionMode('rotating');
+      }
     }
   }, [findConceptAtPosition]);
 
@@ -109,6 +120,7 @@ export const usePointerHandlers = (
 
     const deltaX = x - mouseRef.current.x;
     const deltaY = y - mouseRef.current.y;
+    const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
     if (interactionMode === 'rotating' || interactionMode === 'two-finger-rotating') {
       // Rotate sphere
@@ -144,17 +156,22 @@ export const usePointerHandlers = (
         }));
       }
     } else if (interactionMode === 'selecting') {
-      // Check if we've moved enough to start sphere rotation
-      const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      if (moveDistance > 8) {
+      // For touch, require much more movement before starting rotation
+      const threshold = mouseRef.current.touchId !== undefined ? 25 : 8; // Increased threshold for touch
+      
+      if (moveDistance > threshold) {
         if (dragTimeoutRef.current) {
           clearTimeout(dragTimeoutRef.current);
         }
-        setInteractionMode('rotating');
-        rotationRef.current.x += deltaY * 0.01;
-        rotationRef.current.y += deltaX * 0.01;
-        mouseRef.current.x = x;
-        mouseRef.current.y = y;
+        
+        // Only allow rotation if it's not a touch interaction
+        if (mouseRef.current.touchId === undefined) {
+          setInteractionMode('rotating');
+          rotationRef.current.x += deltaY * 0.01;
+          rotationRef.current.y += deltaX * 0.01;
+          mouseRef.current.x = x;
+          mouseRef.current.y = y;
+        }
       }
     }
   }, []);
