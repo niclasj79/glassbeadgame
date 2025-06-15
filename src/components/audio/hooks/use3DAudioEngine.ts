@@ -1,5 +1,5 @@
 
-import { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { useAudioContext } from './useAudioContext';
 import { useAudioState } from './useAudioState';
 import { getDisciplineFrequencies } from '../utils/audioUtils';
