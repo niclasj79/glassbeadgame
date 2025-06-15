@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Eye, EyeOff } from 'lucide-react';
 import { useParticleSystem } from './hooks/useParticleSystem';
 import { useVisualizerPerformance } from './hooks/useVisualizerPerformance';
+import { useVisualizerCanvas } from './hooks/useVisualizerCanvas';
 import { VisualizerSettings } from './VisualizerSettings';
-import { VisualizerCanvas } from './VisualizerCanvas';
 
 interface EnhancedSynesthesiaVisualizerProps {
   activeFrequencies: number[];
@@ -54,7 +54,7 @@ export const EnhancedSynesthesiaVisualizer: React.FC<EnhancedSynesthesiaVisualiz
     performanceMode
   });
 
-  const { drawVisualization } = VisualizerCanvas({
+  const { drawVisualization } = useVisualizerCanvas({
     canvasRef,
     particles,
     settings,

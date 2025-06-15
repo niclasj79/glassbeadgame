@@ -1,5 +1,5 @@
 
-import React, { useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 
 interface AdvancedParticle {
   x: number;
@@ -25,7 +25,7 @@ interface VisualizationSettings {
   depthLayers: boolean;
 }
 
-interface VisualizerCanvasProps {
+interface UseVisualizerCanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   particles: AdvancedParticle[];
   settings: VisualizationSettings;
@@ -35,7 +35,7 @@ interface VisualizerCanvasProps {
   performanceMode: boolean;
 }
 
-export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
+export const useVisualizerCanvas = ({
   canvasRef,
   particles,
   settings,
@@ -43,7 +43,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
   disciplines,
   resonanceLevel,
   performanceMode
-}) => {
+}: UseVisualizerCanvasProps) => {
   const disciplineColors = {
     mathematics: { h: 220, s: 70, l: 60 },
     music: { h: 120, s: 70, l: 60 },
