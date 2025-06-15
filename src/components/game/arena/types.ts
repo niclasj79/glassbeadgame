@@ -22,9 +22,21 @@ export interface MouseRef {
   x: number;
   y: number;
   isDown: boolean;
+  touchId?: number;
 }
 
 export interface RotationRef {
   x: number;
   y: number;
 }
+
+export interface DragState {
+  isDragging: boolean;
+  conceptId: string | null;
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export type InteractionMode = 'idle' | 'rotating' | 'selecting' | 'dragging';

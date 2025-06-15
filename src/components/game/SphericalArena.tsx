@@ -3,23 +3,27 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useAudio } from '../audio/AudioEngine';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionInfo } from './arena/SessionInfo';
-import { SphericalArenaProps, MouseRef, RotationRef } from './arena/types';
+import { SphericalArenaProps } from './arena/types';
 import { Button } from '@/components/ui/button';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
   selectedDisciplines,
-  concepts,
+  concepts: initialConcepts,
   onConceptInteraction,
   onSessionEnd
 }) => {
-  const mouseRef = useRef<MouseRef>({ x: 0, y: 0, isDown: false });
-  const rotationRef = useRef<RotationRef>({ x: 0, y: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
   const [sessionTime, setSessionTime] = useState(0);
+  const [concepts, setConcepts] = useState(initialConcepts);
   
   const { playDisciplineSound } = useAudio();
+
+  // Update concepts when initial concepts change
+  useEffect(() => {
+    setConcepts(initialConcepts);
+  }, [initialConcepts]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,6 +47,15 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     }
   };
 
+  const handleConceptMove = (conceptId: string, newX: number, newY: number) => {
+    setConcepts(prev => prev.map(concept => 
+      concept.id === conceptId 
+        ? { ...concept, x: newX, y: newY }
+        : concept
+    ));
+    onConceptInteraction(conceptId, 'move');
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative">
       {/* Minimal End Session Button */}
@@ -62,9 +75,8 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           disciplines={disciplines}
           isPaused={isPaused}
           selectedConcept={selectedConcept}
-          rotationRef={rotationRef}
-          mouseRef={mouseRef}
           onConceptClick={handleConceptClick}
+          onConceptMove={handleConceptMove}
         />
         
         <SessionInfo
