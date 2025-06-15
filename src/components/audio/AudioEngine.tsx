@@ -1,9 +1,7 @@
 
 import React, { createContext, useContext } from 'react';
 import { AudioContextType, AudioProviderProps } from './types';
-import { useAudioContext } from './hooks/useAudioContext';
-import { useAudioState } from './hooks/useAudioState';
-import { useAudioFunctions } from './hooks/useAudioFunctions';
+import { useAudioEngine } from './hooks/useAudioEngine';
 
 const AudioContext = createContext<AudioContextType | null>(null);
 
@@ -17,59 +15,32 @@ export const useAudio = () => {
 
 export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   const {
-    audioContextRef,
-    oscillatorsRef,
-    gainNodesRef,
-    masterGainRef,
-    initializeAudioContext,
-    updateMasterVolume,
-    stopAmbientLayer,
-    stopAllAmbientLayers
-  } = useAudioContext();
-
-  const {
     isAudioEnabled,
-    setIsAudioEnabled,
+    isInitialized,
     masterVolume,
-    setMasterVolumeState,
-    isInitialized,
-    setIsInitialized
-  } = useAudioState();
-
-  const { playDisciplineSound, playSynthesisSound, playAmbientLayer } = useAudioFunctions(
-    audioContextRef,
-    masterGainRef,
-    oscillatorsRef,
-    gainNodesRef,
-    isAudioEnabled,
-    isInitialized,
+    preloadAudio,
+    initializeAudio,
+    toggleAudio,
+    setMasterVolume,
+    playDisciplineSound,
+    createBackgroundSoundscape,
+    updateDynamicPanning,
     stopAmbientLayer
-  );
+  } = useAudioEngine();
 
-  const initializeAudio = async () => {
-    if (isInitialized) return;
-    
-    const success = await initializeAudioContext(masterVolume);
-    if (success) {
-      setIsInitialized(true);
-      setIsAudioEnabled(true);
-    }
+  // Enhanced playSynthesisSound for multiple disciplines
+  const playSynthesisSound = (disciplines: string[], resonance: number) => {
+    disciplines.forEach((disciplineId, index) => {
+      setTimeout(() => {
+        playDisciplineSound(disciplineId, resonance);
+      }, index * 150);
+    });
   };
 
-  const setMasterVolume = (volume: number) => {
-    setMasterVolumeState(volume);
-    updateMasterVolume(volume);
-  };
-
-  const toggleAudio = () => {
-    if (!isAudioEnabled && !isInitialized) {
-      initializeAudio();
-    } else {
-      setIsAudioEnabled(!isAudioEnabled);
-      if (isAudioEnabled) {
-        stopAllAmbientLayers();
-      }
-    }
+  // Enhanced playAmbientLayer (now handled by background soundscape)
+  const playAmbientLayer = (layer: string) => {
+    console.log('Ambient layer request:', layer);
+    // This is now handled by createBackgroundSoundscape
   };
 
   return (
@@ -82,7 +53,10 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
         setMasterVolume,
         isAudioEnabled,
         toggleAudio,
-        initializeAudio
+        initializeAudio,
+        preloadAudio,
+        createBackgroundSoundscape,
+        updateDynamicPanning
       }}
     >
       {children}

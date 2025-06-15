@@ -1,6 +1,6 @@
 
 export interface AudioContextType {
-  playDisciplineSound: (disciplineId: string, intensity?: number) => void;
+  playDisciplineSound: (disciplineId: string, intensity?: number, position?: { x: number; y: number; z: number }) => void;
   playSynthesisSound: (disciplines: string[], resonance: number) => void;
   playAmbientLayer: (layer: string) => void;
   stopAmbientLayer: (layer: string) => void;
@@ -8,6 +8,9 @@ export interface AudioContextType {
   isAudioEnabled: boolean;
   toggleAudio: () => void;
   initializeAudio: () => Promise<void>;
+  preloadAudio?: () => Promise<boolean>;
+  createBackgroundSoundscape?: (concepts: any[], rotationX: number, rotationY: number) => void;
+  updateDynamicPanning?: (rotationX: number, rotationY: number) => void;
 }
 
 export interface AudioProviderProps {

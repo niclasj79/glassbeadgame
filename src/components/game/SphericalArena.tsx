@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
@@ -16,16 +17,26 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
-  const [audioInitialized, setAudioInitialized] = useState(false);
-  const { initializeAudio, playDisciplineSound } = useAudio();
+  const [rotationState, setRotationState] = useState({ x: 0, y: 0 });
+  const { 
+    preloadAudio, 
+    playDisciplineSound, 
+    createBackgroundSoundscape, 
+    updateDynamicPanning,
+    isAudioEnabled 
+  } = useAudio();
 
-  // Initialize audio on first user interaction
-  const initializeAudioOnInteraction = async () => {
-    if (!audioInitialized) {
-      await initializeAudio();
-      setAudioInitialized(true);
-    }
-  };
+  // Pre-load audio on mount
+  useEffect(() => {
+    const initAudio = async () => {
+      if (preloadAudio) {
+        await preloadAudio();
+        console.log('Audio engine pre-loaded for session');
+      }
+    };
+    
+    initAudio();
+  }, [preloadAudio]);
 
   // Offline session management with performance monitoring
   const {
@@ -45,7 +56,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     enableBatchedUpdates: true,
     enableAggressiveCaching: true,
     maxCacheSize: 100,
-    preloadInsights: false // Disabled for offline mode
+    preloadInsights: false
   });
 
   // Concept interactions
@@ -55,15 +66,25 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     onConceptInteraction
   );
 
-  // Enhanced concept click handler with audio
+  // Create background soundscape when concepts or rotation change
+  useEffect(() => {
+    if (isAudioEnabled && createBackgroundSoundscape && concepts.length > 0) {
+      createBackgroundSoundscape(concepts, rotationState.x, rotationState.y);
+    }
+  }, [concepts, isAudioEnabled, createBackgroundSoundscape, rotationState]);
+
+  // Enhanced concept click handler with 3D audio
   const enhancedConceptClick = async (conceptId: string) => {
-    await initializeAudioOnInteraction();
-    
     const concept = concepts.find(c => c.id === conceptId);
     if (concept) {
       const discipline = disciplines.find(d => d.id === concept.discipline);
       if (discipline) {
-        playDisciplineSound(discipline.id, concept.energy);
+        // Play sound with 3D positioning
+        playDisciplineSound(discipline.id, concept.energy, { 
+          x: concept.x, 
+          y: concept.y, 
+          z: concept.z 
+        });
       }
     }
     
@@ -71,10 +92,8 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptClick(conceptId);
   };
 
-  // Optimized concept move handler with instant visual feedback and audio
+  // Enhanced concept move handler with instant feedback and 3D audio
   const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
-    await initializeAudioOnInteraction();
-    
     // Update local state immediately for instant visual feedback
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
@@ -82,12 +101,16 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         : concept
     ));
     
-    // Play movement sound
+    // Play movement sound with 3D positioning
     const concept = concepts.find(c => c.id === conceptId);
     if (concept) {
       const discipline = disciplines.find(d => d.id === concept.discipline);
       if (discipline) {
-        playDisciplineSound(discipline.id, concept.energy * 0.7);
+        playDisciplineSound(discipline.id, concept.energy * 0.7, { 
+          x: newX, 
+          y: newY, 
+          z: newZ 
+        });
       }
     }
     
@@ -103,43 +126,19 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     trackRenderPerformance();
   };
 
+  // Handle rotation changes for dynamic panning
+  const handleRotationChange = (rotationX: number, rotationY: number) => {
+    setRotationState({ x: rotationX, y: rotationY });
+    if (updateDynamicPanning && isAudioEnabled) {
+      updateDynamicPanning(rotationX, rotationY);
+    }
+  };
+
   // Handle session end with cleanup
   const handleSessionEnd = () => {
     console.log('Session ending - Performance metrics:', performanceMetrics);
     cleanup();
     onSessionEnd();
-  };
-
-  // Export session data to JSON
-  const exportSessionData = () => {
-    if (!sessionId) return;
-
-    try {
-      const sessionData = {
-        sessionId,
-        disciplines: selectedDisciplines,
-        concepts,
-        insights: currentInsight ? [currentInsight] : [],
-        performanceMetrics,
-        exportedAt: new Date().toISOString()
-      };
-
-      const dataStr = JSON.stringify(sessionData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `glass-bead-game-session-${sessionId.slice(-8)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      console.log('Session data exported successfully');
-    } catch (error) {
-      console.error('Failed to export session data:', error);
-    }
   };
 
   // Cleanup on unmount
@@ -181,6 +180,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           selectedConcept={selectedConcept}
           onConceptClick={enhancedConceptClick}
           onConceptMove={enhancedConceptMove}
+          onRotationChange={handleRotationChange}
         />
         
         {/* Bottom UI Elements */}
@@ -194,31 +194,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         />
       </div>
 
-      {/* Audio initialization hint */}
-      {!audioInitialized && (
-        <div className="absolute top-20 right-4 bg-amber-800/80 text-amber-200 p-2 rounded text-xs">
-          Click or move a concept to enable audio
-        </div>
-      )}
-
-      {/* Offline Mode Indicator */}
-      <div className="absolute top-20 right-4 bg-green-800/80 text-green-200 p-2 rounded text-xs font-mono">
-        <div>🌐 OFFLINE MODE</div>
-        <button 
-          onClick={exportSessionData}
-          className="mt-1 text-xs bg-green-700 hover:bg-green-600 px-2 py-1 rounded"
-        >
-          Export Session
-        </button>
-      </div>
-
       {/* Performance Monitor (Development only) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono">
           <div>Renders: {performanceMetrics.renderCount}</div>
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
-          <div>Mode: Offline</div>
-          <div>Audio: {audioInitialized ? 'Ready' : 'Pending'}</div>
+          <div>Audio: {isAudioEnabled ? '3D Ready' : 'Disabled'}</div>
+          <div>Concepts: {concepts.length}</div>
         </div>
       )}
     </div>

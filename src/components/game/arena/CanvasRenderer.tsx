@@ -16,6 +16,7 @@ interface CanvasRendererProps {
   selectedConcept: string | null;
   onConceptClick: (conceptId: string) => void;
   onConceptMove: (conceptId: string, newX: number, newY: number, newZ: number) => void;
+  onRotationChange?: (rotationX: number, rotationY: number) => void;
 }
 
 export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
@@ -24,13 +25,15 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   isPaused,
   selectedConcept,
   onConceptClick,
-  onConceptMove
+  onConceptMove,
+  onRotationChange
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [showDimensionalOverlay, setShowDimensionalOverlay] = useState(true);
   const lastRenderTimeRef = useRef<number>(0);
   const isDirtyRef = useRef<boolean>(true);
+  const lastRotationRef = useRef({ x: 0, y: 0 });
 
   // Updated dimensional mapping to use correct transcendental values
   const dimensionalMapping: DimensionalMapping = {
@@ -51,6 +54,19 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     handleTouchEnd,
     getCursor
   } = useInteractions(concepts, onConceptClick, onConceptMove);
+
+  // Track rotation changes and notify parent
+  useEffect(() => {
+    const currentRotation = rotationRef.current;
+    const lastRotation = lastRotationRef.current;
+    
+    if (onRotationChange && 
+        (Math.abs(currentRotation.x - lastRotation.x) > 0.01 || 
+         Math.abs(currentRotation.y - lastRotation.y) > 0.01)) {
+      onRotationChange(currentRotation.x, currentRotation.y);
+      lastRotationRef.current = { x: currentRotation.x, y: currentRotation.y };
+    }
+  });
 
   // Mark canvas as dirty when concepts change
   useEffect(() => {
