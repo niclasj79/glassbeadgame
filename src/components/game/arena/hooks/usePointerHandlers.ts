@@ -1,7 +1,7 @@
 
 import { useCallback } from 'react';
 import { Concept, RotationRef, MouseRef, DragState, InteractionMode } from '../types';
-import { rotatePoint, project3DTo2D, screenToSphere } from '../utils';
+import { rotatePoint, project3DTo2D, screenToSphere, screenToXY, isTouchNearConcept } from '../utils';
 
 export const usePointerHandlers = (
   concepts: Concept[],
@@ -34,14 +34,28 @@ export const usePointerHandlers = (
     dragTimeoutRef: React.MutableRefObject<number | undefined>,
     touchId?: number
   ) => {
-    mouseRef.current = { x, y, isDown: true, touchId };
+    // Handle two-finger touch for rotation
+    if (mouseRef.current.activeTouches.length >= 2) {
+      mouseRef.current.twoFingerRotation = true;
+      setInteractionMode('two-finger-rotating');
+      return;
+    }
+
+    mouseRef.current = { 
+      ...mouseRef.current,
+      x, 
+      y, 
+      isDown: true, 
+      touchId,
+      twoFingerRotation: false
+    };
     
     const conceptHit = findConceptAtPosition(x, y, canvas, rotationRef);
     
-    if (conceptHit) {
+    if (conceptHit && touchId !== undefined) {
+      // Touch interaction with concept - start touch drag mode
       setInteractionMode('selecting');
       
-      // Start drag timeout for concepts
       dragTimeoutRef.current = window.setTimeout(() => {
         if (mouseRef.current.isDown) {
           setInteractionMode('dragging');
@@ -51,10 +65,29 @@ export const usePointerHandlers = (
             startX: x,
             startY: y,
             offsetX: 0,
-            offsetY: 0
+            offsetY: 0,
+            touchDragMode: true
           });
         }
-      }, 200); // Reduced timeout for more responsive dragging
+      }, 150);
+    } else if (conceptHit && touchId === undefined) {
+      // Mouse interaction with concept - normal 3D drag
+      setInteractionMode('selecting');
+      
+      dragTimeoutRef.current = window.setTimeout(() => {
+        if (mouseRef.current.isDown) {
+          setInteractionMode('dragging');
+          setDragState({
+            isDragging: true,
+            conceptId: conceptHit.concept.id,
+            startX: x,
+            startY: y,
+            offsetX: 0,
+            offsetY: 0,
+            touchDragMode: false
+          });
+        }
+      }, 200);
     } else {
       setInteractionMode('rotating');
     }
@@ -72,29 +105,44 @@ export const usePointerHandlers = (
     setDragState: (state: DragState | ((prev: DragState) => DragState)) => void,
     dragTimeoutRef: React.MutableRefObject<number | undefined>
   ) => {
-    if (!mouseRef.current.isDown) return;
+    if (!mouseRef.current.isDown && interactionMode !== 'two-finger-rotating') return;
 
     const deltaX = x - mouseRef.current.x;
     const deltaY = y - mouseRef.current.y;
 
-    if (interactionMode === 'rotating') {
+    if (interactionMode === 'rotating' || interactionMode === 'two-finger-rotating') {
       // Rotate sphere
       rotationRef.current.x += deltaY * 0.01;
       rotationRef.current.y += deltaX * 0.01;
       
-      mouseRef.current.x = x;
-      mouseRef.current.y = y;
+      if (interactionMode !== 'two-finger-rotating') {
+        mouseRef.current.x = x;
+        mouseRef.current.y = y;
+      }
     } else if (interactionMode === 'dragging' && dragState.isDragging && dragState.conceptId) {
-      // Update drag position with real-time sphere projection
-      const spherePos = screenToSphere(x, y, canvas, rotationRef);
-      setDragState(prev => ({
-        ...prev,
-        offsetX: x - prev.startX,
-        offsetY: y - prev.startY,
-        sphereX: spherePos.x,
-        sphereY: spherePos.y,
-        sphereZ: spherePos.z
-      }));
+      if (dragState.touchDragMode) {
+        // Touch drag - XY only in current view
+        const xyPos = screenToXY(x, y, canvas, rotationRef);
+        setDragState(prev => ({
+          ...prev,
+          offsetX: x - prev.startX,
+          offsetY: y - prev.startY,
+          sphereX: xyPos.x,
+          sphereY: xyPos.y,
+          sphereZ: 0 // Keep current Z for touch
+        }));
+      } else {
+        // Mouse drag - full 3D positioning
+        const spherePos = screenToSphere(x, y, canvas, rotationRef);
+        setDragState(prev => ({
+          ...prev,
+          offsetX: x - prev.startX,
+          offsetY: y - prev.startY,
+          sphereX: spherePos.x,
+          sphereY: spherePos.y,
+          sphereZ: spherePos.z
+        }));
+      }
     } else if (interactionMode === 'selecting') {
       // Check if we've moved enough to start sphere rotation
       const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -134,14 +182,26 @@ export const usePointerHandlers = (
         onConceptClick(conceptHit.concept.id);
       }
     } else if (interactionMode === 'dragging' && dragState.isDragging && dragState.conceptId) {
-      // Finish dragging - use the calculated sphere coordinates
-      if (dragState.sphereX !== undefined && dragState.sphereY !== undefined && dragState.sphereZ !== undefined) {
-        onConceptMove(dragState.conceptId, dragState.sphereX, dragState.sphereY, dragState.sphereZ);
+      // Finish dragging
+      if (dragState.touchDragMode) {
+        // Touch drag - update XY only, preserve current Z
+        const currentConcept = concepts.find(c => c.id === dragState.conceptId);
+        if (currentConcept && dragState.sphereX !== undefined && dragState.sphereY !== undefined) {
+          onConceptMove(dragState.conceptId, dragState.sphereX, dragState.sphereY, currentConcept.z);
+        }
+      } else {
+        // Mouse drag - full 3D positioning
+        if (dragState.sphereX !== undefined && dragState.sphereY !== undefined && dragState.sphereZ !== undefined) {
+          onConceptMove(dragState.conceptId, dragState.sphereX, dragState.sphereY, dragState.sphereZ);
+        }
       }
     }
 
     // Reset state
-    mouseRef.current.isDown = false;
+    if (interactionMode !== 'two-finger-rotating') {
+      mouseRef.current.isDown = false;
+    }
+    mouseRef.current.twoFingerRotation = false;
     setInteractionMode('idle');
     setDragState({
       isDragging: false,
@@ -149,7 +209,8 @@ export const usePointerHandlers = (
       startX: 0,
       startY: 0,
       offsetX: 0,
-      offsetY: 0
+      offsetY: 0,
+      touchDragMode: false
     });
   }, [concepts, findConceptAtPosition, onConceptClick, onConceptMove]);
 

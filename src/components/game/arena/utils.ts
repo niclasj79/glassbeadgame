@@ -1,4 +1,3 @@
-
 // Helper function to convert hex color to RGB
 export const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -35,6 +34,45 @@ export const rotatePoint = (x: number, y: number, z: number, rotX: number, rotY:
   const finalZ = y * sinX + newZ * cosX;
   
   return { x: newX, y: newY, z: finalZ };
+};
+
+// Convert screen coordinates to XY only (for touch concept dragging)
+export const screenToXY = (screenX: number, screenY: number, canvas: HTMLCanvasElement, rotationRef: React.MutableRefObject<{ x: number; y: number }>) => {
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  // Convert to normalized coordinates relative to canvas center
+  const normalizedX = (screenX - centerX) * 0.8;
+  const normalizedY = (screenY - centerY) * 0.8;
+  
+  return {
+    x: normalizedX,
+    y: normalizedY
+  };
+};
+
+// Check if touch is near a concept
+export const isTouchNearConcept = (touchX: number, touchY: number, concept: any, canvas: HTMLCanvasElement, rotationRef: React.MutableRefObject<{ x: number; y: number }>) => {
+  const rotated = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
+  const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+  
+  const distance = Math.sqrt((touchX - projected.x) ** 2 + (touchY - projected.y) ** 2);
+  const size = 8 + concept.energy * 4 * projected.scale;
+  
+  return distance < size + 15; // Slightly larger touch target
+};
+
+// Calculate distance between two touches
+export const getTouchDistance = (touch1: { x: number; y: number }, touch2: { x: number; y: number }) => {
+  return Math.sqrt((touch1.x - touch2.x) ** 2 + (touch1.y - touch2.y) ** 2);
+};
+
+// Calculate center point between two touches
+export const getTouchCenter = (touch1: { x: number; y: number }, touch2: { x: number; y: number }) => {
+  return {
+    x: (touch1.x + touch2.x) / 2,
+    y: (touch1.y + touch2.y) / 2
+  };
 };
 
 // Convert screen coordinates to sphere coordinates

@@ -18,11 +18,19 @@ export interface Concept {
   connections: string[];
 }
 
+export interface TouchInfo {
+  id: number;
+  x: number;
+  y: number;
+}
+
 export interface MouseRef {
   x: number;
   y: number;
   isDown: boolean;
   touchId?: number;
+  activeTouches: TouchInfo[];
+  twoFingerRotation: boolean;
 }
 
 export interface RotationRef {
@@ -40,9 +48,10 @@ export interface DragState {
   sphereX?: number;
   sphereY?: number;
   sphereZ?: number;
+  touchDragMode: boolean;
 }
 
-export type InteractionMode = 'idle' | 'rotating' | 'selecting' | 'dragging';
+export type InteractionMode = 'idle' | 'rotating' | 'selecting' | 'dragging' | 'two-finger-rotating';
 
 export interface DimensionalMapping {
   x: { label: string; description: string };
