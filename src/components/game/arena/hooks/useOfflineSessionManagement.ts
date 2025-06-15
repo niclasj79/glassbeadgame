@@ -19,6 +19,13 @@ const DEFAULT_CONFIG: OfflineSessionConfig = {
   preloadInsights: false // Disabled for offline mode
 };
 
+// Helper function to format time in mm:ss format
+const formatTimeValue = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 export const useOfflineSessionManagement = (
   initialConcepts: Concept[],
   onSessionEnd: () => void,
@@ -147,9 +154,9 @@ export const useOfflineSessionManagement = (
     console.log('Offline Session Performance Metrics:', {
       renders: performanceMetrics.current.renderCount,
       avgFrameTime: performanceMetrics.current.averageFrameTime.toFixed(2) + 'ms',
-      sessionDuration: formatTime(sessionTime)
+      sessionDuration: formatTimeValue(sessionTime)
     });
-  }, [flushPendingUpdates, cleanupMovement, sessionId, startTime, sessionTime, concepts, formatTime]);
+  }, [flushPendingUpdates, cleanupMovement, sessionId, startTime, sessionTime, concepts]);
 
   return {
     sessionId,
