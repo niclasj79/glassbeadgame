@@ -36,9 +36,9 @@ export const OptimizedCanvasRenderer: React.FC<OptimizedCanvasRendererProps> = (
 
   // Performance optimization: memoize dimensional mapping
   const dimensionalMapping: DimensionalMapping = useMemo(() => ({
-    x: { label: "Beautiful ↔ Ugly", description: "From aesthetic beauty to its negation" },
-    y: { label: "Good ↔ Evil", description: "From moral goodness to its negation" },
-    z: { label: "True ↔ False", description: "From truth to its negation" }
+    x: { positive: "Beautiful", negative: "Ugly", description: "From aesthetic beauty to its negation" },
+    y: { positive: "Good", negative: "Evil", description: "From moral goodness to its negation" },
+    z: { positive: "True", negative: "False", description: "From truth to its negation" }
   }), []);
 
   // Performance optimization: memoize discipline lookup
@@ -224,15 +224,15 @@ export const OptimizedCanvasRenderer: React.FC<OptimizedCanvasRendererProps> = (
           <div className="text-xs text-gray-300 space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-red-400"></div>
-              <span className="truncate">{dimensionalMapping.x.label}</span>
+              <span className="truncate">{dimensionalMapping.x.positive} ↔ {dimensionalMapping.x.negative}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-green-400"></div>
-              <span className="truncate">{dimensionalMapping.y.label}</span>
+              <span className="truncate">{dimensionalMapping.y.positive} ↔ {dimensionalMapping.y.negative}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-blue-400"></div>
-              <span className="truncate">{dimensionalMapping.z.label}</span>
+              <span className="truncate">{dimensionalMapping.z.positive} ↔ {dimensionalMapping.z.negative}</span>
             </div>
           </div>
         </div>

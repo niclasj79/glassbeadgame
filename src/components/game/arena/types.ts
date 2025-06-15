@@ -1,4 +1,3 @@
-
 export interface SphericalArenaProps {
   disciplines: any[];
   selectedDisciplines: string[];
@@ -53,8 +52,14 @@ export interface DragState {
 
 export type InteractionMode = 'idle' | 'rotating' | 'selecting' | 'dragging' | 'two-finger-rotating';
 
+export interface DimensionalAxis {
+  positive: string;
+  negative: string;
+  description: string;
+}
+
 export interface DimensionalMapping {
-  x: { label: string; description: string };
-  y: { label: string; description: string };
-  z: { label: string; description: string };
+  x: DimensionalAxis;
+  y: DimensionalAxis;
+  z: DimensionalAxis;
 }

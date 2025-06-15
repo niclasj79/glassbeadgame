@@ -36,21 +36,21 @@ export const DimensionalDisplay: React.FC<DimensionalDisplayProps> = ({
         
         <div className="space-y-1 md:space-y-2">
           <div className="flex justify-between items-center gap-2">
-            <span className="text-xs text-red-300 truncate">{dimensionalMapping.x.label}</span>
+            <span className="text-xs text-red-300 truncate">{dimensionalMapping.x.positive} ↔ {dimensionalMapping.x.negative}</span>
             <Badge variant="outline" className="border-red-400 text-red-300 text-xs">
               {formatValue(dimensionalValues.analytical_intuitive)}%
             </Badge>
           </div>
           
           <div className="flex justify-between items-center gap-2">
-            <span className="text-xs text-green-300 truncate">{dimensionalMapping.y.label}</span>
+            <span className="text-xs text-green-300 truncate">{dimensionalMapping.y.positive} ↔ {dimensionalMapping.y.negative}</span>
             <Badge variant="outline" className="border-green-400 text-green-300 text-xs">
               {formatValue(dimensionalValues.theoretical_practical)}%
             </Badge>
           </div>
           
           <div className="flex justify-between items-center gap-2">
-            <span className="text-xs text-blue-300 truncate">{dimensionalMapping.z.label}</span>
+            <span className="text-xs text-blue-300 truncate">{dimensionalMapping.z.positive} ↔ {dimensionalMapping.z.negative}</span>
             <Badge variant="outline" className="border-blue-400 text-blue-300 text-xs">
               {formatValue(dimensionalValues.abstract_concrete)}%
             </Badge>

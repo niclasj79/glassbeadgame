@@ -1,4 +1,3 @@
-
 import { RotationRef, DimensionalMapping } from '../types';
 import { rotatePoint, project3DTo2D } from '../utils';
 
@@ -59,12 +58,12 @@ export class DimensionalRenderer {
     mapping: DimensionalMapping
   ) {
     const labels = [
-      { pos: [radius + 20, 0, 0], text: mapping.x.label, color: 'rgba(255, 150, 150, 0.8)' },
-      { pos: [-radius - 20, 0, 0], text: `← ${mapping.x.label}`, color: 'rgba(255, 150, 150, 0.8)' },
-      { pos: [0, radius + 20, 0], text: mapping.y.label, color: 'rgba(150, 255, 150, 0.8)' },
-      { pos: [0, -radius - 20, 0], text: `← ${mapping.y.label}`, color: 'rgba(150, 255, 150, 0.8)' },
-      { pos: [0, 0, radius + 20], text: mapping.z.label, color: 'rgba(150, 150, 255, 0.8)' },
-      { pos: [0, 0, -radius - 20], text: `← ${mapping.z.label}`, color: 'rgba(150, 150, 255, 0.8)' }
+      { pos: [radius + 20, 0, 0], text: mapping.x.positive, color: 'rgba(255, 150, 150, 0.8)' },
+      { pos: [-radius - 20, 0, 0], text: mapping.x.negative, color: 'rgba(255, 150, 150, 0.8)' },
+      { pos: [0, radius + 20, 0], text: mapping.y.positive, color: 'rgba(150, 255, 150, 0.8)' },
+      { pos: [0, -radius - 20, 0], text: mapping.y.negative, color: 'rgba(150, 255, 150, 0.8)' },
+      { pos: [0, 0, radius + 20], text: mapping.z.positive, color: 'rgba(150, 150, 255, 0.8)' },
+      { pos: [0, 0, -radius - 20], text: mapping.z.negative, color: 'rgba(150, 150, 255, 0.8)' }
     ];
 
     ctx.font = '12px Arial';
