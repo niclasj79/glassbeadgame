@@ -488,7 +488,7 @@ export const EnhancedSynesthesiaVisualizer: React.FC<EnhancedSynesthesiaVisualiz
             </Card>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
