@@ -47,13 +47,19 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     }
   };
 
-  const handleConceptMove = (conceptId: string, newX: number, newY: number) => {
+  const handleConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
-        ? { ...concept, x: newX, y: newY }
+        ? { ...concept, x: newX, y: newY, z: newZ }
         : concept
     ));
     onConceptInteraction(conceptId, 'move');
+    
+    // Play audio feedback for movement
+    const concept = concepts.find(c => c.id === conceptId);
+    if (concept) {
+      playDisciplineSound(concept.discipline, 0.3);
+    }
   };
 
   return (

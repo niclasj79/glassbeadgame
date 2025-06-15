@@ -37,6 +37,15 @@ export interface DragState {
   startY: number;
   offsetX: number;
   offsetY: number;
+  sphereX?: number;
+  sphereY?: number;
+  sphereZ?: number;
 }
 
 export type InteractionMode = 'idle' | 'rotating' | 'selecting' | 'dragging';
+
+export interface DimensionalMapping {
+  x: { label: string; description: string };
+  y: { label: string; description: string };
+  z: { label: string; description: string };
+}

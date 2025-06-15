@@ -1,12 +1,12 @@
 
 import { useCallback } from 'react';
 import { Concept, RotationRef, MouseRef, DragState, InteractionMode } from '../types';
-import { rotatePoint, project3DTo2D } from '../utils';
+import { rotatePoint, project3DTo2D, screenToSphere } from '../utils';
 
 export const usePointerHandlers = (
   concepts: Concept[],
   onConceptClick: (conceptId: string) => void,
-  onConceptMove: (conceptId: string, newX: number, newY: number) => void
+  onConceptMove: (conceptId: string, newX: number, newY: number, newZ: number) => void
 ) => {
   const findConceptAtPosition = useCallback((x: number, y: number, canvas: HTMLCanvasElement, rotationRef: React.MutableRefObject<RotationRef>) => {
     for (const concept of concepts) {
@@ -50,11 +50,11 @@ export const usePointerHandlers = (
             conceptId: conceptHit.concept.id,
             startX: x,
             startY: y,
-            offsetX: x - conceptHit.projected.x,
-            offsetY: y - conceptHit.projected.y
+            offsetX: 0,
+            offsetY: 0
           });
         }
-      }, 300); // 300ms hold to start dragging
+      }, 200); // Reduced timeout for more responsive dragging
     } else {
       setInteractionMode('rotating');
     }
@@ -85,16 +85,20 @@ export const usePointerHandlers = (
       mouseRef.current.x = x;
       mouseRef.current.y = y;
     } else if (interactionMode === 'dragging' && dragState.isDragging && dragState.conceptId) {
-      // Update drag position
+      // Update drag position with real-time sphere projection
+      const spherePos = screenToSphere(x, y, canvas, rotationRef);
       setDragState(prev => ({
         ...prev,
         offsetX: x - prev.startX,
-        offsetY: y - prev.startY
+        offsetY: y - prev.startY,
+        sphereX: spherePos.x,
+        sphereY: spherePos.y,
+        sphereZ: spherePos.z
       }));
     } else if (interactionMode === 'selecting') {
       // Check if we've moved enough to start sphere rotation
       const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      if (moveDistance > 10) {
+      if (moveDistance > 8) {
         if (dragTimeoutRef.current) {
           clearTimeout(dragTimeoutRef.current);
         }
@@ -130,34 +134,9 @@ export const usePointerHandlers = (
         onConceptClick(conceptHit.concept.id);
       }
     } else if (interactionMode === 'dragging' && dragState.isDragging && dragState.conceptId) {
-      // Finish dragging - convert screen coordinates to 3D position
-      const concept = concepts.find(c => c.id === dragState.conceptId);
-      if (concept) {
-        // Calculate new 3D position based on current sphere rotation and screen offset
-        const sphereRadius = 200;
-        const newScreenX = dragState.startX + dragState.offsetX;
-        const newScreenY = dragState.startY + dragState.offsetY;
-        
-        // Convert screen coordinates back to 3D sphere coordinates
-        // This is a simplified approach - we'll maintain the Z distance but update X,Y
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        
-        // Calculate relative position on sphere surface
-        const relativeX = (newScreenX - centerX) / sphereRadius;
-        const relativeY = (newScreenY - centerY) / sphereRadius;
-        
-        // Constrain to sphere surface
-        const distance = Math.sqrt(relativeX * relativeX + relativeY * relativeY);
-        if (distance <= 1) {
-          const newX = relativeX * sphereRadius;
-          const newY = relativeY * sphereRadius;
-          const newZ = Math.sqrt(Math.max(0, sphereRadius * sphereRadius - newX * newX - newY * newY));
-          
-          // Apply inverse rotation to get world coordinates
-          const inverseRotated = rotatePoint(newX, newY, newZ, -rotationRef.current.x, -rotationRef.current.y);
-          onConceptMove(dragState.conceptId, inverseRotated.x, inverseRotated.y);
-        }
+      // Finish dragging - use the calculated sphere coordinates
+      if (dragState.sphereX !== undefined && dragState.sphereY !== undefined && dragState.sphereZ !== undefined) {
+        onConceptMove(dragState.conceptId, dragState.sphereX, dragState.sphereY, dragState.sphereZ);
       }
     }
 
