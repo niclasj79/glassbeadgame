@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,10 +12,18 @@ interface AIInterpretationProps {
 interface SessionData {
   id?: string;
   disciplines: string[];
-  concepts: any[];
+  concepts: Concept[];
   interactions: Interaction[];
   duration: number;
   sessionType: string;
+}
+
+interface Concept {
+  id: string;
+  text?: string;
+  name?: string;
+  discipline?: string;
+  energy?: number;
 }
 
 interface Interaction {
@@ -100,7 +107,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     const activeConcepts = Array.from(conceptMovements.keys());
     const disciplineNames = disciplines.map(d => d.charAt(0).toUpperCase() + d.slice(1));
     
-    // Generate real-world analogies
+    // real-world analogies and movement descriptions arrays
     const realWorldAnalogies = [
       "the formation of a complex ecosystem where predator-prey relationships establish dynamic equilibrium",
       "the emergence of a jazz ensemble where individual musicians create spontaneous harmonic structures",
@@ -116,7 +123,6 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
 
     const selectedAnalogy = realWorldAnalogies[Math.floor(Math.random() * realWorldAnalogies.length)];
     
-    // Generate movement descriptions
     const movementDescriptions = [
       "gravitational convergence toward points of conceptual density",
       "orbital trajectories that trace the boundaries between different knowledge domains",
@@ -130,7 +136,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
 
     const selectedMovement = movementDescriptions[Math.floor(Math.random() * movementDescriptions.length)];
 
-    // Generate the interpretation
+    // interpretations array and return
     const interpretations = [
       `This contemplative exploration manifested as a three-dimensional meditation on the relationships between ${activeConcepts.slice(0, 3).join(', ')}${activeConcepts.length > 3 ? ', and others' : ''}. The spatial choreography revealed ${selectedMovement}, creating a conceptual architecture that mirrors ${selectedAnalogy}. 
 
@@ -166,7 +172,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Group concepts by discipline for better organization
+  // Group concepts by discipline for better organization with proper typing
   const conceptsByDiscipline = sessionData.concepts.reduce((acc, concept) => {
     const discipline = concept.discipline || 'unknown';
     if (!acc[discipline]) {
@@ -174,7 +180,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     }
     acc[discipline].push(concept);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, Concept[]>);
 
   // Get discipline colors (simplified mapping)
   const getDisciplineColor = (discipline: string) => {
@@ -191,6 +197,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     return colorMap[discipline] || colorMap.unknown;
   };
 
+  // loading state rendering
   if (isGenerating) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center">
@@ -224,7 +231,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
           </div>
         </div>
 
-        {/* Concepts Section - New Addition */}
+        {/* Concepts Section */}
         <Card className="bg-gray-900/80 border-gray-700 p-6 mb-6 backdrop-blur-sm">
           <h3 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
             <Lightbulb className="w-5 h-5" />
@@ -259,6 +266,7 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
           </div>
         </Card>
 
+        {/* interpretation card, knowledge domains card, and buttons */}
         <Card className="bg-gray-900/80 border-gray-700 p-8 mb-6 backdrop-blur-sm">
           <div className="prose prose-invert max-w-none">
             <div className="text-lg leading-relaxed text-gray-200 whitespace-pre-line">
