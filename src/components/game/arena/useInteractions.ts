@@ -9,7 +9,7 @@ import { useEventHandlers } from './hooks/useEventHandlers';
 export const useInteractions = (
   concepts: Concept[],
   onConceptClick: (conceptId: string) => void,
-  onConceptMove: (conceptId: string, newX: number, newY: number) => void
+  onConceptMove: (conceptId: string, newX: number, newY: number, newZ: number) => void
 ) => {
   const rotationRef = useRef<RotationRef>({ x: 0, y: 0 });
   
