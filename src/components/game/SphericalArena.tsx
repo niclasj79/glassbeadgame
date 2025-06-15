@@ -4,7 +4,7 @@ import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
 import { SphericalArenaProps } from './arena/types';
-import { useSessionManagement } from './arena/hooks/useSessionManagement';
+import { usePerformantSessionManagement } from './arena/hooks/usePerformantSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
@@ -17,7 +17,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
 
-  // Session management
+  // Optimized session management with performance monitoring
   const {
     sessionId,
     concepts,
@@ -28,8 +28,15 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     currentInsight,
     isGenerating,
     error,
-    cleanupMovement
-  } = useSessionManagement(initialConcepts, onSessionEnd);
+    cleanup,
+    trackRenderPerformance,
+    performanceMetrics
+  } = usePerformantSessionManagement(initialConcepts, onSessionEnd, {
+    enableBatchedUpdates: true,
+    enableAggressiveCaching: true,
+    maxCacheSize: 100,
+    preloadInsights: true
+  });
 
   // Concept interactions
   const { handleConceptClick, handleConceptMove } = useConceptInteractions(
@@ -44,35 +51,54 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptClick(conceptId);
   };
 
-  // Enhanced concept move handler
+  // Optimized concept move handler with instant visual feedback
   const enhancedConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
-    // Update concepts immediately for visual feedback
+    // Update local state immediately for instant visual feedback
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
         ? { ...concept, x: newX, y: newY, z: newZ }
         : concept
     ));
     
+    // Handle business logic
     handleConceptMove(conceptId, newX, newY, newZ);
     
-    // Update movement tracking (now optimized with batching and throttling)
+    // Update optimized movement tracking (batched and cached)
     if (sessionId) {
       updateConceptMovement(conceptId, newX, newY, newZ);
     }
+
+    // Track render performance
+    trackRenderPerformance();
   };
 
-  // Handle session end
+  // Handle session end with cleanup
   const handleSessionEnd = () => {
-    cleanupMovement();
+    console.log('Session ending - Performance metrics:', performanceMetrics);
+    cleanup();
     onSessionEnd();
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      cleanupMovement();
+      cleanup();
     };
-  }, [cleanupMovement]);
+  }, [cleanup]);
+
+  // Performance monitoring effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (performanceMetrics.averageFrameTime > 50) {
+        console.warn('Performance degradation detected:', {
+          avgFrameTime: performanceMetrics.averageFrameTime.toFixed(2) + 'ms',
+          renderCount: performanceMetrics.renderCount
+        });
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [performanceMetrics]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
@@ -80,10 +106,10 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       <SessionHeader
         remainingTime={remainingTime}
         formatTime={formatTime}
-        onEndSession={handleSessionEnd}
+        onSessionEnd={handleSessionEnd}
       />
 
-      {/* 3D Canvas - Full Screen */}
+      {/* 3D Canvas - Full Screen with Performance Optimization */}
       <div className="flex-1 relative">
         <CanvasRenderer
           concepts={concepts}
@@ -104,6 +130,15 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           error={error}
         />
       </div>
+
+      {/* Performance Monitor (Development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono">
+          <div>Renders: {performanceMetrics.renderCount}</div>
+          <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
+          <div>Cache Hits: {performanceMetrics.cacheHitRate}</div>
+        </div>
+      )}
     </div>
   );
 };
