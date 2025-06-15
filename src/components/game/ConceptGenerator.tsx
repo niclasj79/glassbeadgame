@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Concept } from './concept/types';
 import { conceptDatabaseService } from './concept/conceptDatabase';
@@ -62,7 +63,7 @@ export class ConceptGenerator {
         }
       }
 
-      // Generate some connections between concepts
+      // Generate connections between ALL concepts
       this.generateConnections(concepts);
 
       return concepts;
@@ -73,14 +74,19 @@ export class ConceptGenerator {
   }
 
   private generateConnections(concepts: Concept[]): void {
-    const connectionCount = Math.floor(concepts.length * 0.4);
-    for (let i = 0; i < connectionCount; i++) {
-      const concept1 = concepts[Math.floor(Math.random() * concepts.length)];
-      const concept2 = concepts[Math.floor(Math.random() * concepts.length)];
-      
-      if (concept1.id !== concept2.id && !concept1.connections.includes(concept2.id)) {
-        concept1.connections.push(concept2.id);
-        concept2.connections.push(concept1.id);
+    // Connect each concept to every other concept
+    for (let i = 0; i < concepts.length; i++) {
+      for (let j = i + 1; j < concepts.length; j++) {
+        const concept1 = concepts[i];
+        const concept2 = concepts[j];
+        
+        // Add bidirectional connections
+        if (!concept1.connections.includes(concept2.id)) {
+          concept1.connections.push(concept2.id);
+        }
+        if (!concept2.connections.includes(concept1.id)) {
+          concept2.connections.push(concept1.id);
+        }
       }
     }
   }

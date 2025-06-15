@@ -21,7 +21,11 @@ export class ConnectionRenderer {
         const projected2 = project3DTo2D(rotated2.x, rotated2.y, rotated2.z, canvas);
 
         const avgScale = (projected1.scale + projected2.scale) / 2;
-        if (avgScale < 0.3) return;
+        
+        // Always render connections, but adjust opacity based on distance
+        const minOpacity = 0.1;
+        const maxOpacity = 0.6;
+        const opacity = Math.max(minOpacity, avgScale * maxOpacity);
 
         // Animated flow along connection
         const flow = (Date.now() * 0.003) % 1;
@@ -30,22 +34,24 @@ export class ConnectionRenderer {
 
         // Connection line with gradient
         const gradient = ctx.createLinearGradient(projected1.x, projected1.y, projected2.x, projected2.y);
-        gradient.addColorStop(0, `rgba(150, 100, 255, ${avgScale * 0.3})`);
-        gradient.addColorStop(0.5, `rgba(200, 150, 255, ${avgScale * 0.6})`);
-        gradient.addColorStop(1, `rgba(150, 100, 255, ${avgScale * 0.3})`);
+        gradient.addColorStop(0, `rgba(150, 100, 255, ${opacity * 0.5})`);
+        gradient.addColorStop(0.5, `rgba(200, 150, 255, ${opacity})`);
+        gradient.addColorStop(1, `rgba(150, 100, 255, ${opacity * 0.5})`);
         
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(1, 2 * avgScale);
         ctx.beginPath();
         ctx.moveTo(projected1.x, projected1.y);
         ctx.lineTo(projected2.x, projected2.y);
         ctx.stroke();
 
-        // Flow particle
-        ctx.fillStyle = `rgba(255, 255, 255, ${avgScale * 0.8})`;
-        ctx.beginPath();
-        ctx.arc(flowX, flowY, 3, 0, Math.PI * 2);
-        ctx.fill();
+        // Flow particle - only show when connection is reasonably visible
+        if (avgScale > 0.2) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
+          ctx.beginPath();
+          ctx.arc(flowX, flowY, Math.max(1, 3 * avgScale), 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
     });
   }
