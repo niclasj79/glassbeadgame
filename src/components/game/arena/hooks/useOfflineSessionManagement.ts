@@ -4,6 +4,7 @@ import { Concept } from '../types';
 import { useSessionTimer } from './useSessionTimer';
 import { useOfflineTextGeneration } from './useOfflineTextGeneration';
 import { useOfflineMovementTracking } from './useOfflineMovementTracking';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface OfflineSessionConfig {
   enableBatchedUpdates: boolean;
@@ -59,7 +60,12 @@ export const useOfflineSessionManagement = (
     enableLocalCaching: finalConfig.enableAggressiveCaching
   });
   
-  // Offline text generation
+  // Offline text generation - only initialize if Hesse insights are enabled
+  const textGeneration = useOfflineTextGeneration(
+    isFeatureEnabled('hesseInsights') ? sessionId : null, 
+    { cooldownPeriod: 15000 }
+  );
+
   const { 
     currentInsight, 
     isGenerating, 
@@ -67,9 +73,7 @@ export const useOfflineSessionManagement = (
     generateInsights,
     preloadInsights,
     getCachedInsight 
-  } = useOfflineTextGeneration(sessionId, {
-    cooldownPeriod: 15000
-  });
+  } = textGeneration;
 
   // Generate session ID
   useEffect(() => {
@@ -108,9 +112,9 @@ export const useOfflineSessionManagement = (
     }
   }, [isExpired, onSessionEnd, cleanupMovement, flushPendingUpdates]);
 
-  // Generate insights when concepts are stable
+  // Generate insights when concepts are stable - only if Hesse insights are enabled
   useEffect(() => {
-    if (allConceptsStable && concepts.length > 0 && sessionId) {
+    if (isFeatureEnabled('hesseInsights') && allConceptsStable && concepts.length > 0 && sessionId) {
       console.log('Generating offline insight for stable concepts');
       generateInsights(concepts);
     }
@@ -168,9 +172,9 @@ export const useOfflineSessionManagement = (
     formatTime,
     updateConceptMovement,
     allConceptsStable,
-    currentInsight,
-    isGenerating,
-    error,
+    currentInsight: isFeatureEnabled('hesseInsights') ? currentInsight : null,
+    isGenerating: isFeatureEnabled('hesseInsights') ? isGenerating : false,
+    error: isFeatureEnabled('hesseInsights') ? error : null,
     cleanup,
     trackRenderPerformance,
     performanceMetrics: performanceMetrics.current

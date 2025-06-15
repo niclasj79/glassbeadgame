@@ -2,7 +2,8 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, BookOpen, Sparkles } from 'lucide-react';
+import { Loader2, BookOpen, Sparkles, EyeOff } from 'lucide-react';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface HesseInsightsProps {
   conceptualText: string | null;
@@ -19,7 +20,23 @@ export const HesseInsights: React.FC<HesseInsightsProps> = ({
   error,
   className = ""
 }) => {
+  const hesseInsightsEnabled = isFeatureEnabled('hesseInsights');
   const hasContent = conceptualText || dimensionalText;
+
+  // Show disabled state when feature is off
+  if (!hesseInsightsEnabled) {
+    return (
+      <Card className={`bg-gray-900/80 border-gray-700 backdrop-blur-sm p-3 md:p-4 ${className}`}>
+        <div className="flex items-center gap-2 mb-2 md:mb-3">
+          <EyeOff className="h-4 w-4 md:h-5 md:w-5 text-gray-500" />
+          <h3 className="text-base md:text-lg font-semibold text-gray-400">Hesse Insights</h3>
+        </div>
+        <p className="text-xs md:text-sm text-gray-500 italic">
+          Hesse insights are currently disabled. Enable in feature flags to see philosophical reflections.
+        </p>
+      </Card>
+    );
+  }
 
   if (!hasContent && !isGenerating && !error) {
     return (

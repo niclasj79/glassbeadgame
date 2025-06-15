@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { HeroSection } from './HeroSection';
 import { DisciplineSelectionPhase } from './DisciplineSelectionPhase';
 import { ConceptSelectionPhase } from './ConceptSelectionPhase';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface SessionStartFlowProps {
   disciplines: any[];
@@ -34,7 +35,12 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
 
   const handleQuickSelect = (combination: string[]) => {
     setSelectedDisciplines(combination);
-    setCurrentPhase('concept');
+    // Skip concept selection if Hesse insights are disabled (no need for specific concepts)
+    if (!isFeatureEnabled('hesseInsights')) {
+      handleDisciplineSelection(combination);
+    } else {
+      setCurrentPhase('concept');
+    }
   };
 
   const handleSurpriseMe = async (allDisciplines: string[], conceptCount: number) => {
@@ -53,7 +59,12 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
 
   const handleDisciplineSelection = (disciplines: string[]) => {
     setSelectedDisciplines(disciplines);
-    setCurrentPhase('concept');
+    // Skip concept selection if Hesse insights are disabled
+    if (!isFeatureEnabled('hesseInsights')) {
+      handleConceptsSelected({});
+    } else {
+      setCurrentPhase('concept');
+    }
   };
 
   const handleConceptsSelected = async (selectedConcepts: { [disciplineId: string]: string }) => {
@@ -73,7 +84,8 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     setCurrentPhase('hero');
   };
 
-  if (currentPhase === 'concept') {
+  // Only show concept selection phase if Hesse insights are enabled
+  if (currentPhase === 'concept' && isFeatureEnabled('hesseInsights')) {
     return (
       <ConceptSelectionPhase
         disciplines={disciplines}

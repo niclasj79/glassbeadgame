@@ -1,10 +1,10 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useStateRecovery } from '@/hooks/useStateRecovery';
 import { useErrorRecovery } from '@/hooks/useErrorRecovery';
 import { conceptGenerator, Concept } from '../ConceptGenerator';
 import { gameSessionService, GameSessionData } from '../GameSessionService';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface GameSessionState {
   phase: 'start' | 'arena' | 'interpretation';
@@ -70,7 +70,9 @@ export const useGameStateManager = () => {
     try {
       console.log('Starting session with disciplines:', selectedDisciplines, 'concepts:', conceptCount, 'selected:', selectedConcepts);
       
-      const concepts = await conceptGenerator.generateConcepts(selectedDisciplines, conceptCount, selectedConcepts);
+      // Only use selected concepts if Hesse insights are enabled
+      const conceptsToUse = isFeatureEnabled('hesseInsights') ? selectedConcepts : undefined;
+      const concepts = await conceptGenerator.generateConcepts(selectedDisciplines, conceptCount, conceptsToUse);
       console.log('Generated concepts:', concepts);
       
       const sessionId = crypto.randomUUID();
@@ -92,9 +94,10 @@ export const useGameStateManager = () => {
         }
       }));
 
+      const insightStatus = isFeatureEnabled('hesseInsights') ? "with Hesse insights" : "without Hesse insights";
       toast({
         title: "Session Started",
-        description: `Exploring ${conceptCount} concepts across ${selectedDisciplines.length} disciplines`,
+        description: `Exploring ${conceptCount} concepts across ${selectedDisciplines.length} disciplines ${insightStatus}`,
       });
     } catch (error) {
       console.error('Error starting session:', error);

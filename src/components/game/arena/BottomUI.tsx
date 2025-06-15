@@ -3,6 +3,7 @@ import React from 'react';
 import { SessionInfo } from './SessionInfo';
 import { ResponsiveInsights } from './ResponsiveInsights';
 import { Concept } from './types';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface BottomUIProps {
   disciplines: any[];
@@ -21,6 +22,8 @@ export const BottomUI: React.FC<BottomUIProps> = ({
   isGenerating,
   error
 }) => {
+  const showInsights = isFeatureEnabled('hesseInsights');
+
   return (
     <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 right-2 md:right-4 flex flex-col md:flex-row justify-between items-end gap-2 md:gap-4">
       {/* Session Info - Hidden on mobile */}
@@ -32,14 +35,16 @@ export const BottomUI: React.FC<BottomUIProps> = ({
         />
       </div>
       
-      {/* Hesse Insights - Responsive wrapper */}
-      <div className="w-full md:max-w-md md:flex-shrink-0">
-        <ResponsiveInsights
-          currentInsight={currentInsight}
-          isGenerating={isGenerating}
-          error={error}
-        />
-      </div>
+      {/* Hesse Insights - Only show if feature is enabled */}
+      {showInsights && (
+        <div className="w-full md:max-w-md md:flex-shrink-0">
+          <ResponsiveInsights
+            currentInsight={currentInsight}
+            isGenerating={isGenerating}
+            error={error}
+          />
+        </div>
+      )}
     </div>
   );
 };

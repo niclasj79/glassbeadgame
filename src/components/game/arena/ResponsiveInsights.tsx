@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { HesseInsights } from './HesseInsights';
 import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface ResponsiveInsightsProps {
   currentInsight: any;
@@ -17,6 +18,12 @@ export const ResponsiveInsights: React.FC<ResponsiveInsightsProps> = ({
 }) => {
   const [insightsExpanded, setInsightsExpanded] = useState(false);
   const isMobile = useIsMobile();
+  const hesseInsightsEnabled = isFeatureEnabled('hesseInsights');
+
+  // Don't render anything if feature is disabled
+  if (!hesseInsightsEnabled) {
+    return null;
+  }
 
   if (isMobile) {
     return (
