@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { Card, CardProps } from './card';
+import { Card } from './card';
 import { TouchFeedback } from './touch-feedback';
 import { LoadingOverlay } from './loading-overlay';
 import { cn } from '@/lib/utils';
 
-interface EnhancedCardProps extends CardProps {
+interface EnhancedCardProps extends React.HTMLAttributes<HTMLDivElement> {
   loading?: boolean;
   loadingMessage?: string;
   interactive?: boolean;
