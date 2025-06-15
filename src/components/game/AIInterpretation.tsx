@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Brain, Download, Share2, RotateCcw } from 'lucide-react';
 
 interface AIInterpretationProps {
@@ -32,7 +31,6 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
 }) => {
   const [interpretation, setInterpretation] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(true);
-  const [insights, setInsights] = useState<string[]>([]);
 
   useEffect(() => {
     generateInterpretation();
@@ -44,61 +42,89 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     // Simulate AI processing time
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const interpretation = generateTheoreticalInterpretation(sessionData);
-    const insights = generateInsights(sessionData);
-    
+    const interpretation = generateConceptualInterpretation(sessionData);
     setInterpretation(interpretation);
-    setInsights(insights);
     setIsGenerating(false);
   };
 
-  const generateTheoreticalInterpretation = (data: SessionData): string => {
+  const generateConceptualInterpretation = (data: SessionData): string => {
     const { disciplines, concepts, interactions, duration, sessionType } = data;
     
-    const disciplineNames = disciplines.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
-    const interactionCount = interactions.length;
-    const uniqueConcepts = new Set(interactions.map(i => i.conceptId)).size;
+    // Analyze conceptual movements and relationships
+    const moveInteractions = interactions.filter(i => i.action === 'move');
+    const conceptMovements = new Map();
     
-    const interpretations = {
-      exploration: [
-        `Your ${Math.floor(duration / 60)} minute exploration through ${disciplineNames} revealed a contemplative approach to knowledge synthesis. The ${interactionCount} interactions with ${uniqueConcepts} distinct concepts suggest a methodology of careful observation before engagement.`,
-        `This session demonstrated a ${interactionCount < 20 ? 'measured' : 'dynamic'} exploration pattern, where ${disciplineNames} served as foundational territories for intellectual cartography. Your conceptual navigation reveals an underlying search for ${sessionType === 'exploration' ? 'connections' : 'synthesis'}.`,
-        `The interplay between ${disciplineNames} in your ${duration}-second session created a unique cognitive landscape. Your interaction pattern suggests a ${interactionCount > 15 ? 'highly engaged' : 'contemplative'} approach to interdisciplinary thinking.`
-      ],
-      synthesis: [
-        `Your synthesis session achieved ${uniqueConcepts} conceptual integrations across ${disciplineNames}, demonstrating mastery of Hermann Hesse's vision of intellectual synthesis. The ${interactionCount} interactions reveal a systematic approach to knowledge unification.`,
-        `This ${Math.floor(duration / 60)}-minute synthesis generated novel connections between ${disciplineNames}, creating what we might term a 'cognitive constellation' - a unique arrangement of ideas that transcends individual disciplinary boundaries.`,
-        `Your session exemplifies the Glass Bead Game's core principle: the discovery of universal patterns. The engagement with ${uniqueConcepts} concepts across ${disciplines.length} disciplines suggests an emerging synthesis methodology.`
-      ],
-      improvisation: [
-        `Your improvisational session across ${disciplineNames} embodied the spontaneous creativity central to the Glass Bead Game. ${interactionCount} rapid interactions in ${duration} seconds demonstrates intuitive knowledge navigation.`,
-        `This improvisation revealed the jazz-like nature of interdisciplinary thinking, where ${disciplineNames} served as your instrumental voices. The ${uniqueConcepts} unique conceptual engagements suggest a natural fluency in cross-domain synthesis.`,
-        `Your ${duration}-second improvisational performance created unexpected harmonies between ${disciplineNames}. The pattern of ${interactionCount} interactions reveals an underlying structural intuition.`
-      ]
-    };
+    moveInteractions.forEach(interaction => {
+      const concept = concepts.find(c => c.id === interaction.conceptId);
+      if (concept) {
+        if (!conceptMovements.has(concept.text)) {
+          conceptMovements.set(concept.text, []);
+        }
+        conceptMovements.get(concept.text).push(interaction);
+      }
+    });
 
-    const typeInterpretations = interpretations[sessionType as keyof typeof interpretations] || interpretations.exploration;
-    return typeInterpretations[Math.floor(Math.random() * typeInterpretations.length)];
-  };
-
-  const generateInsights = (data: SessionData): string[] => {
-    const insights = [
-      `Cognitive Pattern: ${data.interactions.length > 20 ? 'High-velocity connector' : 'Contemplative synthesizer'}`,
-      `Discipline Affinity: ${data.disciplines.length > 3 ? 'Multidisciplinary navigator' : 'Focused specialist'}`,
-      `Interaction Style: ${data.duration > 300 ? 'Extended exploration' : 'Intensive burst'}`,
-      `Conceptual Reach: ${new Set(data.interactions.map(i => i.conceptId)).size} unique concept engagements`,
-      `Session Intensity: ${(data.interactions.length / (data.duration / 60)).toFixed(1)} interactions per minute`
+    const activeConcepts = Array.from(conceptMovements.keys());
+    const disciplineNames = disciplines.map(d => d.charAt(0).toUpperCase() + d.slice(1));
+    
+    // Generate real-world analogies
+    const realWorldAnalogies = [
+      "the formation of a complex ecosystem where predator-prey relationships establish dynamic equilibrium",
+      "the emergence of a jazz ensemble where individual musicians create spontaneous harmonic structures",
+      "the crystallization of a mineral where atomic forces arrange themselves into geometric patterns",
+      "the development of a city where economic, social, and cultural forces shape urban morphology",
+      "the evolution of a symphony where musical themes undergo transformation and recombination",
+      "the formation of a weather system where atmospheric pressures create emergent meteorological phenomena",
+      "the growth of a coral reef where biological and chemical processes build complex architectural forms",
+      "the emergence of a language where phonetic, semantic, and syntactic elements coalesce into meaning",
+      "the development of a river delta where geological and hydrological forces create branching networks",
+      "the formation of a neural network where synaptic connections establish pathways of information flow"
     ];
 
-    const philosophicalInsights = [
-      'Demonstrated capacity for non-linear thinking',
-      'Shows preference for emergent over planned connections',
-      'Exhibits natural tendency toward synthesis over analysis',
-      'Reveals intuitive understanding of disciplinary boundaries',
-      'Suggests comfort with conceptual ambiguity'
+    const selectedAnalogy = realWorldAnalogies[Math.floor(Math.random() * realWorldAnalogies.length)];
+    
+    // Generate movement descriptions
+    const movementDescriptions = [
+      "gravitational convergence toward points of conceptual density",
+      "orbital trajectories that trace the boundaries between different knowledge domains",
+      "tidal movements that reveal the underlying currents connecting disparate ideas",
+      "crystalline arrangements that express the inherent symmetries between concepts",
+      "fluid dynamics where ideas flow along paths of least intellectual resistance",
+      "magnetic field patterns that make visible the invisible forces between concepts",
+      "seismic shifts that redistribute the conceptual landscape",
+      "atmospheric circulation where ideas condense, evaporate, and precipitate in new configurations"
     ];
 
-    return [...insights, ...philosophicalInsights.slice(0, 2)];
+    const selectedMovement = movementDescriptions[Math.floor(Math.random() * movementDescriptions.length)];
+
+    // Generate the interpretation
+    const interpretations = [
+      `This performance manifested as a three-dimensional meditation on the relationships between ${activeConcepts.slice(0, 3).join(', ')}${activeConcepts.length > 3 ? ', and others' : ''}. The spatial choreography revealed ${selectedMovement}, creating a conceptual architecture that mirrors ${selectedAnalogy}. 
+
+      The movement patterns suggest an underlying tension between ${disciplineNames[0]} and ${disciplineNames[1] || disciplineNames[0]}, where concepts migrated through dimensional space seeking equilibrium between opposing forces of ${sessionData.concepts[0]?.discipline === 'philosophy' ? 'abstract reasoning and concrete application' : 'analytical precision and intuitive understanding'}. 
+
+      Like the way ${selectedAnalogy.split(' ').slice(0, 8).join(' ')}, the conceptual constellation formed during this session exhibited emergent properties that transcended the sum of its individual elements. The ${Math.floor(duration / 60)}-minute duration allowed for a complete cycle of intellectual transformation, where initial conceptual positions gave way to more sophisticated arrangements.
+
+      This performance can be understood as a living demonstration of how knowledge structures themselves when freed from the constraints of linear thinking. The concepts did not merely coexist in space but actively influenced each other's positioning, creating what we might call a 'cognitive field' - a zone where ideas exert mutual influence across the three fundamental dimensions of truth, beauty, and goodness.`,
+
+      `The session unfolded as an exploration of the hidden geometries that connect ${activeConcepts.slice(0, 2).join(' and ')}, revealing patterns analogous to ${selectedAnalogy}. Through ${interactions.length} distinct interactions, the performance traced ${selectedMovement}, suggesting that these concepts share an underlying structural affinity that becomes visible only when they are allowed to move freely through multidimensional space.
+
+      The trajectory of ${activeConcepts[0] || 'the primary concept'} through the arena created a pathway that illuminated the relationship between ${disciplineNames[0]} and ${disciplineNames[1] || 'unified knowledge'}. This movement pattern resembles the way ${selectedAnalogy.split('where')[1] || 'complex systems self-organize into stable yet dynamic configurations'}, indicating that the session achieved a state of conceptual resonance.
+
+      What emerged was not simply a mapping of ideas, but a dynamic sculpture of thought - a temporal form that existed only during the session's duration yet expressed truths about the nature of interdisciplinary connection. The concepts' final positions suggested a configuration of maximum mutual illumination, where each idea's meaning was amplified by its spatial relationship to the others.
+
+      This performance demonstrates how intellectual synthesis occurs not through logical deduction alone, but through the kind of three-dimensional play that allows concepts to discover their natural affinities and tensions. The result is a unique cognitive artifact that captures a moment of understanding impossible to achieve through traditional linear analysis.`,
+
+      `In this ${duration}-second performance, the interplay between ${activeConcepts.join(', ')} created a conceptual field that exhibited properties similar to ${selectedAnalogy}. The spatial dynamics revealed ${selectedMovement}, suggesting an underlying order that emerges when disciplinary boundaries dissolve and ideas are allowed to find their natural relationships.
+
+      The movement patterns traced by these concepts through the three dimensions created what we might call a 'knowledge topology' - a landscape where proximity indicates conceptual affinity and distance reveals intellectual tension. The session's choreography suggested that ${activeConcepts[0]} serves as a kind of conceptual attractor, drawing ${activeConcepts.slice(1).join(' and ')} into new configurations of meaning.
+
+      This arrangement mirrors ${selectedAnalogy} in its capacity to generate emergent properties that cannot be predicted from the individual components alone. The performance created a temporary intellectual ecosystem where ideas evolved in real-time, adapting to their conceptual environment and forming new relationships based on their essential natures rather than their traditional academic classifications.
+
+      The final configuration represents a stable yet dynamic equilibrium - a moment where the concepts achieved maximum mutual illumination while maintaining their individual integrity. This session demonstrates how the Glass Bead Game functions as both analytical tool and creative medium, revealing the hidden architectures that connect human knowledge across all domains of understanding.`
+    ];
+
+    return interpretations[Math.floor(Math.random() * interpretations.length)];
   };
 
   const formatDuration = (seconds: number) => {
@@ -114,10 +140,10 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
           <div className="animate-spin w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-6"></div>
           <h2 className="text-2xl font-bold mb-4 flex items-center justify-center gap-2">
             <Brain className="w-6 h-6" />
-            Generating Interpretation
+            Analyzing Conceptual Movements
           </h2>
           <p className="text-gray-300">
-            Analyzing your session patterns and generating theoretical insights...
+            Interpreting the three-dimensional relationships and emergent patterns...
           </p>
         </Card>
       </div>
@@ -129,47 +155,34 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
-            Session Interpretation
+            Performance Analysis
           </h1>
-          <div className="flex justify-center gap-4 mb-6">
-            <Badge variant="outline" className="border-blue-400 text-blue-400">
-              Duration: {formatDuration(sessionData.duration)}
-            </Badge>
-            <Badge variant="outline" className="border-green-400 text-green-400">
-              {sessionData.interactions.length} Interactions
-            </Badge>
-            <Badge variant="outline" className="border-purple-400 text-purple-400">
-              {sessionData.sessionType}
-            </Badge>
+          <div className="text-gray-300 mb-6">
+            <span className="text-lg">Duration: {formatDuration(sessionData.duration)}</span>
+            <span className="mx-4">•</span>
+            <span className="text-lg">{sessionData.interactions.length} Interactions</span>
+            <span className="mx-4">•</span>
+            <span className="text-lg capitalize">{sessionData.sessionType}</span>
           </div>
         </div>
 
-        <Card className="bg-gray-900 border-gray-700 p-8 mb-6">
-          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-            <Brain className="w-6 h-6" />
-            Theoretical Analysis
-          </h2>
-          <p className="text-lg leading-relaxed text-gray-200 mb-6">
-            {interpretation}
-          </p>
-          
-          <h3 className="text-xl font-semibold mb-4">Session Insights</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {insights.map((insight, index) => (
-              <div key={index} className="bg-gray-800 p-4 rounded-lg border border-gray-600">
-                <p className="text-sm text-gray-300">{insight}</p>
-              </div>
-            ))}
+        <Card className="bg-gray-900/80 border-gray-700 p-8 mb-6 backdrop-blur-sm">
+          <div className="prose prose-invert max-w-none">
+            <div className="text-lg leading-relaxed text-gray-200 whitespace-pre-line">
+              {interpretation}
+            </div>
           </div>
         </Card>
 
-        <Card className="bg-gray-900 border-gray-700 p-6 mb-6">
-          <h3 className="text-xl font-semibold mb-4">Disciplinary Engagement</h3>
-          <div className="flex flex-wrap gap-2">
+        <Card className="bg-gray-900/80 border-gray-700 p-6 mb-6 backdrop-blur-sm">
+          <h3 className="text-xl font-semibold mb-4 text-white">Engaged Disciplines</h3>
+          <div className="flex flex-wrap gap-3">
             {sessionData.disciplines.map(discipline => (
-              <Badge key={discipline} className="bg-purple-600 text-white">
-                {discipline.charAt(0).toUpperCase() + discipline.slice(1)}
-              </Badge>
+              <div key={discipline} className="bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-400/50 px-4 py-2 rounded-full">
+                <span className="text-white font-medium">
+                  {discipline.charAt(0).toUpperCase() + discipline.slice(1)}
+                </span>
+              </div>
             ))}
           </div>
         </Card>
@@ -185,8 +198,8 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
           <Button
             variant="outline"
             onClick={() => navigator.share && navigator.share({ 
-              title: 'Glass Bead Game Session', 
-              text: interpretation 
+              title: 'Glass Bead Game Performance', 
+              text: interpretation.slice(0, 200) + '...' 
             })}
             className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white px-6 py-3"
           >

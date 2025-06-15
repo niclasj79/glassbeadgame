@@ -8,6 +8,7 @@ interface AudioContextType {
   setMasterVolume: (volume: number) => void;
   isAudioEnabled: boolean;
   toggleAudio: () => void;
+  initializeAudio: () => Promise<void>;
 }
 
 const AudioContext = createContext<AudioContextType | null>(null);
@@ -31,19 +32,11 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   const masterGainRef = useRef<GainNode | null>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [masterVolume, setMasterVolumeState] = useState(0.3);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => {
-    if (isAudioEnabled && !audioContextRef.current) {
-      initAudioContext();
-    }
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, [isAudioEnabled]);
-
-  const initAudioContext = async () => {
+  const initializeAudio = async () => {
+    if (isInitialized) return;
+    
     try {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       masterGainRef.current = audioContextRef.current.createGain();
@@ -53,13 +46,25 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
+      
+      setIsInitialized(true);
+      setIsAudioEnabled(true);
+      console.log('Audio system initialized successfully');
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
   const createTone = (frequency: number, type: OscillatorType = 'sine', duration: number = 1000) => {
-    if (!audioContextRef.current || !masterGainRef.current) return;
+    if (!audioContextRef.current || !masterGainRef.current || !isAudioEnabled) return;
 
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
@@ -91,7 +96,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   };
 
   const playDisciplineSound = (disciplineId: string, intensity: number = 0.5) => {
-    if (!isAudioEnabled) return;
+    if (!isAudioEnabled || !isInitialized) return;
     
     const frequencies = getDisciplineFrequencies(disciplineId);
     const baseFreq = frequencies[0];
@@ -112,7 +117,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   };
 
   const playSynthesisSound = (disciplines: string[], resonance: number) => {
-    if (!isAudioEnabled || disciplines.length === 0) return;
+    if (!isAudioEnabled || disciplines.length === 0 || !isInitialized) return;
     
     disciplines.forEach((disciplineId, index) => {
       const frequencies = getDisciplineFrequencies(disciplineId);
@@ -136,7 +141,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   };
 
   const playAmbientLayer = (layer: string) => {
-    if (!isAudioEnabled || !audioContextRef.current || !masterGainRef.current) return;
+    if (!isAudioEnabled || !audioContextRef.current || !masterGainRef.current || !isInitialized) return;
     
     const layerFreqs = {
       cosmic: 55, // Deep bass
@@ -188,10 +193,14 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   };
 
   const toggleAudio = () => {
-    setIsAudioEnabled(!isAudioEnabled);
-    if (isAudioEnabled) {
-      // Stop all ambient layers when disabling
-      oscillatorsRef.current.forEach((_, layer) => stopAmbientLayer(layer));
+    if (!isAudioEnabled && !isInitialized) {
+      initializeAudio();
+    } else {
+      setIsAudioEnabled(!isAudioEnabled);
+      if (isAudioEnabled) {
+        // Stop all ambient layers when disabling
+        oscillatorsRef.current.forEach((_, layer) => stopAmbientLayer(layer));
+      }
     }
   };
 
@@ -204,7 +213,8 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
         stopAmbientLayer,
         setMasterVolume,
         isAudioEnabled,
-        toggleAudio
+        toggleAudio,
+        initializeAudio
       }}
     >
       {children}

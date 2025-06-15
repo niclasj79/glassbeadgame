@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
@@ -6,6 +5,7 @@ import { BottomUI } from './arena/BottomUI';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
+import { useAudio } from '../audio/AudioEngine';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -16,6 +16,16 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
+  const [audioInitialized, setAudioInitialized] = useState(false);
+  const { initializeAudio, playDisciplineSound } = useAudio();
+
+  // Initialize audio on first user interaction
+  const initializeAudioOnInteraction = async () => {
+    if (!audioInitialized) {
+      await initializeAudio();
+      setAudioInitialized(true);
+    }
+  };
 
   // Offline session management with performance monitoring
   const {
@@ -45,20 +55,41 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     onConceptInteraction
   );
 
-  // Enhanced concept click handler
-  const enhancedConceptClick = (conceptId: string) => {
+  // Enhanced concept click handler with audio
+  const enhancedConceptClick = async (conceptId: string) => {
+    await initializeAudioOnInteraction();
+    
+    const concept = concepts.find(c => c.id === conceptId);
+    if (concept) {
+      const discipline = disciplines.find(d => d.id === concept.discipline);
+      if (discipline) {
+        playDisciplineSound(discipline.id, concept.energy);
+      }
+    }
+    
     setSelectedConcept(conceptId);
     handleConceptClick(conceptId);
   };
 
-  // Optimized concept move handler with instant visual feedback
-  const enhancedConceptMove = (conceptId: string, newX: number, newY: number, newZ: number) => {
+  // Optimized concept move handler with instant visual feedback and audio
+  const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
+    await initializeAudioOnInteraction();
+    
     // Update local state immediately for instant visual feedback
     setConcepts(prev => prev.map(concept => 
       concept.id === conceptId 
         ? { ...concept, x: newX, y: newY, z: newZ }
         : concept
     ));
+    
+    // Play movement sound
+    const concept = concepts.find(c => c.id === conceptId);
+    if (concept) {
+      const discipline = disciplines.find(d => d.id === concept.discipline);
+      if (discipline) {
+        playDisciplineSound(discipline.id, concept.energy * 0.7);
+      }
+    }
     
     // Handle business logic
     handleConceptMove(conceptId, newX, newY, newZ);
@@ -163,6 +194,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         />
       </div>
 
+      {/* Audio initialization hint */}
+      {!audioInitialized && (
+        <div className="absolute top-20 right-4 bg-amber-800/80 text-amber-200 p-2 rounded text-xs">
+          Click or move a concept to enable audio
+        </div>
+      )}
+
       {/* Offline Mode Indicator */}
       <div className="absolute top-20 right-4 bg-green-800/80 text-green-200 p-2 rounded text-xs font-mono">
         <div>🌐 OFFLINE MODE</div>
@@ -180,6 +218,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           <div>Renders: {performanceMetrics.renderCount}</div>
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
           <div>Mode: Offline</div>
+          <div>Audio: {audioInitialized ? 'Ready' : 'Pending'}</div>
         </div>
       )}
     </div>

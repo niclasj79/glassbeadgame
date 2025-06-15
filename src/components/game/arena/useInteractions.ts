@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { RotationRef, Concept } from './types';
 import { usePointerState } from './hooks/usePointerState';
 import { useInteractionMode } from './hooks/useInteractionMode';
-import { usePointerHandlers } from './hooks/usePointerHandlers';
+import { useSimplifiedPointerHandlers } from './hooks/useSimplifiedPointerHandlers';
 import { useEventHandlers } from './hooks/useEventHandlers';
 
 export const useInteractions = (
@@ -27,7 +27,7 @@ export const useInteractions = (
     handlePointerDown,
     handlePointerMove,
     handlePointerUp
-  } = usePointerHandlers(concepts, onConceptClick, onConceptMove);
+  } = useSimplifiedPointerHandlers(concepts, onConceptClick, onConceptMove);
 
   const {
     handleMouseDown,

@@ -37,7 +37,7 @@ export class ConceptRenderer {
         finalY += dragState.offsetY;
       }
 
-      ConceptRenderer.renderSingleConcept(
+      ConceptRenderer.renderGlassBead(
         ctx, 
         concept, 
         discipline, 
@@ -50,7 +50,7 @@ export class ConceptRenderer {
     });
   }
 
-  private static renderSingleConcept(
+  private static renderGlassBead(
     ctx: CanvasRenderingContext2D,
     concept: Concept,
     discipline: any,
@@ -60,77 +60,99 @@ export class ConceptRenderer {
     isSelected: boolean,
     isDragged: boolean
   ) {
-    const alpha = Math.max(0.4, scale);
-    const baseSize = 6 + concept.energy * 8 * scale;
-    const pulseSize = baseSize + Math.sin(Date.now() * 0.003 + concept.energy * 10) * 2;
-    
+    const alpha = Math.max(0.6, scale);
+    const baseSize = 12 + concept.energy * 6 * scale;
     const rgb = hexToRgb(discipline.color);
     
-    // Enhanced glow for dragged concepts
-    const glowMultiplier = isDragged ? 1.5 : 1;
+    ctx.save();
     
-    // Render glow layers
-    for (let layer = 3; layer >= 0; layer--) {
-      const layerAlpha = alpha * (0.3 - layer * 0.05) * glowMultiplier;
-      const layerSize = (pulseSize + layer * 8) * (isDragged ? 1.2 : 1);
+    // Glass bead base - translucent sphere
+    const gradient = ctx.createRadialGradient(
+      x - baseSize * 0.3, y - baseSize * 0.3, 0,
+      x, y, baseSize
+    );
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.8})`); // Highlight
+    gradient.addColorStop(0.3, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.7})`); // Main color
+    gradient.addColorStop(0.7, `rgba(${rgb.r * 0.7}, ${rgb.g * 0.7}, ${rgb.b * 0.7}, ${alpha * 0.8})`); // Darker edge
+    gradient.addColorStop(1, `rgba(${rgb.r * 0.4}, ${rgb.g * 0.4}, ${rgb.b * 0.4}, ${alpha * 0.9})`); // Dark rim
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, baseSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Glass reflection highlight
+    const highlightGradient = ctx.createRadialGradient(
+      x - baseSize * 0.4, y - baseSize * 0.4, 0,
+      x - baseSize * 0.4, y - baseSize * 0.4, baseSize * 0.6
+    );
+    highlightGradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.9})`);
+    highlightGradient.addColorStop(0.5, `rgba(255, 255, 255, ${alpha * 0.3})`);
+    highlightGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+    
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.arc(x - baseSize * 0.3, y - baseSize * 0.3, baseSize * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Glass specular highlight (small bright spot)
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(x - baseSize * 0.35, y - baseSize * 0.35, baseSize * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Subtle inner glow for energy
+    if (concept.energy > 0.3) {
+      const innerGlow = ctx.createRadialGradient(x, y, 0, x, y, baseSize * 0.8);
+      innerGlow.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * concept.energy * 0.3})`);
+      innerGlow.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
       
-      const gradient = ctx.createRadialGradient(
-        x, y, 0,
-        x, y, layerSize
-      );
-      gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${layerAlpha})`);
-      gradient.addColorStop(0.4, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${layerAlpha * 0.5})`);
-      gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
-      
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = innerGlow;
       ctx.beginPath();
-      ctx.arc(x, y, layerSize, 0, Math.PI * 2);
+      ctx.arc(x, y, baseSize * 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    // Concept core
-    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.9})`;
+    
+    // Shadow beneath the bead
+    const shadowGradient = ctx.createRadialGradient(
+      x, y + baseSize * 0.8, 0,
+      x, y + baseSize * 0.8, baseSize * 0.8
+    );
+    shadowGradient.addColorStop(0, `rgba(0, 0, 0, ${alpha * 0.3})`);
+    shadowGradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
+    
+    ctx.fillStyle = shadowGradient;
     ctx.beginPath();
-    ctx.arc(x, y, pulseSize * 0.3, 0, Math.PI * 2);
+    ctx.arc(x, y + baseSize * 0.8, baseSize * 0.6, 0, Math.PI * 2);
     ctx.fill();
 
-    // Orbital particles
-    for (let p = 0; p < 3; p++) {
-      const particleAngle = (Date.now() * 0.001 + p * 2.1) % (Math.PI * 2);
-      const particleRadius = pulseSize + 15 + Math.sin(Date.now() * 0.002 + p) * 5;
-      const particleX = x + Math.cos(particleAngle) * particleRadius;
-      const particleY = y + Math.sin(particleAngle) * particleRadius;
-      
-      ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.4})`;
-      ctx.beginPath();
-      ctx.arc(particleX, particleY, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Concept text with enhanced styling
+    // Concept text with glass-like styling
     if (scale > 0.6) {
       ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-      ctx.font = `${Math.floor(14 * scale)}px Arial`;
+      ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.5})`;
+      ctx.lineWidth = 1;
+      ctx.font = `bold ${Math.floor(12 * scale)}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      ctx.shadowColor = discipline.color;
-      ctx.shadowBlur = 8;
-      ctx.fillText(concept.text, x, y + pulseSize + 20);
-      ctx.shadowBlur = 0;
+      const textY = y + baseSize + 18;
+      ctx.strokeText(concept.text, x, textY);
+      ctx.fillText(concept.text, x, textY);
     }
 
-    // Enhanced selection highlight
+    // Selection highlight for glass bead
     if (isSelected || isDragged) {
-      const selectionRadius = pulseSize + 10 + Math.sin(Date.now() * 0.005) * 3;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * (isDragged ? 1 : 0.8)})`;
+      const selectionRadius = baseSize + 8;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * (isDragged ? 0.9 : 0.6)})`;
       ctx.lineWidth = isDragged ? 3 : 2;
-      ctx.setLineDash(isDragged ? [8, 4] : [5, 5]);
+      ctx.setLineDash([8, 4]);
       ctx.lineDashOffset = Date.now() * 0.01;
       ctx.beginPath();
       ctx.arc(x, y, selectionRadius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    
+    ctx.restore();
   }
 }
