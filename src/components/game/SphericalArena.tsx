@@ -272,47 +272,57 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   return (
     <div 
-      className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
+      className="h-screen w-full flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
       role="application"
       aria-label="Glass Bead Game - Spherical Arena"
     >
-      {/* Header with timer and end session */}
-      <SessionHeader
-        remainingTime={remainingTime}
-        formatTime={formatTime}
-        onEndSession={handleSessionEnd}
-      />
+      {/* Header with timer and end session - Fixed height */}
+      <div className="flex-shrink-0">
+        <SessionHeader
+          remainingTime={remainingTime}
+          formatTime={formatTime}
+          onEndSession={handleSessionEnd}
+        />
+      </div>
 
-      {/* 3D Canvas - Full Screen with Performance Optimization */}
-      <div className="flex-1 relative">
+      {/* 3D Canvas - Full remaining screen space */}
+      <div className="flex-1 relative min-h-0">
         <LoadingOverlay 
           isLoading={isInitializing} 
           message="Initializing immersive experience..."
           className="bg-gradient-to-br from-indigo-950 via-purple-900 to-black"
         >
-          <CanvasRenderer
-            concepts={concepts}
-            disciplines={disciplines}
-            isPaused={isPaused}
-            selectedConcept={selectedConcept}
-            onConceptClick={enhancedConceptClick}
-            onConceptMove={enhancedConceptMove}
-            onRotationChange={handleRotationChange}
-          />
+          <div className="w-full h-full">
+            <CanvasRenderer
+              concepts={concepts}
+              disciplines={disciplines}
+              isPaused={isPaused}
+              selectedConcept={selectedConcept}
+              onConceptClick={enhancedConceptClick}
+              onConceptMove={enhancedConceptMove}
+              onRotationChange={handleRotationChange}
+            />
+          </div>
         </LoadingOverlay>
         
-        {/* Bottom UI Elements */}
-        <BottomUI
-          disciplines={disciplines}
-          selectedDisciplines={selectedDisciplines}
-          concepts={concepts}
-          currentInsight={currentInsight}
-          isGenerating={isGenerating}
-          error={error}
-        />
+        {/* Bottom UI Elements - Positioned absolutely over the canvas */}
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+          <div className="pointer-events-auto">
+            <BottomUI
+              disciplines={disciplines}
+              selectedDisciplines={selectedDisciplines}
+              concepts={concepts}
+              currentInsight={currentInsight}
+              isGenerating={isGenerating}
+              error={error}
+            />
+          </div>
+        </div>
 
-        {/* Audio Controls in Arena UI */}
-        <AudioControls className="fixed bottom-4 right-4" />
+        {/* Audio Controls in Arena UI - Fixed position */}
+        <div className="absolute bottom-4 right-4 pointer-events-auto">
+          <AudioControls />
+        </div>
       </div>
 
       {/* Accessibility Status (Screen reader only) */}
@@ -324,7 +334,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
       {/* Performance Monitor (Development only) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono">
+        <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none">
           <div>Renders: {performanceMetrics.renderCount}</div>
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
           <div>Audio: {isAudioEnabled ? '3D Ready' : 'Disabled'}</div>

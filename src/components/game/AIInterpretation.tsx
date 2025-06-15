@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, Download, Share2, RotateCcw } from 'lucide-react';
+import { Brain, Download, Share2, RotateCcw, Lightbulb } from 'lucide-react';
 
 interface AIInterpretationProps {
   sessionData: SessionData;
@@ -165,6 +166,31 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Group concepts by discipline for better organization
+  const conceptsByDiscipline = sessionData.concepts.reduce((acc, concept) => {
+    const discipline = concept.discipline || 'unknown';
+    if (!acc[discipline]) {
+      acc[discipline] = [];
+    }
+    acc[discipline].push(concept);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  // Get discipline colors (simplified mapping)
+  const getDisciplineColor = (discipline: string) => {
+    const colorMap: Record<string, string> = {
+      philosophy: 'from-purple-500 to-indigo-500',
+      mathematics: 'from-blue-500 to-cyan-500',
+      physics: 'from-green-500 to-emerald-500',
+      music: 'from-pink-500 to-rose-500',
+      art: 'from-orange-500 to-amber-500',
+      literature: 'from-red-500 to-pink-500',
+      history: 'from-yellow-500 to-orange-500',
+      unknown: 'from-gray-500 to-slate-500'
+    };
+    return colorMap[discipline] || colorMap.unknown;
+  };
+
   if (isGenerating) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center">
@@ -194,9 +220,44 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
             <span className="mx-4">•</span>
             <span className="text-lg">{sessionData.interactions.length} Movements</span>
             <span className="mx-4">•</span>
-            <span className="text-lg">Interdisciplinary Exploration</span>
+            <span className="text-lg">{sessionData.concepts.length} Concepts</span>
           </div>
         </div>
+
+        {/* Concepts Section - New Addition */}
+        <Card className="bg-gray-900/80 border-gray-700 p-6 mb-6 backdrop-blur-sm">
+          <h3 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
+            <Lightbulb className="w-5 h-5" />
+            Concepts Explored
+          </h3>
+          <div className="space-y-4">
+            {Object.entries(conceptsByDiscipline).map(([discipline, concepts]) => (
+              <div key={discipline} className="space-y-2">
+                <h4 className="text-lg font-medium text-gray-200 capitalize flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${getDisciplineColor(discipline)}`}></div>
+                  {discipline}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 ml-5">
+                  {concepts.map((concept, index) => (
+                    <div 
+                      key={concept.id || index}
+                      className="bg-gray-800/50 border border-gray-600/50 rounded-lg p-3 hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="text-sm font-medium text-white">
+                        {concept.text || concept.name || 'Unnamed Concept'}
+                      </div>
+                      {concept.energy && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          Energy: {Math.round(concept.energy)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
 
         <Card className="bg-gray-900/80 border-gray-700 p-8 mb-6 backdrop-blur-sm">
           <div className="prose prose-invert max-w-none">
@@ -210,7 +271,10 @@ export const AIInterpretation: React.FC<AIInterpretationProps> = ({
           <h3 className="text-xl font-semibold mb-4 text-white">Knowledge Domains</h3>
           <div className="flex flex-wrap gap-3">
             {sessionData.disciplines.map(discipline => (
-              <div key={discipline} className="bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-400/50 px-4 py-2 rounded-full">
+              <div 
+                key={discipline} 
+                className={`bg-gradient-to-r ${getDisciplineColor(discipline)}/30 border border-purple-400/50 px-4 py-2 rounded-full`}
+              >
                 <span className="text-white font-medium">
                   {discipline.charAt(0).toUpperCase() + discipline.slice(1)}
                 </span>

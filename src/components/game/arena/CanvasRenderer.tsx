@@ -31,6 +31,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   onRotationChange
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const [showDimensionalOverlay, setShowDimensionalOverlay] = useState(true);
   const lastRenderTimeRef = useRef<number>(0);
@@ -150,6 +151,45 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     }
   });
 
+  // Canvas resize handler with proper container sizing
+  const handleResize = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    // Get the actual container dimensions
+    const rect = container.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    // Only resize if dimensions actually changed
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      isDirtyRef.current = true;
+      console.log(`Canvas resized to ${width}x${height}`);
+    }
+  }, []);
+
+  // Set up resize observer for proper canvas sizing
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    resizeObserver.observe(container);
+    
+    // Initial resize
+    handleResize();
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [handleResize]);
+
   // Mark canvas as dirty when concepts change or animations are active
   useEffect(() => {
     isDirtyRef.current = true;
@@ -185,12 +225,6 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
                         (now - lastRenderTimeRef.current >= 16);
     
     if (!shouldRender) return;
-
-    // Update canvas size if needed
-    if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    }
 
     // Get animated concept positions
     const animatedConcepts = getAnimatedConcepts();
@@ -256,10 +290,10 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   }, []);
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full">
       <canvas
         ref={canvasRef}
-        className="w-full h-full"
+        className="w-full h-full block"
         style={{ cursor: getCursor() }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
