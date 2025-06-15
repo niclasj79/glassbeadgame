@@ -8,7 +8,9 @@ import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionMana
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
 import { usePerformanceOptimization } from './arena/hooks/usePerformanceOptimization';
 import { useAudio } from '../audio/AudioEngine';
-import { AudioControls } from '../audio/AudioControls';
+import { EnhancedAudioControls } from '../audio/EnhancedAudioControls';
+import { use3DAudioEngine } from '../audio/hooks/use3DAudioEngine';
+import { getDisciplineFrequencies } from '../audio/utils/audioUtils';
 import { memoryManager } from './arena/utils/memoryManager';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
