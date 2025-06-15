@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { HeroSection } from './HeroSection';
 import { DisciplineSelectionPhase } from './DisciplineSelectionPhase';
 
 interface SessionStartFlowProps {
@@ -11,6 +12,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   disciplines,
   onSessionStart
 }) => {
+  const [showDisciplineSelection, setShowDisciplineSelection] = useState(false);
   const [suggestedCombinations, setSuggestedCombinations] = useState<string[][]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -23,6 +25,10 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     }
     setSuggestedCombinations(combinations);
   }, [disciplines]);
+
+  const handleStartGame = () => {
+    setShowDisciplineSelection(true);
+  };
 
   const handleQuickSelect = async (combination: string[]) => {
     setIsLoading(true);
@@ -46,16 +52,20 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     }
   };
 
-  return (
-    <DisciplineSelectionPhase
-      disciplines={disciplines}
-      selectedDisciplines={[]}
-      suggestedCombinations={suggestedCombinations}
-      onToggleDiscipline={() => {}}
-      onQuickSelect={handleQuickSelect}
-      onSurpriseMe={handleSurpriseMe}
-      onNext={() => {}}
-      isLoading={isLoading}
-    />
-  );
+  if (showDisciplineSelection) {
+    return (
+      <DisciplineSelectionPhase
+        disciplines={disciplines}
+        selectedDisciplines={[]}
+        suggestedCombinations={suggestedCombinations}
+        onToggleDiscipline={() => {}}
+        onQuickSelect={handleQuickSelect}
+        onSurpriseMe={handleSurpriseMe}
+        onNext={() => {}}
+        isLoading={isLoading}
+      />
+    );
+  }
+
+  return <HeroSection onStartGame={handleStartGame} />;
 };
