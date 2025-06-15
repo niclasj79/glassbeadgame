@@ -110,7 +110,7 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
             )}
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };
