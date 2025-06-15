@@ -32,7 +32,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     setCurrentPhase('discipline');
   };
 
-  const handleQuickSelect = async (combination: string[]) => {
+  const handleQuickSelect = (combination: string[]) => {
     setSelectedDisciplines(combination);
     setCurrentPhase('concept');
   };
@@ -43,10 +43,17 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       // Randomly select 2-4 disciplines for surprise me
       const shuffled = [...allDisciplines].sort(() => 0.5 - Math.random());
       const randomSelection = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
-      await onSessionStart(randomSelection, randomSelection.length);
+      
+      // Directly start the session for surprise me (quick start)
+      await onSessionStart(randomSelection, conceptCount);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDisciplineSelection = (disciplines: string[]) => {
+    setSelectedDisciplines(disciplines);
+    setCurrentPhase('concept');
   };
 
   const handleConceptsSelected = async (selectedConcepts: { [disciplineId: string]: string }) => {
@@ -60,6 +67,10 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
 
   const handleBackToDisciplines = () => {
     setCurrentPhase('discipline');
+  };
+
+  const handleBackToHero = () => {
+    setCurrentPhase('hero');
   };
 
   if (currentPhase === 'concept') {
@@ -78,12 +89,13 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     return (
       <DisciplineSelectionPhase
         disciplines={disciplines}
-        selectedDisciplines={[]}
+        selectedDisciplines={selectedDisciplines}
         suggestedCombinations={suggestedCombinations}
-        onToggleDiscipline={() => {}}
+        onToggleDiscipline={() => {}} // Not used in current implementation
         onQuickSelect={handleQuickSelect}
         onSurpriseMe={handleSurpriseMe}
-        onNext={() => {}}
+        onNext={handleDisciplineSelection}
+        onBack={handleBackToHero}
         isLoading={isLoading}
       />
     );

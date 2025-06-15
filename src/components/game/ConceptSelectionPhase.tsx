@@ -93,6 +93,7 @@ export const ConceptSelectionPhase: React.FC<ConceptSelectionPhaseProps> = ({
                           : `border-gray-600 hover:border-purple-400 hover:bg-purple-900/20`
                       }`}
                       onClick={() => handleConceptSelect(disciplineId, concept)}
+                      disabled={isLoading}
                     >
                       <div className="text-sm font-medium">{concept}</div>
                     </Button>
@@ -111,7 +112,7 @@ export const ConceptSelectionPhase: React.FC<ConceptSelectionPhaseProps> = ({
             disabled={isLoading}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            Back to Disciplines
           </Button>
 
           <div className="text-center">
