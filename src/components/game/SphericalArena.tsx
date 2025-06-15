@@ -13,6 +13,9 @@ import { EnhancedAudioControls } from '../audio/EnhancedAudioControls';
 import { use3DAudioEngine } from '../audio/hooks/use3DAudioEngine';
 import { getDisciplineFrequencies } from '../audio/utils/audioUtils';
 import { memoryManager } from './arena/utils/memoryManager';
+import { useAccessibility } from '../../hooks/useAccessibility';
+import { useImprovedTouch } from '../../hooks/useImprovedTouch';
+import { LoadingOverlay } from '../ui/loading-overlay';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -24,6 +27,8 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
   const [rotationState, setRotationState] = useState({ x: 0, y: 0 });
+  const [isInitializing, setIsInitializing] = useState(true);
+  
   const { 
     preloadAudio, 
     playDisciplineSound, 
@@ -32,6 +37,36 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     isAudioEnabled,
     initializeAudio
   } = useAudio();
+
+  // Accessibility features
+  const { announce, saveFocus, restoreFocus, focusFirst } = useAccessibility({
+    announceChanges: true,
+    focusManagement: true,
+    keyboardNavigation: true
+  });
+
+  // Enhanced touch handling
+  const { touchState, isTouch } = useImprovedTouch((gesture) => {
+    switch (gesture.type) {
+      case 'double-tap':
+        announce('Double tap detected - focusing on center');
+        break;
+      case 'pinch':
+        if (gesture.scale && gesture.scale > 1.2) {
+          announce('Pinch to zoom in detected');
+        } else if (gesture.scale && gesture.scale < 0.8) {
+          announce('Pinch to zoom out detected');
+        }
+        break;
+      case 'long-press':
+        announce('Long press detected - accessing concept details');
+        break;
+    }
+  }, {
+    enablePinch: true,
+    enableRotation: true,
+    longPressDelay: 400
+  });
 
   // Performance optimization with adaptive settings
   const { getPerformanceMetrics, optimizeForLowPerformance, isOptimal } = usePerformanceOptimization({
@@ -44,15 +79,25 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   // Automatically initialize audio when session starts
   useEffect(() => {
     const initSessionAudio = async () => {
-      if (preloadAudio && initializeAudio) {
-        await preloadAudio();
-        await initializeAudio();
-        console.log('Audio engine initialized and enabled for session');
+      try {
+        setIsInitializing(true);
+        announce('Initializing audio engine...');
+        
+        if (preloadAudio && initializeAudio) {
+          await preloadAudio();
+          await initializeAudio();
+          announce('Audio engine ready');
+        }
+      } catch (error) {
+        console.error('Audio initialization failed:', error);
+        announce('Audio initialization failed, continuing without audio');
+      } finally {
+        setIsInitializing(false);
       }
     };
     
     initSessionAudio();
-  }, [preloadAudio, initializeAudio]);
+  }, [preloadAudio, initializeAudio, announce]);
 
   // Start memory monitoring
   useEffect(() => {
@@ -77,13 +122,19 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   } = useOfflineSessionManagement(initialConcepts, onSessionEnd, {
     enableBatchedUpdates: true,
     enableAggressiveCaching: true,
-    maxCacheSize: 50, // Reduced for better memory usage
+    maxCacheSize: 50,
     preloadInsights: false
   });
 
-  // Enhanced concept position update handler with state synchronization
+  // Enhanced concept position update handler with accessibility announcements
   const handleConceptPositionUpdate = (conceptId: string, newX: number, newY: number, newZ: number) => {
     console.log(`SphericalArena: Handling concept ${conceptId} position update to:`, { newX, newY, newZ });
+    
+    // Announce concept movement to screen readers
+    const concept = concepts.find(c => c.id === conceptId);
+    if (concept) {
+      announce(`Moved concept: ${concept.text}`);
+    }
     
     // Update session state immediately for persistence
     if (sessionId) {
@@ -118,7 +169,6 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     let timeoutId: number;
     
     if (isAudioEnabled && createBackgroundSoundscape && concepts.length > 0) {
-      // Throttle background soundscape updates to every 500ms
       timeoutId = window.setTimeout(() => {
         createBackgroundSoundscape(concepts, rotationState.x, rotationState.y);
       }, 500);
@@ -129,10 +179,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     };
   }, [concepts, isAudioEnabled, createBackgroundSoundscape, rotationState]);
 
-  // Enhanced concept click handler with 3D audio
+  // Enhanced concept click handler with accessibility and 3D audio
   const enhancedConceptClick = async (conceptId: string) => {
     const concept = concepts.find(c => c.id === conceptId);
     if (concept) {
+      // Announce concept selection
+      announce(`Selected concept: ${concept.text} from ${concept.discipline}`);
+      
       const discipline = disciplines.find(d => d.id === concept.discipline);
       if (discipline) {
         // Play sound with 3D positioning
@@ -148,7 +201,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptClick(conceptId);
   };
 
-  // Enhanced concept move handler that ensures state flows properly
+  // Enhanced concept move handler with accessibility
   const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
     console.log(`SphericalArena: Processing concept move for ${conceptId} to:`, { newX, newY, newZ });
     
@@ -163,13 +216,12 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   const handleRotationChange = (rotationX: number, rotationY: number) => {
     setRotationState({ x: rotationX, y: rotationY });
     if (updateDynamicPanning && isAudioEnabled) {
-      // Throttle panning updates
       const throttledUpdate = () => updateDynamicPanning(rotationX, rotationY);
       setTimeout(throttledUpdate, 100);
     }
   };
 
-  // Handle session end with cleanup
+  // Handle session end with cleanup and accessibility
   const handleSessionEnd = () => {
     const metrics = getPerformanceMetrics();
     console.log('Session ending - Performance metrics:', {
@@ -177,6 +229,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       finalFPS: metrics.averageFPS,
       finalMemory: memoryManager.getCurrentMemoryUsage()
     });
+    
+    announce('Session ended. Thank you for playing!');
+    restoreFocus();
     cleanup();
     onSessionEnd();
   };
@@ -200,16 +255,27 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           frameTime: metrics.frameTime.toFixed(2) + 'ms'
         });
         
-        // Automatically optimize for low performance
         optimizeForLowPerformance();
+        announce('Performance optimized for better experience');
       }
-    }, 10000); // Check every 10 seconds
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, [getPerformanceMetrics, isOptimal, optimizeForLowPerformance]);
+  }, [getPerformanceMetrics, isOptimal, optimizeForLowPerformance, announce]);
+
+  // Focus management for session start
+  useEffect(() => {
+    if (!isInitializing) {
+      announce(`Session started with ${concepts.length} concepts. ${isTouch ? 'Touch controls active.' : 'Mouse controls active.'}`);
+    }
+  }, [isInitializing, concepts.length, isTouch, announce]);
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden">
+    <div 
+      className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
+      role="application"
+      aria-label="Glass Bead Game - Spherical Arena"
+    >
       {/* Header with timer and end session */}
       <SessionHeader
         remainingTime={remainingTime}
@@ -219,15 +285,21 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
       {/* 3D Canvas - Full Screen with Performance Optimization */}
       <div className="flex-1 relative">
-        <CanvasRenderer
-          concepts={concepts}
-          disciplines={disciplines}
-          isPaused={isPaused}
-          selectedConcept={selectedConcept}
-          onConceptClick={enhancedConceptClick}
-          onConceptMove={enhancedConceptMove}
-          onRotationChange={handleRotationChange}
-        />
+        <LoadingOverlay 
+          isLoading={isInitializing} 
+          message="Initializing immersive experience..."
+          className="bg-gradient-to-br from-indigo-950 via-purple-900 to-black"
+        >
+          <CanvasRenderer
+            concepts={concepts}
+            disciplines={disciplines}
+            isPaused={isPaused}
+            selectedConcept={selectedConcept}
+            onConceptClick={enhancedConceptClick}
+            onConceptMove={enhancedConceptMove}
+            onRotationChange={handleRotationChange}
+          />
+        </LoadingOverlay>
         
         {/* Bottom UI Elements */}
         <BottomUI
@@ -243,6 +315,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         <AudioControls className="fixed bottom-4 right-4" />
       </div>
 
+      {/* Accessibility Status (Screen reader only) */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {isTouch ? 'Touch interface active' : 'Mouse interface active'}.
+        {concepts.length} concepts available.
+        {selectedConcept && `Selected: ${concepts.find(c => c.id === selectedConcept)?.text}`}
+      </div>
+
       {/* Performance Monitor (Development only) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono">
@@ -252,6 +331,8 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           <div>Concepts: {concepts.length}</div>
           <div>Memory: {memoryManager.getCurrentMemoryUsage().used}</div>
           <div>Status: {isOptimal ? '✅ Optimal' : '⚠️ Degraded'}</div>
+          <div>Touch: {isTouch ? '📱 Active' : '🖱️ Mouse'}</div>
+          <div>Gesture: {touchState.gestureType}</div>
         </div>
       )}
     </div>
