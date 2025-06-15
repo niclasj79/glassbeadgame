@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Concept } from './concept/types';
 import { conceptDatabaseService } from './concept/conceptDatabase';
@@ -6,7 +5,7 @@ import { PositionGenerator } from './concept/positionGenerator';
 import { synthesisGenerator } from './concept/synthesisGenerator';
 import { FallbackConceptGenerator } from './concept/fallbackGenerator';
 
-export { Concept } from './concept/types';
+export type { Concept } from './concept/types';
 
 export class ConceptGenerator {
   private usedConcepts: Set<string> = new Set();

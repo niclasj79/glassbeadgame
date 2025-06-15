@@ -4,6 +4,7 @@ import { useAudio } from '../audio/AudioEngine';
 import { ArenaControls } from './arena/ArenaControls';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { ConceptDisplay } from './arena/ConceptDisplay';
+import { SessionInfo } from './arena/SessionInfo';
 import { SphericalArenaProps, MouseRef, RotationRef } from './arena/types';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
@@ -66,6 +67,12 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           rotationRef={rotationRef}
           mouseRef={mouseRef}
           onConceptClick={handleConceptClick}
+        />
+        
+        <SessionInfo
+          disciplines={disciplines}
+          selectedDisciplines={selectedDisciplines}
+          concepts={concepts}
         />
         
         <ConceptDisplay
