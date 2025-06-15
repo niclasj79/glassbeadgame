@@ -9,7 +9,7 @@ import { useMovementTracking } from './arena/hooks/useMovementTracking';
 import { useTextGeneration } from './arena/hooks/useTextGeneration';
 import { useSessionTimer } from './arena/hooks/useSessionTimer';
 import { Button } from '@/components/ui/button';
-import { Clock, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { Clock, AlertCircle, ChevronUp, ChevronDown, BookOpen } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
