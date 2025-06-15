@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { Concept, DimensionalMapping } from './types';
 import { useInteractions } from './useInteractions';
@@ -155,7 +154,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
       {/* Dimensional Status - Made responsive */}
       {showDimensionalOverlay && (
         <div className="absolute top-4 left-4 bg-gray-800/90 backdrop-blur-sm p-2 md:p-3 rounded border border-gray-600 max-w-xs">
-          <h4 className="text-sm font-semibold text-white mb-2">Transcendental Dimensions</h4>
+          <h4 className="text-sm font-semibold text-white mb-2">The Big Three</h4>
           <div className="text-xs text-gray-300 space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-red-400"></div>

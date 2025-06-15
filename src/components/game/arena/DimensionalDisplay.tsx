@@ -27,7 +27,7 @@ export const DimensionalDisplay: React.FC<DimensionalDisplayProps> = ({
 
   return (
     <Card className="absolute top-4 right-4 bg-gray-800/90 backdrop-blur-sm p-3 md:p-4 border border-gray-600 max-w-xs">
-      <h4 className="font-semibold mb-2 md:mb-3 text-white text-sm md:text-base">AQAL Dimensions</h4>
+      <h4 className="font-semibold mb-2 md:mb-3 text-white text-sm md:text-base">The Big Three</h4>
       
       <div className="space-y-2 md:space-y-3">
         <div className="text-xs md:text-sm">

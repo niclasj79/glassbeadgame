@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, BookOpen, Brain } from 'lucide-react';
@@ -89,7 +88,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onStartGame }) => {
             className="bg-gradient-to-r from-blue-600/80 to-purple-600/80 hover:from-blue-700/90 hover:to-purple-700/90 text-white border border-white/20 backdrop-blur-sm px-8 py-3 text-lg font-light tracking-wide transition-all duration-300 hover:scale-105"
           >
             <Sparkles className="w-5 h-5 mr-3" />
-            Begin the Synthesis
+            Start The Game
           </Button>
           
           <div className="flex items-center gap-6 text-sm text-white/60">
