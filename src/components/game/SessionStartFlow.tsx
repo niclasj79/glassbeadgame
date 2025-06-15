@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { DisciplineSelectionPhase } from './DisciplineSelectionPhase';
 import { ConceptCountPhase } from './ConceptCountPhase';
@@ -36,7 +35,9 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   const handleSurpriseMe = async (selectedDisciplines: string[], conceptCount: number) => {
     setIsLoading(true);
     try {
-      await onSessionStart(selectedDisciplines, conceptCount);
+      // Limit concept count to number of selected disciplines (one per discipline)
+      const actualConceptCount = Math.min(conceptCount, selectedDisciplines.length);
+      await onSessionStart(selectedDisciplines, actualConceptCount);
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +56,9 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   const handleStartWithConcepts = async () => {
     setIsLoading(true);
     try {
-      await onSessionStart(selectedDisciplines, conceptCount);
+      // Limit concept count to number of selected disciplines (one per discipline)
+      const actualConceptCount = Math.min(conceptCount, selectedDisciplines.length);
+      await onSessionStart(selectedDisciplines, actualConceptCount);
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +78,9 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   };
 
   const handleConceptCountChange = (count: number) => {
-    setConceptCount(count);
+    // Limit concept count to selected disciplines
+    const maxCount = Math.max(1, selectedDisciplines.length);
+    setConceptCount(Math.min(count, maxCount));
   };
 
   if (phase === 'concepts') {
@@ -83,7 +88,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       <ConceptCountPhase
         disciplines={disciplines}
         selectedDisciplines={selectedDisciplines}
-        conceptCount={conceptCount}
+        conceptCount={Math.min(conceptCount, selectedDisciplines.length)}
         onConceptCountChange={handleConceptCountChange}
         onBack={handleBack}
         onStart={handleStartWithConcepts}

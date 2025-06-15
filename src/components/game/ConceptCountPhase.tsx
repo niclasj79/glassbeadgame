@@ -24,14 +24,16 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
   onStart,
   isLoading = false
 }) => {
+  const maxConcepts = selectedDisciplines.length;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
       <Card className="bg-gray-900 border-gray-700 p-8 max-w-2xl w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
-            How Many Concepts?
+            Concept Focus
           </h1>
-          <p className="text-gray-300">Choose the number of concepts to explore</p>
+          <p className="text-gray-300">One profound concept per discipline</p>
         </div>
 
         {/* Selected Disciplines Display */}
@@ -53,33 +55,14 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
           </div>
         </div>
 
-        {/* Concept Count Selection */}
+        {/* Concept Count Display */}
         <div className="mb-8">
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <Button
-              variant="outline"
-              onClick={() => onConceptCountChange(Math.max(8, conceptCount - 2))}
-              className="border-gray-600"
-              disabled={isLoading}
-            >
-              -
-            </Button>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-purple-400">{conceptCount}</div>
-              <div className="text-sm text-gray-400">concepts</div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => onConceptCountChange(Math.min(25, conceptCount + 2))}
-              className="border-gray-600"
-              disabled={isLoading}
-            >
-              +
-            </Button>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-purple-400">{maxConcepts}</div>
+            <div className="text-sm text-gray-400">concepts (one per discipline)</div>
           </div>
-          <div className="text-center text-sm text-gray-400">
-            {conceptCount < 12 ? 'Focused exploration' : 
-             conceptCount < 18 ? 'Balanced discovery' : 'Rich complexity'}
+          <div className="text-center text-sm text-gray-400 mt-2">
+            Each discipline will contribute its most resonant concept
           </div>
         </div>
 

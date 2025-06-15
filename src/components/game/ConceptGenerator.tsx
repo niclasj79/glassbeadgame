@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -18,6 +17,9 @@ export class ConceptGenerator {
 
   async generateConcepts(disciplines: string[], count: number = 12): Promise<Concept[]> {
     try {
+      // Limit to one concept per discipline
+      const actualCount = Math.min(count, disciplines.length);
+      
       // Fetch concepts from Supabase based on selected disciplines
       const { data: dbConcepts, error } = await supabase
         .from('concepts')
@@ -31,55 +33,62 @@ export class ConceptGenerator {
 
       if (error) {
         console.error('Error fetching concepts:', error);
-        return this.generateFallbackConcepts(disciplines, count);
+        return this.generateFallbackConcepts(disciplines, actualCount);
       }
 
       if (!dbConcepts || dbConcepts.length === 0) {
-        return this.generateFallbackConcepts(disciplines, count);
+        return this.generateFallbackConcepts(disciplines, actualCount);
       }
 
       const concepts: Concept[] = [];
       const sphereRadius = 180;
-      const availableConcepts = dbConcepts.filter(concept => 
-        !this.usedConcepts.has(concept.text)
-      );
+      
+      // Select one concept per discipline
+      for (let i = 0; i < disciplines.length && i < actualCount; i++) {
+        const disciplineId = disciplines[i];
+        const disciplineConcepts = dbConcepts.filter(concept => 
+          concept.discipline_id === disciplineId && 
+          !this.usedConcepts.has(concept.text)
+        );
 
-      // If we've used all concepts, reset the used set
-      if (availableConcepts.length === 0) {
-        this.usedConcepts.clear();
-        availableConcepts.push(...dbConcepts);
+        if (disciplineConcepts.length === 0) {
+          // If no unused concepts for this discipline, reset and try again
+          this.usedConcepts.clear();
+          const allDisciplineConcepts = dbConcepts.filter(concept => 
+            concept.discipline_id === disciplineId
+          );
+          if (allDisciplineConcepts.length > 0) {
+            disciplineConcepts.push(allDisciplineConcepts[0]);
+          }
+        }
+
+        if (disciplineConcepts.length > 0) {
+          const selectedConcept = disciplineConcepts[Math.floor(Math.random() * disciplineConcepts.length)];
+          this.usedConcepts.add(selectedConcept.text);
+
+          // Generate position on sphere surface with more organic distribution
+          const phi = Math.random() * Math.PI * 2;
+          const theta = Math.acos(2 * Math.random() - 1);
+          
+          const x = sphereRadius * Math.sin(theta) * Math.cos(phi);
+          const y = sphereRadius * Math.sin(theta) * Math.sin(phi);
+          const z = sphereRadius * Math.cos(theta);
+
+          concepts.push({
+            id: selectedConcept.id,
+            text: selectedConcept.text,
+            discipline: selectedConcept.discipline_id,
+            x,
+            y,
+            z,
+            energy: 0.3 + Math.random() * 0.7,
+            connections: []
+          });
+        }
       }
 
-      // Shuffle and select concepts
-      const shuffledConcepts = [...availableConcepts].sort(() => 0.5 - Math.random());
-      const selectedConcepts = shuffledConcepts.slice(0, Math.min(count, shuffledConcepts.length));
-
-      for (let i = 0; i < selectedConcepts.length; i++) {
-        const dbConcept = selectedConcepts[i];
-        this.usedConcepts.add(dbConcept.text);
-
-        // Generate position on sphere surface
-        const phi = Math.random() * Math.PI * 2;
-        const theta = Math.acos(2 * Math.random() - 1);
-        
-        const x = sphereRadius * Math.sin(theta) * Math.cos(phi);
-        const y = sphereRadius * Math.sin(theta) * Math.sin(phi);
-        const z = sphereRadius * Math.cos(theta);
-
-        concepts.push({
-          id: dbConcept.id,
-          text: dbConcept.text,
-          discipline: dbConcept.discipline_id,
-          x,
-          y,
-          z,
-          energy: 0.3 + Math.random() * 0.7,
-          connections: []
-        });
-      }
-
-      // Generate some random connections
-      const connectionCount = Math.floor(concepts.length * 0.3);
+      // Generate some connections between concepts
+      const connectionCount = Math.floor(concepts.length * 0.4);
       for (let i = 0; i < connectionCount; i++) {
         const concept1 = concepts[Math.floor(Math.random() * concepts.length)];
         const concept2 = concepts[Math.floor(Math.random() * concepts.length)];
@@ -93,7 +102,7 @@ export class ConceptGenerator {
       return concepts;
     } catch (error) {
       console.error('Error in generateConcepts:', error);
-      return this.generateFallbackConcepts(disciplines, count);
+      return this.generateFallbackConcepts(disciplines, Math.min(count, disciplines.length));
     }
   }
 
@@ -134,9 +143,11 @@ export class ConceptGenerator {
 
     const concepts: Concept[] = [];
     const sphereRadius = 180;
+    const actualCount = Math.min(count, disciplines.length);
 
-    for (let i = 0; i < count; i++) {
-      const disciplineId = disciplines[Math.floor(Math.random() * disciplines.length)];
+    // Generate one concept per discipline
+    for (let i = 0; i < actualCount; i++) {
+      const disciplineId = disciplines[i];
       const availableConcepts = conceptDatabase[disciplineId as keyof typeof conceptDatabase] || [];
       const unusedConcepts = availableConcepts.filter(concept => !this.usedConcepts.has(concept));
       
@@ -148,6 +159,7 @@ export class ConceptGenerator {
       const conceptText = unusedConcepts[Math.floor(Math.random() * unusedConcepts.length)];
       this.usedConcepts.add(conceptText);
 
+      // More organic positioning
       const phi = Math.random() * Math.PI * 2;
       const theta = Math.acos(2 * Math.random() - 1);
       

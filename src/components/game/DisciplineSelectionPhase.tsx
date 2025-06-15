@@ -1,10 +1,8 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowRight } from 'lucide-react';
-import { SurpriseMeButton } from './SurpriseMeButton';
-import { QuickCombinations } from './QuickCombinations';
+import { Badge } from '@/components/ui/badge';
+import { Play, Shuffle, Sparkles } from 'lucide-react';
 
 interface DisciplineSelectionPhaseProps {
   disciplines: any[];
@@ -12,8 +10,9 @@ interface DisciplineSelectionPhaseProps {
   suggestedCombinations: string[][];
   onToggleDiscipline: (disciplineId: string) => void;
   onQuickSelect: (combination: string[]) => void;
-  onSurpriseMe: (selectedDisciplines: string[], conceptCount: number) => void;
+  onSurpriseMe: (selectedDisciplines: string[], conceptCount: number) => Promise<void>;
   onNext: () => void;
+  isLoading: boolean;
 }
 
 export const DisciplineSelectionPhase: React.FC<DisciplineSelectionPhaseProps> = ({
@@ -23,66 +22,96 @@ export const DisciplineSelectionPhase: React.FC<DisciplineSelectionPhaseProps> =
   onToggleDiscipline,
   onQuickSelect,
   onSurpriseMe,
-  onNext
+  onNext,
+  isLoading
 }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
-      <Card className="bg-gray-900 border-gray-700 p-8 max-w-4xl w-full">
+      <Card className="bg-gray-900 border-gray-700 p-8 max-w-2xl w-full">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
             Choose Your Disciplines
           </h1>
-          <p className="text-gray-300">Select disciplines to explore their interconnections</p>
+          <p className="text-gray-300">Select the areas you want to explore</p>
         </div>
 
-        <SurpriseMeButton disciplines={disciplines} onSurpriseMe={onSurpriseMe} />
-
-        <div className="border-t border-gray-700 pt-8">
-          <QuickCombinations
-            disciplines={disciplines}
-            suggestedCombinations={suggestedCombinations}
-            onQuickSelect={onQuickSelect}
-          />
-
-          {/* Custom Selection */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold mb-4">Or Build Your Own</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              {disciplines.map(discipline => (
-                <Button
-                  key={discipline.id}
-                  variant={selectedDisciplines.includes(discipline.id) ? "default" : "outline"}
-                  onClick={() => onToggleDiscipline(discipline.id)}
-                  className={`p-2 h-auto text-xs ${
-                    selectedDisciplines.includes(discipline.id)
-                      ? 'bg-purple-600 hover:bg-purple-700'
-                      : 'border-gray-600'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div 
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold mx-auto mb-1"
-                      style={{ backgroundColor: discipline.color }}
-                    >
-                      {discipline.icon}
-                    </div>
-                    <span>{discipline.name}</span>
-                  </div>
-                </Button>
-              ))}
-            </div>
+        {/* Discipline Selection */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-3">Disciplines</h3>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {disciplines.map(discipline => (
+              <Button
+                key={discipline.id}
+                variant={selectedDisciplines.includes(discipline.id) ? "default" : "outline"}
+                style={{ backgroundColor: selectedDisciplines.includes(discipline.id) ? discipline.color : 'transparent' }}
+                className={`text-white px-3 py-1 rounded-full ${selectedDisciplines.includes(discipline.id) ? '' : 'border-gray-600'}`}
+                onClick={() => onToggleDiscipline(discipline.id)}
+                disabled={isLoading}
+              >
+                {discipline.icon} {discipline.name}
+              </Button>
+            ))}
           </div>
+        </div>
 
-          <div className="flex justify-center">
-            <Button
-              onClick={onNext}
-              disabled={selectedDisciplines.length === 0}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8 py-3"
-            >
-              <ArrowRight className="w-4 h-4 mr-2" />
-              Next: Choose Concepts
-            </Button>
+        {/* Quick Select Suggestions */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-3">Quick Select</h3>
+          <div className="flex flex-col gap-2 items-center">
+            {suggestedCombinations.map((combination, index) => (
+              <Button
+                key={index}
+                variant="secondary"
+                className="w-full md:w-auto border-gray-600"
+                onClick={() => onQuickSelect(combination)}
+                disabled={isLoading}
+              >
+                {combination.map(disciplineId => {
+                  const discipline = disciplines.find(d => d.id === disciplineId);
+                  return discipline ? discipline.name : null;
+                }).join(' + ')}
+              </Button>
+            ))}
           </div>
+        </div>
+
+        {/* Surprise Me Button */}
+        <div className="mb-6 text-center">
+          <Button
+            onClick={() => onSurpriseMe(disciplines.map(d => d.id), 12)}
+            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Shuffle className="w-4 h-4 mr-2 animate-spin" />
+                Surprising...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Surprise Me
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Next Button */}
+        <div className="text-center">
+          <Button
+            onClick={onNext}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8"
+            disabled={isLoading}
+          >
+            {selectedDisciplines.length > 0 ? (
+              <>
+                <Play className="w-4 h-4 mr-2" />
+                Next
+              </>
+            ) : (
+              "Choose Disciplines to Continue"
+            )}
+          </Button>
         </div>
       </Card>
     </div>
