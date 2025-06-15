@@ -106,7 +106,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       <SessionHeader
         remainingTime={remainingTime}
         formatTime={formatTime}
-        onSessionEnd={handleSessionEnd}
+        onEndSession={handleSessionEnd}
       />
 
       {/* 3D Canvas - Full Screen with Performance Optimization */}
