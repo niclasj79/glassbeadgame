@@ -5,7 +5,7 @@ import { ConceptCountPhase } from './ConceptCountPhase';
 
 interface SessionStartFlowProps {
   disciplines: any[];
-  onSessionStart: (selectedDisciplines: string[], conceptCount: number) => void;
+  onSessionStart: (selectedDisciplines: string[], conceptCount: number) => Promise<void>;
 }
 
 export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
@@ -16,6 +16,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   const [suggestedCombinations, setSuggestedCombinations] = useState<string[][]>([]);
   const [phase, setPhase] = useState<'disciplines' | 'concepts'>('disciplines');
   const [conceptCount, setConceptCount] = useState(12);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Generate 3 random discipline combinations
@@ -32,8 +33,13 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
     setPhase('concepts');
   };
 
-  const handleSurpriseMe = (selectedDisciplines: string[], conceptCount: number) => {
-    onSessionStart(selectedDisciplines, conceptCount);
+  const handleSurpriseMe = async (selectedDisciplines: string[], conceptCount: number) => {
+    setIsLoading(true);
+    try {
+      await onSessionStart(selectedDisciplines, conceptCount);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCustomStart = () => {
@@ -41,13 +47,18 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       if (phase === 'disciplines') {
         setPhase('concepts');
       } else {
-        onSessionStart(selectedDisciplines, conceptCount);
+        handleStartWithConcepts();
       }
     }
   };
 
-  const handleStartWithConcepts = () => {
-    onSessionStart(selectedDisciplines, conceptCount);
+  const handleStartWithConcepts = async () => {
+    setIsLoading(true);
+    try {
+      await onSessionStart(selectedDisciplines, conceptCount);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleDiscipline = (disciplineId: string) => {
@@ -76,6 +87,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
         onConceptCountChange={handleConceptCountChange}
         onBack={handleBack}
         onStart={handleStartWithConcepts}
+        isLoading={isLoading}
       />
     );
   }
@@ -89,6 +101,7 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       onQuickSelect={handleQuickSelect}
       onSurpriseMe={handleSurpriseMe}
       onNext={handleCustomStart}
+      isLoading={isLoading}
     />
   );
 };

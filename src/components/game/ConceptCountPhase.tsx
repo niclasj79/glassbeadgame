@@ -3,7 +3,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Play } from 'lucide-react';
+import { Play, Loader2 } from 'lucide-react';
 
 interface ConceptCountPhaseProps {
   disciplines: any[];
@@ -12,6 +12,7 @@ interface ConceptCountPhaseProps {
   onConceptCountChange: (count: number) => void;
   onBack: () => void;
   onStart: () => void;
+  isLoading?: boolean;
 }
 
 export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
@@ -20,7 +21,8 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
   conceptCount,
   onConceptCountChange,
   onBack,
-  onStart
+  onStart,
+  isLoading = false
 }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
@@ -58,6 +60,7 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
               variant="outline"
               onClick={() => onConceptCountChange(Math.max(8, conceptCount - 2))}
               className="border-gray-600"
+              disabled={isLoading}
             >
               -
             </Button>
@@ -69,6 +72,7 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
               variant="outline"
               onClick={() => onConceptCountChange(Math.min(25, conceptCount + 2))}
               className="border-gray-600"
+              disabled={isLoading}
             >
               +
             </Button>
@@ -84,18 +88,29 @@ export const ConceptCountPhase: React.FC<ConceptCountPhaseProps> = ({
             variant="outline"
             onClick={onBack}
             className="border-gray-600"
+            disabled={isLoading}
           >
             Back
           </Button>
           <Button
             onClick={onStart}
             className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8"
+            disabled={isLoading}
           >
-            <Play className="w-4 h-4 mr-2" />
-            Enter the Arena
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading Concepts...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 mr-2" />
+                Enter the Arena
+              </>
+            )}
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
