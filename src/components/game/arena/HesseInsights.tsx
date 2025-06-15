@@ -1,0 +1,94 @@
+
+import React from 'react';
+import { Card } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Loader2, BookOpen, Sparkles } from 'lucide-react';
+
+interface HesseInsightsProps {
+  conceptualText: string | null;
+  dimensionalText: string | null;
+  isGenerating: boolean;
+  error: string | null;
+  className?: string;
+}
+
+export const HesseInsights: React.FC<HesseInsightsProps> = ({
+  conceptualText,
+  dimensionalText,
+  isGenerating,
+  error,
+  className = ""
+}) => {
+  const hasContent = conceptualText || dimensionalText;
+
+  if (!hasContent && !isGenerating && !error) {
+    return (
+      <Card className={`bg-gray-900/80 border-gray-700 backdrop-blur-sm p-4 ${className}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen className="h-5 w-5 text-amber-400" />
+          <h3 className="text-lg font-semibold text-white">Hesse Insights</h3>
+        </div>
+        <p className="text-sm text-gray-400 italic">
+          Move concepts to new positions and wait 20 seconds for insights to emerge...
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={`bg-gray-900/80 border-gray-700 backdrop-blur-sm ${className}`}>
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen className="h-5 w-5 text-amber-400" />
+          <h3 className="text-lg font-semibold text-white">Hesse Insights</h3>
+          {isGenerating && (
+            <Loader2 className="h-4 w-4 text-amber-400 animate-spin ml-auto" />
+          )}
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
+            <p className="text-red-300 text-sm">{error}</p>
+          </div>
+        )}
+
+        <ScrollArea className="max-h-80">
+          <div className="space-y-4">
+            {conceptualText && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="h-4 w-4 text-blue-400" />
+                  <h4 className="text-sm font-medium text-blue-300">Conceptual Synthesis</h4>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed italic">
+                  "{conceptualText}"
+                </p>
+              </div>
+            )}
+
+            {dimensionalText && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="h-4 w-4 text-purple-400" />
+                  <h4 className="text-sm font-medium text-purple-300">Dimensional Expression</h4>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed italic">
+                  "{dimensionalText}"
+                </p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {isGenerating && (
+          <div className="mt-4 p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
+              <p className="text-amber-300 text-sm">Generating Hermann Hesse-style insights...</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+};

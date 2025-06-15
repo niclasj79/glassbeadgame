@@ -3,8 +3,13 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useAudio } from '../audio/AudioEngine';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionInfo } from './arena/SessionInfo';
+import { HesseInsights } from './arena/HesseInsights';
 import { SphericalArenaProps } from './arena/types';
+import { useMovementTracking } from './arena/hooks/useMovementTracking';
+import { useTextGeneration } from './arena/hooks/useTextGeneration';
+import { useSessionTimer } from './arena/hooks/useSessionTimer';
 import { Button } from '@/components/ui/button';
+import { Clock, AlertCircle } from 'lucide-react';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -15,24 +20,41 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
-  const [sessionTime, setSessionTime] = useState(0);
   const [concepts, setConcepts] = useState(initialConcepts);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [startTime] = useState(Date.now());
   
   const { playDisciplineSound } = useAudio();
+
+  // Session management hooks
+  const { sessionTime, remainingTime, isExpired, formatTime } = useSessionTimer(startTime, false);
+  const { updateConceptMovement, allConceptsStable } = useMovementTracking(sessionId, concepts);
+  const { currentInsight, isGenerating, error, generateInsights } = useTextGeneration(sessionId);
+
+  // Generate session ID on mount
+  useEffect(() => {
+    setSessionId(crypto.randomUUID());
+  }, []);
 
   // Update concepts when initial concepts change
   useEffect(() => {
     setConcepts(initialConcepts);
   }, [initialConcepts]);
 
+  // Auto-end session when expired
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (!isPaused) {
-        setSessionTime(prev => prev + 1);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isPaused]);
+    if (isExpired) {
+      onSessionEnd();
+    }
+  }, [isExpired, onSessionEnd]);
+
+  // Generate insights when all concepts are stable
+  useEffect(() => {
+    if (allConceptsStable && concepts.length > 0) {
+      console.log('All concepts stable, generating insights...');
+      generateInsights(concepts);
+    }
+  }, [allConceptsStable, concepts, generateInsights]);
 
   const handleConceptClick = (conceptId: string) => {
     setSelectedConcept(conceptId);
@@ -55,6 +77,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     ));
     onConceptInteraction(conceptId, 'move');
     
+    // Update movement tracking
+    updateConceptMovement(conceptId, newX, newY, newZ);
+    
     // Play audio feedback for movement
     const concept = concepts.find(c => c.id === conceptId);
     if (concept) {
@@ -64,8 +89,22 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative">
-      {/* Minimal End Session Button */}
-      <div className="absolute top-4 right-4 z-10">
+      {/* Header with timer and end session */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-4">
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-lg backdrop-blur-sm ${
+          remainingTime <= 30 ? 'bg-red-900/80 text-red-200' : 'bg-gray-900/80 text-gray-200'
+        }`}>
+          <Clock className="h-4 w-4" />
+          <span className="text-sm font-mono">{formatTime()}</span>
+        </div>
+        
+        {remainingTime <= 30 && (
+          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-orange-900/80 text-orange-200">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">Session ending soon!</span>
+          </div>
+        )}
+        
         <Button
           onClick={onSessionEnd}
           className="bg-gradient-to-r from-blue-600 to-purple-600 opacity-80 hover:opacity-100 transition-opacity"
@@ -85,11 +124,22 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           onConceptMove={handleConceptMove}
         />
         
-        <SessionInfo
-          disciplines={disciplines}
-          selectedDisciplines={selectedDisciplines}
-          concepts={concepts}
-        />
+        {/* Bottom UI Elements */}
+        <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end gap-4">
+          <SessionInfo
+            disciplines={disciplines}
+            selectedDisciplines={selectedDisciplines}
+            concepts={concepts}
+          />
+          
+          <HesseInsights
+            conceptualText={currentInsight?.conceptualText || null}
+            dimensionalText={currentInsight?.dimensionalText || null}
+            isGenerating={isGenerating}
+            error={error}
+            className="max-w-md flex-shrink-0"
+          />
+        </div>
       </div>
     </div>
   );

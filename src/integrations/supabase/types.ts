@@ -48,6 +48,50 @@ export type Database = {
           },
         ]
       }
+      concept_movement_tracking: {
+        Row: {
+          concept_id: string
+          id: string
+          is_stable: boolean | null
+          last_moved_at: string | null
+          position_x: number
+          position_y: number
+          position_z: number
+          session_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          concept_id: string
+          id?: string
+          is_stable?: boolean | null
+          last_moved_at?: string | null
+          position_x: number
+          position_y: number
+          position_z: number
+          session_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          concept_id?: string
+          id?: string
+          is_stable?: boolean | null
+          last_moved_at?: string | null
+          position_x?: number
+          position_y?: number
+          position_z?: number
+          session_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_movement_tracking_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       concepts: {
         Row: {
           created_at: string
@@ -110,6 +154,8 @@ export type Database = {
           created_at: string
           duration: number | null
           id: string
+          is_expired: boolean | null
+          max_duration: number | null
           session_type: string
           updated_at: string
           user_id: string | null
@@ -119,6 +165,8 @@ export type Database = {
           created_at?: string
           duration?: number | null
           id?: string
+          is_expired?: boolean | null
+          max_duration?: number | null
           session_type?: string
           updated_at?: string
           user_id?: string | null
@@ -128,6 +176,8 @@ export type Database = {
           created_at?: string
           duration?: number | null
           id?: string
+          is_expired?: boolean | null
+          max_duration?: number | null
           session_type?: string
           updated_at?: string
           user_id?: string | null
@@ -253,6 +303,44 @@ export type Database = {
           },
           {
             foreignKeyName: "session_interactions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      text_insights: {
+        Row: {
+          concept_positions: Json
+          conceptual_text: string
+          created_at: string | null
+          dimensional_text: string
+          generated_at: string | null
+          id: string
+          session_id: string
+        }
+        Insert: {
+          concept_positions: Json
+          conceptual_text: string
+          created_at?: string | null
+          dimensional_text: string
+          generated_at?: string | null
+          id?: string
+          session_id: string
+        }
+        Update: {
+          concept_positions?: Json
+          conceptual_text?: string
+          created_at?: string | null
+          dimensional_text?: string
+          generated_at?: string | null
+          id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_insights_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "game_sessions"

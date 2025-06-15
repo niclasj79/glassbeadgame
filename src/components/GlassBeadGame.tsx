@@ -54,9 +54,14 @@ export const GlassBeadGame: React.FC = () => {
       const concepts = await conceptGenerator.generateConcepts(selectedDisciplines, conceptCount);
       console.log('Generated concepts:', concepts);
       
+      // Generate a session ID immediately
+      const sessionId = crypto.randomUUID();
+      setCurrentSessionId(sessionId);
+      
       setCurrentConcepts(concepts);
       setSessionData(prev => ({
         ...prev,
+        id: sessionId,
         disciplines: selectedDisciplines,
         concepts,
         sessionType: 'exploration',
