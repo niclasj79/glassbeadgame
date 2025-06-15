@@ -4,7 +4,7 @@ import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
 import { SphericalArenaProps } from './arena/types';
-import { usePerformantSessionManagement } from './arena/hooks/usePerformantSessionManagement';
+import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
@@ -17,7 +17,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
 
-  // Optimized session management with performance monitoring
+  // Offline session management with performance monitoring
   const {
     sessionId,
     concepts,
@@ -31,11 +31,11 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     cleanup,
     trackRenderPerformance,
     performanceMetrics
-  } = usePerformantSessionManagement(initialConcepts, onSessionEnd, {
+  } = useOfflineSessionManagement(initialConcepts, onSessionEnd, {
     enableBatchedUpdates: true,
     enableAggressiveCaching: true,
     maxCacheSize: 100,
-    preloadInsights: true
+    preloadInsights: false // Disabled for offline mode
   });
 
   // Concept interactions
@@ -63,7 +63,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     // Handle business logic
     handleConceptMove(conceptId, newX, newY, newZ);
     
-    // Update optimized movement tracking (batched and cached)
+    // Update offline movement tracking
     if (sessionId) {
       updateConceptMovement(conceptId, newX, newY, newZ);
     }
@@ -77,6 +77,38 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     console.log('Session ending - Performance metrics:', performanceMetrics);
     cleanup();
     onSessionEnd();
+  };
+
+  // Export session data to JSON
+  const exportSessionData = () => {
+    if (!sessionId) return;
+
+    try {
+      const sessionData = {
+        sessionId,
+        disciplines: selectedDisciplines,
+        concepts,
+        insights: currentInsight ? [currentInsight] : [],
+        performanceMetrics,
+        exportedAt: new Date().toISOString()
+      };
+
+      const dataStr = JSON.stringify(sessionData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `glass-bead-game-session-${sessionId.slice(-8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log('Session data exported successfully');
+    } catch (error) {
+      console.error('Failed to export session data:', error);
+    }
   };
 
   // Cleanup on unmount
@@ -131,12 +163,23 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
         />
       </div>
 
+      {/* Offline Mode Indicator */}
+      <div className="absolute top-20 right-4 bg-green-800/80 text-green-200 p-2 rounded text-xs font-mono">
+        <div>🌐 OFFLINE MODE</div>
+        <button 
+          onClick={exportSessionData}
+          className="mt-1 text-xs bg-green-700 hover:bg-green-600 px-2 py-1 rounded"
+        >
+          Export Session
+        </button>
+      </div>
+
       {/* Performance Monitor (Development only) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono">
           <div>Renders: {performanceMetrics.renderCount}</div>
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
-          <div>Cache Hits: {performanceMetrics.cacheHitRate}</div>
+          <div>Mode: Offline</div>
         </div>
       )}
     </div>
