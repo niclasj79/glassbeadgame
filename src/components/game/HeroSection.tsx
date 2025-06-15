@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, BookOpen, Brain } from 'lucide-react';
@@ -69,19 +70,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onStartGame }) => {
         <p className="text-xl md:text-2xl text-blue-100/80 mb-4 font-light leading-relaxed">
           Das Glasperlenspiel
         </p>
-        <p className="text-lg md:text-xl text-white/70 mb-12 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-lg md:text-xl text-white/70 mb-8 max-w-2xl mx-auto leading-relaxed">
           An immersive synthesis of all human knowledge, where disciplines dance in harmony 
           and wisdom emerges from the connections between all things
         </p>
 
-        {/* Philosophical quote */}
-        <blockquote className="text-base md:text-lg text-indigo-200/80 italic mb-12 max-w-3xl mx-auto leading-relaxed">
-          "The Game was thus a mode of playing with the total contents and values of our culture"
-          <footer className="text-sm text-white/50 mt-2 not-italic">— Hermann Hesse</footer>
-        </blockquote>
-
-        {/* Call to action */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        {/* Start Game Button - Repositioned here, right after description */}
+        <div className="flex justify-center mb-8">
           <Button 
             onClick={onStartGame}
             size="lg"
@@ -90,7 +85,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onStartGame }) => {
             <Sparkles className="w-5 h-5 mr-3" />
             Start The Game
           </Button>
-          
+        </div>
+
+        {/* Philosophical quote */}
+        <blockquote className="text-base md:text-lg text-indigo-200/80 italic mb-8 max-w-3xl mx-auto leading-relaxed">
+          "The Game was thus a mode of playing with the total contents and values of our culture"
+          <footer className="text-sm text-white/50 mt-2 not-italic">— Hermann Hesse</footer>
+        </blockquote>
+
+        {/* Additional info */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <div className="flex items-center gap-6 text-sm text-white/60">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4" />

@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Concept, DimensionalMapping } from './types';
 import { useInteractions } from './useInteractions';
@@ -35,11 +34,11 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const isDirtyRef = useRef<boolean>(true);
   const lastRotationRef = useRef({ x: 0, y: 0 });
 
-  // Updated dimensional mapping to use correct transcendental values
+  // Updated dimensional mapping with corrected labels and swapped Good/Not Good positions
   const dimensionalMapping: DimensionalMapping = {
-    x: { positive: "Beautiful", negative: "Ugly", description: "From aesthetic beauty to its negation" },
-    y: { positive: "Good", negative: "Evil", description: "From moral goodness to its negation" },
-    z: { positive: "True", negative: "False", description: "From truth to its negation" }
+    x: { positive: "Beautiful", negative: "Not Beautiful", description: "From aesthetic beauty to its negation" },
+    y: { positive: "Not Good", negative: "Good", description: "From moral opposition to goodness" },
+    z: { positive: "True", negative: "Not True", description: "From truth to its negation" }
   };
 
   const {

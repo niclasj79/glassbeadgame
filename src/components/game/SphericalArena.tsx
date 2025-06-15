@@ -7,6 +7,7 @@ import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
 import { useAudio } from '../audio/AudioEngine';
+import { AudioControls } from '../audio/AudioControls';
 
 export const SphericalArena: React.FC<SphericalArenaProps> = ({
   disciplines,
@@ -23,20 +24,22 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     playDisciplineSound, 
     createBackgroundSoundscape, 
     updateDynamicPanning,
-    isAudioEnabled 
+    isAudioEnabled,
+    initializeAudio
   } = useAudio();
 
-  // Pre-load audio on mount
+  // Automatically initialize audio when session starts
   useEffect(() => {
-    const initAudio = async () => {
-      if (preloadAudio) {
+    const initSessionAudio = async () => {
+      if (preloadAudio && initializeAudio) {
         await preloadAudio();
-        console.log('Audio engine pre-loaded for session');
+        await initializeAudio(); // Automatically enable audio
+        console.log('Audio engine initialized and enabled for session');
       }
     };
     
-    initAudio();
-  }, [preloadAudio]);
+    initSessionAudio();
+  }, [preloadAudio, initializeAudio]);
 
   // Offline session management with performance monitoring
   const {
@@ -192,6 +195,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
           isGenerating={isGenerating}
           error={error}
         />
+
+        {/* Audio Controls in Arena UI */}
+        <AudioControls className="fixed bottom-4 right-4" />
       </div>
 
       {/* Performance Monitor (Development only) */}
