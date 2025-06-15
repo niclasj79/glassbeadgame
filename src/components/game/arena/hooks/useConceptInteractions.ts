@@ -30,14 +30,9 @@ export const useConceptInteractions = (
 
   // Handle concept movement with position persistence
   const handleConceptMove = useCallback((conceptId: string, newX: number, newY: number, newZ: number) => {
-    console.log(`Moving concept ${conceptId} to:`, { newX, newY, newZ });
+    console.log(`useConceptInteractions: Handling concept ${conceptId} move to:`, { newX, newY, newZ });
     
-    // Update position through the callback
-    if (onConceptPositionUpdate) {
-      onConceptPositionUpdate(conceptId, newX, newY, newZ);
-    }
-    
-    // Handle business logic
+    // Handle business logic first
     onConceptInteraction(conceptId, 'move');
     
     // Play movement completion sound
@@ -52,7 +47,10 @@ export const useConceptInteractions = (
         });
       }
     }
-  }, [concepts, disciplines, onConceptInteraction, onConceptPositionUpdate, playDisciplineSound]);
+
+    // Note: We don't call onConceptPositionUpdate here as it should be handled 
+    // by the caller (SphericalArena.enhancedConceptMove) to maintain proper state flow
+  }, [concepts, disciplines, onConceptInteraction, playDisciplineSound]);
 
   // Track dragging state to prevent audio during drag
   useEffect(() => {

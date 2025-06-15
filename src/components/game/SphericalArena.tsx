@@ -62,21 +62,25 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     preloadInsights: false
   });
 
-  // Enhanced concept position update handler
+  // Enhanced concept position update handler with state synchronization
   const handleConceptPositionUpdate = (conceptId: string, newX: number, newY: number, newZ: number) => {
-    console.log(`Updating concept ${conceptId} position in SphericalArena:`, { newX, newY, newZ });
+    console.log(`SphericalArena: Handling concept ${conceptId} position update to:`, { newX, newY, newZ });
     
-    // Update local state immediately for instant visual feedback
-    setConcepts(prev => prev.map(concept => 
-      concept.id === conceptId 
-        ? { ...concept, x: newX, y: newY, z: newZ }
-        : concept
-    ));
-    
-    // Update offline movement tracking
+    // Update session state immediately for persistence
     if (sessionId) {
       updateConceptMovement(conceptId, newX, newY, newZ);
     }
+
+    // Update local state with batch update to prevent multiple re-renders
+    setConcepts(prev => {
+      const updated = prev.map(concept => 
+        concept.id === conceptId 
+          ? { ...concept, x: newX, y: newY, z: newZ }
+          : concept
+      );
+      console.log(`SphericalArena: Updated local concept state for ${conceptId}`);
+      return updated;
+    });
 
     // Track render performance
     trackRenderPerformance();
@@ -116,11 +120,14 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     handleConceptClick(conceptId);
   };
 
-  // Enhanced concept move handler with proper position persistence
+  // Enhanced concept move handler that ensures state flows properly
   const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
-    console.log(`SphericalArena handling concept move for ${conceptId}:`, { newX, newY, newZ });
+    console.log(`SphericalArena: Processing concept move for ${conceptId} to:`, { newX, newY, newZ });
     
-    // Handle the move through the concept interactions (this will trigger position update)
+    // Call the position update handler which will update both session and local state
+    handleConceptPositionUpdate(conceptId, newX, newY, newZ);
+    
+    // Handle business logic (audio, interactions)
     handleConceptMove(conceptId, newX, newY, newZ);
   };
 

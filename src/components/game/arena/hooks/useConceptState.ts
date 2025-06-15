@@ -12,8 +12,10 @@ export const useConceptState = (initialConcepts: Concept[]) => {
     setConcepts(newConcepts);
   }, []);
 
-  // Update a single concept's position permanently
+  // Update a single concept's position permanently with enhanced logging
   const updateConceptPosition = useCallback((conceptId: string, x: number, y: number, z: number) => {
+    console.log(`useConceptState: Updating concept ${conceptId} position to:`, { x, y, z });
+    
     const newConcepts = conceptsRef.current.map(concept =>
       concept.id === conceptId 
         ? { ...concept, x, y, z }
@@ -21,7 +23,7 @@ export const useConceptState = (initialConcepts: Concept[]) => {
     );
     
     updateConceptsRef(newConcepts);
-    console.log(`Concept ${conceptId} permanently moved to:`, { x, y, z });
+    console.log(`useConceptState: Concept ${conceptId} position updated successfully`);
   }, [updateConceptsRef]);
 
   // Get current position of a concept
@@ -30,15 +32,22 @@ export const useConceptState = (initialConcepts: Concept[]) => {
     return concept ? { x: concept.x, y: concept.y, z: concept.z } : null;
   }, []);
 
-  // Update concepts from external source (like initial load)
+  // Update concepts from external source (like initial load) with change detection
   const updateConcepts = useCallback((newConcepts: Concept[]) => {
+    console.log(`useConceptState: Updating all concepts. Count: ${newConcepts.length}`);
     updateConceptsRef(newConcepts);
   }, [updateConceptsRef]);
+
+  // Get all current concepts
+  const getCurrentConcepts = useCallback(() => {
+    return conceptsRef.current;
+  }, []);
 
   return {
     concepts,
     updateConceptPosition,
     getConceptPosition,
-    updateConcepts
+    updateConcepts,
+    getCurrentConcepts
   };
 };

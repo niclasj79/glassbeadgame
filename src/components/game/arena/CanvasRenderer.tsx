@@ -36,6 +36,8 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const lastRenderTimeRef = useRef<number>(0);
   const isDirtyRef = useRef<boolean>(true);
   const lastRotationRef = useRef({ x: 0, y: 0 });
+  const lastUpdateHashRef = useRef<string>('');
+  const internalMoveRef = useRef<Set<string>>(new Set());
 
   // Concept state management with persistence
   const { concepts, updateConceptPosition, getConceptPosition, updateConcepts } = useConceptState(initialConcepts);
@@ -43,10 +45,39 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   // Animation system
   const { startAnimation, getAnimatedPosition, hasActiveAnimations } = useConceptAnimations();
 
-  // Update concepts when props change
+  // Create a hash of concept positions to detect external vs internal changes
+  const createConceptHash = useCallback((conceptList: Concept[]) => {
+    return conceptList.map(c => `${c.id}:${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}`).join('|');
+  }, []);
+
+  // Smart concept update - only update if changes are from external source
   useEffect(() => {
-    updateConcepts(initialConcepts);
-  }, [initialConcepts, updateConcepts]);
+    const newHash = createConceptHash(initialConcepts);
+    
+    // Skip update if hash hasn't changed or if we have pending internal moves
+    if (newHash === lastUpdateHashRef.current || internalMoveRef.current.size > 0) {
+      return;
+    }
+
+    // Check if this is an external update by comparing individual concept positions
+    let hasExternalChanges = false;
+    for (const newConcept of initialConcepts) {
+      const currentPosition = getConceptPosition(newConcept.id);
+      if (!currentPosition || 
+          Math.abs(currentPosition.x - newConcept.x) > 0.01 ||
+          Math.abs(currentPosition.y - newConcept.y) > 0.01 ||
+          Math.abs(currentPosition.z - newConcept.z) > 0.01) {
+        hasExternalChanges = true;
+        break;
+      }
+    }
+
+    if (hasExternalChanges) {
+      console.log('External concept position changes detected, updating internal state');
+      updateConcepts(initialConcepts);
+      lastUpdateHashRef.current = newHash;
+    }
+  }, [initialConcepts, createConceptHash, getConceptPosition, updateConcepts]);
 
   // Updated dimensional mapping with corrected labels and swapped Good/Not Good positions
   const dimensionalMapping: DimensionalMapping = {
@@ -55,12 +86,15 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     z: { positive: "True", negative: "Not True", description: "From truth to its negation" }
   };
 
-  // Enhanced concept move handler with animation
+  // Enhanced concept move handler with proper state management
   const handleConceptMoveWithAnimation = useCallback((conceptId: string, newX: number, newY: number, newZ: number) => {
     const currentPosition = getConceptPosition(conceptId);
     if (!currentPosition) return;
 
-    console.log(`Starting animation for concept ${conceptId} from:`, currentPosition, 'to:', { newX, newY, newZ });
+    console.log(`Handling concept move for ${conceptId} from:`, currentPosition, 'to:', { newX, newY, newZ });
+
+    // Mark this as an internal move to prevent external updates from overriding
+    internalMoveRef.current.add(conceptId);
 
     // Start animation from current position to new position
     startAnimation(
@@ -74,11 +108,17 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
       600 // 600ms animation duration
     );
 
-    // Update the actual position immediately (the animation will handle the visual transition)
+    // Update the internal state immediately
     updateConceptPosition(conceptId, newX, newY, newZ);
     
-    // Call the parent callback
+    // Call the parent callback to update the session state
     onConceptMove(conceptId, newX, newY, newZ);
+
+    // Clear the internal move flag after a short delay to allow parent updates to complete
+    setTimeout(() => {
+      internalMoveRef.current.delete(conceptId);
+      console.log(`Cleared internal move flag for ${conceptId}`);
+    }, 100);
 
     // Dispatch custom events for drag tracking
     window.dispatchEvent(new CustomEvent('conceptdragend'));
