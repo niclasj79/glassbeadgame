@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Concept } from './concept/types';
 import { conceptDatabaseService } from './concept/conceptDatabase';
@@ -12,10 +11,19 @@ export class ConceptGenerator {
   private usedConcepts: Set<string> = new Set();
   private fallbackGenerator = new FallbackConceptGenerator();
 
-  async generateConcepts(disciplines: string[], count: number = 12): Promise<Concept[]> {
+  async generateConcepts(
+    disciplines: string[], 
+    count: number = 12, 
+    selectedConcepts?: { [disciplineId: string]: string }
+  ): Promise<Concept[]> {
     try {
       // Limit to one concept per discipline
       const actualCount = Math.min(count, disciplines.length);
+      
+      // If specific concepts were selected, use those
+      if (selectedConcepts) {
+        return this.generateFromSelectedConcepts(disciplines, selectedConcepts);
+      }
       
       // Fetch concepts from Supabase based on selected disciplines
       const dbConcepts = await conceptDatabaseService.fetchConcepts(disciplines);
@@ -71,6 +79,35 @@ export class ConceptGenerator {
       console.error('Error in generateConcepts:', error);
       return this.fallbackGenerator.generateFallbackConcepts(disciplines, Math.min(count, disciplines.length));
     }
+  }
+
+  private generateFromSelectedConcepts(
+    disciplines: string[], 
+    selectedConcepts: { [disciplineId: string]: string }
+  ): Concept[] {
+    const concepts: Concept[] = [];
+
+    disciplines.forEach(disciplineId => {
+      const conceptText = selectedConcepts[disciplineId];
+      if (conceptText) {
+        const position = PositionGenerator.generateSpherePosition();
+        const energy = PositionGenerator.generateEnergy();
+
+        concepts.push({
+          id: `selected-${disciplineId}-${Date.now()}-${Math.random()}`,
+          text: conceptText,
+          discipline: disciplineId,
+          ...position,
+          energy,
+          connections: []
+        });
+      }
+    });
+
+    // Generate connections between ALL concepts
+    this.generateConnections(concepts);
+
+    return concepts;
   }
 
   private generateConnections(concepts: Concept[]): void {
