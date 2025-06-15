@@ -183,13 +183,19 @@ export const useMovementTracking = (sessionId: string | null, concepts: Concept[
     if (!sessionId) return;
 
     try {
-      // Batch stability updates
-      const stabilityUpdates = concepts.map(concept => ({
-        session_id: sessionId,
-        concept_id: concept.id,
-        is_stable: true,
-        updated_at: new Date().toISOString()
-      }));
+      // Batch stability updates with current position data
+      const stabilityUpdates = concepts.map(concept => {
+        const state = movementState[concept.id];
+        return {
+          session_id: sessionId,
+          concept_id: concept.id,
+          is_stable: true,
+          position_x: state?.position.x || concept.x,
+          position_y: state?.position.y || concept.y,
+          position_z: state?.position.z || concept.z,
+          updated_at: new Date().toISOString()
+        };
+      });
 
       await supabase
         .from('concept_movement_tracking')
@@ -201,7 +207,7 @@ export const useMovementTracking = (sessionId: string | null, concepts: Concept[
     } catch (error) {
       console.error('Error updating stability in database:', error);
     }
-  }, [sessionId, concepts]);
+  }, [sessionId, concepts, movementState]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
