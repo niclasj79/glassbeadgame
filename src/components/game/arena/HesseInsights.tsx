@@ -29,7 +29,7 @@ export const HesseInsights: React.FC<HesseInsightsProps> = ({
           <h3 className="text-lg font-semibold text-white">Hesse Insights</h3>
         </div>
         <p className="text-sm text-gray-400 italic">
-          Move concepts to new positions and wait 20 seconds for insights to emerge...
+          Position concepts in the 3D space and wait 20 seconds for Hermann Hesse-style insights to emerge...
         </p>
       </Card>
     );
@@ -70,7 +70,7 @@ export const HesseInsights: React.FC<HesseInsightsProps> = ({
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles className="h-4 w-4 text-purple-400" />
-                  <h4 className="text-sm font-medium text-purple-300">Dimensional Expression</h4>
+                  <h4 className="text-sm font-medium text-purple-300">Dimensional Expression & Collective Symbiosis</h4>
                 </div>
                 <p className="text-sm text-gray-300 leading-relaxed italic">
                   "{dimensionalText}"
@@ -84,7 +84,7 @@ export const HesseInsights: React.FC<HesseInsightsProps> = ({
           <div className="mt-4 p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
-              <p className="text-amber-300 text-sm">Generating Hermann Hesse-style insights...</p>
+              <p className="text-amber-300 text-sm">Generating Hermann Hesse-style insights based on dimensional positioning...</p>
             </div>
           </div>
         )}

@@ -33,7 +33,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   // Generate session ID on mount
   useEffect(() => {
-    setSessionId(crypto.randomUUID());
+    const newSessionId = crypto.randomUUID();
+    setSessionId(newSessionId);
+    console.log('Created new session:', newSessionId);
   }, []);
 
   // Update concepts when initial concepts change
@@ -44,17 +46,18 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
   // Auto-end session when expired
   useEffect(() => {
     if (isExpired) {
+      console.log('Session expired, ending...');
       onSessionEnd();
     }
   }, [isExpired, onSessionEnd]);
 
   // Generate insights when all concepts are stable
   useEffect(() => {
-    if (allConceptsStable && concepts.length > 0) {
-      console.log('All concepts stable, generating insights...');
+    if (allConceptsStable && concepts.length > 0 && sessionId) {
+      console.log('All concepts stable for 20 seconds, generating insights...');
       generateInsights(concepts);
     }
-  }, [allConceptsStable, concepts, generateInsights]);
+  }, [allConceptsStable, concepts, generateInsights, sessionId]);
 
   const handleConceptClick = (conceptId: string) => {
     setSelectedConcept(conceptId);
@@ -78,7 +81,9 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
     onConceptInteraction(conceptId, 'move');
     
     // Update movement tracking
-    updateConceptMovement(conceptId, newX, newY, newZ);
+    if (sessionId) {
+      updateConceptMovement(conceptId, newX, newY, newZ);
+    }
     
     // Play audio feedback for movement
     const concept = concepts.find(c => c.id === conceptId);

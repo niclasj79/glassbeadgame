@@ -26,21 +26,38 @@ serve(async (req) => {
     console.log('Generating insights for session:', sessionId);
     console.log('Concepts count:', concepts.length);
 
-    // Generate conceptual insights
-    const conceptualPrompt = `You are Hermann Hesse writing about the Glass Bead Game. Based on these concepts and their relationships, write a short paragraph (60-80 words) about the conceptual synthesis:
+    // Calculate dimensional values for each concept
+    const conceptsWithDimensions = concepts.map((c: any) => {
+      const radius = Math.sqrt(c.x * c.x + c.y * c.y + c.z * c.z);
+      const normalizedX = c.x / radius;
+      const normalizedY = c.y / radius;
+      const normalizedZ = c.z / radius;
+      
+      return {
+        ...c,
+        dimensions: {
+          analytical_intuitive: ((normalizedX + 1) / 2) * 100,
+          theoretical_practical: ((normalizedY + 1) / 2) * 100,
+          abstract_concrete: ((normalizedZ + 1) / 2) * 100
+        }
+      };
+    });
 
-Concepts: ${concepts.map((c: any) => `${c.text} (${c.discipline})`).join(', ')}
+    // Generate conceptual insights (shorter paragraph)
+    const conceptualPrompt = `You are Hermann Hesse reflecting on the Glass Bead Game. Write a contemplative paragraph (60-80 words) about the conceptual synthesis of these ideas:
 
-Write in Hesse's contemplative style about how these concepts relate to each other intellectually and spiritually. Focus on the connections between ideas across disciplines.`;
+${conceptsWithDimensions.map((c: any) => `• ${c.text} (${c.discipline})`).join('\n')}
 
-    // Generate dimensional insights
-    const dimensionalPrompt = `You are Hermann Hesse reflecting on the Glass Bead Game's dimensional space. Based on these concepts positioned in 3D space, write a longer paragraph (120-150 words) about dimensional expressions and collective symbiosis:
+Write in Hesse's philosophical style about how these concepts from different disciplines create unexpected connections and reveal deeper truths about knowledge itself. Focus on the intellectual and spiritual resonance between these ideas.`;
 
-Concepts with positions: ${concepts.map((c: any) => 
-      `${c.text} at (${c.x.toFixed(1)}, ${c.y.toFixed(1)}, ${c.z.toFixed(1)})`
-    ).join(', ')}
+    // Generate dimensional insights (longer paragraph about spatial relationships)
+    const dimensionalPrompt = `You are Hermann Hesse contemplating the sacred geometry of the Glass Bead Game. Write a longer meditation (120-150 words) on how these concepts exist in dimensional space and form collective symbiosis:
 
-Write in Hesse's mystical style about how the spatial arrangement creates meaning, how proximity and distance in the dimensional space reflect deeper truths about knowledge and understanding. Discuss the collective symbiosis of ideas in this sacred geometry.`;
+${conceptsWithDimensions.map((c: any) => 
+      `• ${c.text}: positioned at analytical-intuitive ${c.dimensions.analytical_intuitive.toFixed(0)}%, theoretical-practical ${c.dimensions.theoretical_practical.toFixed(0)}%, abstract-concrete ${c.dimensions.abstract_concrete.toFixed(0)}%`
+    ).join('\n')}
+
+Reflect on how their spatial positioning creates meaning beyond their individual essences. Discuss how proximity and distance in this dimensional space reveals the hidden architecture of knowledge. Explore how these concepts, through their unique dimensional expressions, form a symbiotic whole that transcends the sum of its parts - a living constellation of meaning where each position influences and is influenced by all others.`;
 
     // Generate both texts in parallel
     const [conceptualResponse, dimensionalResponse] = await Promise.all([
@@ -85,14 +102,15 @@ Write in Hesse's mystical style about how the spatial arrangement creates meanin
         session_id: sessionId,
         conceptual_text: conceptualText,
         dimensional_text: dimensionalText,
-        concept_positions: concepts.map((c: any) => ({
+        concept_positions: conceptsWithDimensions.map((c: any) => ({
           id: c.id,
           text: c.text,
           discipline: c.discipline,
           x: c.x,
           y: c.y,
           z: c.z,
-          energy: c.energy
+          energy: c.energy,
+          dimensions: c.dimensions
         }))
       })
       .select()

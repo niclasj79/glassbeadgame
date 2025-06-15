@@ -21,7 +21,7 @@ export const useTextGeneration = (sessionId: string | null) => {
 
     // Throttle generation to prevent too frequent calls
     const now = Date.now();
-    if (now - lastGenerationRef.current < 30000) return; // 30 second cooldown
+    if (now - lastGenerationRef.current < 20000) return; // 20 second cooldown
 
     setIsGenerating(true);
     setError(null);
