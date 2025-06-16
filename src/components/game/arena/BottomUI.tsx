@@ -25,7 +25,7 @@ export const BottomUI: React.FC<BottomUIProps> = ({
   const showInsights = isFeatureEnabled('hesseInsights');
 
   return (
-    <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 right-2 md:right-4 flex flex-col md:flex-row justify-between items-end gap-2 md:gap-4">
+    <div className="flex flex-col md:flex-row justify-between items-end gap-2 md:gap-4 p-2 md:p-4">
       {/* Session Info - Hidden on mobile */}
       <div className="hidden md:block">
         <SessionInfo

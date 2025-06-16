@@ -272,29 +272,33 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   return (
     <div 
-      className="min-h-dvh w-full flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
+      className="w-full bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
       style={{
-        height: '100dvh',
-        minHeight: '-webkit-fill-available',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        paddingLeft: 'env(safe-area-inset-left)',
-        paddingRight: 'env(safe-area-inset-right)'
+        height: '100vh',
+        minHeight: '100vh',
+        maxHeight: '100vh'
       }}
       role="application"
       aria-label="Glass Bead Game - Spherical Arena"
     >
-      {/* Header with timer and end session - Fixed height */}
-      <div className="flex-shrink-0">
-        <SessionHeader
-          remainingTime={remainingTime}
-          formatTime={formatTime}
-          onEndSession={handleSessionEnd}
-        />
-      </div>
+      {/* Fixed Header - Mobile optimized positioning */}
+      <SessionHeader
+        remainingTime={remainingTime}
+        formatTime={formatTime}
+        onEndSession={handleSessionEnd}
+      />
 
-      {/* 3D Canvas - Full remaining screen space */}
-      <div className="flex-1 relative min-h-0">
+      {/* Main Arena Content - Full viewport with proper mobile handling */}
+      <div 
+        className="w-full relative"
+        style={{
+          height: '100vh',
+          paddingTop: 'max(env(safe-area-inset-top), 60px)', // Ensure space for header
+          paddingBottom: 'max(env(safe-area-inset-bottom), 120px)', // Ensure space for bottom UI
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)'
+        }}
+      >
         <LoadingOverlay 
           isLoading={isInitializing} 
           message="Initializing immersive experience..."
@@ -312,25 +316,38 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
             />
           </div>
         </LoadingOverlay>
-        
-        {/* Bottom UI Elements - Positioned absolutely over the canvas */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <div className="pointer-events-auto">
-            <BottomUI
-              disciplines={disciplines}
-              selectedDisciplines={selectedDisciplines}
-              concepts={concepts}
-              currentInsight={currentInsight}
-              isGenerating={isGenerating}
-              error={error}
-            />
-          </div>
-        </div>
+      </div>
 
-        {/* Audio Controls in Arena UI - Fixed position */}
-        <div className="absolute bottom-4 right-4 pointer-events-auto">
-          <AudioControls />
+      {/* Bottom UI - Fixed positioning with mobile optimization */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 pointer-events-none z-20"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)'
+        }}
+      >
+        <div className="pointer-events-auto">
+          <BottomUI
+            disciplines={disciplines}
+            selectedDisciplines={selectedDisciplines}
+            concepts={concepts}
+            currentInsight={currentInsight}
+            isGenerating={isGenerating}
+            error={error}
+          />
         </div>
+      </div>
+
+      {/* Audio Controls - Fixed positioning for mobile */}
+      <div 
+        className="fixed bottom-4 right-4 pointer-events-auto z-30"
+        style={{
+          bottom: `calc(4px + env(safe-area-inset-bottom))`,
+          right: `calc(16px + env(safe-area-inset-right))`
+        }}
+      >
+        <AudioControls />
       </div>
 
       {/* Accessibility Status (Screen reader only) */}
@@ -342,7 +359,13 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
       {/* Performance Monitor (Development only) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none">
+        <div 
+          className="fixed top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none z-50"
+          style={{
+            top: `calc(80px + env(safe-area-inset-top))`,
+            left: `calc(16px + env(safe-area-inset-left))`
+          }}
+        >
           <div>Renders: {performanceMetrics.renderCount}</div>
           <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
           <div>Audio: {isAudioEnabled ? '3D Ready' : 'Disabled'}</div>

@@ -18,7 +18,14 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
   const isMobile = useIsMobile();
 
   return (
-    <div className="absolute top-2 md:top-4 right-2 md:right-4 z-10 flex items-center gap-2 md:gap-4">
+    <div 
+      className="fixed top-0 left-0 right-0 z-30 flex items-center justify-end gap-2 md:gap-4 p-2 md:p-4"
+      style={{
+        paddingTop: `calc(8px + env(safe-area-inset-top))`,
+        paddingLeft: `calc(8px + env(safe-area-inset-left))`,
+        paddingRight: `calc(8px + env(safe-area-inset-right))`
+      }}
+    >
       <div className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 rounded-lg backdrop-blur-sm text-xs md:text-sm ${
         remainingTime <= 30 ? 'bg-red-900/80 text-red-200' : 'bg-gray-900/80 text-gray-200'
       }`}>
