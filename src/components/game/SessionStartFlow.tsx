@@ -50,8 +50,9 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
       const shuffled = [...allDisciplines].sort(() => 0.5 - Math.random());
       const randomSelection = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
       
-      // Directly start the session for surprise me (quick start)
-      await onSessionStart(randomSelection, conceptCount);
+      // Use a proper concept count for surprise me (12-15 concepts)
+      const properConceptCount = 12 + Math.floor(Math.random() * 4);
+      await onSessionStart(randomSelection, properConceptCount);
     } finally {
       setIsLoading(false);
     }
@@ -70,7 +71,9 @@ export const SessionStartFlow: React.FC<SessionStartFlowProps> = ({
   const handleConceptsSelected = async (selectedConcepts: { [disciplineId: string]: string }) => {
     setIsLoading(true);
     try {
-      await onSessionStart(selectedDisciplines, selectedDisciplines.length, selectedConcepts);
+      // Use a proper concept count (12-15) instead of selectedDisciplines.length
+      const conceptCount = 12 + Math.floor(Math.random() * 4);
+      await onSessionStart(selectedDisciplines, conceptCount, selectedConcepts);
     } finally {
       setIsLoading(false);
     }

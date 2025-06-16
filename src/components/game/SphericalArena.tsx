@@ -272,7 +272,15 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
 
   return (
     <div 
-      className="h-screen w-full flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
+      className="min-h-dvh w-full flex flex-col bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
+      style={{
+        height: '100dvh',
+        minHeight: '-webkit-fill-available',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)'
+      }}
       role="application"
       aria-label="Glass Bead Game - Spherical Arena"
     >
