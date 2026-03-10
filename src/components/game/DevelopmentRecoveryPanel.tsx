@@ -12,7 +12,7 @@ export const DevelopmentRecoveryPanel: React.FC<DevelopmentRecoveryPanelProps> =
   onRestoreSnapshot,
   onGameReset
 }) => {
-  if (process.env.NODE_ENV !== 'development' || !hasSnapshots) {
+  if (!import.meta.env.DEV || !hasSnapshots) {
     return null;
   }
 

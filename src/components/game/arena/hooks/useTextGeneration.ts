@@ -71,7 +71,7 @@ export const useTextGeneration = (sessionId: string | null) => {
     if (!sessionId) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('text_insights')
         .select('id, conceptual_text, dimensional_text, generated_at')
         .eq('session_id', sessionId)

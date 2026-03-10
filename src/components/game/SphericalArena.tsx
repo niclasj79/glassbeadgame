@@ -358,7 +358,7 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
       </div>
 
       {/* Performance Monitor (Development only) */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div 
           className="fixed top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none z-50"
           style={{

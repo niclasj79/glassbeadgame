@@ -20,7 +20,7 @@ export class GameSessionService {
   async createSession(sessionData: GameSessionData): Promise<string | null> {
     try {
       // Create the main session record
-      const { data: session, error: sessionError } = await supabase
+      const { data: session, error: sessionError } = await (supabase as any)
         .from('game_sessions')
         .insert({
           session_type: sessionData.sessionType,
@@ -44,7 +44,7 @@ export class GameSessionService {
         discipline_id: disciplineId
       }));
 
-      const { error: disciplinesError } = await supabase
+      const { error: disciplinesError } = await (supabase as any)
         .from('session_disciplines')
         .insert(disciplineInserts);
 
@@ -62,7 +62,7 @@ export class GameSessionService {
         energy: concept.energy
       }));
 
-      const { error: conceptsError } = await supabase
+      const { error: conceptsError } = await (supabase as any)
         .from('session_concepts')
         .insert(conceptInserts);
 
@@ -79,7 +79,7 @@ export class GameSessionService {
       }));
 
       if (interactionInserts.length > 0) {
-        const { error: interactionsError } = await supabase
+        const { error: interactionsError } = await (supabase as any)
           .from('session_interactions')
           .insert(interactionInserts);
 
@@ -98,7 +98,7 @@ export class GameSessionService {
   async getSession(sessionId: string): Promise<GameSessionData | null> {
     try {
       // Fetch session with related data
-      const { data: session, error: sessionError } = await supabase
+      const { data: session, error: sessionError } = await (supabase as any)
         .from('game_sessions')
         .select(`
           *,
@@ -160,7 +160,7 @@ export class GameSessionService {
 
   async updateSessionDuration(sessionId: string, duration: number): Promise<void> {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('game_sessions')
         .update({ 
           duration,
@@ -178,7 +178,7 @@ export class GameSessionService {
 
   async getRecentSessions(limit: number = 10): Promise<GameSessionData[]> {
     try {
-      const { data: sessions, error } = await supabase
+      const { data: sessions, error } = await (supabase as any)
         .from('game_sessions')
         .select(`
           *,

@@ -46,7 +46,7 @@ export const useMovementDatabase = (sessionId: string | null): MovementDatabaseH
         updated_at: new Date(data.timestamp).toISOString()
       }));
 
-      await supabase
+      await (supabase as any)
         .from('concept_movement_tracking')
         .upsert(upsertData, {
           onConflict: 'session_id,concept_id'
@@ -104,7 +104,7 @@ export const useMovementDatabase = (sessionId: string | null): MovementDatabaseH
         };
       });
 
-      await supabase
+      await (supabase as any)
         .from('concept_movement_tracking')
         .upsert(stabilityUpdates, {
           onConflict: 'session_id,concept_id'
