@@ -1,23 +1,25 @@
 import { RotationRef, DimensionalMapping } from '../types';
 import { rotatePoint, project3DTo2D } from '../utils';
+import { SphereRenderer } from './SphereRenderer';
 
 export class DimensionalRenderer {
   static render(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    dimensionalMapping: DimensionalMapping
+    dimensionalMapping: DimensionalMapping,
+    zoom: number = 1
   ) {
-    const sphereRadius = 180;
+    const sphereRadius = SphereRenderer.getResponsiveRadius(canvas);
     
     // Render axis lines
-    this.renderAxisLines(ctx, canvas, rotationRef, sphereRadius);
+    this.renderAxisLines(ctx, canvas, rotationRef, sphereRadius, zoom);
     
     // Render dimensional labels
-    this.renderDimensionalLabels(ctx, canvas, rotationRef, sphereRadius, dimensionalMapping);
+    this.renderDimensionalLabels(ctx, canvas, rotationRef, sphereRadius, dimensionalMapping, zoom);
     
     // Render subtle grid
-    this.renderSphereGrid(ctx, canvas, rotationRef, sphereRadius);
+    this.renderSphereGrid(ctx, canvas, rotationRef, sphereRadius, zoom);
   }
 
   private static renderAxisLines(
