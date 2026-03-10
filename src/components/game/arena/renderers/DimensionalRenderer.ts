@@ -26,7 +26,8 @@ export class DimensionalRenderer {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    radius: number
+    radius: number,
+    zoom: number
   ) {
     const axes = [
       { start: [-radius, 0, 0], end: [radius, 0, 0], color: 'rgba(255, 100, 100, 0.6)' }, // X-axis (red)
