@@ -72,23 +72,24 @@ export const useAudioEngine = () => {
       const baseFreq = freqs[0] * 0.5; // low octave
       const nodes: { osc: OscillatorNode; gain: GainNode }[] = [];
 
-      // Detuned pad pair for richness
-      for (const detune of [-4, 4]) {
+      // Detuned pad pair for richness — audible volume
+      for (const detune of [-6, 0, 6]) {
         const osc = actx.createOscillator();
         const gain = actx.createGain();
         const filter = actx.createBiquadFilter();
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(baseFreq, actx.currentTime);
+        osc.type = detune === 0 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(baseFreq * (detune === 6 ? 2 : 1), actx.currentTime);
         osc.detune.setValueAtTime(detune, actx.currentTime);
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(400 + idx * 100, actx.currentTime);
-        filter.Q.setValueAtTime(1, actx.currentTime);
+        filter.frequency.setValueAtTime(600 + idx * 150, actx.currentTime);
+        filter.Q.setValueAtTime(0.7, actx.currentTime);
 
-        const vol = 0.04 / (idx + 1);
+        // Much louder so users can hear the drone
+        const vol = 0.12 / (idx + 1);
         gain.gain.setValueAtTime(0, actx.currentTime);
-        gain.gain.linearRampToValueAtTime(vol, actx.currentTime + 3);
+        gain.gain.linearRampToValueAtTime(vol, actx.currentTime + 4);
 
         osc.connect(filter);
         filter.connect(gain);
@@ -109,7 +110,7 @@ export const useAudioEngine = () => {
     if (rhythmIntervalRef.current) clearInterval(rhythmIntervalRef.current);
 
     rhythmGainRef.current = actx.createGain();
-    rhythmGainRef.current.gain.setValueAtTime(0.06, actx.currentTime);
+    rhythmGainRef.current.gain.setValueAtTime(0.15, actx.currentTime);
     rhythmGainRef.current.connect(master);
 
     const baseTempo = 700; // ms per beat
