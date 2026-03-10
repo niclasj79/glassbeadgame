@@ -6,8 +6,8 @@ export class SphereRenderer {
     return Math.min(canvas.width, canvas.height) * 0.32;
   }
 
-  static render(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, rotationRef: React.MutableRefObject<RotationRef>) {
-    const sphereRadius = SphereRenderer.getResponsiveRadius(canvas);
+  static render(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, rotationRef: React.MutableRefObject<RotationRef>, zoom: number = 1) {
+    const sphereRadius = SphereRenderer.getResponsiveRadius(canvas) * zoom;
     const segments = 16;
     const t = Date.now() * 0.0003;
 

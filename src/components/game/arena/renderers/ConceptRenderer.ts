@@ -34,7 +34,7 @@ export class ConceptRenderer {
       if (!discipline) return;
 
       const rotated = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
-      const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+      const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
 
       if (projected.scale < 0.2) return;
 

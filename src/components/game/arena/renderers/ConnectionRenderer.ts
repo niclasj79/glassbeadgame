@@ -69,12 +69,13 @@ export class ConnectionRenderer {
     c1: Concept, c2: Concept,
     proximity: number,
     discipline1Color: string, discipline2Color: string,
-    rotationRef: React.MutableRefObject<RotationRef>
+    rotationRef: React.MutableRefObject<RotationRef>,
+    zoom: number = 1
   ) {
     const r1 = rotatePoint(c1.x, c1.y, c1.z, rotationRef.current.x, rotationRef.current.y);
     const r2 = rotatePoint(c2.x, c2.y, c2.z, rotationRef.current.x, rotationRef.current.y);
-    const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas);
-    const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas);
+    const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas, zoom);
+    const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas, zoom);
 
     const t = Date.now() * 0.003;
     const pulse = Math.sin(t) * 0.3 + 0.7;
