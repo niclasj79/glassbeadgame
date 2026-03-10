@@ -78,7 +78,7 @@ export class DimensionalRenderer {
       const rotated = rotatePoint(label.pos[0], label.pos[1], label.pos[2], rotationRef.current.x, rotationRef.current.y);
       
       if (rotated.z > -100) { // Only show labels that are reasonably visible
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         
         ctx.fillStyle = label.color;
         ctx.fillText(label.text, projected.x, projected.y);
