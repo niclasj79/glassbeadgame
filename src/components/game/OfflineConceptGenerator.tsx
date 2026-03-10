@@ -71,13 +71,14 @@ export class OfflineConceptGenerator {
       const energy = PositionGenerator.generateEnergy();
 
       concepts.push({
-        id: `fallback-${disciplineId}-${i}-${Date.now()}`,
-        text: `${disciplineId.charAt(0).toUpperCase() + disciplineId.slice(1)} Concept ${i + 1}`,
-        discipline: disciplineId,
-        ...position,
-        energy,
-        connections: []
-      });
+          id: `fallback-${disciplineId}-${concepts.length}-${Date.now()}`,
+          text: `${disciplineId.charAt(0).toUpperCase() + disciplineId.slice(1)} Concept ${concepts.length + 1}`,
+          discipline: disciplineId,
+          ...position,
+          energy,
+          connections: []
+        });
+      }
     }
 
     this.generateConnections(concepts);
