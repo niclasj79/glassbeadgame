@@ -160,7 +160,7 @@ export class GameSessionService {
 
   async updateSessionDuration(sessionId: string, duration: number): Promise<void> {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('game_sessions')
         .update({ 
           duration,
