@@ -11,6 +11,14 @@ export interface AudioContextType {
   preloadAudio?: () => Promise<boolean>;
   createBackgroundSoundscape?: (concepts: any[], rotationX: number, rotationY: number) => void;
   updateDynamicPanning?: (rotationX: number, rotationY: number) => void;
+  // New reactive sounds
+  playHoverSound?: () => void;
+  playGrabSound?: () => void;
+  playDropSound?: () => void;
+  playRotationSound?: (direction: number) => void;
+  playProximityTension?: (proximity: number) => void;
+  playSynthesisChord?: (discipline1: string, discipline2: string, resonance: number) => void;
+  updateSoundtrackIntensity?: (totalResonance: number) => void;
 }
 
 export interface AudioProviderProps {
