@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ErrorBoundary } from '../error/ErrorBoundary';
 import { SessionStartFlow } from './SessionStartFlow';
@@ -14,6 +13,7 @@ interface GamePhaseRouterProps {
   onSessionEnd: () => Promise<void>;
   onNewSession: () => void;
   onBackToMenu: () => void;
+  onDiscoveriesUpdate?: (discoveries: any[], score: any) => void;
 }
 
 export const GamePhaseRouter: React.FC<GamePhaseRouterProps> = ({
@@ -24,19 +24,17 @@ export const GamePhaseRouter: React.FC<GamePhaseRouterProps> = ({
   onConceptInteraction,
   onSessionEnd,
   onNewSession,
-  onBackToMenu
+  onBackToMenu,
+  onDiscoveriesUpdate
 }) => {
   switch (phase) {
     case 'start':
       return (
         <ErrorBoundary level="section">
-          <SessionStartFlow
-            disciplines={disciplines}
-            onSessionStart={onSessionStart}
-          />
+          <SessionStartFlow disciplines={disciplines} onSessionStart={onSessionStart} />
         </ErrorBoundary>
       );
-    
+
     case 'arena':
       return (
         <ErrorBoundary level="section">
@@ -46,10 +44,11 @@ export const GamePhaseRouter: React.FC<GamePhaseRouterProps> = ({
             concepts={gameState.currentConcepts}
             onConceptInteraction={onConceptInteraction}
             onSessionEnd={onSessionEnd}
+            onDiscoveriesUpdate={onDiscoveriesUpdate}
           />
         </ErrorBoundary>
       );
-    
+
     case 'interpretation':
       return (
         <ErrorBoundary level="section">
@@ -60,7 +59,7 @@ export const GamePhaseRouter: React.FC<GamePhaseRouterProps> = ({
           />
         </ErrorBoundary>
       );
-    
+
     default:
       return null;
   }

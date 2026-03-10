@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, BookOpen, Brain } from 'lucide-react';
 
@@ -8,109 +7,150 @@ interface HeroSectionProps {
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onStartGame }) => {
-  return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background illustration */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-900 to-black">
-        {/* Ethereal orbs and light effects */}
-        <div className="absolute top-20 left-20 w-32 h-32 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-32 w-24 h-24 bg-purple-400/30 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-40 left-40 w-40 h-40 bg-indigo-400/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
-        <div className="absolute bottom-32 right-20 w-28 h-28 bg-violet-400/25 rounded-full blur-2xl animate-pulse delay-500"></div>
-        
-        {/* Geometric patterns suggesting the Glass Bead Game */}
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <pattern id="beadPattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="10" cy="10" r="2" fill="currentColor" opacity="0.3"/>
-                <circle cx="5" cy="15" r="1.5" fill="currentColor" opacity="0.2"/>
-                <circle cx="15" cy="5" r="1" fill="currentColor" opacity="0.4"/>
-              </pattern>
-            </defs>
-            <rect width="100" height="100" fill="url(#beadPattern)" className="text-white"/>
-          </svg>
-        </div>
-        
-        {/* Floating particles */}
-        <div className="absolute inset-0">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-white/40 rounded-full animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${2 + Math.random() * 4}s`
-              }}
-            />
-          ))}
-        </div>
-      </div>
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-      {/* Main content */}
-      <div className="relative z-10 text-center px-8 max-w-4xl">
-        {/* Title */}
+  // Animated mini sphere preview
+  const renderPreview = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    const cx = w / 2;
+    const cy = h / 2;
+    const t = Date.now() * 0.0008;
+    const radius = Math.min(w, h) * 0.3;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Glow
+    const glow = ctx.createRadialGradient(cx, cy, radius * 0.2, cx, cy, radius * 1.5);
+    glow.addColorStop(0, 'hsla(260, 60%, 50%, 0.12)');
+    glow.addColorStop(0.5, 'hsla(240, 50%, 40%, 0.05)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    // Wireframe circles
+    const segments = 8;
+    ctx.strokeStyle = 'hsla(260, 50%, 60%, 0.12)';
+    ctx.lineWidth = 0.8;
+    for (let i = 1; i < segments; i++) {
+      const angle = (i / segments) * Math.PI;
+      const r = Math.sin(angle) * radius;
+      const y = Math.cos(angle) * radius;
+      ctx.beginPath();
+      for (let j = 0; j <= 48; j++) {
+        const a = (j / 48) * Math.PI * 2;
+        const px = cx + Math.cos(a + t) * r;
+        const py = cy + y * 0.6 + Math.sin(a + t) * r * 0.4;
+        if (j === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Floating beads
+    const beadColors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4'];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + t;
+      const r2 = radius * (0.5 + Math.sin(t * 1.5 + i) * 0.3);
+      const bx = cx + Math.cos(a) * r2;
+      const by = cy + Math.sin(a * 0.7) * r2 * 0.5;
+      const color = beadColors[i % beadColors.length];
+      const size = 4 + Math.sin(t + i) * 2;
+
+      // Bead glow
+      const beadGlow = ctx.createRadialGradient(bx, by, 0, bx, by, size * 3);
+      beadGlow.addColorStop(0, color + '40');
+      beadGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = beadGlow;
+      ctx.beginPath();
+      ctx.arc(bx, by, size * 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bead
+      const beadGrad = ctx.createRadialGradient(bx - size * 0.3, by - size * 0.3, 0, bx, by, size);
+      beadGrad.addColorStop(0, '#ffffff');
+      beadGrad.addColorStop(0.3, color);
+      beadGrad.addColorStop(1, color + '80');
+      ctx.fillStyle = beadGrad;
+      ctx.beginPath();
+      ctx.arc(bx, by, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(renderPreview);
+  }, []);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(renderPreview);
+    return () => cancelAnimationFrame(raf);
+  }, [renderPreview]);
+
+  return (
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden" style={{ background: 'hsl(240, 60%, 3%)' }}>
+      {/* Animated canvas background */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ opacity: 0.7 }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 text-center px-6 max-w-3xl">
         <div className="mb-8">
-          <h1 className="text-6xl md:text-8xl font-light text-white mb-4 tracking-wide">
+          <h1 className="text-5xl md:text-7xl font-extralight tracking-wider mb-2">
             <span className="bg-gradient-to-r from-blue-200 via-purple-200 to-indigo-200 bg-clip-text text-transparent">
               The Glass
             </span>
           </h1>
-          <h1 className="text-6xl md:text-8xl font-light text-white mb-6 tracking-wide">
+          <h1 className="text-5xl md:text-7xl font-extralight tracking-wider mb-6">
             <span className="bg-gradient-to-r from-purple-200 via-indigo-200 to-blue-200 bg-clip-text text-transparent">
               Bead Game
             </span>
           </h1>
-          <div className="w-32 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto mb-8"></div>
+          <div className="w-24 h-px bg-gradient-to-r from-transparent via-game-glow/50 to-transparent mx-auto mb-6" />
         </div>
 
-        {/* Subtitle */}
-        <p className="text-xl md:text-2xl text-blue-100/80 mb-4 font-light leading-relaxed">
+        <p className="text-lg md:text-xl game-text-dim mb-2 font-light italic">
           Das Glasperlenspiel
         </p>
-        <p className="text-lg md:text-xl text-white/70 mb-8 max-w-2xl mx-auto leading-relaxed">
-          An immersive synthesis of all human knowledge, where disciplines dance in harmony 
-          and wisdom emerges from the connections between all things
+        <p className="text-base md:text-lg game-text-dim mb-8 max-w-xl mx-auto leading-relaxed">
+          Drag concepts together to discover hidden connections across disciplines.
+          Build resonance. Uncover the unity of knowledge.
         </p>
 
-        {/* Start Game Button - Repositioned here, right after description */}
-        <div className="flex justify-center mb-8">
-          <Button 
-            onClick={onStartGame}
-            size="lg"
-            className="bg-gradient-to-r from-blue-600/80 to-purple-600/80 hover:from-blue-700/90 hover:to-purple-700/90 text-white border border-white/20 backdrop-blur-sm px-8 py-3 text-lg font-light tracking-wide transition-all duration-300 hover:scale-105"
-          >
-            <Sparkles className="w-5 h-5 mr-3" />
-            Start The Game
-          </Button>
-        </div>
+        <Button
+          onClick={onStartGame}
+          size="lg"
+          className="bg-game-glow/20 hover:bg-game-glow/30 text-game-glow border border-game-glow/30 px-8 py-3 text-lg font-light tracking-wide transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-game-glow/20"
+        >
+          <Sparkles className="w-5 h-5 mr-3" />
+          Begin
+        </Button>
 
-        {/* Philosophical quote */}
-        <blockquote className="text-base md:text-lg text-indigo-200/80 italic mb-8 max-w-3xl mx-auto leading-relaxed">
+        <blockquote className="mt-10 text-sm md:text-base game-text-dim italic max-w-2xl mx-auto leading-relaxed">
           "The Game was thus a mode of playing with the total contents and values of our culture"
-          <footer className="text-sm text-white/50 mt-2 not-italic">— Hermann Hesse</footer>
+          <footer className="text-xs game-text-dim mt-2 not-italic opacity-60">— Hermann Hesse</footer>
         </blockquote>
 
-        {/* Additional info */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <div className="flex items-center gap-6 text-sm text-white/60">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              <span>Explore Knowledge</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4" />
-              <span>Discover Connections</span>
-            </div>
+        <div className="flex gap-6 justify-center items-center mt-8">
+          <div className="flex items-center gap-2 text-xs game-text-dim">
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Explore Knowledge</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs game-text-dim">
+            <Brain className="w-3.5 h-3.5" />
+            <span>Discover Connections</span>
           </div>
         </div>
-
-        {/* Floating elements for visual interest */}
-        <div className="absolute -top-20 -left-20 w-1 h-1 bg-white/60 rounded-full animate-ping"></div>
-        <div className="absolute -bottom-16 -right-16 w-1 h-1 bg-blue-300/60 rounded-full animate-ping delay-1000"></div>
-        <div className="absolute top-10 right-10 w-1 h-1 bg-purple-300/60 rounded-full animate-ping delay-2000"></div>
       </div>
     </div>
   );

@@ -1,309 +1,130 @@
-
 import React, { useState, useEffect } from 'react';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
+import { SynthesisCard } from './arena/SynthesisCard';
+import { ScoreDisplay } from './arena/ScoreDisplay';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
-import { usePerformanceOptimization } from './arena/hooks/usePerformanceOptimization';
+import { useProximitySynthesis } from './arena/hooks/useProximitySynthesis';
 import { useAudio } from '../audio/AudioEngine';
 import { AudioControls } from '../audio/AudioControls';
-import { EnhancedAudioControls } from '../audio/EnhancedAudioControls';
-import { use3DAudioEngine } from '../audio/hooks/use3DAudioEngine';
-import { getDisciplineFrequencies } from '../audio/utils/audioUtils';
-import { memoryManager } from './arena/utils/memoryManager';
-import { useAccessibility } from '../../hooks/useAccessibility';
-import { useImprovedTouch } from '../../hooks/useImprovedTouch';
 import { LoadingOverlay } from '../ui/loading-overlay';
 
-export const SphericalArena: React.FC<SphericalArenaProps> = ({
+interface EnhancedArenaProps extends SphericalArenaProps {
+  onDiscoveriesUpdate?: (discoveries: any[], score: any) => void;
+}
+
+export const SphericalArena: React.FC<EnhancedArenaProps> = ({
   disciplines,
   selectedDisciplines,
   concepts: initialConcepts,
   onConceptInteraction,
-  onSessionEnd
+  onSessionEnd,
+  onDiscoveriesUpdate
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
-  const [rotationState, setRotationState] = useState({ x: 0, y: 0 });
+  const [showTutorial, setShowTutorial] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
-  
-  const { 
-    preloadAudio, 
-    playDisciplineSound, 
-    createBackgroundSoundscape, 
-    updateDynamicPanning,
-    isAudioEnabled,
-    initializeAudio
-  } = useAudio();
 
-  // Accessibility features
-  const { announce, saveFocus, restoreFocus, focusFirst } = useAccessibility({
-    announceChanges: true,
-    focusManagement: true,
-    keyboardNavigation: true
-  });
+  const { preloadAudio, playDisciplineSound, isAudioEnabled, initializeAudio } = useAudio();
 
-  // Enhanced touch handling
-  const { touchState, isTouch } = useImprovedTouch((gesture) => {
-    switch (gesture.type) {
-      case 'double-tap':
-        announce('Double tap detected - focusing on center');
-        break;
-      case 'pinch':
-        if (gesture.scale && gesture.scale > 1.2) {
-          announce('Pinch to zoom in detected');
-        } else if (gesture.scale && gesture.scale < 0.8) {
-          announce('Pinch to zoom out detected');
-        }
-        break;
-      case 'long-press':
-        announce('Long press detected - accessing concept details');
-        break;
-    }
-  }, {
-    enablePinch: true,
-    enableRotation: true,
-    longPressDelay: 400
-  });
-
-  // Performance optimization with adaptive settings
-  const { getPerformanceMetrics, optimizeForLowPerformance, isOptimal } = usePerformanceOptimization({
-    enableMemoryMonitoring: true,
-    enableFrameRateMonitoring: true,
-    targetFPS: 60,
-    memoryThreshold: 100
-  });
-
-  // Automatically initialize audio when session starts
   useEffect(() => {
-    const initSessionAudio = async () => {
+    const init = async () => {
       try {
-        setIsInitializing(true);
-        announce('Initializing audio engine...');
-        
         if (preloadAudio && initializeAudio) {
           await preloadAudio();
           await initializeAudio();
-          announce('Audio engine ready');
         }
-      } catch (error) {
-        console.error('Audio initialization failed:', error);
-        announce('Audio initialization failed, continuing without audio');
+      } catch (e) {
+        console.error('Audio init failed:', e);
       } finally {
         setIsInitializing(false);
       }
     };
-    
-    initSessionAudio();
-  }, [preloadAudio, initializeAudio, announce]);
+    init();
+  }, [preloadAudio, initializeAudio]);
 
-  // Start memory monitoring
+  // Dismiss tutorial after 5s
   useEffect(() => {
-    memoryManager.startMonitoring();
-    return () => memoryManager.stopMonitoring();
+    const timer = setTimeout(() => setShowTutorial(false), 5000);
+    return () => clearTimeout(timer);
   }, []);
 
-  // Offline session management with performance monitoring
   const {
-    sessionId,
-    concepts,
-    setConcepts,
-    remainingTime,
-    formatTime,
-    updateConceptMovement,
-    currentInsight,
-    isGenerating,
-    error,
-    cleanup,
-    trackRenderPerformance,
-    performanceMetrics
+    sessionId, concepts, setConcepts, remainingTime, formatTime,
+    updateConceptMovement, currentInsight, isGenerating, error, cleanup,
+    trackRenderPerformance, performanceMetrics
   } = useOfflineSessionManagement(initialConcepts, onSessionEnd, {
-    enableBatchedUpdates: true,
-    enableAggressiveCaching: true,
-    maxCacheSize: 50,
-    preloadInsights: false
+    enableBatchedUpdates: true, enableAggressiveCaching: true, maxCacheSize: 50, preloadInsights: false
   });
 
-  // Enhanced concept position update handler with accessibility announcements
+  // Proximity synthesis system
+  const {
+    discoveries, activePairs, latestDiscovery, isGeneratingInsight, score, dismissDiscovery
+  } = useProximitySynthesis(concepts, disciplines);
+
+  // Notify parent of discoveries
+  useEffect(() => {
+    if (onDiscoveriesUpdate) {
+      onDiscoveriesUpdate(discoveries, score);
+    }
+  }, [discoveries, score, onDiscoveriesUpdate]);
+
   const handleConceptPositionUpdate = (conceptId: string, newX: number, newY: number, newZ: number) => {
-    console.log(`SphericalArena: Handling concept ${conceptId} position update to:`, { newX, newY, newZ });
-    
-    // Announce concept movement to screen readers
-    const concept = concepts.find(c => c.id === conceptId);
-    if (concept) {
-      announce(`Moved concept: ${concept.text}`);
-    }
-    
-    // Update session state immediately for persistence
-    if (sessionId) {
-      updateConceptMovement(conceptId, newX, newY, newZ);
-    }
-
-    // Update local state with batch update to prevent multiple re-renders
-    setConcepts(prev => {
-      const updated = prev.map(concept => 
-        concept.id === conceptId 
-          ? { ...concept, x: newX, y: newY, z: newZ }
-          : concept
-      );
-      console.log(`SphericalArena: Updated local concept state for ${conceptId}`);
-      return updated;
-    });
-
-    // Track render performance
+    if (sessionId) updateConceptMovement(conceptId, newX, newY, newZ);
+    setConcepts(prev => prev.map(c => c.id === conceptId ? { ...c, x: newX, y: newY, z: newZ } : c));
     trackRenderPerformance();
   };
 
-  // Concept interactions with position update callback
   const { handleConceptClick, handleConceptMove } = useConceptInteractions(
-    concepts,
-    disciplines,
-    onConceptInteraction,
-    handleConceptPositionUpdate
+    concepts, disciplines, onConceptInteraction, handleConceptPositionUpdate
   );
 
-  // Create background soundscape when concepts or rotation change (throttled)
-  useEffect(() => {
-    let timeoutId: number;
-    
-    if (isAudioEnabled && createBackgroundSoundscape && concepts.length > 0) {
-      timeoutId = window.setTimeout(() => {
-        createBackgroundSoundscape(concepts, rotationState.x, rotationState.y);
-      }, 500);
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [concepts, isAudioEnabled, createBackgroundSoundscape, rotationState]);
-
-  // Enhanced concept click handler with accessibility and 3D audio
   const enhancedConceptClick = async (conceptId: string) => {
     const concept = concepts.find(c => c.id === conceptId);
     if (concept) {
-      // Announce concept selection
-      announce(`Selected concept: ${concept.text} from ${concept.discipline}`);
-      
       const discipline = disciplines.find(d => d.id === concept.discipline);
-      if (discipline) {
-        // Play sound with 3D positioning
-        playDisciplineSound(discipline.id, concept.energy, { 
-          x: concept.x, 
-          y: concept.y, 
-          z: concept.z 
-        });
+      if (discipline && playDisciplineSound) {
+        playDisciplineSound(discipline.id, concept.energy, { x: concept.x, y: concept.y, z: concept.z });
       }
     }
-    
     setSelectedConcept(conceptId);
     handleConceptClick(conceptId);
   };
 
-  // Enhanced concept move handler with accessibility
   const enhancedConceptMove = async (conceptId: string, newX: number, newY: number, newZ: number) => {
-    console.log(`SphericalArena: Processing concept move for ${conceptId} to:`, { newX, newY, newZ });
-    
-    // Call the position update handler which will update both session and local state
     handleConceptPositionUpdate(conceptId, newX, newY, newZ);
-    
-    // Handle business logic (audio, interactions)
     handleConceptMove(conceptId, newX, newY, newZ);
   };
 
-  // Handle rotation changes for dynamic panning (throttled)
-  const handleRotationChange = (rotationX: number, rotationY: number) => {
-    setRotationState({ x: rotationX, y: rotationY });
-    if (updateDynamicPanning && isAudioEnabled) {
-      const throttledUpdate = () => updateDynamicPanning(rotationX, rotationY);
-      setTimeout(throttledUpdate, 100);
-    }
-  };
-
-  // Handle session end with cleanup and accessibility
   const handleSessionEnd = () => {
-    const metrics = getPerformanceMetrics();
-    console.log('Session ending - Performance metrics:', {
-      ...performanceMetrics,
-      finalFPS: metrics.averageFPS,
-      finalMemory: memoryManager.getCurrentMemoryUsage()
-    });
-    
-    announce('Session ended. Thank you for playing!');
-    restoreFocus();
     cleanup();
     onSessionEnd();
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, [cleanup]);
-
-  // Performance monitoring and optimization
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const metrics = getPerformanceMetrics();
-      
-      if (!isOptimal) {
-        console.warn('Performance degradation detected:', {
-          fps: metrics.averageFPS.toFixed(1),
-          memory: memoryManager.getCurrentMemoryUsage(),
-          frameTime: metrics.frameTime.toFixed(2) + 'ms'
-        });
-        
-        optimizeForLowPerformance();
-        announce('Performance optimized for better experience');
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [getPerformanceMetrics, isOptimal, optimizeForLowPerformance, announce]);
-
-  // Focus management for session start
-  useEffect(() => {
-    if (!isInitializing) {
-      announce(`Session started with ${concepts.length} concepts. ${isTouch ? 'Touch controls active.' : 'Mouse controls active.'}`);
-    }
-  }, [isInitializing, concepts.length, isTouch, announce]);
+  useEffect(() => { return () => { cleanup(); }; }, [cleanup]);
 
   return (
-    <div 
-      className="w-full bg-gradient-to-br from-indigo-950 via-purple-900 to-black relative overflow-hidden"
-      style={{
-        height: '100vh',
-        minHeight: '100vh',
-        maxHeight: '100vh'
-      }}
+    <div
+      className="w-full relative overflow-hidden"
+      style={{ height: '100vh', minHeight: '100vh', maxHeight: '100vh', background: 'hsl(240, 60%, 3%)' }}
       role="application"
       aria-label="Glass Bead Game - Spherical Arena"
     >
-      {/* Fixed Header - Mobile optimized positioning */}
+      {/* Header with score */}
       <SessionHeader
         remainingTime={remainingTime}
         formatTime={formatTime}
         onEndSession={handleSessionEnd}
+        score={score}
       />
 
-      {/* Main Arena Content - Full viewport with proper mobile handling */}
-      <div 
-        className="w-full relative"
-        style={{
-          height: '100vh',
-          paddingTop: 'max(env(safe-area-inset-top), 60px)', // Ensure space for header
-          paddingBottom: 'max(env(safe-area-inset-bottom), 120px)', // Ensure space for bottom UI
-          paddingLeft: 'env(safe-area-inset-left)',
-          paddingRight: 'env(safe-area-inset-right)'
-        }}
-      >
-        <LoadingOverlay 
-          isLoading={isInitializing} 
-          message="Initializing immersive experience..."
-          className="bg-gradient-to-br from-indigo-950 via-purple-900 to-black"
-        >
+      {/* Arena canvas */}
+      <div className="w-full relative" style={{ height: '100vh', paddingTop: '60px', paddingBottom: '80px' }}>
+        <LoadingOverlay isLoading={isInitializing} message="Entering the Glass Bead Game...">
           <div className="w-full h-full">
             <CanvasRenderer
               concepts={concepts}
@@ -312,70 +133,42 @@ export const SphericalArena: React.FC<SphericalArenaProps> = ({
               selectedConcept={selectedConcept}
               onConceptClick={enhancedConceptClick}
               onConceptMove={enhancedConceptMove}
-              onRotationChange={handleRotationChange}
+              proximityPairs={activePairs}
             />
           </div>
         </LoadingOverlay>
       </div>
 
-      {/* Bottom UI - Fixed positioning with mobile optimization */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 pointer-events-none z-20"
-        style={{
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          paddingLeft: 'env(safe-area-inset-left)',
-          paddingRight: 'env(safe-area-inset-right)'
-        }}
-      >
-        <div className="pointer-events-auto">
-          <BottomUI
-            disciplines={disciplines}
-            selectedDisciplines={selectedDisciplines}
-            concepts={concepts}
-            currentInsight={currentInsight}
-            isGenerating={isGenerating}
-            error={error}
-          />
-        </div>
-      </div>
-
-      {/* Audio Controls - Fixed positioning for mobile */}
-      <div 
-        className="fixed bottom-4 right-4 pointer-events-auto z-30"
-        style={{
-          bottom: `calc(4px + env(safe-area-inset-bottom))`,
-          right: `calc(16px + env(safe-area-inset-right))`
-        }}
-      >
-        <AudioControls />
-      </div>
-
-      {/* Accessibility Status (Screen reader only) */}
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {isTouch ? 'Touch interface active' : 'Mouse interface active'}.
-        {concepts.length} concepts available.
-        {selectedConcept && `Selected: ${concepts.find(c => c.id === selectedConcept)?.text}`}
-      </div>
-
-      {/* Performance Monitor (Development only) */}
-      {import.meta.env.DEV && (
-        <div 
-          className="fixed top-20 left-4 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none z-50"
-          style={{
-            top: `calc(80px + env(safe-area-inset-top))`,
-            left: `calc(16px + env(safe-area-inset-left))`
-          }}
-        >
-          <div>Renders: {performanceMetrics.renderCount}</div>
-          <div>Avg Frame: {performanceMetrics.averageFrameTime.toFixed(1)}ms</div>
-          <div>Audio: {isAudioEnabled ? '3D Ready' : 'Disabled'}</div>
-          <div>Concepts: {concepts.length}</div>
-          <div>Memory: {memoryManager.getCurrentMemoryUsage().used}</div>
-          <div>Status: {isOptimal ? '✅ Optimal' : '⚠️ Degraded'}</div>
-          <div>Touch: {isTouch ? '📱 Active' : '🖱️ Mouse'}</div>
-          <div>Gesture: {touchState.gestureType}</div>
+      {/* Tutorial overlay */}
+      {showTutorial && !isInitializing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="game-surface-elevated rounded-xl p-6 max-w-sm mx-4 animate-fade-in pointer-events-auto">
+            <h3 className="text-lg font-semibold game-text-bright mb-3">How to Play</h3>
+            <ul className="text-sm game-text-dim space-y-2">
+              <li>🔮 Drag concepts from different disciplines close together</li>
+              <li>✨ When they're near enough, a resonance is discovered</li>
+              <li>📜 Each discovery reveals a hidden connection</li>
+              <li>🏆 Build your resonance score with unique pairings</li>
+            </ul>
+            <button
+              onClick={() => setShowTutorial(false)}
+              className="mt-4 text-sm text-game-glow hover:text-white transition-colors"
+            >
+              Got it!
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Synthesis discovery card */}
+      {latestDiscovery && (
+        <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
+      )}
+
+      {/* Audio Controls */}
+      <div className="fixed bottom-4 right-4 z-30">
+        <AudioControls />
+      </div>
     </div>
   );
 };
