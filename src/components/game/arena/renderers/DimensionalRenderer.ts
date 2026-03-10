@@ -58,7 +58,8 @@ export class DimensionalRenderer {
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
     radius: number,
-    mapping: DimensionalMapping
+    mapping: DimensionalMapping,
+    zoom: number
   ) {
     const labels = [
       { pos: [radius + 20, 0, 0], text: mapping.x.positive, color: 'rgba(255, 150, 150, 0.8)' },
