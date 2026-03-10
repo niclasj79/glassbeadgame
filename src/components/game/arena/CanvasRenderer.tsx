@@ -8,6 +8,7 @@ import { SphereRenderer } from './renderers/SphereRenderer';
 import { ConceptRenderer } from './renderers/ConceptRenderer';
 import { ConnectionRenderer } from './renderers/ConnectionRenderer';
 import { DimensionalRenderer } from './renderers/DimensionalRenderer';
+import { EffectsRenderer } from './renderers/EffectsRenderer';
 import { ArenaUI } from './ArenaUI';
 import { rotatePoint, project3DTo2D } from './utils';
 
@@ -20,6 +21,12 @@ interface CanvasRendererProps {
   onConceptMove: (conceptId: string, newX: number, newY: number, newZ: number) => void;
   onRotationChange?: (rotationX: number, rotationY: number) => void;
   proximityPairs?: { concept1: Concept; concept2: Concept; proximity: number }[];
+  scoreIntensity?: number;
+  onHover?: (conceptId: string | null) => void;
+  onGrab?: () => void;
+  onDrop?: () => void;
+  onRotate?: (direction: number) => void;
+  discoveriesCount?: number;
 }
 
 export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
@@ -30,7 +37,13 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   onConceptClick,
   onConceptMove,
   onRotationChange,
-  proximityPairs = []
+  proximityPairs = [],
+  scoreIntensity = 0,
+  onHover,
+  onGrab,
+  onDrop,
+  onRotate,
+  discoveriesCount = 0
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,6 +55,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   const lastUpdateHashRef = useRef<string>('');
   const internalMoveRef = useRef<Set<string>>(new Set());
   const [hoveredConcept, setHoveredConcept] = useState<string | null>(null);
+  const prevHoveredRef = useRef<string | null>(null);
 
   // Rotation inertia state
   const velocityRef = useRef({ x: 0, y: 0 });
@@ -88,15 +102,11 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     if (!currentPosition) return;
 
     internalMoveRef.current.add(conceptId);
-
     startAnimation(conceptId, currentPosition.x, currentPosition.y, currentPosition.z, newX, newY, newZ, 600);
     updateConceptPosition(conceptId, newX, newY, newZ);
     onConceptMove(conceptId, newX, newY, newZ);
 
-    setTimeout(() => {
-      internalMoveRef.current.delete(conceptId);
-    }, 100);
-
+    setTimeout(() => { internalMoveRef.current.delete(conceptId); }, 100);
     window.dispatchEvent(new CustomEvent('conceptdragend'));
   }, [getConceptPosition, startAnimation, updateConceptPosition, onConceptMove]);
 
@@ -107,14 +117,13 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     getCursor
   } = useInteractions(concepts, onConceptClick, handleConceptMoveWithAnimation);
 
-  // Track pointer velocity for inertia
+  // Track pointer velocity for inertia + hover detection
   const wrappedMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const now = performance.now();
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Track velocity while rotating
     if (interactionMode === 'rotating') {
       const dt = now - lastPointerMoveRef.current.time;
       if (dt > 0 && dt < 100) {
@@ -134,31 +143,36 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
         const rotated = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
         const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
         const dist = Math.sqrt((x - projected.x) ** 2 + (y - projected.y) ** 2);
-        const size = 18 + concept.energy * 12 * projected.scale;
-        if (dist < size + 10) {
+        const size = 28 + concept.energy * 16 * projected.scale;
+        if (dist < size + 12) {
           found = concept.id;
           break;
         }
       }
-      if (found !== hoveredConcept) setHoveredConcept(found);
+      if (found !== hoveredConcept) {
+        setHoveredConcept(found);
+        if (found && found !== prevHoveredRef.current) {
+          onHover?.(found);
+        }
+        prevHoveredRef.current = found;
+      }
     }
 
     handleMouseMove(e);
-  }, [handleMouseMove, interactionMode, concepts, rotationRef, dragState, hoveredConcept]);
+  }, [handleMouseMove, interactionMode, concepts, rotationRef, dragState, hoveredConcept, onHover]);
 
   // Apply inertia on mouse up
   const wrappedMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (interactionMode === 'rotating') {
       const vel = velocityRef.current;
       if (Math.abs(vel.x) > 0.001 || Math.abs(vel.y) > 0.001) {
-        // Start inertia loop
+        onRotate?.(vel.y);
         const applyInertia = () => {
           velocityRef.current.x *= 0.95;
           velocityRef.current.y *= 0.95;
           rotationRef.current.x += velocityRef.current.x;
           rotationRef.current.y += velocityRef.current.y;
           isDirtyRef.current = true;
-
           if (Math.abs(velocityRef.current.x) > 0.0005 || Math.abs(velocityRef.current.y) > 0.0005) {
             inertiaAnimRef.current = requestAnimationFrame(applyInertia);
           }
@@ -167,19 +181,37 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
         inertiaAnimRef.current = requestAnimationFrame(applyInertia);
       }
     }
+    if (interactionMode === 'dragging') {
+      onDrop?.();
+    }
     handleMouseUp(e);
-  }, [handleMouseUp, interactionMode, rotationRef]);
+  }, [handleMouseUp, interactionMode, rotationRef, onRotate, onDrop]);
 
-  // Stop inertia on new mouseDown
   const wrappedMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (inertiaAnimRef.current) {
       cancelAnimationFrame(inertiaAnimRef.current);
       velocityRef.current = { x: 0, y: 0 };
     }
+    // Check if we're grabbing a concept
+    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      for (const concept of concepts) {
+        const rotated = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const dist = Math.sqrt((x - projected.x) ** 2 + (y - projected.y) ** 2);
+        const size = 28 + concept.energy * 16 * projected.scale;
+        if (dist < size + 12) {
+          onGrab?.();
+          break;
+        }
+      }
+    }
     handleMouseDown(e);
-  }, [handleMouseDown]);
+  }, [handleMouseDown, concepts, rotationRef, onGrab]);
 
-  // Scroll wheel = X-axis tilt
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     rotationRef.current.x += e.deltaY * 0.002;
@@ -220,7 +252,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
 
   useEffect(() => {
     isDirtyRef.current = true;
-  }, [concepts, selectedConcept, dragState, showDimensionalOverlay, proximityPairs, hoveredConcept]);
+  }, [concepts, selectedConcept, dragState, showDimensionalOverlay, proximityPairs, hoveredConcept, scoreIntensity]);
 
   const getAnimatedConcepts = useCallback(() => {
     return concepts.map(concept => {
@@ -229,19 +261,53 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     });
   }, [concepts, getAnimatedPosition]);
 
+  // Render hint arrows when no discoveries yet
+  const renderHintArrows = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, animatedConcepts: Concept[]) => {
+    if (discoveriesCount > 0) return;
+
+    // Find closest cross-discipline pairs
+    const pairs: { c1: Concept; c2: Concept; dist: number }[] = [];
+    for (let i = 0; i < animatedConcepts.length; i++) {
+      for (let j = i + 1; j < animatedConcepts.length; j++) {
+        if (animatedConcepts[i].discipline === animatedConcepts[j].discipline) continue;
+        const dx = animatedConcepts[i].x - animatedConcepts[j].x;
+        const dy = animatedConcepts[i].y - animatedConcepts[j].y;
+        const dz = animatedConcepts[i].z - animatedConcepts[j].z;
+        pairs.push({ c1: animatedConcepts[i], c2: animatedConcepts[j], dist: Math.sqrt(dx*dx+dy*dy+dz*dz) });
+      }
+    }
+    pairs.sort((a, b) => a.dist - b.dist);
+    const topPairs = pairs.slice(0, 2);
+
+    const t = Date.now() * 0.003;
+    topPairs.forEach(({ c1, c2 }) => {
+      const r1 = rotatePoint(c1.x, c1.y, c1.z, rotationRef.current.x, rotationRef.current.y);
+      const r2 = rotatePoint(c2.x, c2.y, c2.z, rotationRef.current.x, rotationRef.current.y);
+      const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas);
+      const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas);
+
+      ctx.setLineDash([4, 8]);
+      ctx.lineDashOffset = -t * 3;
+      ctx.strokeStyle = `rgba(255, 255, 200, ${0.15 + Math.sin(t) * 0.05})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+  }, [discoveriesCount, rotationRef]);
+
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const now = performance.now();
-    const shouldRender = hasActiveAnimations() || isDirtyRef.current || (now - lastRenderTimeRef.current >= 16);
-    if (!shouldRender) return;
-
+    // Always render (for animations, effects, bobbing)
     const animatedConcepts = getAnimatedConcepts();
 
-    BackgroundRenderer.render(ctx, canvas);
+    BackgroundRenderer.render(ctx, canvas, scoreIntensity);
     if (showDimensionalOverlay) {
       DimensionalRenderer.render(ctx, canvas, rotationRef, dimensionalMapping);
     }
@@ -260,11 +326,16 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
       }
     }
 
+    // Hint arrows
+    renderHintArrows(ctx, canvas, animatedConcepts);
+
     ConceptRenderer.render(ctx, canvas, animatedConcepts, disciplines, selectedConcept, dragState, rotationRef, hoveredConcept);
 
-    lastRenderTimeRef.current = now;
-    if (!hasActiveAnimations()) isDirtyRef.current = false;
-  }, [concepts, disciplines, selectedConcept, rotationRef, dragState, showDimensionalOverlay, dimensionalMapping, hasActiveAnimations, getAnimatedConcepts, proximityPairs, hoveredConcept]);
+    // Effects layer on top
+    EffectsRenderer.render(ctx, canvas, rotationRef, scoreIntensity);
+
+    lastRenderTimeRef.current = performance.now();
+  }, [concepts, disciplines, selectedConcept, rotationRef, dragState, showDimensionalOverlay, dimensionalMapping, getAnimatedConcepts, proximityPairs, hoveredConcept, scoreIntensity, renderHintArrows]);
 
   useEffect(() => {
     let isActive = true;

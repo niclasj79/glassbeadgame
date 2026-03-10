@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
@@ -11,6 +11,8 @@ import { useProximitySynthesis } from './arena/hooks/useProximitySynthesis';
 import { useAudio } from '../audio/AudioEngine';
 import { AudioControls } from '../audio/AudioControls';
 import { LoadingOverlay } from '../ui/loading-overlay';
+import { BackgroundRenderer } from './arena/renderers/BackgroundRenderer';
+import { EffectsRenderer } from './arena/renderers/EffectsRenderer';
 
 interface EnhancedArenaProps extends SphericalArenaProps {
   onDiscoveriesUpdate?: (discoveries: any[], score: any) => void;
@@ -29,7 +31,11 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
   const [showTutorial, setShowTutorial] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const { preloadAudio, playDisciplineSound, isAudioEnabled, initializeAudio } = useAudio();
+  const {
+    preloadAudio, playDisciplineSound, isAudioEnabled, initializeAudio,
+    playHoverSound, playGrabSound, playDropSound, playRotationSound,
+    playSynthesisChord, updateSoundtrackIntensity, createBackgroundSoundscape
+  } = useAudio();
 
   useEffect(() => {
     const init = async () => {
@@ -47,14 +53,13 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     init();
   }, [preloadAudio, initializeAudio]);
 
-  // Dismiss tutorial after 8s (longer than before)
   useEffect(() => {
     const timer = setTimeout(() => setShowTutorial(false), 8000);
     return () => clearTimeout(timer);
   }, []);
 
   const {
-    sessionId, concepts, setConcepts, remainingTime, formatTime,
+    sessionId, concepts, setConcepts, remainingTime, formatTime, maxDuration,
     updateConceptMovement, currentInsight, isGenerating, error, cleanup,
     trackRenderPerformance, performanceMetrics
   } = useOfflineSessionManagement(initialConcepts, onSessionEnd, {
@@ -65,11 +70,46 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     discoveries, activePairs, latestDiscovery, isGeneratingInsight, score, dismissDiscovery
   } = useProximitySynthesis(concepts, disciplines);
 
+  // Update soundtrack intensity when score changes
   useEffect(() => {
-    if (onDiscoveriesUpdate) {
-      onDiscoveriesUpdate(discoveries, score);
+    updateSoundtrackIntensity?.(score.totalResonance);
+  }, [score.totalResonance, updateSoundtrackIntensity]);
+
+  // Start background soundscape when concepts are ready
+  useEffect(() => {
+    if (concepts.length > 0 && !isInitializing) {
+      createBackgroundSoundscape?.(concepts, 0, 0);
     }
+  }, [concepts.length > 0, isInitializing]);
+
+  // Trigger effects on new discovery
+  const prevDiscoveryCount = React.useRef(0);
+  useEffect(() => {
+    if (discoveries.length > prevDiscoveryCount.current && discoveries.length > 0) {
+      const latest = discoveries[discoveries.length - 1];
+      BackgroundRenderer.triggerDiscoveryGlow();
+      // Trigger visual burst at screen center (we don't have exact positions here)
+      EffectsRenderer.triggerDiscoveryBurst(window.innerWidth / 2, window.innerHeight / 2);
+      playSynthesisChord?.(latest.discipline1, latest.discipline2, latest.resonanceScore);
+    }
+    prevDiscoveryCount.current = discoveries.length;
+  }, [discoveries.length, playSynthesisChord]);
+
+  useEffect(() => {
+    if (onDiscoveriesUpdate) onDiscoveriesUpdate(discoveries, score);
   }, [discoveries, score, onDiscoveriesUpdate]);
+
+  // Calculate total possible connections
+  const totalPossible = React.useMemo(() => {
+    const discIds = [...new Set(concepts.map(c => c.discipline))];
+    let count = 0;
+    for (let i = 0; i < concepts.length; i++) {
+      for (let j = i + 1; j < concepts.length; j++) {
+        if (concepts[i].discipline !== concepts[j].discipline) count++;
+      }
+    }
+    return count;
+  }, [concepts]);
 
   const handleConceptPositionUpdate = (conceptId: string, newX: number, newY: number, newZ: number) => {
     if (sessionId) updateConceptMovement(conceptId, newX, newY, newZ);
@@ -103,6 +143,25 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     onSessionEnd();
   };
 
+  // Audio callbacks for canvas
+  const handleHover = useCallback((conceptId: string | null) => {
+    if (conceptId) playHoverSound?.();
+  }, [playHoverSound]);
+
+  const handleGrab = useCallback(() => {
+    playGrabSound?.();
+  }, [playGrabSound]);
+
+  const handleDrop = useCallback(() => {
+    playDropSound?.();
+  }, [playDropSound]);
+
+  const handleRotate = useCallback((direction: number) => {
+    playRotationSound?.(direction);
+  }, [playRotationSound]);
+
+  const scoreIntensity = Math.min(1, score.totalResonance / 200);
+
   useEffect(() => { return () => { cleanup(); }; }, [cleanup]);
 
   return (
@@ -114,12 +173,14 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     >
       <SessionHeader
         remainingTime={remainingTime}
+        maxDuration={maxDuration}
         formatTime={formatTime}
         onEndSession={handleSessionEnd}
         score={score}
+        discoveriesCount={score.discoveriesCount}
+        totalPossible={totalPossible}
       />
 
-      {/* Discovery Log */}
       <DiscoveryLog discoveries={discoveries} disciplines={disciplines} />
 
       <div className="w-full relative" style={{ height: '100vh', paddingTop: '60px', paddingBottom: '80px' }}>
@@ -133,12 +194,17 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
               onConceptClick={enhancedConceptClick}
               onConceptMove={enhancedConceptMove}
               proximityPairs={activePairs}
+              scoreIntensity={scoreIntensity}
+              onHover={handleHover}
+              onGrab={handleGrab}
+              onDrop={handleDrop}
+              onRotate={handleRotate}
+              discoveriesCount={score.discoveriesCount}
             />
           </div>
         </LoadingOverlay>
       </div>
 
-      {/* Tutorial overlay */}
       {showTutorial && !isInitializing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="rounded-xl p-6 max-w-sm mx-4 animate-fade-in pointer-events-auto"
@@ -167,7 +233,6 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
         </div>
       )}
 
-      {/* Synthesis discovery card */}
       {latestDiscovery && (
         <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
       )}
