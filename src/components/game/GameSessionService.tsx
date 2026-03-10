@@ -44,7 +44,7 @@ export class GameSessionService {
         discipline_id: disciplineId
       }));
 
-      const { error: disciplinesError } = await supabase
+      const { error: disciplinesError } = await (supabase as any)
         .from('session_disciplines')
         .insert(disciplineInserts);
 
