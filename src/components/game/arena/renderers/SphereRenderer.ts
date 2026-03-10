@@ -11,7 +11,7 @@ export class SphereRenderer {
     const segments = 16;
     const t = Date.now() * 0.0003;
 
-    // Outer glow - slightly brighter
+    // Outer glow
     const glowGradient = ctx.createRadialGradient(
       canvas.width / 2, canvas.height / 2, sphereRadius * 0.8,
       canvas.width / 2, canvas.height / 2, sphereRadius * 1.3
@@ -24,7 +24,7 @@ export class SphereRenderer {
     ctx.arc(canvas.width / 2, canvas.height / 2, sphereRadius * 1.3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Horizontal circles - brighter wireframe
+    // Horizontal circles
     for (let i = 1; i < segments; i++) {
       const angle = (i / segments) * Math.PI;
       const y = Math.cos(angle) * sphereRadius;
@@ -38,23 +38,19 @@ export class SphereRenderer {
         const a = (j / 64) * Math.PI * 2;
         const variation = Math.sin(a * 3 + t + angle * 2) * 0.03;
         const adjustedRadius = radius * (1 + variation);
-
         const x = Math.cos(a) * adjustedRadius;
         const z = Math.sin(a) * adjustedRadius;
-
         const rotated = rotatePoint(x, y, z, rotationRef.current.x, rotationRef.current.y);
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
-
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         if (j === 0) ctx.moveTo(projected.x, projected.y);
         else ctx.lineTo(projected.x, projected.y);
       }
       ctx.stroke();
     }
 
-    // Vertical circles - brighter
+    // Vertical circles
     for (let i = 0; i < segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
-
       ctx.strokeStyle = 'hsla(220, 55%, 60%, 0.06)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
@@ -64,13 +60,10 @@ export class SphereRenderer {
         const radius = Math.sin(a) * sphereRadius;
         const variation = Math.sin(a * 2 + angle * 3 + t) * 0.02;
         const adjustedRadius = radius * (1 + variation);
-
         const x = Math.cos(angle) * adjustedRadius;
         const z = Math.sin(angle) * adjustedRadius;
-
         const rotated = rotatePoint(x, y, z, rotationRef.current.x, rotationRef.current.y);
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
-
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         if (j === 0) ctx.moveTo(projected.x, projected.y);
         else ctx.lineTo(projected.x, projected.y);
       }
