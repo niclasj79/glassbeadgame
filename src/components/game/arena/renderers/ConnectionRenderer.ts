@@ -7,7 +7,8 @@ export class ConnectionRenderer {
     canvas: HTMLCanvasElement,
     concepts: Concept[],
     rotationRef: React.MutableRefObject<RotationRef>,
-    disciplines?: any[]
+    disciplines?: any[],
+    zoom: number = 1
   ) {
     const t = Date.now() * 0.001;
 
