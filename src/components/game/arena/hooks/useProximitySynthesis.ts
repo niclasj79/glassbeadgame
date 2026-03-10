@@ -122,10 +122,10 @@ export const useProximitySynthesis = (
         };
       });
 
-      // Auto-dismiss after 6s
+      // Auto-dismiss after 15s (longer so users can read)
       setTimeout(() => {
         setLatestDiscovery(prev => prev?.id === discovery.id ? null : prev);
-      }, 6000);
+      }, 15000);
 
     } catch (err) {
       console.error('Synthesis generation failed:', err);
