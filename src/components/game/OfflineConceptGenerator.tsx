@@ -57,7 +57,7 @@ export class OfflineConceptGenerator {
       console.error('Error in offline generateConcepts:', error);
       
       // Fallback to basic concept generation
-      return this.generateFallbackConcepts(disciplines, Math.min(count, disciplines.length));
+      return this.generateFallbackConcepts(disciplines, count);
     }
   }
 
