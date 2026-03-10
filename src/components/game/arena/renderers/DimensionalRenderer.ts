@@ -109,7 +109,7 @@ export class DimensionalRenderer {
         const z = radius * Math.sin(theta) * Math.sin(angle);
         
         const rotated = rotatePoint(x, y, z, rotationRef.current.x, rotationRef.current.y);
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         
         if (j === 0) {
           ctx.moveTo(projected.x, projected.y);
