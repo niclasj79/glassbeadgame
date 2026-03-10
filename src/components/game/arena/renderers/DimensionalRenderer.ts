@@ -90,7 +90,8 @@ export class DimensionalRenderer {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    radius: number
+    radius: number,
+    zoom: number
   ) {
     const gridLines = 8;
     
