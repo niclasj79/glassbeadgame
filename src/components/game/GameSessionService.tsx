@@ -98,7 +98,7 @@ export class GameSessionService {
   async getSession(sessionId: string): Promise<GameSessionData | null> {
     try {
       // Fetch session with related data
-      const { data: session, error: sessionError } = await supabase
+      const { data: session, error: sessionError } = await (supabase as any)
         .from('game_sessions')
         .select(`
           *,
