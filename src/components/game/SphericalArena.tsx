@@ -29,6 +29,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
+  const [infoConcept, setInfoConcept] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
 
