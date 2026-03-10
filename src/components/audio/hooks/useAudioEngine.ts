@@ -110,7 +110,7 @@ export const useAudioEngine = () => {
     if (rhythmIntervalRef.current) clearInterval(rhythmIntervalRef.current);
 
     rhythmGainRef.current = actx.createGain();
-    rhythmGainRef.current.gain.setValueAtTime(0.06, actx.currentTime);
+    rhythmGainRef.current.gain.setValueAtTime(0.15, actx.currentTime);
     rhythmGainRef.current.connect(master);
 
     const baseTempo = 700; // ms per beat
