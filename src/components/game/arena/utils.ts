@@ -13,9 +13,9 @@ export const hexToRgb = (hex: string) => {
 const HALF_PI = Math.PI / 2;
 const TWO_PI = Math.PI * 2;
 
-// Project 3D point to 2D canvas with optimized math
+// Project 3D point to 2D canvas with stronger perspective
 export const project3DTo2D = (x: number, y: number, z: number, canvas: HTMLCanvasElement) => {
-  const distance = 400;
+  const distance = 300; // Closer camera = stronger perspective
   const scale = distance / (distance + z);
   return {
     x: (x * scale) + canvas.width * 0.5,

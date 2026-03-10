@@ -35,12 +35,12 @@ export const GlassBeadGame: React.FC = () => {
   } = useGameStateManager();
 
   const disciplines = [
-    { id: 'mathematics', name: 'Mathematics', color: '#3B82F6', icon: '∑' },
-    { id: 'music', name: 'Music Theory', color: '#10B981', icon: '♪' },
-    { id: 'philosophy', name: 'Philosophy', color: '#8B5CF6', icon: 'Φ' },
-    { id: 'physics', name: 'Physics', color: '#F59E0B', icon: 'Ψ' },
-    { id: 'art', name: 'Visual Arts', color: '#EF4444', icon: '◊' },
-    { id: 'history', name: 'History & Politics', color: '#06B6D4', icon: '⚖' }
+    { id: 'mathematics', name: 'Mathematics', color: '#60A5FA', icon: '∑' },
+    { id: 'music', name: 'Music Theory', color: '#34D399', icon: '♪' },
+    { id: 'philosophy', name: 'Philosophy', color: '#A78BFA', icon: 'Φ' },
+    { id: 'physics', name: 'Physics', color: '#FBBF24', icon: 'Ψ' },
+    { id: 'art', name: 'Visual Arts', color: '#FB7185', icon: '◊' },
+    { id: 'history', name: 'History & Politics', color: '#22D3EE', icon: '⚖' }
   ];
 
   return (

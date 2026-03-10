@@ -6,11 +6,19 @@ export class ConnectionRenderer {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     concepts: Concept[],
-    rotationRef: React.MutableRefObject<RotationRef>
+    rotationRef: React.MutableRefObject<RotationRef>,
+    disciplines?: any[]
   ) {
     const t = Date.now() * 0.001;
 
-    // Render explicit connections
+    const getDisciplineColor = (disciplineId: string): { r: number; g: number; b: number } => {
+      if (disciplines) {
+        const d = disciplines.find(disc => disc.id === disciplineId);
+        if (d) return hexToRgb(d.color);
+      }
+      return { r: 150, g: 120, b: 255 };
+    };
+
     concepts.forEach(concept => {
       concept.connections.forEach(connectionId => {
         const connected = concepts.find(c => c.id === connectionId);
@@ -22,43 +30,43 @@ export class ConnectionRenderer {
         const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas);
 
         const avgScale = (p1.scale + p2.scale) / 2;
-        const opacity = Math.max(0.08, avgScale * 0.5);
+        const opacity = Math.max(0.1, avgScale * 0.6);
+
+        const rgb1 = getDisciplineColor(concept.discipline);
+        const rgb2 = getDisciplineColor(connected.discipline);
 
         const gradient = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-        gradient.addColorStop(0, `rgba(150, 120, 255, ${opacity * 0.4})`);
-        gradient.addColorStop(0.5, `rgba(180, 150, 255, ${opacity * 0.7})`);
-        gradient.addColorStop(1, `rgba(150, 120, 255, ${opacity * 0.4})`);
+        gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, ${opacity * 0.5})`);
+        gradient.addColorStop(0.5, `rgba(${Math.floor((rgb1.r + rgb2.r) / 2)}, ${Math.floor((rgb1.g + rgb2.g) / 2)}, ${Math.floor((rgb1.b + rgb2.b) / 2)}, ${opacity * 0.75})`);
+        gradient.addColorStop(1, `rgba(${rgb2.r}, ${rgb2.g}, ${rgb2.b}, ${opacity * 0.5})`);
 
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = Math.max(0.8, 1.5 * avgScale);
+        ctx.lineWidth = Math.max(0.8, 1.8 * avgScale);
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
 
-        // Flow particle
+        // Flow particle with discipline color
         if (avgScale > 0.3) {
           const flow = (t * 0.3) % 1;
           const fx = p1.x + (p2.x - p1.x) * flow;
           const fy = p1.y + (p2.y - p1.y) * flow;
-          ctx.fillStyle = `rgba(220, 200, 255, ${opacity * 0.6})`;
+          const flowRgb = flow < 0.5 ? rgb1 : rgb2;
+          ctx.fillStyle = `rgba(${flowRgb.r}, ${flowRgb.g}, ${flowRgb.b}, ${opacity * 0.7})`;
           ctx.beginPath();
-          ctx.arc(fx, fy, Math.max(1, 2 * avgScale), 0, Math.PI * 2);
+          ctx.arc(fx, fy, Math.max(1.5, 2.5 * avgScale), 0, Math.PI * 2);
           ctx.fill();
         }
       });
     });
   }
 
-  /**
-   * Render a glowing proximity bridge between two concepts that are close together.
-   * Called by the proximity synthesis system.
-   */
   static renderProximityBridge(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     c1: Concept, c2: Concept,
-    proximity: number, // 0-1, 1 = very close
+    proximity: number,
     discipline1Color: string, discipline2Color: string,
     rotationRef: React.MutableRefObject<RotationRef>
   ) {
@@ -74,12 +82,11 @@ export class ConnectionRenderer {
     const rgb1 = hexToRgb(discipline1Color);
     const rgb2 = hexToRgb(discipline2Color);
 
-    // Glowing bridge line
     const gradient = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
     gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, ${baseOpacity})`);
-    gradient.addColorStop(0.3, `rgba(255, 220, 100, ${baseOpacity * 0.9})`);
-    gradient.addColorStop(0.5, `rgba(255, 255, 200, ${baseOpacity})`);
-    gradient.addColorStop(0.7, `rgba(255, 220, 100, ${baseOpacity * 0.9})`);
+    gradient.addColorStop(0.3, `rgba(255, 230, 120, ${baseOpacity * 0.9})`);
+    gradient.addColorStop(0.5, `rgba(255, 255, 220, ${baseOpacity})`);
+    gradient.addColorStop(0.7, `rgba(255, 230, 120, ${baseOpacity * 0.9})`);
     gradient.addColorStop(1, `rgba(${rgb2.r}, ${rgb2.g}, ${rgb2.b}, ${baseOpacity})`);
 
     // Outer glow
@@ -100,7 +107,7 @@ export class ConnectionRenderer {
     ctx.lineTo(p2.x, p2.y);
     ctx.stroke();
 
-    // Sparkle particles along the bridge
+    // Sparkle particles
     const numParticles = Math.floor(proximity * 5);
     for (let i = 0; i < numParticles; i++) {
       const progress = (t * 0.2 + i / numParticles) % 1;
