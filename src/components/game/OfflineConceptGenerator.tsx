@@ -63,9 +63,10 @@ export class OfflineConceptGenerator {
 
   private generateFallbackConcepts(disciplines: string[], count: number): Concept[] {
     const concepts: Concept[] = [];
+    const conceptsPerDiscipline = Math.ceil(count / disciplines.length);
     
-    for (let i = 0; i < count && i < disciplines.length; i++) {
-      const disciplineId = disciplines[i];
+    for (const disciplineId of disciplines) {
+      for (let i = 0; i < conceptsPerDiscipline && concepts.length < count; i++) {
       const position = PositionGenerator.generateSpherePosition();
       const energy = PositionGenerator.generateEnergy();
 
