@@ -20,7 +20,7 @@ export class GameSessionService {
   async createSession(sessionData: GameSessionData): Promise<string | null> {
     try {
       // Create the main session record
-      const { data: session, error: sessionError } = await supabase
+      const { data: session, error: sessionError } = await (supabase as any)
         .from('game_sessions')
         .insert({
           session_type: sessionData.sessionType,
