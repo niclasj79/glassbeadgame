@@ -46,7 +46,7 @@ export const useOfflineSessionManagement = (
   });
 
   // Offline session management
-  const { sessionTime, remainingTime, isExpired, formatTime } = useSessionTimer(startTime, false);
+  const { sessionTime, remainingTime, isExpired, maxDuration, formatTime } = useSessionTimer(startTime, false);
   
   // Offline movement tracking
   const { 
@@ -169,6 +169,7 @@ export const useOfflineSessionManagement = (
     sessionTime,
     remainingTime,
     isExpired,
+    maxDuration,
     formatTime,
     updateConceptMovement,
     allConceptsStable,

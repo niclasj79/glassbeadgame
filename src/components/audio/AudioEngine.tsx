@@ -25,22 +25,28 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
     playDisciplineSound,
     createBackgroundSoundscape,
     updateDynamicPanning,
-    stopAmbientLayer
+    stopAmbientLayer,
+    playHoverSound,
+    playGrabSound,
+    playDropSound,
+    playRotationSound,
+    playProximityTension,
+    playSynthesisChord,
+    updateSoundtrackIntensity,
   } = useAudioEngine();
 
-  // Enhanced playSynthesisSound for multiple disciplines
   const playSynthesisSound = (disciplines: string[], resonance: number) => {
-    disciplines.forEach((disciplineId, index) => {
-      setTimeout(() => {
-        playDisciplineSound(disciplineId, resonance);
-      }, index * 150);
-    });
+    if (disciplines.length >= 2) {
+      playSynthesisChord(disciplines[0], disciplines[1], resonance);
+    } else {
+      disciplines.forEach((disciplineId, index) => {
+        setTimeout(() => { playDisciplineSound(disciplineId, resonance); }, index * 150);
+      });
+    }
   };
 
-  // Enhanced playAmbientLayer (now handled by background soundscape)
   const playAmbientLayer = (layer: string) => {
     console.log('Ambient layer request:', layer);
-    // This is now handled by createBackgroundSoundscape
   };
 
   return (
@@ -56,7 +62,14 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
         initializeAudio,
         preloadAudio,
         createBackgroundSoundscape,
-        updateDynamicPanning
+        updateDynamicPanning,
+        playHoverSound,
+        playGrabSound,
+        playDropSound,
+        playRotationSound,
+        playProximityTension,
+        playSynthesisChord,
+        updateSoundtrackIntensity,
       }}
     >
       {children}

@@ -6,7 +6,7 @@ export const useSessionTimer = (startTime: number, isAuthenticated: boolean = fa
   const [isExpired, setIsExpired] = useState(false);
   const timerRef = useRef<number>();
 
-  const maxDuration = isAuthenticated ? 120 : 60; // 2 minutes for auth, 1 minute for anonymous
+  const maxDuration = isAuthenticated ? 600 : 300; // 10 minutes for auth, 5 minutes for anonymous
 
   useEffect(() => {
     if (startTime === 0) return;
