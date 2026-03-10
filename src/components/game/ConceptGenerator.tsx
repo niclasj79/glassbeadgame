@@ -17,9 +17,6 @@ export class ConceptGenerator {
     selectedConcepts?: { [disciplineId: string]: string }
   ): Promise<Concept[]> {
     try {
-      // Limit to one concept per discipline
-      const actualCount = Math.min(count, disciplines.length);
-      
       // If specific concepts were selected, use those
       if (selectedConcepts) {
         return this.generateFromSelectedConcepts(disciplines, selectedConcepts);
@@ -29,32 +26,32 @@ export class ConceptGenerator {
       const dbConcepts = await conceptDatabaseService.fetchConcepts(disciplines);
 
       if (!dbConcepts || dbConcepts.length === 0) {
-        return this.fallbackGenerator.generateFallbackConcepts(disciplines, actualCount);
+        return this.fallbackGenerator.generateFallbackConcepts(disciplines, count);
       }
 
       const concepts: Concept[] = [];
+      const conceptsPerDiscipline = Math.ceil(count / disciplines.length);
       
-      // Select one concept per discipline
-      for (let i = 0; i < disciplines.length && i < actualCount; i++) {
-        const disciplineId = disciplines[i];
-        const disciplineConcepts = dbConcepts.filter(concept => 
+      // Select multiple concepts per discipline to fill the arena
+      for (const disciplineId of disciplines) {
+        let disciplineConcepts = dbConcepts.filter(concept => 
           concept.discipline_id === disciplineId && 
           !this.usedConcepts.has(concept.text)
         );
 
         if (disciplineConcepts.length === 0) {
-          // If no unused concepts for this discipline, reset and try again
           this.usedConcepts.clear();
-          const allDisciplineConcepts = dbConcepts.filter(concept => 
+          disciplineConcepts = dbConcepts.filter(concept => 
             concept.discipline_id === disciplineId
           );
-          if (allDisciplineConcepts.length > 0) {
-            disciplineConcepts.push(allDisciplineConcepts[0]);
-          }
         }
 
-        if (disciplineConcepts.length > 0) {
-          const selectedConcept = disciplineConcepts[Math.floor(Math.random() * disciplineConcepts.length)];
+        // Shuffle and pick up to conceptsPerDiscipline
+        const shuffled = [...disciplineConcepts].sort(() => Math.random() - 0.5);
+        const toSelect = shuffled.slice(0, conceptsPerDiscipline);
+
+        for (const selectedConcept of toSelect) {
+          if (concepts.length >= count) break;
           this.usedConcepts.add(selectedConcept.text);
 
           const position = PositionGenerator.generateSpherePosition();
@@ -69,6 +66,7 @@ export class ConceptGenerator {
             connections: []
           });
         }
+        if (concepts.length >= count) break;
       }
 
       // Generate connections between ALL concepts
@@ -77,7 +75,7 @@ export class ConceptGenerator {
       return concepts;
     } catch (error) {
       console.error('Error in generateConcepts:', error);
-      return this.fallbackGenerator.generateFallbackConcepts(disciplines, Math.min(count, disciplines.length));
+      return this.fallbackGenerator.generateFallbackConcepts(disciplines, count);
     }
   }
 
