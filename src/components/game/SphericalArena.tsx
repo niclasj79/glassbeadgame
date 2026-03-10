@@ -132,6 +132,8 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       }
     }
     setSelectedConcept(conceptId);
+    // Toggle info overlay: if same concept clicked again, dismiss
+    setInfoConcept(prev => prev === conceptId ? null : conceptId);
     handleConceptClick(conceptId);
   };
 
