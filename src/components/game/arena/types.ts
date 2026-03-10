@@ -63,3 +63,31 @@ export interface DimensionalMapping {
   y: DimensionalAxis;
   z: DimensionalAxis;
 }
+
+// Synthesis Discovery types
+export interface SynthesisDiscovery {
+  id: string;
+  concept1Id: string;
+  concept2Id: string;
+  concept1Text: string;
+  concept2Text: string;
+  discipline1: string;
+  discipline2: string;
+  insight: string;
+  resonanceScore: number;
+  timestamp: number;
+}
+
+export interface ProximityPair {
+  concept1: Concept;
+  concept2: Concept;
+  distance: number;
+  proximity: number; // 0-1, 1 = very close
+}
+
+export interface GameScore {
+  totalResonance: number;
+  discoveriesCount: number;
+  uniquePairsCount: number;
+  rank: string;
+}
