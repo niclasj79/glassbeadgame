@@ -4,6 +4,7 @@ import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
 import { SynthesisCard } from './arena/SynthesisCard';
 import { DiscoveryLog } from './arena/DiscoveryLog';
+import { ConceptInfoOverlay } from './arena/ConceptInfoOverlay';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
