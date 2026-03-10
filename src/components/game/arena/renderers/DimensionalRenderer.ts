@@ -39,8 +39,8 @@ export class DimensionalRenderer {
       const rotatedStart = rotatePoint(axis.start[0], axis.start[1], axis.start[2], rotationRef.current.x, rotationRef.current.y);
       const rotatedEnd = rotatePoint(axis.end[0], axis.end[1], axis.end[2], rotationRef.current.x, rotationRef.current.y);
       
-      const projectedStart = project3DTo2D(rotatedStart.x, rotatedStart.y, rotatedStart.z, canvas);
-      const projectedEnd = project3DTo2D(rotatedEnd.x, rotatedEnd.y, rotatedEnd.z, canvas);
+      const projectedStart = project3DTo2D(rotatedStart.x, rotatedStart.y, rotatedStart.z, canvas, zoom);
+      const projectedEnd = project3DTo2D(rotatedEnd.x, rotatedEnd.y, rotatedEnd.z, canvas, zoom);
       
       ctx.strokeStyle = axis.color;
       ctx.lineWidth = 2;
