@@ -4,6 +4,7 @@ import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
 import { SynthesisCard } from './arena/SynthesisCard';
 import { DiscoveryLog } from './arena/DiscoveryLog';
+import { ConceptInfoOverlay } from './arena/ConceptInfoOverlay';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
@@ -28,6 +29,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
+  const [infoConcept, setInfoConcept] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -130,6 +132,8 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       }
     }
     setSelectedConcept(conceptId);
+    // Toggle info overlay: if same concept clicked again, dismiss
+    setInfoConcept(prev => prev === conceptId ? null : conceptId);
     handleConceptClick(conceptId);
   };
 
@@ -232,6 +236,13 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
           </div>
         </div>
       )}
+
+      {/* Concept info overlay */}
+      <ConceptInfoOverlay
+        concept={infoConcept ? concepts.find(c => c.id === infoConcept) || null : null}
+        discipline={infoConcept ? disciplines.find(d => d.id === concepts.find(c => c.id === infoConcept)?.discipline) || null : null}
+        onDismiss={() => setInfoConcept(null)}
+      />
 
       {latestDiscovery && (
         <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
