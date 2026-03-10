@@ -13,7 +13,8 @@ export class ConceptRenderer {
     selectedConcept: string | null,
     dragState: DragState,
     rotationRef: React.MutableRefObject<RotationRef>,
-    hoveredConcept?: string | null
+    hoveredConcept?: string | null,
+    zoom: number = 1
   ) {
     const getDiscipline = (id: string) => {
       if (Array.isArray(disciplines)) return disciplines.find(d => d.id === id);
@@ -33,7 +34,7 @@ export class ConceptRenderer {
       if (!discipline) return;
 
       const rotated = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
-      const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+      const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
 
       if (projected.scale < 0.2) return;
 

@@ -14,6 +14,8 @@ import { AudioControls } from '../audio/AudioControls';
 import { LoadingOverlay } from '../ui/loading-overlay';
 import { BackgroundRenderer } from './arena/renderers/BackgroundRenderer';
 import { EffectsRenderer } from './arena/renderers/EffectsRenderer';
+import { Slider } from '../ui/slider';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 
 interface EnhancedArenaProps extends SphericalArenaProps {
   onDiscoveriesUpdate?: (discoveries: any[], score: any) => void;
@@ -32,6 +34,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
   const [infoConcept, setInfoConcept] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [zoom, setZoom] = useState(1);
 
   const {
     preloadAudio, playDisciplineSound, isAudioEnabled, initializeAudio,
@@ -72,25 +75,21 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     discoveries, activePairs, latestDiscovery, isGeneratingInsight, score, dismissDiscovery
   } = useProximitySynthesis(concepts, disciplines);
 
-  // Update soundtrack intensity when score changes
   useEffect(() => {
     updateSoundtrackIntensity?.(score.totalResonance);
   }, [score.totalResonance, updateSoundtrackIntensity]);
 
-  // Start background soundscape when concepts are ready and audio is enabled
   useEffect(() => {
     if (concepts.length > 0 && !isInitializing && isAudioEnabled) {
       createBackgroundSoundscape?.(concepts, 0, 0);
     }
   }, [concepts.length, isInitializing, isAudioEnabled, createBackgroundSoundscape]);
 
-  // Trigger effects on new discovery
   const prevDiscoveryCount = React.useRef(0);
   useEffect(() => {
     if (discoveries.length > prevDiscoveryCount.current && discoveries.length > 0) {
       const latest = discoveries[discoveries.length - 1];
       BackgroundRenderer.triggerDiscoveryGlow();
-      // Trigger visual burst at screen center (we don't have exact positions here)
       EffectsRenderer.triggerDiscoveryBurst(window.innerWidth / 2, window.innerHeight / 2);
       playSynthesisChord?.(latest.discipline1, latest.discipline2, latest.resonanceScore);
     }
@@ -101,9 +100,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     if (onDiscoveriesUpdate) onDiscoveriesUpdate(discoveries, score);
   }, [discoveries, score, onDiscoveriesUpdate]);
 
-  // Calculate total possible connections
   const totalPossible = React.useMemo(() => {
-    const discIds = [...new Set(concepts.map(c => c.discipline))];
     let count = 0;
     for (let i = 0; i < concepts.length; i++) {
       for (let j = i + 1; j < concepts.length; j++) {
@@ -132,8 +129,6 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       }
     }
     setSelectedConcept(conceptId);
-    // Toggle info overlay: if same concept clicked again, dismiss
-    setInfoConcept(prev => prev === conceptId ? null : conceptId);
     handleConceptClick(conceptId);
   };
 
@@ -147,13 +142,19 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     onSessionEnd();
   };
 
-  // Audio callbacks for canvas
+  // Audio callbacks
   const handleHover = useCallback((conceptId: string | null) => {
     if (conceptId) playHoverSound?.();
   }, [playHoverSound]);
 
+  // Hover dwell: show info after lingering 1s
+  const handleHoverDwell = useCallback((conceptId: string) => {
+    setInfoConcept(conceptId);
+  }, []);
+
   const handleGrab = useCallback(() => {
     playGrabSound?.();
+    setInfoConcept(null); // dismiss info on grab
   }, [playGrabSound]);
 
   const handleDrop = useCallback(() => {
@@ -200,10 +201,12 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
               proximityPairs={activePairs}
               scoreIntensity={scoreIntensity}
               onHover={handleHover}
+              onHoverDwell={handleHoverDwell}
               onGrab={handleGrab}
               onDrop={handleDrop}
               onRotate={handleRotate}
               discoveriesCount={score.discoveriesCount}
+              zoom={zoom}
             />
           </div>
         </LoadingOverlay>
@@ -224,6 +227,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
               <li>🌀 <strong>Rotate</strong> the sphere by dragging empty space</li>
               <li>🔄 <strong>Scroll wheel</strong> tilts the sphere vertically</li>
               <li>📜 <strong>Journal</strong> (left) keeps all discoveries</li>
+              <li>🔍 <strong>Hover</strong> over a bead to learn about it</li>
               <li>🏆 Build your resonance score with unique pairings</li>
             </ul>
             <button
@@ -237,7 +241,7 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
         </div>
       )}
 
-      {/* Concept info overlay */}
+      {/* Concept info overlay - triggered by hover dwell */}
       <ConceptInfoOverlay
         concept={infoConcept ? concepts.find(c => c.id === infoConcept) || null : null}
         discipline={infoConcept ? disciplines.find(d => d.id === concepts.find(c => c.id === infoConcept)?.discipline) || null : null}
@@ -247,6 +251,25 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       {latestDiscovery && (
         <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
       )}
+
+      {/* Zoom slider at bottom center */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 rounded-full backdrop-blur-sm"
+        style={{
+          background: 'hsla(240, 20%, 10%, 0.6)',
+          border: '1px solid hsla(260, 30%, 30%, 0.3)',
+        }}
+      >
+        <ZoomOut className="w-3.5 h-3.5" style={{ color: 'hsl(var(--game-text-dim))' }} />
+        <Slider
+          value={[zoom * 100]}
+          onValueChange={(v) => setZoom(v[0] / 100)}
+          min={40}
+          max={250}
+          step={5}
+          className="w-32"
+        />
+        <ZoomIn className="w-3.5 h-3.5" style={{ color: 'hsl(var(--game-text-dim))' }} />
+      </div>
 
       <div className="fixed bottom-4 right-4 z-30">
         <AudioControls />

@@ -7,7 +7,8 @@ export class ConnectionRenderer {
     canvas: HTMLCanvasElement,
     concepts: Concept[],
     rotationRef: React.MutableRefObject<RotationRef>,
-    disciplines?: any[]
+    disciplines?: any[],
+    zoom: number = 1
   ) {
     const t = Date.now() * 0.001;
 
@@ -26,8 +27,8 @@ export class ConnectionRenderer {
 
         const r1 = rotatePoint(concept.x, concept.y, concept.z, rotationRef.current.x, rotationRef.current.y);
         const r2 = rotatePoint(connected.x, connected.y, connected.z, rotationRef.current.x, rotationRef.current.y);
-        const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas);
-        const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas);
+        const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas, zoom);
+        const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas, zoom);
 
         const avgScale = (p1.scale + p2.scale) / 2;
         const opacity = Math.max(0.1, avgScale * 0.6);
@@ -68,12 +69,13 @@ export class ConnectionRenderer {
     c1: Concept, c2: Concept,
     proximity: number,
     discipline1Color: string, discipline2Color: string,
-    rotationRef: React.MutableRefObject<RotationRef>
+    rotationRef: React.MutableRefObject<RotationRef>,
+    zoom: number = 1
   ) {
     const r1 = rotatePoint(c1.x, c1.y, c1.z, rotationRef.current.x, rotationRef.current.y);
     const r2 = rotatePoint(c2.x, c2.y, c2.z, rotationRef.current.x, rotationRef.current.y);
-    const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas);
-    const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas);
+    const p1 = project3DTo2D(r1.x, r1.y, r1.z, canvas, zoom);
+    const p2 = project3DTo2D(r2.x, r2.y, r2.z, canvas, zoom);
 
     const t = Date.now() * 0.003;
     const pulse = Math.sin(t) * 0.3 + 0.7;
