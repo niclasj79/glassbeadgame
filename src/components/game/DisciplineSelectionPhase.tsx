@@ -43,8 +43,8 @@ export const DisciplineSelectionPhase: React.FC<DisciplineSelectionPhaseProps> =
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white flex items-center justify-center p-6">
-      <Card className="bg-gray-900 border-gray-700 p-8 max-w-4xl w-full">
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'hsl(240, 60%, 3%)' }}>
+      <Card className="game-surface-elevated p-8 max-w-4xl w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
             Choose Your Path

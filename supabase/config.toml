@@ -1,1 +1,10 @@
 project_id = "dmuaxiwkzhldayzrjiha"
+
+[functions.generate-hesse-insights]
+verify_jwt = false
+
+[functions.generate-synthesis]
+verify_jwt = false
+
+[functions.generate-session-analysis]
+verify_jwt = false

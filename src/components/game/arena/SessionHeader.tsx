@@ -1,53 +1,57 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Clock, AlertCircle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ScoreDisplay } from './ScoreDisplay';
+import { GameScore } from './types';
 
 interface SessionHeaderProps {
   remainingTime: number;
   formatTime: () => string;
   onEndSession: () => void;
+  score?: GameScore;
 }
 
 export const SessionHeader: React.FC<SessionHeaderProps> = ({
   remainingTime,
   formatTime,
-  onEndSession
+  onEndSession,
+  score
 }) => {
   const isMobile = useIsMobile();
 
   return (
-    <div 
-      className="fixed top-0 left-0 right-0 z-30 flex items-center justify-end gap-2 md:gap-4 p-2 md:p-4"
-      style={{
-        paddingTop: `calc(8px + env(safe-area-inset-top))`,
-        paddingLeft: `calc(8px + env(safe-area-inset-left))`,
-        paddingRight: `calc(8px + env(safe-area-inset-right))`
-      }}
-    >
-      <div className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 rounded-lg backdrop-blur-sm text-xs md:text-sm ${
-        remainingTime <= 30 ? 'bg-red-900/80 text-red-200' : 'bg-gray-900/80 text-gray-200'
-      }`}>
-        <Clock className="h-3 w-3 md:h-4 md:w-4" />
-        <span className="font-mono">{formatTime()}</span>
+    <div className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between gap-2 md:gap-4 p-2 md:p-4">
+      {/* Score display */}
+      <div className="flex items-center gap-2">
+        {score && <ScoreDisplay score={score} />}
       </div>
-      
-      {remainingTime <= 30 && (
-        <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 rounded-lg bg-orange-900/80 text-orange-200">
-          <AlertCircle className="h-3 w-3 md:h-4 md:w-4" />
-          <span className="text-xs md:text-sm hidden sm:inline">Session ending soon!</span>
-          <span className="text-xs md:text-sm sm:hidden">Ending!</span>
+
+      {/* Timer + end button */}
+      <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 rounded-lg backdrop-blur-sm text-xs md:text-sm ${
+          remainingTime <= 30 ? 'bg-destructive/30 text-destructive-foreground' : 'game-surface'
+        }`}>
+          <Clock className="h-3 w-3 md:h-4 md:w-4" />
+          <span className="font-mono game-text-bright">{formatTime()}</span>
         </div>
-      )}
-      
-      <Button
-        onClick={onEndSession}
-        size={isMobile ? "sm" : "default"}
-        className="bg-gradient-to-r from-blue-600 to-purple-600 opacity-80 hover:opacity-100 transition-opacity text-xs md:text-sm"
-      >
-        End Session
-      </Button>
+
+        {remainingTime <= 30 && (
+          <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-destructive/20">
+            <AlertCircle className="h-3 w-3 text-destructive" />
+            <span className="text-xs hidden sm:inline text-destructive">Ending soon</span>
+          </div>
+        )}
+
+        <Button
+          onClick={onEndSession}
+          size={isMobile ? "sm" : "default"}
+          variant="outline"
+          className="border-game-glow/30 text-game-glow hover:bg-game-glow/10 text-xs md:text-sm"
+        >
+          End Session
+        </Button>
+      </div>
     </div>
   );
 };

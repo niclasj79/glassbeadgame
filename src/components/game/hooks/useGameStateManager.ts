@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useStateRecovery } from '@/hooks/useStateRecovery';
 import { useErrorRecovery } from '@/hooks/useErrorRecovery';
 import { conceptGenerator, Concept } from '../ConceptGenerator';
 import { gameSessionService, GameSessionData } from '../GameSessionService';
 import { isFeatureEnabled } from '@/config/featureFlags';
+import { SynthesisDiscovery, GameScore } from '../arena/types';
 
 interface GameSessionState {
   phase: 'start' | 'arena' | 'interpretation';
-  sessionData: GameSessionData;
+  sessionData: GameSessionData & {
+    discoveries?: SynthesisDiscovery[];
+    score?: GameScore;
+  };
   currentConcepts: Concept[];
   startTime: number;
   currentSessionId: string | null;
@@ -22,7 +26,9 @@ const initialGameState: GameSessionState = {
     interactions: [],
     duration: 0,
     sessionType: 'exploration',
-    conceptCount: 0
+    conceptCount: 0,
+    discoveries: [],
+    score: { totalResonance: 0, discoveriesCount: 0, uniquePairsCount: 0, rank: 'Novice' }
   },
   currentConcepts: [],
   startTime: 0,
@@ -31,7 +37,7 @@ const initialGameState: GameSessionState = {
 
 export const useGameStateManager = () => {
   const { toast } = useToast();
-  
+
   const {
     state: gameState,
     updateState: updateGameState,
@@ -47,36 +53,36 @@ export const useGameStateManager = () => {
   const { handleError, retry, reset: resetErrors } = useErrorRecovery({
     maxRetries: 3,
     retryDelay: 2000,
-    onError: (error) => {
-      toast({
-        title: "Game Error",
-        description: "An error occurred during gameplay. The game will attempt to recover.",
-        variant: "destructive"
-      });
+    onError: () => {
+      toast({ title: "Game Error", description: "An error occurred. Attempting recovery.", variant: "destructive" });
     },
     onRecovery: () => {
-      toast({
-        title: "Recovery Successful",
-        description: "The game has recovered from the error.",
-      });
+      toast({ title: "Recovered", description: "The game recovered successfully." });
     }
   });
 
+  const handleDiscoveriesUpdate = useCallback((discoveries: SynthesisDiscovery[], score: GameScore) => {
+    updateGameState(prev => ({
+      ...prev,
+      sessionData: {
+        ...prev.sessionData,
+        discoveries,
+        score
+      }
+    }));
+  }, [updateGameState]);
+
   const handleSessionStart = async (
-    selectedDisciplines: string[], 
-    conceptCount: number = 15, 
+    selectedDisciplines: string[],
+    conceptCount: number = 15,
     selectedConcepts?: { [disciplineId: string]: string }
   ) => {
     try {
-      console.log('Starting session with disciplines:', selectedDisciplines, 'concepts:', conceptCount, 'selected:', selectedConcepts);
-      
-      // Only use selected concepts if Hesse insights are enabled
       const conceptsToUse = isFeatureEnabled('hesseInsights') ? selectedConcepts : undefined;
       const concepts = await conceptGenerator.generateConcepts(selectedDisciplines, conceptCount, conceptsToUse);
-      console.log('Generated concepts:', concepts);
-      
+
       const sessionId = crypto.randomUUID();
-      
+
       updateGameState(prev => ({
         ...prev,
         phase: 'arena',
@@ -90,49 +96,39 @@ export const useGameStateManager = () => {
           concepts,
           sessionType: 'exploration',
           interactions: [],
-          conceptCount
+          conceptCount,
+          discoveries: [],
+          score: { totalResonance: 0, discoveriesCount: 0, uniquePairsCount: 0, rank: 'Novice' }
         }
       }));
 
-      const insightStatus = isFeatureEnabled('hesseInsights') ? "with Hesse insights" : "without Hesse insights";
       toast({
         title: "Session Started",
-        description: `Exploring ${conceptCount} concepts across ${selectedDisciplines.length} disciplines ${insightStatus}`,
+        description: `Exploring ${conceptCount} concepts across ${selectedDisciplines.length} disciplines`,
       });
     } catch (error) {
       console.error('Error starting session:', error);
       handleError(error as Error);
-      
-      toast({
-        title: "Error",
-        description: "Failed to start session. Please try again.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to start session.", variant: "destructive" });
     }
   };
 
   const handleConceptInteraction = (conceptId: string, action: string) => {
     try {
-      const interaction = {
-        conceptId,
-        action,
-        timestamp: Date.now() - gameState.startTime
-      };
-      
+      const interaction = { conceptId, action, timestamp: Date.now() - gameState.startTime };
       updateGameState(prev => ({
         ...prev,
         sessionData: {
           ...prev.sessionData,
           interactions: [...prev.sessionData.interactions, interaction]
         },
-        currentConcepts: prev.currentConcepts.map(concept => 
-          concept.id === conceptId 
+        currentConcepts: prev.currentConcepts.map(concept =>
+          concept.id === conceptId
             ? { ...concept, energy: Math.min(1, concept.energy + 0.1) }
             : concept
         )
       }));
     } catch (error) {
-      console.error('Error handling concept interaction:', error);
       handleError(error as Error);
     }
   };
@@ -145,42 +141,21 @@ export const useGameStateManager = () => {
         duration,
         concepts: gameState.currentConcepts
       };
-      
+
       updateGameState(prev => ({
         ...prev,
         sessionData: finalSessionData,
         phase: 'interpretation'
       }));
 
-      console.log('Saving session data:', finalSessionData);
       const sessionId = await gameSessionService.createSession(finalSessionData);
-      
       if (sessionId) {
-        updateGameState(prev => ({
-          ...prev,
-          currentSessionId: sessionId
-        }));
-        
-        toast({
-          title: "Session Saved",
-          description: "Your exploration has been saved successfully",
-        });
-      } else {
-        toast({
-          title: "Warning",
-          description: "Session completed but could not be saved to database",
-          variant: "destructive"
-        });
+        updateGameState(prev => ({ ...prev, currentSessionId: sessionId }));
       }
     } catch (error) {
       console.error('Error saving session:', error);
-      handleError(error as Error);
-      
-      toast({
-        title: "Warning",
-        description: "Session completed but could not be saved",
-        variant: "destructive"
-      });
+      // Still transition to interpretation
+      updateGameState(prev => ({ ...prev, phase: 'interpretation' }));
     }
   };
 
@@ -190,19 +165,13 @@ export const useGameStateManager = () => {
   };
 
   const handleBackToMenu = () => {
-    updateGameState(prev => ({
-      ...prev,
-      phase: 'start'
-    }));
+    updateGameState(prev => ({ ...prev, phase: 'start' }));
   };
 
   const handleGameReset = () => {
     emergencyReset();
     resetErrors();
-    toast({
-      title: "Game Reset",
-      description: "The game has been reset to initial state",
-    });
+    toast({ title: "Game Reset", description: "Reset to initial state" });
   };
 
   return {
@@ -213,6 +182,7 @@ export const useGameStateManager = () => {
     handleNewSession,
     handleBackToMenu,
     handleGameReset,
+    handleDiscoveriesUpdate,
     restoreFromSnapshot,
     hasSnapshots
   };

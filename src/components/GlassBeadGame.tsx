@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AudioProvider } from './audio/AudioEngine';
 import { GameErrorBoundary } from './error/GameErrorBoundary';
@@ -30,6 +29,7 @@ export const GlassBeadGame: React.FC = () => {
     handleNewSession,
     handleBackToMenu,
     handleGameReset,
+    handleDiscoveriesUpdate,
     restoreFromSnapshot,
     hasSnapshots
   } = useGameStateManager();
@@ -44,7 +44,7 @@ export const GlassBeadGame: React.FC = () => {
   ];
 
   return (
-    <GameErrorBoundary 
+    <GameErrorBoundary
       onGameReset={handleGameReset}
       gamePhase={gameState.phase}
     >
@@ -59,8 +59,9 @@ export const GlassBeadGame: React.FC = () => {
             onSessionEnd={handleSessionEnd}
             onNewSession={handleNewSession}
             onBackToMenu={handleBackToMenu}
+            onDiscoveriesUpdate={handleDiscoveriesUpdate}
           />
-          
+
           <DevelopmentRecoveryPanel
             hasSnapshots={hasSnapshots}
             onRestoreSnapshot={() => restoreFromSnapshot(0)}
