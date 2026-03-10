@@ -30,9 +30,9 @@ export class DimensionalRenderer {
     zoom: number
   ) {
     const axes = [
-      { dir: [-1, 0, 0], dirEnd: [1, 0, 0], color: 'rgba(255, 100, 100, 0.6)' },
-      { dir: [0, -1, 0], dirEnd: [0, 1, 0], color: 'rgba(100, 255, 100, 0.6)' },
-      { dir: [0, 0, -1], dirEnd: [0, 0, 1], color: 'rgba(100, 100, 255, 0.6)' }
+      { dx: 1, dy: 0, dz: 0, color: 'rgba(255, 100, 100, 0.6)' },
+      { dx: 0, dy: 1, dz: 0, color: 'rgba(100, 255, 100, 0.6)' },
+      { dx: 0, dy: 0, dz: 1, color: 'rgba(100, 100, 255, 0.6)' }
     ];
 
     const segments = 32;
@@ -43,10 +43,9 @@ export class DimensionalRenderer {
       ctx.beginPath();
       for (let i = 0; i <= segments; i++) {
         const t = (i / segments) * 2 - 1; // -1 to 1
-        const x = t * radius * (axis.dir[0] !== 0 ? 1 : 0) + t * radius * (axis.dirEnd[0] !== 0 && axis.dir[0] === 0 ? 0 : 0);
-        const px = t * radius * axis.dirEnd[0];
-        const py = t * radius * axis.dirEnd[1];
-        const pz = t * radius * axis.dirEnd[2];
+        const px = t * radius * axis.dx;
+        const py = t * radius * axis.dy;
+        const pz = t * radius * axis.dz;
         const rotated = rotatePoint(px, py, pz, rotationRef.current.x, rotationRef.current.y);
         const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         if (i === 0) ctx.moveTo(projected.x, projected.y);
