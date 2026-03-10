@@ -4,7 +4,7 @@ import { ConceptDatabaseEntry } from './types';
 
 export class ConceptDatabaseService {
   async fetchConcepts(disciplines: string[]): Promise<ConceptDatabaseEntry[]> {
-    const { data: dbConcepts, error } = await supabase
+    const { data: dbConcepts, error } = await (supabase as any)
       .from('concepts')
       .select(`
         id,

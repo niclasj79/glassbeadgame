@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     // Log to external service in production
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       this.logErrorToService(error, errorInfo);
     }
   }

@@ -178,7 +178,7 @@ export class GameSessionService {
 
   async getRecentSessions(limit: number = 10): Promise<GameSessionData[]> {
     try {
-      const { data: sessions, error } = await supabase
+      const { data: sessions, error } = await (supabase as any)
         .from('game_sessions')
         .select(`
           *,

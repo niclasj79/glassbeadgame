@@ -104,7 +104,7 @@ export const useMovementDatabase = (sessionId: string | null): MovementDatabaseH
         };
       });
 
-      await supabase
+      await (supabase as any)
         .from('concept_movement_tracking')
         .upsert(stabilityUpdates, {
           onConflict: 'session_id,concept_id'
