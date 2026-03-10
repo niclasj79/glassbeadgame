@@ -32,13 +32,13 @@
     --game-glow-primary: 260 80% 65%;
     --game-glow-secondary: 220 80% 60%;
     --game-glow-tertiary: 180 70% 50%;
-    --game-text-bright: 0 0% 95%;
-    --game-text-dim: 240 10% 60%;
-    --game-border-subtle: 260 20% 20%;
-    --game-surface: 240 30% 10%;
-    --game-surface-elevated: 240 25% 14%;
-    --game-resonance: 45 90% 55%;
-    --game-synthesis: 280 70% 60%;
+    --game-text-bright: 0 0% 97%;
+    --game-text-dim: 220 15% 72%;
+    --game-border-subtle: 260 20% 22%;
+    --game-surface: 240 30% 11%;
+    --game-surface-elevated: 240 25% 16%;
+    --game-resonance: 45 90% 58%;
+    --game-synthesis: 280 70% 65%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;

@@ -3,7 +3,7 @@ import { CanvasRenderer } from './arena/CanvasRenderer';
 import { SessionHeader } from './arena/SessionHeader';
 import { BottomUI } from './arena/BottomUI';
 import { SynthesisCard } from './arena/SynthesisCard';
-import { ScoreDisplay } from './arena/ScoreDisplay';
+import { DiscoveryLog } from './arena/DiscoveryLog';
 import { SphericalArenaProps } from './arena/types';
 import { useOfflineSessionManagement } from './arena/hooks/useOfflineSessionManagement';
 import { useConceptInteractions } from './arena/hooks/useConceptInteractions';
@@ -47,9 +47,9 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     init();
   }, [preloadAudio, initializeAudio]);
 
-  // Dismiss tutorial after 5s
+  // Dismiss tutorial after 8s (longer than before)
   useEffect(() => {
-    const timer = setTimeout(() => setShowTutorial(false), 5000);
+    const timer = setTimeout(() => setShowTutorial(false), 8000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -61,12 +61,10 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     enableBatchedUpdates: true, enableAggressiveCaching: true, maxCacheSize: 50, preloadInsights: false
   });
 
-  // Proximity synthesis system
   const {
     discoveries, activePairs, latestDiscovery, isGeneratingInsight, score, dismissDiscovery
   } = useProximitySynthesis(concepts, disciplines);
 
-  // Notify parent of discoveries
   useEffect(() => {
     if (onDiscoveriesUpdate) {
       onDiscoveriesUpdate(discoveries, score);
@@ -114,7 +112,6 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       role="application"
       aria-label="Glass Bead Game - Spherical Arena"
     >
-      {/* Header with score */}
       <SessionHeader
         remainingTime={remainingTime}
         formatTime={formatTime}
@@ -122,7 +119,9 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
         score={score}
       />
 
-      {/* Arena canvas */}
+      {/* Discovery Log */}
+      <DiscoveryLog discoveries={discoveries} disciplines={disciplines} />
+
       <div className="w-full relative" style={{ height: '100vh', paddingTop: '60px', paddingBottom: '80px' }}>
         <LoadingOverlay isLoading={isInitializing} message="Entering the Glass Bead Game...">
           <div className="w-full h-full">
@@ -142,17 +141,25 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
       {/* Tutorial overlay */}
       {showTutorial && !isInitializing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div className="game-surface-elevated rounded-xl p-6 max-w-sm mx-4 animate-fade-in pointer-events-auto">
-            <h3 className="text-lg font-semibold game-text-bright mb-3">How to Play</h3>
-            <ul className="text-sm game-text-dim space-y-2">
-              <li>🔮 Drag concepts from different disciplines close together</li>
-              <li>✨ When they're near enough, a resonance is discovered</li>
-              <li>📜 Each discovery reveals a hidden connection</li>
+          <div className="rounded-xl p-6 max-w-sm mx-4 animate-fade-in pointer-events-auto"
+            style={{
+              background: 'hsl(var(--game-surface-elevated))',
+              border: '1px solid hsl(var(--game-border-subtle))'
+            }}
+          >
+            <h3 className="text-lg font-semibold mb-3" style={{ color: 'hsl(var(--game-text-bright))' }}>How to Play</h3>
+            <ul className="text-sm space-y-2" style={{ color: 'hsl(var(--game-text-dim))' }}>
+              <li>🔮 <strong>Drag</strong> concepts close to ones from other disciplines</li>
+              <li>✨ <strong>Resonance</strong> is discovered when they're near enough</li>
+              <li>🌀 <strong>Rotate</strong> the sphere by dragging empty space</li>
+              <li>🔄 <strong>Scroll wheel</strong> tilts the sphere vertically</li>
+              <li>📜 <strong>Journal</strong> (left) keeps all discoveries</li>
               <li>🏆 Build your resonance score with unique pairings</li>
             </ul>
             <button
               onClick={() => setShowTutorial(false)}
-              className="mt-4 text-sm text-game-glow hover:text-white transition-colors"
+              className="mt-4 text-sm transition-colors hover:opacity-80"
+              style={{ color: 'hsl(var(--game-glow-primary))' }}
             >
               Got it!
             </button>
@@ -165,7 +172,6 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
         <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
       )}
 
-      {/* Audio Controls */}
       <div className="fixed bottom-4 right-4 z-30">
         <AudioControls />
       </div>

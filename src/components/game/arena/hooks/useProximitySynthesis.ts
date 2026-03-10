@@ -157,7 +157,7 @@ export const useProximitySynthesis = (
       });
       setTimeout(() => {
         setLatestDiscovery(prev => prev?.id === discovery.id ? null : prev);
-      }, 6000);
+      }, 15000);
     } finally {
       setIsGeneratingInsight(false);
       pendingRef.current = null;

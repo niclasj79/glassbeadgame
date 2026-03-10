@@ -11,27 +11,27 @@ export class SphereRenderer {
     const segments = 16;
     const t = Date.now() * 0.0003;
 
-    // Outer glow
+    // Outer glow - slightly brighter
     const glowGradient = ctx.createRadialGradient(
       canvas.width / 2, canvas.height / 2, sphereRadius * 0.8,
       canvas.width / 2, canvas.height / 2, sphereRadius * 1.3
     );
-    glowGradient.addColorStop(0, 'hsla(260, 60%, 40%, 0.04)');
-    glowGradient.addColorStop(0.5, 'hsla(260, 50%, 30%, 0.02)');
+    glowGradient.addColorStop(0, 'hsla(260, 60%, 45%, 0.05)');
+    glowGradient.addColorStop(0.5, 'hsla(260, 50%, 35%, 0.025)');
     glowGradient.addColorStop(1, 'transparent');
     ctx.fillStyle = glowGradient;
     ctx.beginPath();
     ctx.arc(canvas.width / 2, canvas.height / 2, sphereRadius * 1.3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Horizontal circles with subtle animation
+    // Horizontal circles - brighter wireframe
     for (let i = 1; i < segments; i++) {
       const angle = (i / segments) * Math.PI;
       const y = Math.cos(angle) * sphereRadius;
       const radius = Math.sin(angle) * sphereRadius;
-      const depthFade = Math.sin(angle); // Fade at poles
+      const depthFade = Math.sin(angle);
 
-      ctx.strokeStyle = `hsla(260, 50%, 55%, ${0.06 * depthFade})`;
+      ctx.strokeStyle = `hsla(260, 55%, 60%, ${0.08 * depthFade})`;
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       for (let j = 0; j <= 64; j++) {
@@ -51,11 +51,11 @@ export class SphereRenderer {
       ctx.stroke();
     }
 
-    // Vertical circles
+    // Vertical circles - brighter
     for (let i = 0; i < segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
 
-      ctx.strokeStyle = 'hsla(220, 50%, 55%, 0.05)';
+      ctx.strokeStyle = 'hsla(220, 55%, 60%, 0.06)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       for (let j = 0; j <= 32; j++) {
