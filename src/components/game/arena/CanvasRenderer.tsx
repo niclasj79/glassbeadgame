@@ -333,7 +333,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({
 
     BackgroundRenderer.render(ctx, canvas, scoreIntensity);
     if (showDimensionalOverlay) {
-      DimensionalRenderer.render(ctx, canvas, rotationRef, dimensionalMapping);
+      DimensionalRenderer.render(ctx, canvas, rotationRef, dimensionalMapping, zoom);
     }
     SphereRenderer.render(ctx, canvas, rotationRef, zoom);
     ConnectionRenderer.render(ctx, canvas, animatedConcepts, rotationRef, disciplines, zoom);

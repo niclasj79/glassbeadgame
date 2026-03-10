@@ -1,30 +1,33 @@
 import { RotationRef, DimensionalMapping } from '../types';
 import { rotatePoint, project3DTo2D } from '../utils';
+import { SphereRenderer } from './SphereRenderer';
 
 export class DimensionalRenderer {
   static render(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    dimensionalMapping: DimensionalMapping
+    dimensionalMapping: DimensionalMapping,
+    zoom: number = 1
   ) {
-    const sphereRadius = 180;
+    const sphereRadius = SphereRenderer.getResponsiveRadius(canvas);
     
     // Render axis lines
-    this.renderAxisLines(ctx, canvas, rotationRef, sphereRadius);
+    this.renderAxisLines(ctx, canvas, rotationRef, sphereRadius, zoom);
     
     // Render dimensional labels
-    this.renderDimensionalLabels(ctx, canvas, rotationRef, sphereRadius, dimensionalMapping);
+    this.renderDimensionalLabels(ctx, canvas, rotationRef, sphereRadius, dimensionalMapping, zoom);
     
     // Render subtle grid
-    this.renderSphereGrid(ctx, canvas, rotationRef, sphereRadius);
+    this.renderSphereGrid(ctx, canvas, rotationRef, sphereRadius, zoom);
   }
 
   private static renderAxisLines(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    radius: number
+    radius: number,
+    zoom: number
   ) {
     const axes = [
       { start: [-radius, 0, 0], end: [radius, 0, 0], color: 'rgba(255, 100, 100, 0.6)' }, // X-axis (red)
@@ -36,8 +39,8 @@ export class DimensionalRenderer {
       const rotatedStart = rotatePoint(axis.start[0], axis.start[1], axis.start[2], rotationRef.current.x, rotationRef.current.y);
       const rotatedEnd = rotatePoint(axis.end[0], axis.end[1], axis.end[2], rotationRef.current.x, rotationRef.current.y);
       
-      const projectedStart = project3DTo2D(rotatedStart.x, rotatedStart.y, rotatedStart.z, canvas);
-      const projectedEnd = project3DTo2D(rotatedEnd.x, rotatedEnd.y, rotatedEnd.z, canvas);
+      const projectedStart = project3DTo2D(rotatedStart.x, rotatedStart.y, rotatedStart.z, canvas, zoom);
+      const projectedEnd = project3DTo2D(rotatedEnd.x, rotatedEnd.y, rotatedEnd.z, canvas, zoom);
       
       ctx.strokeStyle = axis.color;
       ctx.lineWidth = 2;
@@ -55,7 +58,8 @@ export class DimensionalRenderer {
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
     radius: number,
-    mapping: DimensionalMapping
+    mapping: DimensionalMapping,
+    zoom: number
   ) {
     const labels = [
       { pos: [radius + 20, 0, 0], text: mapping.x.positive, color: 'rgba(255, 150, 150, 0.8)' },
@@ -74,7 +78,7 @@ export class DimensionalRenderer {
       const rotated = rotatePoint(label.pos[0], label.pos[1], label.pos[2], rotationRef.current.x, rotationRef.current.y);
       
       if (rotated.z > -100) { // Only show labels that are reasonably visible
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         
         ctx.fillStyle = label.color;
         ctx.fillText(label.text, projected.x, projected.y);
@@ -86,7 +90,8 @@ export class DimensionalRenderer {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     rotationRef: React.MutableRefObject<RotationRef>,
-    radius: number
+    radius: number,
+    zoom: number
   ) {
     const gridLines = 8;
     
@@ -104,7 +109,7 @@ export class DimensionalRenderer {
         const z = radius * Math.sin(theta) * Math.sin(angle);
         
         const rotated = rotatePoint(x, y, z, rotationRef.current.x, rotationRef.current.y);
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         
         if (j === 0) {
           ctx.moveTo(projected.x, projected.y);
@@ -129,7 +134,7 @@ export class DimensionalRenderer {
         const z = radius * Math.sin(theta) * Math.sin(angle);
         
         const rotated = rotatePoint(x, y, z, rotationRef.current.x, rotationRef.current.y);
-        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas);
+        const projected = project3DTo2D(rotated.x, rotated.y, rotated.z, canvas, zoom);
         
         if (j === 0) {
           ctx.moveTo(projected.x, projected.y);
