@@ -77,12 +77,12 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
     updateSoundtrackIntensity?.(score.totalResonance);
   }, [score.totalResonance, updateSoundtrackIntensity]);
 
-  // Start background soundscape when concepts are ready
+  // Start background soundscape when concepts are ready and audio is enabled
   useEffect(() => {
-    if (concepts.length > 0 && !isInitializing) {
+    if (concepts.length > 0 && !isInitializing && isAudioEnabled) {
       createBackgroundSoundscape?.(concepts, 0, 0);
     }
-  }, [concepts.length > 0, isInitializing]);
+  }, [concepts.length, isInitializing, isAudioEnabled, createBackgroundSoundscape]);
 
   // Trigger effects on new discovery
   const prevDiscoveryCount = React.useRef(0);
