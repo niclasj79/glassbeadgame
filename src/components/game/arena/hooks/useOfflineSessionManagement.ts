@@ -169,6 +169,7 @@ export const useOfflineSessionManagement = (
     sessionTime,
     remainingTime,
     isExpired,
+    maxDuration,
     formatTime,
     updateConceptMovement,
     allConceptsStable,
