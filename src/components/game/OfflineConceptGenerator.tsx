@@ -12,41 +12,40 @@ export class OfflineConceptGenerator {
 
   async generateConcepts(disciplines: string[], count: number = 12): Promise<Concept[]> {
     try {
-      // Limit to one concept per discipline
-      const actualCount = Math.min(count, disciplines.length);
-      
       const concepts: Concept[] = [];
+      const conceptsPerDiscipline = Math.ceil(count / disciplines.length);
       
-      // Select one concept per discipline from local data
-      for (let i = 0; i < disciplines.length && i < actualCount; i++) {
-        const disciplineId = disciplines[i];
+      // Select multiple concepts per discipline from local data
+      for (const disciplineId of disciplines) {
         const availableConcepts = conceptDatabase[disciplineId as keyof typeof conceptDatabase] || [];
         
-        // Filter out used concepts
-        const unusedConcepts = availableConcepts.filter(concept => !this.usedConcepts.has(concept));
+        let unusedConcepts = availableConcepts.filter(concept => !this.usedConcepts.has(concept));
         
-        // Reset if no unused concepts available
         if (unusedConcepts.length === 0) {
           this.usedConcepts.clear();
-          unusedConcepts.push(...availableConcepts);
+          unusedConcepts = [...availableConcepts];
         }
 
-        if (unusedConcepts.length > 0) {
-          const selectedConceptText = unusedConcepts[Math.floor(Math.random() * unusedConcepts.length)];
-          this.usedConcepts.add(selectedConceptText);
+        const shuffled = [...unusedConcepts].sort(() => Math.random() - 0.5);
+        const toSelect = shuffled.slice(0, conceptsPerDiscipline);
+
+        for (const conceptText of toSelect) {
+          if (concepts.length >= count) break;
+          this.usedConcepts.add(conceptText);
 
           const position = PositionGenerator.generateSpherePosition();
           const energy = PositionGenerator.generateEnergy();
 
           concepts.push({
-            id: `concept-${disciplineId}-${i}-${Date.now()}`,
-            text: selectedConceptText,
+            id: `concept-${disciplineId}-${concepts.length}-${Date.now()}`,
+            text: conceptText,
             discipline: disciplineId,
             ...position,
             energy,
             connections: []
           });
         }
+        if (concepts.length >= count) break;
       }
 
       // Generate connections between ALL concepts

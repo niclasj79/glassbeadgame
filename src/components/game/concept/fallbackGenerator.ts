@@ -8,33 +8,37 @@ export class FallbackConceptGenerator {
 
   generateFallbackConcepts(disciplines: string[], count: number): Concept[] {
     const concepts: Concept[] = [];
-    const actualCount = Math.min(count, disciplines.length);
+    const conceptsPerDiscipline = Math.ceil(count / disciplines.length);
 
-    // Generate one concept per discipline
-    for (let i = 0; i < actualCount; i++) {
-      const disciplineId = disciplines[i];
+    // Generate multiple concepts per discipline
+    for (const disciplineId of disciplines) {
       const availableConcepts = conceptDatabase[disciplineId as keyof typeof conceptDatabase] || [];
-      const unusedConcepts = availableConcepts.filter(concept => !this.usedConcepts.has(concept));
+      let unusedConcepts = availableConcepts.filter(concept => !this.usedConcepts.has(concept));
       
       if (unusedConcepts.length === 0) {
         this.usedConcepts.clear();
-        unusedConcepts.push(...availableConcepts);
+        unusedConcepts = [...availableConcepts];
       }
 
-      const conceptText = unusedConcepts[Math.floor(Math.random() * unusedConcepts.length)];
-      this.usedConcepts.add(conceptText);
+      const shuffled = [...unusedConcepts].sort(() => Math.random() - 0.5);
+      const toSelect = shuffled.slice(0, conceptsPerDiscipline);
 
-      const position = PositionGenerator.generateSpherePosition();
-      const energy = PositionGenerator.generateEnergy();
+      for (let i = 0; i < toSelect.length && concepts.length < count; i++) {
+        this.usedConcepts.add(toSelect[i]);
 
-      concepts.push({
-        id: `concept-${i}-${Date.now()}`,
-        text: conceptText,
-        discipline: disciplineId,
-        ...position,
-        energy,
-        connections: []
-      });
+        const position = PositionGenerator.generateSpherePosition();
+        const energy = PositionGenerator.generateEnergy();
+
+        concepts.push({
+          id: `concept-${concepts.length}-${Date.now()}`,
+          text: toSelect[i],
+          discipline: disciplineId,
+          ...position,
+          energy,
+          connections: []
+        });
+      }
+      if (concepts.length >= count) break;
     }
 
     return concepts;

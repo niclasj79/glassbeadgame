@@ -75,7 +75,7 @@ export class ConceptGenerator {
       return concepts;
     } catch (error) {
       console.error('Error in generateConcepts:', error);
-      return this.fallbackGenerator.generateFallbackConcepts(disciplines, Math.min(count, disciplines.length));
+      return this.fallbackGenerator.generateFallbackConcepts(disciplines, count);
     }
   }
 
