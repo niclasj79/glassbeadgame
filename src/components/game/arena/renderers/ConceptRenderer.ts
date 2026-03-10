@@ -13,7 +13,8 @@ export class ConceptRenderer {
     selectedConcept: string | null,
     dragState: DragState,
     rotationRef: React.MutableRefObject<RotationRef>,
-    hoveredConcept?: string | null
+    hoveredConcept?: string | null,
+    zoom: number = 1
   ) {
     const getDiscipline = (id: string) => {
       if (Array.isArray(disciplines)) return disciplines.find(d => d.id === id);
