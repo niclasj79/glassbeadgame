@@ -237,6 +237,13 @@ export const SphericalArena: React.FC<EnhancedArenaProps> = ({
         </div>
       )}
 
+      {/* Concept info overlay */}
+      <ConceptInfoOverlay
+        concept={infoConcept ? concepts.find(c => c.id === infoConcept) || null : null}
+        discipline={infoConcept ? disciplines.find(d => d.id === concepts.find(c => c.id === infoConcept)?.discipline) || null : null}
+        onDismiss={() => setInfoConcept(null)}
+      />
+
       {latestDiscovery && (
         <SynthesisCard discovery={latestDiscovery} onDismiss={dismissDiscovery} />
       )}
