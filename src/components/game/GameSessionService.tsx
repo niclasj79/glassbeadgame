@@ -62,7 +62,7 @@ export class GameSessionService {
         energy: concept.energy
       }));
 
-      const { error: conceptsError } = await supabase
+      const { error: conceptsError } = await (supabase as any)
         .from('session_concepts')
         .insert(conceptInserts);
 
