@@ -79,7 +79,7 @@ export class GameSessionService {
       }));
 
       if (interactionInserts.length > 0) {
-        const { error: interactionsError } = await supabase
+        const { error: interactionsError } = await (supabase as any)
           .from('session_interactions')
           .insert(interactionInserts);
 
