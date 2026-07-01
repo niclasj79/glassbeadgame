@@ -1,0 +1,139 @@
+import { useMemo, useRef } from "react";
+import * as THREE from "three";
+import { useFrame } from "@react-three/fiber";
+import { Billboard, Text } from "@react-three/drei";
+import interWoff from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
+import { useStore } from "@/state/store";
+import { conceptById } from "@/content/concepts";
+import { disciplineById } from "@/content/disciplines";
+import { hashString, smoothstep } from "@/lib/utils";
+import { frameState } from "./frameState";
+
+export const BEAD_RADIUS = 0.15;
+const SHELL_SCALE = 1.42;
+const HIT_SCALE = 2.1;
+/** Un-tonemapped color boost that pushes bead cores above the bloom threshold. */
+const CORE_BOOST = 1.42;
+const BOB_AMPLITUDE = 0.035;
+
+// One shared unit sphere; every bead scales it.
+const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+
+interface BeadProps {
+  id: string;
+  index: number;
+}
+
+function Bead({ id, index }: BeadProps) {
+  const concept = conceptById.get(id);
+  const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
+
+  const group = useRef<THREE.Group>(null);
+  const core = useRef<THREE.Mesh>(null);
+  const label = useRef<THREE.Object3D>(null);
+  const scaleRef = useRef(1);
+
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
+
+  const { coreMaterial, shellMaterial, bobPhase } = useMemo(() => {
+    const base = new THREE.Color(discipline?.color ?? "#8888aa");
+    return {
+      coreMaterial: new THREE.MeshBasicMaterial({
+        color: base.clone().multiplyScalar(CORE_BOOST),
+        toneMapped: false,
+      }),
+      shellMaterial: new THREE.MeshPhysicalMaterial({
+        color: base,
+        transparent: true,
+        opacity: 0.3,
+        roughness: 0.16,
+        metalness: 0,
+        clearcoat: 1,
+        clearcoatRoughness: 0.28,
+        depthWrite: false,
+      }),
+      bobPhase: (hashString(id) % 6283) / 1000,
+    };
+  }, [discipline?.color, id]);
+
+  useFrame((state) => {
+    const g = group.current;
+    if (!g) return;
+    const i = frameState.beadIndex.get(id) ?? index;
+    const p = frameState.positions;
+    const bob = reducedMotion
+      ? 0
+      : Math.sin(frameState.clock * 0.55 + bobPhase) * BOB_AMPLITUDE;
+    g.position.set(p[i * 3], p[i * 3 + 1] + bob, p[i * 3 + 2]);
+
+    // Hover/select emphasis (wired for M2; idle breathing meanwhile).
+    const hovered = frameState.hoveredId === id;
+    const targetScale = hovered ? 1.14 : 1;
+    scaleRef.current += (targetScale - scaleRef.current) * 0.12;
+    const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
+    g.scale.setScalar(scaleRef.current * breath);
+
+    // Label legibility: fade far-hemisphere and distant labels.
+    if (label.current) {
+      const camDir = state.camera.position.clone().normalize();
+      const beadDir = g.position.clone().normalize();
+      const facing = smoothstep(-0.12, 0.32, camDir.dot(beadDir));
+      const dist = state.camera.position.distanceTo(g.position);
+      const near = 1 - smoothstep(9, 14, dist);
+      const target = Math.max(facing * near, hovered ? 1 : 0);
+      const textObj = label.current as unknown as { material?: THREE.Material };
+      if (textObj.material && "opacity" in textObj.material) {
+        textObj.material.transparent = true;
+        textObj.material.opacity += (target - textObj.material.opacity) * 0.15;
+      }
+    }
+  });
+
+  if (!concept || !discipline) return null;
+
+  return (
+    <group ref={group}>
+      <mesh ref={core} geometry={sphereGeometry} scale={BEAD_RADIUS} material={coreMaterial} />
+      <mesh
+        geometry={sphereGeometry}
+        scale={BEAD_RADIUS * SHELL_SCALE}
+        material={shellMaterial}
+      />
+      {/* Enlarged invisible hit target — pointer handlers attach here in M2. */}
+      <mesh geometry={sphereGeometry} scale={BEAD_RADIUS * HIT_SCALE} userData={{ beadId: id }}>
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+      </mesh>
+      <Billboard follow>
+        <Text
+          ref={label as never}
+          font={interWoff}
+          fontSize={0.105}
+          letterSpacing={0.02}
+          color="#f0ede6"
+          anchorX="center"
+          anchorY="top"
+          position={[0, -(BEAD_RADIUS * SHELL_SCALE + 0.1), 0]}
+          outlineWidth={0.007}
+          outlineColor="#06090f"
+          outlineOpacity={0.9}
+          maxWidth={2.2}
+          textAlign="center"
+        >
+          {concept.name}
+        </Text>
+      </Billboard>
+    </group>
+  );
+}
+
+export function Beads() {
+  const beadIds = useStore((s) => s.session?.beadIds ?? null);
+  if (!beadIds || beadIds.length === 0) return null;
+  return (
+    <group>
+      {beadIds.map((id, i) => (
+        <Bead key={id} id={id} index={i} />
+      ))}
+    </group>
+  );
+}
