@@ -1,41 +1,52 @@
-
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { validateContent } from "./src/content/validate";
 
-// https://vitejs.dev/config/
+// Gate every dev-server start and production build on content integrity:
+// broken concept references or malformed connections fail loudly, here,
+// instead of surfacing as a silent dead bead in the arena.
+const contentGate = (): Plugin => ({
+  name: "gbg-content-gate",
+  buildStart() {
+    const { errors, warnings } = validateContent();
+    for (const w of warnings) this.warn(`[content] ${w}`);
+    if (errors.length > 0) {
+      throw new Error(`content validation failed:\n  - ${errors.join("\n  - ")}`);
+    }
+  },
+});
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    watch: {
-      // Reduce file watching overhead
-      usePolling: false,
-      interval: 1000,
-      ignored: [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-        '**/.next/**',
-        '**/.cache/**',
-        '**/coverage/**'
-      ]
-    }
   },
-  plugins: [
-    react(),
-    // Only use componentTagger in development and with reduced overhead
-    mode === 'development' && componentTagger()
-  ].filter(Boolean),
+  plugins: [react(), mode === "development" && componentTagger(), contentGate()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Optimize build and dev server
   optimizeDeps: {
-    exclude: ['lovable-tagger']
-  }
+    exclude: ["lovable-tagger"],
+  },
+  build: {
+    target: "es2020",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-three": ["three"],
+          "vendor-r3f": [
+            "@react-three/fiber",
+            "@react-three/drei",
+            "@react-three/postprocessing",
+            "postprocessing",
+          ],
+          "vendor-motion": ["framer-motion"],
+        },
+      },
+    },
+  },
 }));

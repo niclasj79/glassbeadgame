@@ -1,27 +1,14 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
-export default App;
+export default function App() {
+  return (
+    <div className="fixed inset-0 grid place-items-center bg-void">
+      <div className="select-none text-center animate-fade-up">
+        <p className="font-ui text-[11px] uppercase tracking-[0.55em] text-dim/70">
+          Das Glasperlenspiel
+        </p>
+        <h1 className="mt-5 font-display text-6xl font-medium tracking-wide text-bright md:text-7xl">
+          The Glass Bead Game
+        </h1>
+      </div>
+    </div>
+  );
+}
