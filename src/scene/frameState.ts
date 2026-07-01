@@ -18,14 +18,20 @@ export const frameState = {
   morphActive: false,
   /** Last user interaction with the camera or beads (performance.now()). */
   idleSince: 0,
-  /** World-space pointer aim point while threading (set by useThreading). */
+  /** World-space pointer aim point while threading (set by the threading driver). */
   aim: { x: 0, y: 0, z: 0, active: false },
   hoveredId: null as string | null,
+  /** Bead currently magnetized as the thread's landing candidate. */
+  snapId: null as string | null,
+  /** Final rendered position per bead (positions + bob), written by Beads each frame. */
+  rendered: new Float32Array(0),
 };
 
 export function initFramePositions(beadIds: string[], initial: Float32Array): void {
   frameState.positions = initial.slice();
   frameState.targets = initial.slice();
+  frameState.rendered = initial.slice();
+  frameState.snapId = null;
   frameState.beadIndex = new Map(beadIds.map((id, i) => [id, i]));
   frameState.morphActive = false;
   frameState.timeScale = 1;

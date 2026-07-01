@@ -8,6 +8,7 @@ import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { hashString, smoothstep } from "@/lib/utils";
 import { frameState } from "./frameState";
+import { beadPointerHandlers } from "./threading";
 
 export const BEAD_RADIUS = 0.15;
 const SHELL_SCALE = 1.42;
@@ -66,9 +67,16 @@ function Bead({ id, index }: BeadProps) {
       : Math.sin(frameState.clock * 0.55 + bobPhase) * BOB_AMPLITUDE;
     g.position.set(p[i * 3], p[i * 3 + 1] + bob, p[i * 3 + 2]);
 
-    // Hover/select emphasis (wired for M2; idle breathing meanwhile).
+    // Threads and the aim raycast read the final rendered position.
+    frameState.rendered[i * 3] = g.position.x;
+    frameState.rendered[i * 3 + 1] = g.position.y;
+    frameState.rendered[i * 3 + 2] = g.position.z;
+
+    const interaction = useStore.getState().session?.interaction;
+    const selected = interaction?.fromId === id && interaction.mode !== "idle";
+    const snapped = frameState.snapId === id;
     const hovered = frameState.hoveredId === id;
-    const targetScale = hovered ? 1.14 : 1;
+    const targetScale = snapped ? 1.24 : selected ? 1.18 : hovered ? 1.12 : 1;
     scaleRef.current += (targetScale - scaleRef.current) * 0.12;
     const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
     g.scale.setScalar(scaleRef.current * breath);
@@ -80,7 +88,7 @@ function Bead({ id, index }: BeadProps) {
       const facing = smoothstep(-0.12, 0.32, camDir.dot(beadDir));
       const dist = state.camera.position.distanceTo(g.position);
       const near = 1 - smoothstep(9, 14, dist);
-      const target = Math.max(facing * near, hovered ? 1 : 0);
+      const target = Math.max(facing * near, hovered || selected || snapped ? 1 : 0);
       const textObj = label.current as unknown as { material?: THREE.Material };
       if (textObj.material && "opacity" in textObj.material) {
         textObj.material.transparent = true;
@@ -99,8 +107,13 @@ function Bead({ id, index }: BeadProps) {
         scale={BEAD_RADIUS * SHELL_SCALE}
         material={shellMaterial}
       />
-      {/* Enlarged invisible hit target — pointer handlers attach here in M2. */}
-      <mesh geometry={sphereGeometry} scale={BEAD_RADIUS * HIT_SCALE} userData={{ beadId: id }}>
+      {/* Enlarged invisible hit target carrying the weaving gesture handlers. */}
+      <mesh
+        geometry={sphereGeometry}
+        scale={BEAD_RADIUS * HIT_SCALE}
+        userData={{ beadId: id }}
+        {...beadPointerHandlers(id)}
+      >
         <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
       </mesh>
       <Billboard follow>

@@ -3,6 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
 import { SetupScreen } from "./ui/screens/SetupScreen";
+import { ArenaHud } from "./ui/arena/ArenaHud";
 import { useStore } from "./state/store";
 import { probeWebGL } from "./lib/device";
 
@@ -38,6 +39,7 @@ export default function App() {
       <AnimatePresence mode="wait">
         {phase === "title" && <TitleScreen key="title" />}
         {phase === "setup" && <SetupScreen key="setup" />}
+        {phase === "arena" && <ArenaHud key="arena" />}
       </AnimatePresence>
     </div>
   );

@@ -7,6 +7,9 @@ import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { Backdrop } from "./Backdrop";
 import { Lattice } from "./Lattice";
 import { Beads } from "./Beads";
+import { Threads } from "./Threads";
+import { ThreadPreview } from "./ThreadPreview";
+import { ThreadingDriver } from "./ThreadingDriver";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
 
@@ -77,6 +80,9 @@ export function Cosmos() {
       <Backdrop />
       <Lattice />
       <Beads />
+      <Threads />
+      <ThreadPreview />
+      <ThreadingDriver />
       <CameraRig />
       <Effects />
     </>
