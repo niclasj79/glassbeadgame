@@ -4,6 +4,8 @@ import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
 import { SetupScreen } from "./ui/screens/SetupScreen";
 import { ArenaHud } from "./ui/arena/ArenaHud";
+import { AudioBridge } from "./audio/useAudio";
+import { SoundToggle } from "./ui/components/SoundToggle";
 import { useStore } from "./state/store";
 import { probeWebGL } from "./lib/device";
 
@@ -36,11 +38,13 @@ export default function App() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-void">
       <ArenaCanvas />
+      <AudioBridge />
       <AnimatePresence mode="wait">
         {phase === "title" && <TitleScreen key="title" />}
         {phase === "setup" && <SetupScreen key="setup" />}
         {phase === "arena" && <ArenaHud key="arena" />}
       </AnimatePresence>
+      <SoundToggle />
     </div>
   );
 }

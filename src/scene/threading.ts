@@ -3,6 +3,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { useStore } from "@/state/store";
 import { resolveAttempt, detectNewMotifs } from "@/game/rules";
 import { ARENA_RADIUS } from "@/game/layout";
+import { hoverPing, selectTick, cancelGliss } from "@/audio/sfx";
 import { frameState } from "./frameState";
 
 /**
@@ -120,6 +121,7 @@ function endGesture(opts?: { keepControlsLocked?: boolean }) {
 function cancelGesture() {
   const st = useStore.getState();
   if (st.session && st.session.interaction.mode !== "idle") {
+    if (st.session.interaction.mode === "threading") cancelGliss();
     st.setInteraction({ mode: "idle", fromId: null, sticky: false });
   }
   endGesture();
@@ -173,6 +175,7 @@ export function beadPointerHandlers(id: string) {
       e.stopPropagation();
       if (useStore.getState().phase !== "arena") return;
       frameState.hoveredId = id;
+      hoverPing(id);
       if (interactionMode() === "idle") setCursor("pointer");
     },
     onPointerOut: () => {
@@ -203,6 +206,7 @@ export function beadPointerHandlers(id: string) {
         }
       }
       st.setInteraction({ mode: "pressed", fromId: id, sticky: false });
+      selectTick(id);
     },
   };
 }
