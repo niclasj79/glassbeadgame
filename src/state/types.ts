@@ -59,6 +59,18 @@ export interface SessionState {
   interaction: Interaction;
 }
 
+export interface SessionMemory {
+  id: string;
+  seed: number;
+  endedAt: number;
+  disciplines: DisciplineId[];
+  beadIds: string[];
+  threads: Thread[];
+  discoveries: Discovery[];
+  motifs: MotifAward[];
+  score: number;
+}
+
 export interface Settings {
   muted: boolean;
   qualityTier: "high" | "base" | "potato";

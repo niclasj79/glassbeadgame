@@ -183,11 +183,16 @@ export function beadPointerHandlers(id: string) {
       e.stopPropagation();
       if (useStore.getState().phase !== "arena") return;
       frameState.hoveredId = id;
+      useStore.getState().setFocusedBead(id);
       hoverPing(id);
       if (interactionMode() === "idle") setCursor("pointer");
     },
     onPointerOut: () => {
       if (frameState.hoveredId === id) frameState.hoveredId = null;
+      const st = useStore.getState();
+      if (st.focusedBeadId === id && st.session?.interaction.fromId !== id) {
+        st.setFocusedBead(null);
+      }
       if (interactionMode() === "idle") setCursor("");
     },
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
@@ -215,6 +220,7 @@ export function beadPointerHandlers(id: string) {
         }
       }
       st.setInteraction({ mode: "pressed", fromId: id, sticky: false });
+      st.setFocusedBead(id);
       selectTick(id);
     },
   };
