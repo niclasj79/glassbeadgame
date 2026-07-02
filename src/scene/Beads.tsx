@@ -23,9 +23,10 @@ const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
 interface BeadProps {
   id: string;
   index: number;
+  lensAnchor: boolean;
 }
 
-function Bead({ id, index }: BeadProps) {
+function Bead({ id, index, lensAnchor }: BeadProps) {
   const concept = conceptById.get(id);
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
 
@@ -35,6 +36,9 @@ function Bead({ id, index }: BeadProps) {
   const scaleRef = useRef(1);
 
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const lensActive = useStore((s) => s.lensActive);
+  const focusedBeadId = useStore((s) => s.focusedBeadId);
+  const threaded = useStore((s) => !!s.session?.threads.some((t) => t.a === id || t.b === id));
 
   const { coreMaterial, shellMaterial, bobPhase } = useMemo(() => {
     const base = new THREE.Color(discipline?.color ?? "#8888aa");
@@ -76,7 +80,8 @@ function Bead({ id, index }: BeadProps) {
     const selected = interaction?.fromId === id && interaction.mode !== "idle";
     const snapped = frameState.snapId === id;
     const hovered = frameState.hoveredId === id;
-    const targetScale = snapped ? 1.24 : selected ? 1.18 : hovered ? 1.12 : 1;
+    const focused = focusedBeadId === id;
+    const targetScale = snapped ? 1.24 : focused ? 1.2 : selected ? 1.18 : hovered ? 1.12 : 1;
     scaleRef.current += (targetScale - scaleRef.current) * 0.12;
     const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
     g.scale.setScalar(scaleRef.current * breath);
@@ -88,7 +93,16 @@ function Bead({ id, index }: BeadProps) {
       const facing = smoothstep(-0.12, 0.32, camDir.dot(beadDir));
       const dist = state.camera.position.distanceTo(g.position);
       const near = 1 - smoothstep(9, 14, dist);
-      const target = Math.max(facing * near, hovered || selected || snapped ? 1 : 0);
+      const target = lensActive
+        ? hovered || selected || snapped || focused
+          ? 1
+          : threaded
+            ? 0.88
+            : lensAnchor
+              ? 0.62
+              : 0
+        : Math.max(facing * near, hovered || selected || snapped || focused ? 1 : 0);
+      label.current.visible = target > 0.03;
       const textObj = label.current as unknown as { material?: THREE.Material };
       if (textObj.material && "opacity" in textObj.material) {
         textObj.material.transparent = true;
@@ -139,13 +153,40 @@ function Bead({ id, index }: BeadProps) {
   );
 }
 
+function lensAnchorIds(beadIds: string[]): Set<string> {
+  const anchors = new Set<string>();
+  const axes = [0, 1, 2] as const;
+  for (const axis of axes) {
+    let highId: string | null = null;
+    let lowId: string | null = null;
+    let high = -Infinity;
+    let low = Infinity;
+    for (const id of beadIds) {
+      const value = conceptById.get(id)?.tbg[axis];
+      if (value === undefined) continue;
+      if (value > high) {
+        high = value;
+        highId = id;
+      }
+      if (value < low) {
+        low = value;
+        lowId = id;
+      }
+    }
+    if (highId) anchors.add(highId);
+    if (lowId) anchors.add(lowId);
+  }
+  return anchors;
+}
+
 export function Beads() {
   const beadIds = useStore((s) => s.session?.beadIds ?? null);
   if (!beadIds || beadIds.length === 0) return null;
+  const anchors = lensAnchorIds(beadIds);
   return (
     <group>
       {beadIds.map((id, i) => (
-        <Bead key={id} id={id} index={i} />
+        <Bead key={id} id={id} index={i} lensAnchor={anchors.has(id)} />
       ))}
     </group>
   );

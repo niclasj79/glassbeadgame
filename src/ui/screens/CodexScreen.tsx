@@ -1,12 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { connections } from "@/content/connections";
 import { conceptById } from "@/content/concepts";
 import { disciplineById, disciplines } from "@/content/disciplines";
 import { totalConnections } from "@/game/ranks";
+import type { SessionMemory } from "@/state/types";
 import type { CuratedConnection, DisciplineId } from "@/content/types";
 import { RankSigil } from "../components/RankSigil";
+import { CodexAtlas } from "./CodexAtlas";
+import { SessionReplay } from "./SessionReplay";
 
 function groupKey(c: CuratedConnection): string {
   const da = conceptById.get(c.pair[0])!.discipline;
@@ -79,6 +82,8 @@ export function CodexScreen() {
   const open = useStore((s) => s.codexOpen);
   const setCodexOpen = useStore((s) => s.setCodexOpen);
   const codex = useStore((s) => s.codex);
+  const archive = useStore((s) => s.sessionArchive);
+  const [replay, setReplay] = useState<SessionMemory | null>(null);
 
   const groups = useMemo(() => {
     const map = new Map<string, CuratedConnection[]>();
@@ -125,7 +130,9 @@ export function CodexScreen() {
               <RankSigil codexCount={found} totalCount={totalConnections()} size={92} />
             </div>
 
-            <div className="mt-10 space-y-10">
+            <CodexAtlas codex={codex} archive={archive} onReplay={setReplay} />
+
+            <div className="mt-12 space-y-10">
               {groups.map(([key, conns]) => (
                 <section key={key}>
                   <GroupHeader keyStr={key} />
@@ -147,6 +154,7 @@ export function CodexScreen() {
               </button>
             </div>
           </div>
+          <SessionReplay memory={replay} onClose={() => setReplay(null)} />
         </motion.div>
       )}
     </AnimatePresence>

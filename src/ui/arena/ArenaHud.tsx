@@ -4,8 +4,11 @@ import { useStore } from "@/state/store";
 import { isCoarsePointer } from "@/lib/device";
 import type { Discovery, MotifAward } from "@/state/types";
 import { GlassPanel } from "../components/GlassPanel";
+import { Button } from "../components/Button";
+import { BeadInspectCard } from "./BeadInspectCard";
 import { DiscoveryCard } from "./DiscoveryCard";
 import { JournalDrawer } from "./JournalDrawer";
+import { MotifRitualToast, MotifTracker } from "./MotifTracker";
 
 function ResonanceGlyph() {
   return (
@@ -32,7 +35,17 @@ function BookGlyph() {
   );
 }
 
-/** In-arena chrome: restrained, glassy, never louder than the cosmos. */
+function LensGuide() {
+  return (
+    <GlassPanel className="pointer-events-auto absolute bottom-5 right-5 hidden w-80 bg-void/62 p-4 md:block">
+      <p className="font-ui text-[10px] uppercase tracking-[0.35em] text-dim">The Lens</p>
+      <p className="mt-2 font-display text-base italic leading-relaxed text-bright/90">
+        Labels mark focus, woven beads, and the extreme points of True, Beautiful, and Good.
+      </p>
+    </GlassPanel>
+  );
+}
+
 export function ArenaHud() {
   const score = useStore((s) => s.session?.score ?? 0);
   const threadCount = useStore((s) => s.session?.threads.length ?? 0);
@@ -47,38 +60,37 @@ export function ArenaHud() {
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   const [journalOpen, setJournalOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(true);
   const [faintToast, setFaintToast] = useState<Discovery | null>(null);
   const [motifToast, setMotifToast] = useState<MotifAward | null>(null);
   const seenDiscoveries = useRef(0);
   const seenMotifs = useRef(0);
 
-  // The concluding cinematic: threads brighten, the cadence resolves,
-  // the camera crowns the web — then the Annotation.
   useEffect(() => {
     if (mode !== "concluding") return;
     const t = setTimeout(finishConcluding, reducedMotion ? 700 : 4200);
     return () => clearTimeout(t);
   }, [mode, finishConcluding, reducedMotion]);
 
-  // Contextual first-run hints: one at a time, each persisted once seen.
   const hintsSeen = useStore((s) => s.settings.hintsSeen);
   const markHintSeen = useStore((s) => s.markHintSeen);
   const coarse = useMemo(isCoarsePointer, []);
   const activeHint = useMemo(() => {
+    if (welcomeOpen) return null;
     if (threadCount === 0 && !hintsSeen.weave) {
       return {
         id: "weave",
         delay: 2.2,
         text: coarse
-          ? "Tap a bead, then tap another to weave a thread · drag the void to orbit"
-          : "Press a bead and draw its thread to another · drag the void to orbit",
+          ? "Tap a bead, then tap another to weave a thread - drag the void to orbit"
+          : "Press a bead and draw its thread to another - drag the void to orbit",
       };
     }
     if (discoveries.length >= 1 && !hintsSeen.journal) {
       return {
         id: "journal",
         delay: 1.2,
-        text: "Every discovery is kept in your Journal — the book at the left edge",
+        text: "Every discovery is kept in your Journal - the book at the left edge",
       };
     }
     if (threadCount >= 3 && !hintsSeen.lens) {
@@ -89,9 +101,8 @@ export function ArenaHud() {
       };
     }
     return null;
-  }, [threadCount, discoveries.length, hintsSeen, coarse]);
+  }, [welcomeOpen, threadCount, discoveries.length, hintsSeen, coarse]);
 
-  // A hint retires the moment its lesson is demonstrated.
   useEffect(() => {
     if (threadCount > 0 && !hintsSeen.weave) markHintSeen("weave");
   }, [threadCount, hintsSeen.weave, markHintSeen]);
@@ -132,81 +143,112 @@ export function ArenaHud() {
       animate={{ opacity: 1, transition: { delay: 0.9, duration: 0.8 } }}
       exit={{ opacity: 0, transition: { duration: 0.4 } }}
     >
-      {/* Chrome hides during the concluding cinematic. */}
       {mode !== "concluding" && (
-      <>
-      {/* Score — top left */}
-      <GlassPanel className="pointer-events-auto absolute left-4 top-4 flex items-center gap-3 rounded-full px-4 py-2.5 sm:left-5 sm:top-5 sm:px-5">
-        <span className="flex items-center gap-1.5 text-resonance">
-          <ResonanceGlyph />
-          <span className="font-ui text-sm font-semibold tabular-nums">{score}</span>
-        </span>
-        <span className="hidden h-3 w-px bg-line/70 sm:block" />
-        <span className="hidden font-ui text-[11px] uppercase tracking-[0.22em] text-dim sm:inline">
-          Resonance
-        </span>
-        {threadCount > 0 && (
-          <>
-            <span className="hidden h-3 w-px bg-line/70 md:block" />
-            <span className="hidden font-ui text-[11px] tabular-nums text-dim md:inline">
-              {threadCount} {threadCount === 1 ? "thread" : "threads"}
-              {curatedCount > 0 && ` · ${curatedCount} luminous`}
+        <>
+          <GlassPanel className="pointer-events-auto absolute left-4 top-4 flex items-center gap-3 rounded-full px-4 py-2.5 sm:left-5 sm:top-5 sm:px-5">
+            <span className="flex items-center gap-1.5 text-resonance">
+              <ResonanceGlyph />
+              <span className="font-ui text-sm font-semibold tabular-nums">{score}</span>
             </span>
-          </>
-        )}
-      </GlassPanel>
+            <span className="hidden h-3 w-px bg-line/70 sm:block" />
+            <span className="hidden font-ui text-[11px] uppercase tracking-[0.22em] text-dim sm:inline">
+              Resonance
+            </span>
+            {threadCount > 0 && (
+              <>
+                <span className="hidden h-3 w-px bg-line/70 md:block" />
+                <span className="hidden font-ui text-[11px] tabular-nums text-dim md:inline">
+                  {threadCount} {threadCount === 1 ? "thread" : "threads"}
+                  {curatedCount > 0 && ` - ${curatedCount} luminous`}
+                </span>
+              </>
+            )}
+          </GlassPanel>
 
-      {/* Conclude — top right */}
-      <button
-        onClick={() => {
-          if (discoveries.length === 0) returnToTitle();
-          else concludeSession();
-        }}
-        className="pointer-events-auto absolute right-4 top-4 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright sm:right-5 sm:top-5"
-      >
-        {discoveries.length === 0 ? (
-          "Leave"
-        ) : (
-          <>
-            <span className="sm:hidden">Conclude</span>
-            <span className="hidden sm:inline">Conclude the Game</span>
-          </>
-        )}
-      </button>
+          <button
+            onClick={() => {
+              if (discoveries.length === 0) returnToTitle();
+              else concludeSession();
+            }}
+            className="pointer-events-auto absolute right-4 top-4 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright sm:right-5 sm:top-5"
+          >
+            {discoveries.length === 0 ? (
+              "Leave"
+            ) : (
+              <>
+                <span className="sm:hidden">Conclude</span>
+                <span className="hidden sm:inline">Conclude the Game</span>
+              </>
+            )}
+          </button>
 
-      {/* Lens toggle — below Conclude */}
-      <button
-        onClick={() => setLens(!lensActive)}
-        aria-pressed={lensActive}
-        title="The Lens: view the beads along True / Good / Beautiful"
-        className={
-          "pointer-events-auto absolute right-5 top-[4.6rem] rounded-full border px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors " +
-          (lensActive
-            ? "border-glow/70 bg-glow/15 text-bright"
-            : "border-line/40 bg-surface/50 text-dim hover:border-line/80 hover:text-bright")
-        }
-      >
-        {lensActive ? "Close the Lens" : "The Lens"}
-      </button>
+          <button
+            onClick={() => setLens(!lensActive)}
+            aria-pressed={lensActive}
+            title="The Lens: view the beads along True / Good / Beautiful"
+            className={
+              "pointer-events-auto absolute right-5 top-[4.6rem] rounded-full border px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors " +
+              (lensActive
+                ? "border-glow/70 bg-glow/15 text-bright"
+                : "border-line/40 bg-surface/50 text-dim hover:border-line/80 hover:text-bright")
+            }
+          >
+            {lensActive ? "Close the Lens" : "The Lens"}
+          </button>
 
-      {/* Journal toggle — left edge */}
-      <button
-        onClick={() => setJournalOpen(true)}
-        aria-label="Open discovery journal"
-        className="pointer-events-auto absolute left-5 top-1/2 -translate-y-1/2 rounded-full border border-line/40 bg-surface/50 p-3.5 text-dim backdrop-blur-md transition-colors hover:border-line/80 hover:text-bright"
-      >
-        <BookGlyph />
-        {discoveries.length > 0 && (
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-glow px-1 font-ui text-[10px] font-semibold text-void">
-            {discoveries.length}
-          </span>
-        )}
-      </button>
-
-      </>
+          <button
+            onClick={() => setJournalOpen(true)}
+            aria-label="Open discovery journal"
+            className="pointer-events-auto absolute left-5 top-1/2 -translate-y-1/2 rounded-full border border-line/40 bg-surface/50 p-3.5 text-dim backdrop-blur-md transition-colors hover:border-line/80 hover:text-bright"
+          >
+            <BookGlyph />
+            {discoveries.length > 0 && (
+              <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-glow px-1 font-ui text-[10px] font-semibold text-void">
+                {discoveries.length}
+              </span>
+            )}
+          </button>
+        </>
       )}
 
-      {/* Contextual hints — one at a time, each shown once ever. */}
+      <AnimatePresence>
+        {mode !== "concluding" && welcomeOpen && threadCount === 0 && (
+          <motion.div
+            key="arena-welcome"
+            className="pointer-events-auto absolute inset-0 z-20 grid place-items-center bg-void/35 px-6 backdrop-blur-[1px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.35 } }}
+          >
+            <GlassPanel
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="arena-welcome-title"
+              className="w-full max-w-lg bg-void/80 p-7 text-center sm:p-8"
+            >
+              <p className="font-ui text-[10px] uppercase tracking-[0.45em] text-dim/75">
+                The Arena Opens
+              </p>
+              <h2
+                id="arena-welcome-title"
+                className="mt-3 font-display text-3xl font-medium text-bright sm:text-4xl"
+              >
+                Find the luminous connections
+              </h2>
+              <p className="mt-4 font-display text-lg italic leading-relaxed text-bright/90">
+                Test connections until you find the hidden luminous connections.
+              </p>
+              <p className="mt-3 font-ui text-sm leading-relaxed text-dim">
+                Faint resonances still count as experiments. Luminous discoveries open the Codex.
+              </p>
+              <Button className="mt-7" onClick={() => setWelcomeOpen(false)}>
+                Begin testing
+              </Button>
+            </GlassPanel>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {mode !== "concluding" && activeHint && (
           <motion.p
@@ -221,7 +263,6 @@ export function ArenaHud() {
         )}
       </AnimatePresence>
 
-      {/* Faint-resonance toast — bottom right, quiet by design */}
       <AnimatePresence>
         {faintToast && (
           <motion.div
@@ -235,9 +276,7 @@ export function ArenaHud() {
             <GlassPanel className="p-4">
               <div className="flex items-center justify-between">
                 <p className="font-display text-sm italic text-dim">Faint resonance</p>
-                <span className="font-ui text-xs tabular-nums text-dim">
-                  +{faintToast.points}
-                </span>
+                <span className="font-ui text-xs tabular-nums text-dim">+{faintToast.points}</span>
               </div>
               <p className="mt-1.5 line-clamp-3 font-ui text-[12px] leading-relaxed text-dim/80">
                 {faintToast.insight}
@@ -247,25 +286,17 @@ export function ArenaHud() {
         )}
       </AnimatePresence>
 
-      {/* Motif award — top center */}
+      {mode !== "concluding" && <MotifTracker />}
+      {mode !== "concluding" && lensActive && <LensGuide />}
+
       <AnimatePresence>
         {motifToast && (
-          <motion.div
-            key={motifToast.motifId + motifToast.at}
-            className="absolute left-1/2 top-6 -translate-x-1/2"
-            initial={{ opacity: 0, y: -12, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.5 }}
-          >
-            <span className="rounded-full border border-resonance/50 bg-resonance/10 px-5 py-2 font-ui text-[11px] uppercase tracking-[0.28em] text-resonance shadow-[0_0_30px_-8px_hsl(42_92%_60%/0.5)]">
-              ✦ Motif · {motifToast.name} +{motifToast.points}
-            </span>
-          </motion.div>
+          <MotifRitualToast key={motifToast.motifId + motifToast.at} motif={motifToast} />
         )}
       </AnimatePresence>
 
       <JournalDrawer open={journalOpen} onClose={() => setJournalOpen(false)} />
+      {mode !== "concluding" && <BeadInspectCard />}
       <DiscoveryCard />
     </motion.div>
   );

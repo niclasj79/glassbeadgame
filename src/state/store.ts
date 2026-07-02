@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
+import type { SharedProgress } from "@/game/progress";
 import { drawSession } from "@/game/session";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
 import type {
@@ -9,6 +10,7 @@ import type {
   Interaction,
   MotifAward,
   Phase,
+  SessionMemory,
   SessionState,
   Settings,
   Thread,
@@ -21,16 +23,21 @@ interface GBGState {
   settings: Settings;
   session: SessionState | null;
   codex: Record<string, CodexEntry>;
+  sessionArchive: SessionMemory[];
   lifetimeStats: { sessions: number; totalScore: number };
+  focusedBeadId: string | null;
 
   goToSetup: () => void;
   returnToTitle: () => void;
   beginSession: (picks: DisciplineId[]) => void;
   setLens: (on: boolean) => void;
   setCodexOpen: (open: boolean) => void;
+  setFocusedBead: (id: string | null) => void;
   setMuted: (muted: boolean) => void;
   setQualityTier: (tier: QualityTier) => void;
   markHintSeen: (id: string) => void;
+  mergeProgress: (progress: SharedProgress) => void;
+  resetProgress: () => void;
 
   setInteraction: (partial: Partial<Interaction>) => void;
   addThread: (thread: Thread) => void;
@@ -50,9 +57,12 @@ const idleInteraction = (): Interaction => ({
 /** What survives across sessions: the codex, lifetime stats, and taste settings. */
 interface PersistedSlice {
   codex: GBGState["codex"];
+  sessionArchive: GBGState["sessionArchive"];
   lifetimeStats: GBGState["lifetimeStats"];
   settings: Pick<Settings, "muted" | "hintsSeen">;
 }
+
+const MAX_SESSION_ARCHIVE = 12;
 
 export const useStore = create<GBGState>()(
   subscribeWithSelector(
@@ -69,12 +79,20 @@ export const useStore = create<GBGState>()(
     },
     session: null,
     codex: {},
+    sessionArchive: [],
     lifetimeStats: { sessions: 0, totalScore: 0 },
+    focusedBeadId: null,
 
     goToSetup: () => set({ phase: "setup" }),
 
     returnToTitle: () =>
-      set({ phase: "title", session: null, lensActive: false, codexOpen: false }),
+      set({
+        phase: "title",
+        session: null,
+        lensActive: false,
+        codexOpen: false,
+        focusedBeadId: null,
+      }),
 
     beginSession: (picks) => {
       const draw = drawSession(picks);
@@ -89,7 +107,7 @@ export const useStore = create<GBGState>()(
         startedAt: Date.now(),
         interaction: idleInteraction(),
       };
-      set({ phase: "arena", session, lensActive: false });
+      set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
     },
 
     setLens: (on) => {
@@ -103,6 +121,8 @@ export const useStore = create<GBGState>()(
 
     setCodexOpen: (open) => set({ codexOpen: open }),
 
+    setFocusedBead: (focusedBeadId) => set({ focusedBeadId }),
+
     setMuted: (muted) => set((st) => ({ settings: { ...st.settings, muted } })),
 
     setQualityTier: (qualityTier) =>
@@ -111,6 +131,47 @@ export const useStore = create<GBGState>()(
     markHintSeen: (id) =>
       set((st) => ({
         settings: { ...st.settings, hintsSeen: { ...st.settings.hintsSeen, [id]: true } },
+      })),
+
+    mergeProgress: (progress) =>
+      set((st) => {
+        const codex = { ...st.codex };
+        for (const [id, incoming] of Object.entries(progress.codex)) {
+          const existing = codex[id];
+          codex[id] = existing
+            ? {
+                firstFoundAt: Math.min(existing.firstFoundAt, incoming.firstFoundAt),
+                count: Math.max(existing.count, incoming.count),
+              }
+            : incoming;
+        }
+
+        const hintsSeen = { ...st.settings.hintsSeen };
+        for (const [id, seen] of Object.entries(progress.hintsSeen)) {
+          if (seen) hintsSeen[id] = true;
+        }
+
+        return {
+          codex,
+          lifetimeStats: {
+            sessions: Math.max(st.lifetimeStats.sessions, progress.lifetimeStats.sessions),
+            totalScore: Math.max(st.lifetimeStats.totalScore, progress.lifetimeStats.totalScore),
+          },
+          settings: { ...st.settings, hintsSeen },
+        };
+      }),
+
+    resetProgress: () =>
+      set((st) => ({
+        phase: "title",
+        session: null,
+        codex: {},
+        sessionArchive: [],
+        codexOpen: false,
+        lensActive: false,
+        focusedBeadId: null,
+        lifetimeStats: { sessions: 0, totalScore: 0 },
+        settings: { ...st.settings, hintsSeen: {} },
       })),
 
     setInteraction: (partial) => {
@@ -162,9 +223,25 @@ export const useStore = create<GBGState>()(
     finishConcluding: () => {
       const s = get().session;
       if (!s) return;
+      const memory: SessionMemory = {
+        id: `${s.seed}-${Date.now()}`,
+        seed: s.seed,
+        endedAt: Date.now(),
+        disciplines: s.disciplines,
+        beadIds: s.beadIds,
+        threads: s.threads,
+        discoveries: s.discoveries,
+        motifs: s.motifs,
+        score: s.score,
+      };
       set((st) => ({
         phase: "conclusion",
         session: { ...s, interaction: idleInteraction() },
+        focusedBeadId: null,
+        sessionArchive:
+          s.discoveries.length > 0 || s.threads.length > 0
+            ? [memory, ...st.sessionArchive].slice(0, MAX_SESSION_ARCHIVE)
+            : st.sessionArchive,
         lifetimeStats: {
           sessions: st.lifetimeStats.sessions + 1,
           totalScore: st.lifetimeStats.totalScore + s.score,
@@ -177,6 +254,7 @@ export const useStore = create<GBGState>()(
         version: 1,
         partialize: (s): PersistedSlice => ({
           codex: s.codex,
+          sessionArchive: s.sessionArchive,
           lifetimeStats: s.lifetimeStats,
           settings: { muted: s.settings.muted, hintsSeen: s.settings.hintsSeen },
         }),
@@ -185,6 +263,7 @@ export const useStore = create<GBGState>()(
           return {
             ...current,
             codex: p.codex ?? current.codex,
+            sessionArchive: p.sessionArchive ?? current.sessionArchive,
             lifetimeStats: p.lifetimeStats ?? current.lifetimeStats,
             settings: {
               ...current.settings, // qualityTier/reducedMotion stay device-derived
