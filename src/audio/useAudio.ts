@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useStore } from "@/state/store";
 import { audio } from "./engine";
 import { ambient } from "./ambient";
-import { discoveryChord, faintDyad, setAimTension } from "./sfx";
+import { discoveryChord, faintDyad, setAimTension, conclusionCadence } from "./sfx";
 import { noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
 
@@ -75,7 +75,10 @@ export function AudioBridge(): null {
       // (The cancel gliss is fired directly by threading.cancelGesture.)
       useStore.subscribe(
         (s) => s.session?.interaction.mode ?? "idle",
-        (mode) => setAimTension(mode === "threading")
+        (mode) => {
+          setAimTension(mode === "threading");
+          if (mode === "concluding") conclusionCadence(sessionPitches());
+        }
       ),
 
       // The web's growth swells the ambient floor.

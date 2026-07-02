@@ -157,6 +157,12 @@ function commit(fromId: string, toId: string) {
   }
 }
 
+/** Dev-only E2E seam: drives the exact same commit path as a real gesture. */
+export function devCommit(fromId: string, toId: string): void {
+  if (!import.meta.env.DEV) return;
+  commit(fromId, toId);
+}
+
 /** Ends the reveal moment: restores time, input, and idle state. */
 export function dismissReveal() {
   const st = useStore.getState();
@@ -185,6 +191,7 @@ export function beadPointerHandlers(id: string) {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
       const st = useStore.getState();
       if (st.phase !== "arena" || !st.session) return;
+      if (st.lensActive) return; // the Lens is for contemplation, not weaving
       const mode = st.session.interaction.mode;
       if (mode === "reveal" || mode === "concluding") return;
       e.stopPropagation();

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useStore } from "@/state/store";
+import { rankFor, totalConnections } from "@/game/ranks";
 import { Button } from "../components/Button";
 
 const EPIGRAPH =
@@ -13,6 +14,8 @@ const fadeUp = {
 
 export function TitleScreen() {
   const goToSetup = useStore((s) => s.goToSetup);
+  const setCodexOpen = useStore((s) => s.setCodexOpen);
+  const codexCount = useStore((s) => Object.keys(s.codex).length);
 
   return (
     <motion.div
@@ -54,9 +57,28 @@ export function TitleScreen() {
         </footer>
       </motion.blockquote>
 
-      <motion.div {...fadeUp} transition={{ duration: 0.9, delay: 0.75 }} className="mt-12">
+      <motion.div
+        {...fadeUp}
+        transition={{ duration: 0.9, delay: 0.75 }}
+        className="mt-12 flex items-center gap-4"
+      >
         <Button onClick={goToSetup}>Begin the Game</Button>
+        {codexCount > 0 && (
+          <Button variant="ghost" onClick={() => setCodexOpen(true)}>
+            Codex · {codexCount}/{totalConnections()}
+          </Button>
+        )}
       </motion.div>
+
+      {codexCount > 0 && (
+        <motion.p
+          {...fadeUp}
+          transition={{ duration: 0.9, delay: 0.9 }}
+          className="mt-6 font-ui text-[10px] uppercase tracking-[0.4em] text-dim/60"
+        >
+          {rankFor(codexCount).name} of the Order
+        </motion.p>
+      )}
     </motion.div>
   );
 }

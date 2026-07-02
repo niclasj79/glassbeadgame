@@ -3,6 +3,8 @@ import { AnimatePresence } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
 import { SetupScreen } from "./ui/screens/SetupScreen";
+import { ConclusionScreen } from "./ui/screens/ConclusionScreen";
+import { CodexScreen } from "./ui/screens/CodexScreen";
 import { ArenaHud } from "./ui/arena/ArenaHud";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
@@ -43,7 +45,9 @@ export default function App() {
         {phase === "title" && <TitleScreen key="title" />}
         {phase === "setup" && <SetupScreen key="setup" />}
         {phase === "arena" && <ArenaHud key="arena" />}
+        {phase === "conclusion" && <ConclusionScreen key="conclusion" />}
       </AnimatePresence>
+      <CodexScreen />
       <SoundToggle />
     </div>
   );

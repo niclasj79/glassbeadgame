@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { subscribeWithSelector } from "zustand/middleware";
+import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
 import { drawSession } from "@/game/session";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
@@ -47,8 +47,17 @@ const idleInteraction = (): Interaction => ({
   reveal: null,
 });
 
+/** What survives across sessions: the codex, lifetime stats, and taste settings. */
+interface PersistedSlice {
+  codex: GBGState["codex"];
+  lifetimeStats: GBGState["lifetimeStats"];
+  settings: Pick<Settings, "muted" | "hintsSeen">;
+}
+
 export const useStore = create<GBGState>()(
-  subscribeWithSelector((set, get) => ({
+  subscribeWithSelector(
+    persist(
+      (set, get) => ({
     phase: "title",
     lensActive: false,
     codexOpen: false,
@@ -162,5 +171,29 @@ export const useStore = create<GBGState>()(
         },
       }));
     },
-  }))
+      }),
+      {
+        name: "gbg.v1",
+        version: 1,
+        partialize: (s): PersistedSlice => ({
+          codex: s.codex,
+          lifetimeStats: s.lifetimeStats,
+          settings: { muted: s.settings.muted, hintsSeen: s.settings.hintsSeen },
+        }),
+        merge: (persisted, current) => {
+          const p = (persisted ?? {}) as Partial<PersistedSlice>;
+          return {
+            ...current,
+            codex: p.codex ?? current.codex,
+            lifetimeStats: p.lifetimeStats ?? current.lifetimeStats,
+            settings: {
+              ...current.settings, // qualityTier/reducedMotion stay device-derived
+              muted: p.settings?.muted ?? current.settings.muted,
+              hintsSeen: p.settings?.hintsSeen ?? current.settings.hintsSeen,
+            },
+          };
+        },
+      }
+    )
+  )
 );

@@ -6,6 +6,7 @@ import { fibonacciSpherePositions, tbgPositions } from "@/game/layout";
 import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { Backdrop } from "./Backdrop";
 import { Lattice } from "./Lattice";
+import { LensAxes } from "./LensAxes";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
 import { ThreadPreview } from "./ThreadPreview";
@@ -79,6 +80,7 @@ export function Cosmos() {
 
       <Backdrop />
       <Lattice />
+      <LensAxes />
       <Beads />
       <Threads />
       <ThreadPreview />

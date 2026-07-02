@@ -6,8 +6,12 @@ import {
   handlePointerMove,
   handlePointerUp,
   handleKeyDown,
+  devCommit,
 } from "./threading";
 import { frameState } from "./frameState";
+import { useStore } from "@/state/store";
+import { connectionByPair } from "@/content/connections";
+import { pairKey } from "@/content/types";
 
 /** Wires the pointer state machine to the live camera, canvas, and controls. */
 export function ThreadingDriver() {
@@ -45,6 +49,17 @@ export function ThreadingDriver() {
       },
       beadIds: () => [...frameState.beadIndex.keys()],
       canvas: () => gl.domElement,
+      curatedPairs: () => {
+        const ids = useStore.getState().session?.beadIds ?? [];
+        const out: [string, string][] = [];
+        for (let i = 0; i < ids.length; i++) {
+          for (let j = i + 1; j < ids.length; j++) {
+            if (connectionByPair.has(pairKey(ids[i], ids[j]))) out.push([ids[i], ids[j]]);
+          }
+        }
+        return out;
+      },
+      weave: (a: string, b: string) => devCommit(a, b),
     };
   }, [camera, gl]);
 

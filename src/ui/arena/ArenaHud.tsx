@@ -37,7 +37,21 @@ export function ArenaHud() {
   const threadCount = useStore((s) => s.session?.threads.length ?? 0);
   const discoveries = useStore((s) => s.session?.discoveries ?? []);
   const motifs = useStore((s) => s.session?.motifs ?? []);
+  const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   const returnToTitle = useStore((s) => s.returnToTitle);
+  const concludeSession = useStore((s) => s.concludeSession);
+  const finishConcluding = useStore((s) => s.finishConcluding);
+  const lensActive = useStore((s) => s.lensActive);
+  const setLens = useStore((s) => s.setLens);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
+
+  // The concluding cinematic: threads brighten, the cadence resolves,
+  // the camera crowns the web — then the Annotation.
+  useEffect(() => {
+    if (mode !== "concluding") return;
+    const t = setTimeout(finishConcluding, reducedMotion ? 700 : 4200);
+    return () => clearTimeout(t);
+  }, [mode, finishConcluding, reducedMotion]);
 
   const [journalOpen, setJournalOpen] = useState(false);
   const [faintToast, setFaintToast] = useState<Discovery | null>(null);
@@ -75,6 +89,9 @@ export function ArenaHud() {
       animate={{ opacity: 1, transition: { delay: 0.9, duration: 0.8 } }}
       exit={{ opacity: 0, transition: { duration: 0.4 } }}
     >
+      {/* Chrome hides during the concluding cinematic. */}
+      {mode !== "concluding" && (
+      <>
       {/* Score — top left */}
       <GlassPanel className="pointer-events-auto absolute left-5 top-5 flex items-center gap-3 rounded-full px-5 py-2.5">
         <span className="flex items-center gap-1.5 text-resonance">
@@ -96,12 +113,30 @@ export function ArenaHud() {
         )}
       </GlassPanel>
 
-      {/* Leave — top right (becomes the Conclusion in M5) */}
+      {/* Conclude — top right */}
       <button
-        onClick={returnToTitle}
-        className="pointer-events-auto absolute right-5 top-5 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-line/80 hover:text-bright"
+        onClick={() => {
+          if (discoveries.length === 0) returnToTitle();
+          else concludeSession();
+        }}
+        className="pointer-events-auto absolute right-5 top-5 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright"
       >
-        Leave
+        {discoveries.length === 0 ? "Leave" : "Conclude the Game"}
+      </button>
+
+      {/* Lens toggle — below Conclude */}
+      <button
+        onClick={() => setLens(!lensActive)}
+        aria-pressed={lensActive}
+        title="The Lens: view the beads along True / Good / Beautiful"
+        className={
+          "pointer-events-auto absolute right-5 top-[4.6rem] rounded-full border px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors " +
+          (lensActive
+            ? "border-glow/70 bg-glow/15 text-bright"
+            : "border-line/40 bg-surface/50 text-dim hover:border-line/80 hover:text-bright")
+        }
+      >
+        {lensActive ? "Close the Lens" : "The Lens"}
       </button>
 
       {/* Journal toggle — left edge */}
@@ -118,9 +153,12 @@ export function ArenaHud() {
         )}
       </button>
 
+      </>
+      )}
+
       {/* First-thread hint — bottom center */}
       <AnimatePresence>
-        {threadCount === 0 && (
+        {mode !== "concluding" && threadCount === 0 && (
           <motion.p
             key="hint"
             className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center font-ui text-xs tracking-wide text-dim/80"

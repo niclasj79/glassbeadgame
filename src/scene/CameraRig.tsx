@@ -47,6 +47,14 @@ export function CameraRig() {
     }
   }, [phase, reducedMotion, camera]);
 
+  // The concluding cinematic: rise to the pole and crown the finished web.
+  const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
+  useEffect(() => {
+    if (mode === "concluding" && !reducedMotion) {
+      transit.current = POSES.conclusion;
+    }
+  }, [mode, reducedMotion]);
+
   // The reveal moment: dolly along the current sightline to frame the pair.
   const revealId = useStore((s) => s.session?.interaction.reveal?.id ?? null);
   useEffect(() => {

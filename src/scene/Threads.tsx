@@ -9,6 +9,7 @@ import { disciplineById } from "@/content/disciplines";
 import type { Thread } from "@/state/types";
 import { frameState } from "./frameState";
 import { arcMid } from "./curves";
+// (useStore is also read transiently inside useFrame for the concluding lift.)
 
 const SEGMENTS = 20; // drei's QuadraticBezierLine samples 20 segments = 21 points
 
@@ -86,7 +87,11 @@ function ThreadLine({ thread }: ThreadLineProps) {
       mat.opacity = baseOpacity * (0.35 + 0.65 * eased);
     } else {
       mat.dashOffset = 0;
-      mat.opacity = baseOpacity;
+      // During the concluding cinematic every thread brightens toward full.
+      const concluding =
+        useStore.getState().session?.interaction.mode === "concluding";
+      const target = concluding ? Math.min(1, baseOpacity + 0.35) : baseOpacity;
+      mat.opacity += (target - mat.opacity) * Math.min(1, dt * 3);
     }
   });
 
