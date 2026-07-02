@@ -136,7 +136,9 @@ function commit(fromId: string, toId: string) {
 
   const key = fromId < toId ? `${fromId}+${toId}` : `${toId}+${fromId}`;
   if (session.threads.some((t) => t.id === key)) {
-    // Already woven — treat as a cancel.
+    // Already woven — flash the existing thread instead of committing.
+    frameState.pulseThreadId = key;
+    frameState.pulseAt = performance.now();
     return cancelGesture();
   }
 

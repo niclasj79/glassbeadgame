@@ -1,73 +1,76 @@
-# Welcome to your Lovable project
+# The Glass Bead Game
 
-## Project info
+A contemplative game of connections, after Hermann Hesse's *Das Glasperlenspiel*.
 
-**URL**: https://lovable.dev/projects/57e159c3-f6a4-49de-8a91-6d3294222267
+Concepts from six disciplines — mathematics, music, philosophy, physics, art,
+history — float as glass beads in a dark cosmos. You weave luminous threads
+between them. When a pairing touches one of the game's **curated connections**
+(hand-written insights with real intellectual substance: Bartók's Fibonacci
+climaxes, Noether's theorem, Bohr's coat of arms…), time slows, the camera
+leans in, a chord sounds, and the insight is yours — permanently, in your
+**Codex**. Uncurated pairings still shimmer as *faint resonances*; nothing you
+try is ever a dead end. Conclude when you're ready and receive an
+**Annotation**: a written commentary composed from what you actually wove.
 
-## How can I edit this code?
+No accounts, no backend, no timers. Fully static, fully offline-capable.
+Progress (codex, rank, settings) lives in your browser's localStorage.
 
-There are several ways of editing your application.
+## Play
 
-**Use Lovable**
+- **Weave** — press a bead and drag its thread to another; or tap a bead,
+  then tap another (touch). Escape cancels.
+- **Orbit** — drag the void. Scroll to zoom.
+- **The Lens** — rearranges your beads along the transcendental axes
+  (True / Good / Beautiful). Contemplation only; weaving pauses.
+- **Conclude the Game** — ends the session with a cinematic, the Annotation,
+  and your rank progress: Novice → Student → Scholar → Lector → **Magister Ludi**.
+- Motifs earn bonuses: a closed triangle (*Triad*), three disciplines in one
+  web (*Symposium*), a five-bead chain (*Fugue*).
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/57e159c3-f6a4-49de-8a91-6d3294222267) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Develop
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm install
+npm run dev        # http://localhost:8080
+npm run build      # production build — also runs the content validator
+npm run typecheck  # tsc strict
+npm run lint
 ```
 
-**Edit a file directly in GitHub**
+Stack: Vite · React 18 · TypeScript (strict) · three.js + @react-three/fiber
++ drei + postprocessing (threshold bloom is the art direction) · zustand ·
+framer-motion · Tailwind · hand-rolled Web Audio (one shared pentatonic gamut,
+so every chord the game can produce is consonant).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Where things live
 
-**Use GitHub Codespaces**
+```
+src/
+  content/     the game IS this data — 90 concepts, curated connections,
+               annotation fragments; validate.ts gates every build
+  game/        session draw, rules/scoring/motifs, ranks, layout math
+  state/       zustand store (persisted codex under localStorage "gbg.v1")
+  scene/       R3F cosmos: beads, threads, camera rig, backdrop, effects,
+               and threading.ts — the one pointer state machine
+  audio/       engine, pitch theory, six timbre voices, generative ambient
+  ui/          DOM screens + arena HUD over the persistent canvas
+legacy/        the archived v1 (Lovable-generated) app — reference only
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Adding a curated connection
 
-## What technologies are used for this project?
+1. Pick two concept ids from `src/content/concepts.ts`.
+2. Add an entry to the connections file of the *lexicographically first*
+   discipline prefix (`art. < hist. < math. < music. < phil. < phys.`) in
+   `src/content/connections/`.
+3. Rules the validator enforces: `id` = sorted pair ids joined `+`; insight
+   120–480 chars; title ≤ 60; no duplicate pairs. House style: 2–3 sentences,
+   at least one concrete *true* mechanism, person, work, or date. No mush.
+4. `npm run build` must pass.
 
-This project is built with:
+## Notes
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/57e159c3-f6a4-49de-8a91-6d3294222267) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- The scene layer (`src/scene/`) is written to transfer into the Aethel
+  3D knowledge-graph visualization (see the `tp-vrg` project's design docs) —
+  beads, threads, camera rig, bloom recipe, and layout-morph are the kit.
+- v1 remains intact under `legacy/` and in git history.

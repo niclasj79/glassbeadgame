@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { conceptById } from "@/content/concepts";
@@ -28,6 +29,15 @@ export function JournalDrawer({ open, onClose }: Props) {
   const discoveries = useStore((s) => s.session?.discoveries ?? []);
   const motifs = useStore((s) => s.session?.motifs ?? []);
   const ordered = [...discoveries].reverse();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   return (
     <AnimatePresence>

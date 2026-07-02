@@ -65,6 +65,11 @@ const FAINT_LINES = [
   "{n} faint threads accompanied them, the way sketches accompany a finished drawing.",
 ];
 
+const FAINT_LINES_SINGULAR = [
+  "One fainter resonance shimmered alongside — a reaching that may yet ripen in another Game.",
+  "A single faint thread accompanied them, the way a sketch accompanies a finished drawing.",
+];
+
 const CLOSINGS_QUIET = [
   "A modest Game, and none the worse for it: every Magister began by weaving small.",
   "The web is thin, but it is yours. The beads will keep.",
@@ -108,7 +113,9 @@ export function composeAnnotation(session: SessionState): string {
 
   // The faint strands, acknowledged in aggregate.
   const faint = session.discoveries.filter((d) => d.kind === "faint").length;
-  if (faint > 0) {
+  if (faint === 1) {
+    parts.push(pick(FAINT_LINES_SINGULAR, rng));
+  } else if (faint > 1) {
     parts.push(pick(FAINT_LINES, rng).replace("{n}", String(faint)));
   }
   if (curated.length === 0 && faint === 0) {

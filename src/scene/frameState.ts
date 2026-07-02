@@ -23,6 +23,9 @@ export const frameState = {
   hoveredId: null as string | null,
   /** Bead currently magnetized as the thread's landing candidate. */
   snapId: null as string | null,
+  /** Thread to flash (duplicate weave attempt) + when the flash began. */
+  pulseThreadId: null as string | null,
+  pulseAt: 0,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };

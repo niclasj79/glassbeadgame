@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
+import { isCoarsePointer } from "@/lib/device";
 import type { Discovery, MotifAward } from "@/state/types";
 import { GlassPanel } from "../components/GlassPanel";
 import { DiscoveryCard } from "./DiscoveryCard";
@@ -45,6 +46,12 @@ export function ArenaHud() {
   const setLens = useStore((s) => s.setLens);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [faintToast, setFaintToast] = useState<Discovery | null>(null);
+  const [motifToast, setMotifToast] = useState<MotifAward | null>(null);
+  const seenDiscoveries = useRef(0);
+  const seenMotifs = useRef(0);
+
   // The concluding cinematic: threads brighten, the cadence resolves,
   // the camera crowns the web — then the Annotation.
   useEffect(() => {
@@ -53,11 +60,47 @@ export function ArenaHud() {
     return () => clearTimeout(t);
   }, [mode, finishConcluding, reducedMotion]);
 
-  const [journalOpen, setJournalOpen] = useState(false);
-  const [faintToast, setFaintToast] = useState<Discovery | null>(null);
-  const [motifToast, setMotifToast] = useState<MotifAward | null>(null);
-  const seenDiscoveries = useRef(0);
-  const seenMotifs = useRef(0);
+  // Contextual first-run hints: one at a time, each persisted once seen.
+  const hintsSeen = useStore((s) => s.settings.hintsSeen);
+  const markHintSeen = useStore((s) => s.markHintSeen);
+  const coarse = useMemo(isCoarsePointer, []);
+  const activeHint = useMemo(() => {
+    if (threadCount === 0 && !hintsSeen.weave) {
+      return {
+        id: "weave",
+        delay: 2.2,
+        text: coarse
+          ? "Tap a bead, then tap another to weave a thread · drag the void to orbit"
+          : "Press a bead and draw its thread to another · drag the void to orbit",
+      };
+    }
+    if (discoveries.length >= 1 && !hintsSeen.journal) {
+      return {
+        id: "journal",
+        delay: 1.2,
+        text: "Every discovery is kept in your Journal — the book at the left edge",
+      };
+    }
+    if (threadCount >= 3 && !hintsSeen.lens) {
+      return {
+        id: "lens",
+        delay: 1.2,
+        text: "Open the Lens to see your web arranged along True, Good, and Beautiful",
+      };
+    }
+    return null;
+  }, [threadCount, discoveries.length, hintsSeen, coarse]);
+
+  // A hint retires the moment its lesson is demonstrated.
+  useEffect(() => {
+    if (threadCount > 0 && !hintsSeen.weave) markHintSeen("weave");
+  }, [threadCount, hintsSeen.weave, markHintSeen]);
+  useEffect(() => {
+    if (journalOpen && !hintsSeen.journal) markHintSeen("journal");
+  }, [journalOpen, hintsSeen.journal, markHintSeen]);
+  useEffect(() => {
+    if (lensActive && !hintsSeen.lens) markHintSeen("lens");
+  }, [lensActive, hintsSeen.lens, markHintSeen]);
 
   useEffect(() => {
     if (discoveries.length > seenDiscoveries.current) {
@@ -93,19 +136,19 @@ export function ArenaHud() {
       {mode !== "concluding" && (
       <>
       {/* Score — top left */}
-      <GlassPanel className="pointer-events-auto absolute left-5 top-5 flex items-center gap-3 rounded-full px-5 py-2.5">
+      <GlassPanel className="pointer-events-auto absolute left-4 top-4 flex items-center gap-3 rounded-full px-4 py-2.5 sm:left-5 sm:top-5 sm:px-5">
         <span className="flex items-center gap-1.5 text-resonance">
           <ResonanceGlyph />
           <span className="font-ui text-sm font-semibold tabular-nums">{score}</span>
         </span>
-        <span className="h-3 w-px bg-line/70" />
-        <span className="font-ui text-[11px] uppercase tracking-[0.22em] text-dim">
+        <span className="hidden h-3 w-px bg-line/70 sm:block" />
+        <span className="hidden font-ui text-[11px] uppercase tracking-[0.22em] text-dim sm:inline">
           Resonance
         </span>
         {threadCount > 0 && (
           <>
-            <span className="h-3 w-px bg-line/70" />
-            <span className="font-ui text-[11px] tabular-nums text-dim">
+            <span className="hidden h-3 w-px bg-line/70 md:block" />
+            <span className="hidden font-ui text-[11px] tabular-nums text-dim md:inline">
               {threadCount} {threadCount === 1 ? "thread" : "threads"}
               {curatedCount > 0 && ` · ${curatedCount} luminous`}
             </span>
@@ -119,9 +162,16 @@ export function ArenaHud() {
           if (discoveries.length === 0) returnToTitle();
           else concludeSession();
         }}
-        className="pointer-events-auto absolute right-5 top-5 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright"
+        className="pointer-events-auto absolute right-4 top-4 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright sm:right-5 sm:top-5"
       >
-        {discoveries.length === 0 ? "Leave" : "Conclude the Game"}
+        {discoveries.length === 0 ? (
+          "Leave"
+        ) : (
+          <>
+            <span className="sm:hidden">Conclude</span>
+            <span className="hidden sm:inline">Conclude the Game</span>
+          </>
+        )}
       </button>
 
       {/* Lens toggle — below Conclude */}
@@ -156,19 +206,17 @@ export function ArenaHud() {
       </>
       )}
 
-      {/* First-thread hint — bottom center */}
+      {/* Contextual hints — one at a time, each shown once ever. */}
       <AnimatePresence>
-        {mode !== "concluding" && threadCount === 0 && (
+        {mode !== "concluding" && activeHint && (
           <motion.p
-            key="hint"
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center font-ui text-xs tracking-wide text-dim/80"
+            key={activeHint.id}
+            className="absolute bottom-8 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center font-ui text-xs leading-relaxed tracking-wide text-dim/80"
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 2.2, duration: 1 } }}
+            animate={{ opacity: 1, y: 0, transition: { delay: activeHint.delay, duration: 1 } }}
             exit={{ opacity: 0, transition: { duration: 0.6 } }}
           >
-            Press a bead and draw its thread to another
-            <span className="mx-2 text-line">·</span>
-            drag the void to orbit
+            {activeHint.text}
           </motion.p>
         )}
       </AnimatePresence>

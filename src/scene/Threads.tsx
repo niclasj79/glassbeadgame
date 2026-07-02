@@ -90,8 +90,17 @@ function ThreadLine({ thread }: ThreadLineProps) {
       // During the concluding cinematic every thread brightens toward full.
       const concluding =
         useStore.getState().session?.interaction.mode === "concluding";
-      const target = concluding ? Math.min(1, baseOpacity + 0.35) : baseOpacity;
-      mat.opacity += (target - mat.opacity) * Math.min(1, dt * 3);
+      let target = concluding ? Math.min(1, baseOpacity + 0.35) : baseOpacity;
+      // Duplicate-weave flash: the existing thread answers instead.
+      if (frameState.pulseThreadId === thread.id) {
+        const age = (performance.now() - frameState.pulseAt) / 1000;
+        if (age < 0.9) {
+          target = Math.min(1, target + Math.sin(age * Math.PI * 4) * 0.5 * (1 - age));
+        } else {
+          frameState.pulseThreadId = null;
+        }
+      }
+      mat.opacity += (target - mat.opacity) * Math.min(1, dt * 8);
     }
   });
 

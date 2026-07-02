@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { AnimatePresence } from "framer-motion";
+import { useState } from "react";
+import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
 import { SetupScreen } from "./ui/screens/SetupScreen";
@@ -12,8 +12,10 @@ import { useStore } from "./state/store";
 import { probeWebGL } from "./lib/device";
 
 function WebGLFallback() {
+  const setCodexOpen = useStore((s) => s.setCodexOpen);
+  const codexCount = useStore((s) => Object.keys(s.codex).length);
   return (
-    <div className="fixed inset-0 grid place-items-center bg-void px-6">
+    <div className="fixed inset-0 grid place-items-center overflow-hidden bg-void px-6">
       <div className="max-w-md text-center">
         <p className="font-ui text-[11px] uppercase tracking-[0.55em] text-dim/70">
           Das Glasperlenspiel
@@ -26,29 +28,40 @@ function WebGLFallback() {
           the space for it — WebGL is unavailable. Try a current browser with
           hardware acceleration enabled.
         </p>
+        {codexCount > 0 && (
+          <button
+            onClick={() => setCodexOpen(true)}
+            className="mt-8 rounded-full border border-line/60 px-7 py-3 font-ui text-[11px] uppercase tracking-[0.28em] text-bright transition-colors hover:border-glow/60 hover:bg-glow/10"
+          >
+            Browse your Codex
+          </button>
+        )}
       </div>
+      <CodexScreen />
     </div>
   );
 }
 
 export default function App() {
   const phase = useStore((s) => s.phase);
-  const webgl = useMemo(probeWebGL, []);
+  const [webgl] = useState(probeWebGL);
 
   if (!webgl) return <WebGLFallback />;
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-void">
-      <ArenaCanvas />
-      <AudioBridge />
-      <AnimatePresence mode="wait">
-        {phase === "title" && <TitleScreen key="title" />}
-        {phase === "setup" && <SetupScreen key="setup" />}
-        {phase === "arena" && <ArenaHud key="arena" />}
-        {phase === "conclusion" && <ConclusionScreen key="conclusion" />}
-      </AnimatePresence>
-      <CodexScreen />
-      <SoundToggle />
-    </div>
+    <MotionConfig reducedMotion="user">
+      <div className="fixed inset-0 overflow-hidden bg-void">
+        <ArenaCanvas />
+        <AudioBridge />
+        <AnimatePresence mode="wait">
+          {phase === "title" && <TitleScreen key="title" />}
+          {phase === "setup" && <SetupScreen key="setup" />}
+          {phase === "arena" && <ArenaHud key="arena" />}
+          {phase === "conclusion" && <ConclusionScreen key="conclusion" />}
+        </AnimatePresence>
+        <CodexScreen />
+        <SoundToggle />
+      </div>
+    </MotionConfig>
   );
 }
