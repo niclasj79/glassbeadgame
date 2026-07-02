@@ -47,6 +47,34 @@ export function CameraRig() {
     }
   }, [phase, reducedMotion, camera]);
 
+  // The reveal moment: dolly along the current sightline to frame the pair.
+  const revealId = useStore((s) => s.session?.interaction.reveal?.id ?? null);
+  useEffect(() => {
+    if (!revealId || reducedMotion) return;
+    const reveal = useStore.getState().session?.interaction.reveal;
+    if (!reveal) return;
+    const ia = frameState.beadIndex.get(reveal.a);
+    const ib = frameState.beadIndex.get(reveal.b);
+    if (ia === undefined || ib === undefined) return;
+    const r = frameState.rendered;
+    const mid = new THREE.Vector3(
+      (r[ia * 3] + r[ib * 3]) / 2,
+      (r[ia * 3 + 1] + r[ib * 3 + 1]) / 2 + 0.15,
+      (r[ia * 3 + 2] + r[ib * 3 + 2]) / 2
+    );
+    const span = Math.hypot(
+      r[ia * 3] - r[ib * 3],
+      r[ia * 3 + 1] - r[ib * 3 + 1],
+      r[ia * 3 + 2] - r[ib * 3 + 2]
+    );
+    const dir = camera.position.clone().sub(mid).normalize();
+    const dist = Math.max(3.1, span * 1.15 + 1.6);
+    transit.current = {
+      position: mid.clone().addScaledVector(dir, dist),
+      target: mid,
+    };
+  }, [revealId, reducedMotion, camera]);
+
   useFrame((state, dt) => {
     const ctl = controls.current;
     if (!ctl) return;
@@ -59,9 +87,12 @@ export function CameraRig() {
       }
     }
 
+    const mode = useStore.getState().session?.interaction.mode ?? "idle";
     const idle = performance.now() - frameState.idleSince > IDLE_ORBIT_AFTER_MS;
     ctl.autoRotate =
       !reducedMotion &&
+      mode !== "reveal" &&
+      mode !== "concluding" &&
       ((phase === "arena" && idle && !frameState.aim.active) || phase === "title" || phase === "setup");
   });
 

@@ -34,7 +34,8 @@ interface GBGState {
 
   setInteraction: (partial: Partial<Interaction>) => void;
   addThread: (thread: Thread) => void;
-  addDiscovery: (discovery: Discovery, motifs: MotifAward[]) => void;
+  /** Returns the finalized discovery (newToCodex resolved against the codex). */
+  addDiscovery: (discovery: Discovery, motifs: MotifAward[]) => Discovery;
   concludeSession: () => void;
   finishConcluding: () => void;
 }
@@ -117,10 +118,12 @@ export const useStore = create<GBGState>()(
 
     addDiscovery: (discovery, motifs) => {
       const s = get().session;
-      if (!s) return;
+      if (!s) return discovery;
       const codex = { ...get().codex };
+      let finalized = discovery;
       if (discovery.kind === "curated") {
         const prev = codex[discovery.id];
+        finalized = { ...discovery, newToCodex: !prev };
         codex[discovery.id] = prev
           ? { ...prev, count: prev.count + 1 }
           : { firstFoundAt: Date.now(), count: 1 };
@@ -130,11 +133,12 @@ export const useStore = create<GBGState>()(
         codex,
         session: {
           ...s,
-          discoveries: [...s.discoveries, discovery],
+          discoveries: [...s.discoveries, finalized],
           motifs: [...s.motifs, ...motifs],
-          score: s.score + discovery.points + motifPoints,
+          score: s.score + finalized.points + motifPoints,
         },
       });
+      return finalized;
     },
 
     concludeSession: () => {

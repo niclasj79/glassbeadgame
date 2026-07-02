@@ -101,9 +101,9 @@ function beginThreading(sticky: boolean) {
   setCursor("crosshair");
 }
 
-function endGesture() {
+function endGesture(opts?: { keepControlsLocked?: boolean }) {
   const { dom, controls } = threadingEnv;
-  if (controls) controls.enabled = true;
+  if (controls && !opts?.keepControlsLocked) controls.enabled = true;
   if (dom && gesture.pointerId >= 0) {
     try {
       dom.releasePointerCapture(gesture.pointerId);
@@ -125,6 +125,8 @@ function cancelGesture() {
   endGesture();
 }
 
+const REVEAL_TIME_SCALE = 0.15;
+
 function commit(fromId: string, toId: string) {
   const st = useStore.getState();
   const session = st.session;
@@ -132,16 +134,35 @@ function commit(fromId: string, toId: string) {
 
   const key = fromId < toId ? `${fromId}+${toId}` : `${toId}+${fromId}`;
   if (session.threads.some((t) => t.id === key)) {
-    // Already woven — treat as a cancel; the existing thread pulses instead (M3).
+    // Already woven — treat as a cancel.
     return cancelGesture();
   }
 
   const { thread, discovery } = resolveAttempt(fromId, toId);
   const motifs = detectNewMotifs(session, thread);
   st.addThread(thread);
-  st.addDiscovery(discovery, motifs);
-  st.setInteraction({ mode: "idle", fromId: null, sticky: false });
-  endGesture();
+  const finalized = st.addDiscovery(discovery, motifs);
+
+  if (finalized.kind === "curated") {
+    // The jewel moment: input locks, time dilates, the camera leans in,
+    // and the insight card takes the stage. dismissReveal() unwinds it all.
+    st.setInteraction({ mode: "reveal", fromId: null, sticky: false, reveal: finalized });
+    if (!st.settings.reducedMotion) frameState.timeScaleTarget = REVEAL_TIME_SCALE;
+    endGesture({ keepControlsLocked: true });
+  } else {
+    st.setInteraction({ mode: "idle", fromId: null, sticky: false });
+    endGesture();
+  }
+}
+
+/** Ends the reveal moment: restores time, input, and idle state. */
+export function dismissReveal() {
+  const st = useStore.getState();
+  if (st.session?.interaction.mode !== "reveal") return;
+  st.setInteraction({ mode: "idle", reveal: null });
+  frameState.timeScaleTarget = 1;
+  frameState.idleSince = performance.now();
+  if (threadingEnv.controls) threadingEnv.controls.enabled = true;
 }
 
 // ── Bead-mesh handlers (attached to each bead's hit proxy) ────────────────
