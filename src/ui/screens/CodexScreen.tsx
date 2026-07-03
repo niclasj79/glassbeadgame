@@ -9,6 +9,7 @@ import type { SessionMemory } from "@/state/types";
 import type { CuratedConnection, DisciplineId } from "@/content/types";
 import { RankSigil } from "../components/RankSigil";
 import { CodexAtlas } from "./CodexAtlas";
+import { GreatWeb } from "./GreatWeb";
 import { SessionReplay } from "./SessionReplay";
 
 function groupKey(c: CuratedConnection): string {
@@ -84,6 +85,7 @@ export function CodexScreen() {
   const codex = useStore((s) => s.codex);
   const archive = useStore((s) => s.sessionArchive);
   const [replay, setReplay] = useState<SessionMemory | null>(null);
+  const [view, setView] = useState<"atlas" | "web">("atlas");
 
   const groups = useMemo(() => {
     const map = new Map<string, CuratedConnection[]>();
@@ -130,7 +132,34 @@ export function CodexScreen() {
               <RankSigil codexCount={found} totalCount={totalConnections()} size={92} />
             </div>
 
-            <CodexAtlas codex={codex} archive={archive} onReplay={setReplay} />
+            <div className="mt-8 flex gap-2">
+              {(
+                [
+                  ["atlas", "Atlas of the journey"],
+                  ["web", "The Great Web"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  aria-pressed={view === key}
+                  className={
+                    "rounded-full border px-5 py-2 font-ui text-[10px] uppercase tracking-[0.25em] transition-colors " +
+                    (view === key
+                      ? "border-glow/60 bg-glow/10 text-bright"
+                      : "border-line/40 bg-surface/40 text-dim hover:text-bright")
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === "atlas" ? (
+              <CodexAtlas codex={codex} archive={archive} onReplay={setReplay} />
+            ) : (
+              <GreatWeb codex={codex} />
+            )}
 
             <div className="mt-12 space-y-10">
               {groups.map(([key, conns]) => (

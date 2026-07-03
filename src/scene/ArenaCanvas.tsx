@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { PerformanceMonitor } from "@react-three/drei";
 import { useStore } from "@/state/store";
+import { initialQualityTier } from "@/lib/device";
 import { Cosmos } from "./Cosmos";
 
 /**
@@ -40,10 +41,26 @@ export function ArenaCanvas() {
     };
   }, [canvasKey, contextLost]);
 
+  const ceilingTier = useRef(initialQualityTier());
+
   const demote = useCallback(() => {
     const tier = useStore.getState().settings.qualityTier;
     if (tier === "high") setQualityTier("base");
     else if (tier === "base") setQualityTier("potato");
+  }, [setQualityTier]);
+
+  // Demotion is no longer a one-way trapdoor: sustained good frames climb
+  // back up, capped at what this device started with.
+  const promote = useCallback(() => {
+    const tier = useStore.getState().settings.qualityTier;
+    const ceiling = ceilingTier.current;
+    if (tier === "potato") setQualityTier(ceiling === "potato" ? "potato" : "base");
+    else if (tier === "base" && ceiling === "high") setQualityTier("high");
+  }, [setQualityTier]);
+
+  const settle = useCallback(() => {
+    // Oscillating between tiers: settle at base and stop flip-flopping.
+    setQualityTier(ceilingTier.current === "potato" ? "potato" : "base");
   }, [setQualityTier]);
 
   return (
@@ -60,7 +77,12 @@ export function ArenaCanvas() {
         camera={{ fov: 42, near: 0.1, far: 160, position: [0, 0.5, 13.8] }}
         onCreated={handleCreated}
       >
-        <PerformanceMonitor onDecline={demote} flipflops={2}>
+        <PerformanceMonitor
+          onDecline={demote}
+          onIncline={promote}
+          flipflops={4}
+          onFallback={settle}
+        >
           <Suspense fallback={null}>
             <Cosmos />
           </Suspense>

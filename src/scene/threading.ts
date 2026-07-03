@@ -3,7 +3,10 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { useStore } from "@/state/store";
 import { resolveAttempt, detectNewMotifs } from "@/game/rules";
 import { ARENA_RADIUS } from "@/game/layout";
-import { hoverPing, selectTick, cancelGliss } from "@/audio/sfx";
+import { connectionByPair } from "@/content/connections";
+import { pairKey } from "@/content/types";
+import { smoothstep } from "@/lib/utils";
+import { hoverPing, selectTick, cancelGliss, setSilkActive, stopSympathy } from "@/audio/sfx";
 import { frameState } from "./frameState";
 
 /**
@@ -15,6 +18,9 @@ import { frameState } from "./frameState";
 
 const DRAG_THRESHOLD_PX = 6;
 const SNAP_RADIUS = 0.78;
+/** Within this world-distance of the aim, an undiscovered luminous partner
+ *  begins to shimmer and hum. */
+const SYMPATHY_RADIUS = 2.2;
 
 interface GestureState {
   pointerId: number;
@@ -39,6 +45,11 @@ const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 const vRay = new THREE.Vector3();
 const vAim = new THREE.Vector3();
+const vSymp = new THREE.Vector3();
+
+/** Smoothed pointer speed (px per event, decayed by the frame bridge) —
+ *  drives the silk-shimmer texture while a thread is drawn. */
+export const pointerMotion = { speed: 0, lastX: 0, lastY: 0 };
 
 function setCursor(cursor: string) {
   if (threadingEnv.dom) threadingEnv.dom.style.cursor = cursor;
@@ -78,11 +89,17 @@ function updateAim(clientX: number, clientY: number) {
   frameState.aim.z = vAim.z;
   frameState.aim.active = true;
 
-  // Magnetize the nearest bead within the snap radius.
-  const fromId = useStore.getState().session?.interaction.fromId;
+  // Magnetize the nearest bead within the snap radius; simultaneously find
+  // the sympathetic candidate — the nearest bead that would complete an
+  // undiscovered luminous connection with the origin. The ear hears it
+  // before the eye can name it.
+  const session = useStore.getState().session;
+  const fromId = session?.interaction.fromId;
   const rendered = frameState.rendered;
   let bestId: string | null = null;
   let bestDist = SNAP_RADIUS;
+  let sympId: string | null = null;
+  let sympDist = SYMPATHY_RADIUS;
   for (const [id, i] of frameState.beadIndex) {
     if (id === fromId) continue;
     const dx = rendered[i * 3] - vAim.x;
@@ -93,13 +110,37 @@ function updateAim(clientX: number, clientY: number) {
       bestDist = dist;
       bestId = id;
     }
+    if (fromId && dist < sympDist) {
+      const key = pairKey(fromId, id);
+      if (
+        connectionByPair.has(key) &&
+        !session?.threads.some((th) => th.id === key)
+      ) {
+        sympDist = dist;
+        sympId = id;
+      }
+    }
   }
   frameState.snapId = bestId;
+
+  if (sympId !== null) {
+    const j = frameState.beadIndex.get(sympId)!;
+    vSymp.set(rendered[j * 3], rendered[j * 3 + 1], rendered[j * 3 + 2]);
+    vSymp.project(camera);
+    frameState.sympathy = {
+      id: sympId,
+      strength: 1 - smoothstep(0.4, SYMPATHY_RADIUS, sympDist),
+      panX: Math.max(-1, Math.min(1, vSymp.x)),
+    };
+  } else {
+    frameState.sympathy = null;
+  }
 }
 
 function beginThreading(sticky: boolean) {
   useStore.getState().setInteraction({ mode: "threading", sticky });
   setCursor("crosshair");
+  setSilkActive(true);
 }
 
 function endGesture(opts?: { keepControlsLocked?: boolean }) {
@@ -115,6 +156,10 @@ function endGesture(opts?: { keepControlsLocked?: boolean }) {
   gesture.pointerId = -1;
   frameState.aim.active = false;
   frameState.snapId = null;
+  frameState.sympathy = null;
+  setSilkActive(false);
+  stopSympathy();
+  pointerMotion.speed = 0;
   setCursor("");
 }
 
@@ -142,7 +187,8 @@ function commit(fromId: string, toId: string) {
     return cancelGesture();
   }
 
-  const { thread, discovery } = resolveAttempt(fromId, toId);
+  const priorFaints = session.discoveries.filter((d) => d.kind === "faint").length;
+  const { thread, discovery } = resolveAttempt(fromId, toId, priorFaints);
   const motifs = detectNewMotifs(session, thread);
   st.addThread(thread);
   const finalized = st.addDiscovery(discovery, motifs);
@@ -229,6 +275,14 @@ export function beadPointerHandlers(id: string) {
 // ── Global listeners (window-level, installed by ThreadingDriver) ─────────
 
 export function handlePointerMove(e: PointerEvent) {
+  // Feed the silk: instantaneous pointer speed, exponentially smoothed.
+  const dx = e.clientX - pointerMotion.lastX;
+  const dy = e.clientY - pointerMotion.lastY;
+  pointerMotion.lastX = e.clientX;
+  pointerMotion.lastY = e.clientY;
+  const inst = Math.min(80, Math.hypot(dx, dy));
+  pointerMotion.speed += (inst - pointerMotion.speed) * 0.3;
+
   const mode = interactionMode();
   if (mode === "pressed") {
     const dist = Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY);

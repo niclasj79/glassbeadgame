@@ -142,7 +142,8 @@ function lowpass(ctx: AudioContext, dest: AudioNode, cutoff: number): BiquadFilt
 
 let sharedNoiseBuffer: AudioBuffer | null = null;
 
-function noiseSource(ctx: AudioContext, seconds: number): AudioBufferSourceNode {
+/** Looped white-noise source from a shared buffer — caller starts/stops it. */
+export function noiseSource(ctx: AudioContext, seconds: number): AudioBufferSourceNode {
   if (!sharedNoiseBuffer || sharedNoiseBuffer.sampleRate !== ctx.sampleRate) {
     const len = Math.ceil(ctx.sampleRate * Math.max(2.5, seconds));
     sharedNoiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);

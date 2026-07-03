@@ -3,7 +3,9 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import { mulberry32 } from "@/lib/utils";
+import { useStore } from "@/state/store";
 import { frameState } from "./frameState";
+import { makeRadialTexture } from "./textures";
 
 const STAR_COUNT = 3000;
 
@@ -67,22 +69,6 @@ function Starfield() {
   );
 }
 
-function makeRadialTexture(inner: string, outer: string): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, inner);
-  grad.addColorStop(1, outer);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 interface NebulaPlaneProps {
   color: string;
   position: [number, number, number];
@@ -105,7 +91,7 @@ function NebulaPlane({ color, position, scale, drift }: NebulaPlaneProps) {
       <meshBasicMaterial
         map={texture}
         transparent
-        opacity={0.5}
+        opacity={0.62}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
         toneMapped={false}
@@ -114,12 +100,27 @@ function NebulaPlane({ color, position, scale, drift }: NebulaPlaneProps) {
   );
 }
 
+/** A completed faculty tints the nearest nebula toward its discipline. */
+const FACULTY_NEBULAE: Record<string, string> = {
+  "faculty-mathematics": "rgba(60,110,230,0.13)",
+  "faculty-music": "rgba(40,190,130,0.12)",
+  "faculty-philosophy": "rgba(130,90,230,0.14)",
+  "faculty-physics": "rgba(220,170,50,0.11)",
+  "faculty-art": "rgba(230,90,120,0.11)",
+  "faculty-history": "rgba(40,180,210,0.12)",
+};
+
 /** Deep space: stars, three breathing nebulae, and near dust motes. */
 export function Backdrop() {
+  const unlocks = useStore((s) => s.unlocks);
+  const facultyTint = unlocks.find((u) => u.startsWith("faculty-"));
+  const firstNebula =
+    (facultyTint && FACULTY_NEBULAE[facultyTint]) || "rgba(96,60,190,0.13)";
+
   return (
     <group>
       <Starfield />
-      <NebulaPlane color="rgba(96,60,190,0.13)" position={[-9, 4, -34]} scale={46} drift={0.012} />
+      <NebulaPlane color={firstNebula} position={[-9, 4, -34]} scale={46} drift={0.012} />
       <NebulaPlane color="rgba(38,70,190,0.11)" position={[11, -5, -40]} scale={54} drift={-0.008} />
       <NebulaPlane color="rgba(24,132,150,0.07)" position={[3, 9, -46]} scale={40} drift={0.006} />
       <Sparkles count={90} scale={10} size={2} speed={0.22} opacity={0.35} color="#8ea8ff" />

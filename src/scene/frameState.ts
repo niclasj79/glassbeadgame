@@ -14,6 +14,11 @@ export const frameState = {
   timeScaleTarget: 1,
   /** Dilated elapsed time — advances by dt * timeScale; drives bobbing and drift. */
   clock: 0,
+  /** The Breath: one ~0.1 Hz meditative oscillation shared by bloom, halos,
+   *  lattice, and (via a throttled bridge) the ambient bus. Radians. */
+  breathPhase: 0,
+  /** 0..1 — eased down during reveals and to 0 under reduced motion. */
+  breathDepth: 1,
   /** True while a layout morph (lens toggle) is in flight; threads re-sample curves. */
   morphActive: false,
   /** Last user interaction with the camera or beads (performance.now()). */
@@ -26,6 +31,13 @@ export const frameState = {
   /** Thread to flash (duplicate weave attempt) + when the flash began. */
   pulseThreadId: null as string | null,
   pulseAt: 0,
+  /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */
+  pulses: [] as { threadId: string; atAudioTime: number; duration: number; flip: boolean }[],
+  /** Sympathetic-resonance candidate while threading: the bead that would
+   *  form an undiscovered luminous connection with the origin. */
+  sympathy: null as { id: string; strength: number; panX: number } | null,
+  /** An active Illumination: the Game briefly showing where light hides. */
+  illumination: null as { a: string; b: string; until: number } | null,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };

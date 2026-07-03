@@ -7,6 +7,8 @@ import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { Backdrop } from "./Backdrop";
 import { Lattice } from "./Lattice";
 import { LensAxes } from "./LensAxes";
+import { Membranes } from "./Membranes";
+import { Illumination } from "./Illumination";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
 import { ThreadPreview } from "./ThreadPreview";
@@ -50,6 +52,17 @@ export function Cosmos() {
     frameState.timeScale += (frameState.timeScaleTarget - frameState.timeScale) * k;
     frameState.clock += dt * frameState.timeScale;
 
+    // The Breath: phase integrates dilated time, so it slows with reveals
+    // and stays phase-continuous. Depth eases toward its context target.
+    frameState.breathPhase += dt * frameState.timeScale * Math.PI * 2 * 0.1;
+    const st = useStore.getState();
+    const depthTarget = st.settings.reducedMotion
+      ? 0
+      : st.session?.interaction.mode === "reveal"
+        ? 0.25
+        : 1;
+    frameState.breathDepth += (depthTarget - frameState.breathDepth) * Math.min(1, dt * 2);
+
     // Layout morph toward targets.
     if (frameState.morphActive) {
       const { positions, targets } = frameState;
@@ -83,6 +96,8 @@ export function Cosmos() {
       <LensAxes />
       <Beads />
       <Threads />
+      <Membranes />
+      <Illumination />
       <ThreadPreview />
       <ThreadingDriver />
       <CameraRig />

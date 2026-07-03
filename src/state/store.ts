@@ -3,6 +3,9 @@ import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
 import type { SharedProgress } from "@/game/progress";
 import { drawSession } from "@/game/session";
+import { pickIlluminationTarget } from "@/game/rules";
+import { unlockIdsFor } from "@/game/progress";
+import { utcDateKey } from "@/lib/daily";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
 import type {
   CodexEntry,
@@ -26,14 +29,19 @@ interface GBGState {
   sessionArchive: SessionMemory[];
   lifetimeStats: { sessions: number; totalScore: number };
   focusedBeadId: string | null;
+  /** Great Web milestones earned — persisted once earned, never revoked. */
+  unlocks: string[];
+  /** The last completed Daily Draw. */
+  lastDaily: { date: string; score: number } | null;
 
   goToSetup: () => void;
   returnToTitle: () => void;
-  beginSession: (picks: DisciplineId[]) => void;
+  beginSession: (picks: DisciplineId[], opts?: { seed?: number; daily?: boolean }) => void;
   setLens: (on: boolean) => void;
   setCodexOpen: (open: boolean) => void;
   setFocusedBead: (id: string | null) => void;
   setMuted: (muted: boolean) => void;
+  setBinaural: (on: boolean) => void;
   setQualityTier: (tier: QualityTier) => void;
   markHintSeen: (id: string) => void;
   mergeProgress: (progress: SharedProgress) => void;
@@ -43,6 +51,8 @@ interface GBGState {
   addThread: (thread: Thread) => void;
   /** Returns the finalized discovery (newToCodex resolved against the codex). */
   addDiscovery: (discovery: Discovery, motifs: MotifAward[]) => Discovery;
+  /** Spends one Insight; returns the pair the Game illuminates, or null. */
+  spendInsight: () => [string, string] | null;
   concludeSession: () => void;
   finishConcluding: () => void;
 }
@@ -59,7 +69,9 @@ interface PersistedSlice {
   codex: GBGState["codex"];
   sessionArchive: GBGState["sessionArchive"];
   lifetimeStats: GBGState["lifetimeStats"];
-  settings: Pick<Settings, "muted" | "hintsSeen">;
+  unlocks: GBGState["unlocks"];
+  lastDaily: GBGState["lastDaily"];
+  settings: Pick<Settings, "muted" | "binaural" | "hintsSeen">;
 }
 
 const MAX_SESSION_ARCHIVE = 12;
@@ -73,6 +85,7 @@ export const useStore = create<GBGState>()(
     codexOpen: false,
     settings: {
       muted: false,
+      binaural: true,
       qualityTier: initialQualityTier(),
       reducedMotion: prefersReducedMotion(),
       hintsSeen: {},
@@ -80,6 +93,8 @@ export const useStore = create<GBGState>()(
     session: null,
     codex: {},
     sessionArchive: [],
+    unlocks: [],
+    lastDaily: null,
     lifetimeStats: { sessions: 0, totalScore: 0 },
     focusedBeadId: null,
 
@@ -94,8 +109,8 @@ export const useStore = create<GBGState>()(
         focusedBeadId: null,
       }),
 
-    beginSession: (picks) => {
-      const draw = drawSession(picks);
+    beginSession: (picks, opts) => {
+      const draw = drawSession(picks, opts?.seed);
       const session: SessionState = {
         seed: draw.seed,
         disciplines: draw.disciplines,
@@ -106,6 +121,10 @@ export const useStore = create<GBGState>()(
         score: 0,
         startedAt: Date.now(),
         interaction: idleInteraction(),
+        curatedAvailable: draw.curatedAvailable,
+        insight: 1, // the Magister's gift — one illumination to learn the mechanic
+        illuminationsUsed: 0,
+        daily: opts?.daily,
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
     },
@@ -124,6 +143,8 @@ export const useStore = create<GBGState>()(
     setFocusedBead: (focusedBeadId) => set({ focusedBeadId }),
 
     setMuted: (muted) => set((st) => ({ settings: { ...st.settings, muted } })),
+
+    setBinaural: (binaural) => set((st) => ({ settings: { ...st.settings, binaural } })),
 
     setQualityTier: (qualityTier) =>
       set((st) => ({ settings: { ...st.settings, qualityTier } })),
@@ -171,6 +192,8 @@ export const useStore = create<GBGState>()(
         lensActive: false,
         focusedBeadId: null,
         lifetimeStats: { sessions: 0, totalScore: 0 },
+        unlocks: [],
+        lastDaily: null,
         settings: { ...st.settings, hintsSeen: {} },
       })),
 
@@ -199,16 +222,41 @@ export const useStore = create<GBGState>()(
           : { firstFoundAt: Date.now(), count: 1 };
       }
       const motifPoints = motifs.reduce((sum, m) => sum + m.points, 0);
+      // Insight accrues from what deserves it: luminous finds and motifs.
+      const earnedInsight = (finalized.kind === "curated" ? 1 : 0) + motifs.length;
+      // Milestones only ever accumulate (a shared continue-URL may not
+      // carry every historical unlock; never revoke).
+      const unlocks =
+        finalized.kind === "curated"
+          ? [...new Set([...get().unlocks, ...unlockIdsFor(codex)])]
+          : get().unlocks;
       set({
         codex,
+        unlocks,
         session: {
           ...s,
           discoveries: [...s.discoveries, finalized],
           motifs: [...s.motifs, ...motifs],
           score: s.score + finalized.points + motifPoints,
+          insight: s.insight + earnedInsight,
         },
       });
       return finalized;
+    },
+
+    spendInsight: () => {
+      const s = get().session;
+      if (!s || s.insight <= 0) return null;
+      const target = pickIlluminationTarget(s);
+      if (!target) return null;
+      set({
+        session: {
+          ...s,
+          insight: s.insight - 1,
+          illuminationsUsed: s.illuminationsUsed + 1,
+        },
+      });
+      return target;
     },
 
     concludeSession: () => {
@@ -246,6 +294,9 @@ export const useStore = create<GBGState>()(
           sessions: st.lifetimeStats.sessions + 1,
           totalScore: st.lifetimeStats.totalScore + s.score,
         },
+        lastDaily: s.daily
+          ? { date: utcDateKey(), score: s.score }
+          : st.lastDaily,
       }));
     },
       }),
@@ -256,7 +307,13 @@ export const useStore = create<GBGState>()(
           codex: s.codex,
           sessionArchive: s.sessionArchive,
           lifetimeStats: s.lifetimeStats,
-          settings: { muted: s.settings.muted, hintsSeen: s.settings.hintsSeen },
+          unlocks: s.unlocks,
+          lastDaily: s.lastDaily,
+          settings: {
+            muted: s.settings.muted,
+            binaural: s.settings.binaural,
+            hintsSeen: s.settings.hintsSeen,
+          },
         }),
         merge: (persisted, current) => {
           const p = (persisted ?? {}) as Partial<PersistedSlice>;
@@ -265,9 +322,12 @@ export const useStore = create<GBGState>()(
             codex: p.codex ?? current.codex,
             sessionArchive: p.sessionArchive ?? current.sessionArchive,
             lifetimeStats: p.lifetimeStats ?? current.lifetimeStats,
+            unlocks: p.unlocks ?? current.unlocks,
+            lastDaily: p.lastDaily ?? current.lastDaily,
             settings: {
               ...current.settings, // qualityTier/reducedMotion stay device-derived
               muted: p.settings?.muted ?? current.settings.muted,
+              binaural: p.settings?.binaural ?? current.settings.binaural,
               hintsSeen: p.settings?.hintsSeen ?? current.settings.hintsSeen,
             },
           };

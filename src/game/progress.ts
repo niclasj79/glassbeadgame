@@ -1,5 +1,75 @@
-import { connectionByPair } from "@/content/connections";
+import { connectionByPair, connections } from "@/content/connections";
+import { conceptById } from "@/content/concepts";
 import type { CodexEntry } from "@/state/types";
+import type { DisciplineId } from "@/content/types";
+
+// ── Great Web milestones ───────────────────────────────────────────────────
+
+export interface Milestones {
+  /** A triangle of discovered connections spanning three disciplines. */
+  firstTriad: boolean;
+  /** Disciplines whose every connection has been discovered. */
+  facultiesComplete: DisciplineId[];
+  /** One hundred connections in the codex. */
+  theHundred: boolean;
+}
+
+export function computeMilestones(codex: Record<string, CodexEntry>): Milestones {
+  const found = connections.filter((c) => codex[c.id]);
+
+  // Faculty completion: all connections touching a discipline discovered.
+  const totalPer = new Map<DisciplineId, number>();
+  const foundPer = new Map<DisciplineId, number>();
+  for (const c of connections) {
+    const da = conceptById.get(c.pair[0])!.discipline;
+    const db = conceptById.get(c.pair[1])!.discipline;
+    const both = da === db ? [da] : [da, db];
+    for (const d of both) totalPer.set(d, (totalPer.get(d) ?? 0) + 1);
+    if (codex[c.id]) for (const d of both) foundPer.set(d, (foundPer.get(d) ?? 0) + 1);
+  }
+  const facultiesComplete = [...totalPer.entries()]
+    .filter(([d, total]) => (foundPer.get(d) ?? 0) === total)
+    .map(([d]) => d);
+
+  // First triad: triangle among discovered edges spanning >= 3 disciplines.
+  const adj = new Map<string, Set<string>>();
+  for (const c of found) {
+    const [a, b] = c.pair;
+    if (!adj.has(a)) adj.set(a, new Set());
+    if (!adj.has(b)) adj.set(b, new Set());
+    adj.get(a)!.add(b);
+    adj.get(b)!.add(a);
+  }
+  let firstTriad = false;
+  const nodes = [...adj.keys()];
+  outer: for (let i = 0; i < nodes.length; i++) {
+    for (const j of adj.get(nodes[i])!) {
+      if (j <= nodes[i]) continue;
+      for (const k of adj.get(j)!) {
+        if (k <= j || !adj.get(nodes[i])!.has(k)) continue;
+        const disciplines = new Set(
+          [nodes[i], j, k].map((id) => conceptById.get(id)?.discipline)
+        );
+        if (disciplines.size >= 3) {
+          firstTriad = true;
+          break outer;
+        }
+      }
+    }
+  }
+
+  return { firstTriad, facultiesComplete, theHundred: found.length >= 100 };
+}
+
+/** Unlock ids earned by a codex — persisted once earned, never revoked. */
+export function unlockIdsFor(codex: Record<string, CodexEntry>): string[] {
+  const m = computeMilestones(codex);
+  const out: string[] = [];
+  if (m.firstTriad) out.push("first-triad");
+  for (const d of m.facultiesComplete) out.push(`faculty-${d}`);
+  if (m.theHundred) out.push("the-hundred");
+  return out;
+}
 
 export const CONTINUE_HASH_KEY = "gbg";
 const SHARE_VERSION = 1;
