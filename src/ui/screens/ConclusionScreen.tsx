@@ -40,7 +40,7 @@ export function ConclusionScreen() {
       exit={{ opacity: 0, transition: { duration: 0.5 } }}
     >
       <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-6 py-8">
-        <div className="w-full rounded-3xl border border-line/55 bg-void/78 px-6 py-6 text-center shadow-[0_30px_120px_-28px_rgba(0,0,0,0.92)] backdrop-blur-2xl sm:px-9 sm:py-7">
+        <div className="w-full rounded-3xl border border-line/55 bg-void/60 px-6 py-6 text-center shadow-[0_30px_120px_-28px_rgba(0,0,0,0.92)] backdrop-blur-xl sm:px-9 sm:py-7">
         <motion.p
           {...fadeUp}
           transition={{ delay: 0.4, duration: 0.8 }}

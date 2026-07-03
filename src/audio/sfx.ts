@@ -157,6 +157,25 @@ export function updateSympathy(
   sympathyNodes.panner.pan.setTargetAtTime(candidate.panX * 0.7, t, 0.1);
 }
 
+/** The revelation arpeggio — Insight spent, light briefly shown. */
+export function illuminationChime(aId: string, bId: string): void {
+  const ctx = audio.ensure();
+  const bus = audio.sfxBus;
+  if (!ctx || !bus) return;
+  const a = conceptById.get(aId);
+  const b = conceptById.get(bId);
+  if (!a || !b) return;
+  const t0 = ctx.currentTime + 0.03;
+  const notes = [noteForConcept(a), noteForConcept(b), degreeToFreq(0, 5)];
+  notes.forEach((freq, i) => {
+    playVoice(ctx, bus, "bell", freq, {
+      gain: 0.05,
+      at: t0 + i * 0.16,
+      release: 1.8,
+    });
+  });
+}
+
 /** Full teardown when a gesture or session ends. */
 export function stopSympathy(): void {
   const ctx = audio.get();

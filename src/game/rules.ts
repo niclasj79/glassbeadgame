@@ -5,7 +5,14 @@ import { hashString, mulberry32, pick } from "@/lib/utils";
 import type { Discovery, MotifAward, SessionState, Thread } from "@/state/types";
 
 export const FAINT_POINTS = 2;
+/** From the third faint onward the Game rewards it less — exploration is
+ *  welcome, farming is not. */
+export const FAINT_POINTS_DIMINISHED = 1;
 export const TIER_POINTS: Record<1 | 2 | 3, number> = { 1: 8, 2: 13, 3: 21 };
+
+export function faintPoints(priorFaints: number): number {
+  return priorFaints >= 2 ? FAINT_POINTS_DIMINISHED : FAINT_POINTS;
+}
 
 type FaintTemplate = (a: string, b: string, ka: string, kb: string) => string;
 
@@ -37,7 +44,7 @@ export interface AttemptResult {
 }
 
 /** Resolve a weaving attempt into its thread and its discovery payload. */
-export function resolveAttempt(aId: string, bId: string): AttemptResult {
+export function resolveAttempt(aId: string, bId: string, priorFaints = 0): AttemptResult {
   const key = pairKey(aId, bId);
   const curated = connectionByPair.get(key);
   const now = Date.now();
@@ -71,9 +78,34 @@ export function resolveAttempt(aId: string, bId: string): AttemptResult {
       title: "Faint Resonance",
       insight: composeFaintInsight(aId, bId),
       newToCodex: false,
-      points: FAINT_POINTS,
+      points: faintPoints(priorFaints),
     },
   };
+}
+
+/**
+ * Choose which undiscovered luminous pair an Illumination reveals:
+ * profoundest first, deterministic per session and per spend.
+ */
+export function pickIlluminationTarget(
+  session: SessionState
+): [string, string] | null {
+  const woven = new Set(session.threads.map((t) => t.id));
+  const candidates: { pair: [string, string]; tier: number }[] = [];
+  const ids = session.beadIds;
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const key = pairKey(ids[i], ids[j]);
+      if (woven.has(key)) continue;
+      const conn = connectionByPair.get(key);
+      if (conn) candidates.push({ pair: [ids[i], ids[j]], tier: conn.tier });
+    }
+  }
+  if (candidates.length === 0) return null;
+  const topTier = Math.max(...candidates.map((c) => c.tier));
+  const top = candidates.filter((c) => c.tier === topTier);
+  const rng = mulberry32(session.seed ^ (session.illuminationsUsed + 1) * 0x85ebca6b);
+  return pick(top, rng).pair;
 }
 
 // ── Motifs ────────────────────────────────────────────────────────────────

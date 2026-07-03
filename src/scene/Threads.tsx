@@ -6,6 +6,7 @@ import type { Line2 } from "three-stdlib";
 import { useStore } from "@/state/store";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
+import { audio } from "@/audio/engine";
 import type { Thread } from "@/state/types";
 import { frameState } from "./frameState";
 import { arcMid } from "./curves";
@@ -51,10 +52,66 @@ interface ThreadLineProps {
 function ThreadLine({ thread }: ThreadLineProps) {
   const ref = useRef<Line2>(null);
   const progress = useRef(0);
+  const wasPulsing = useRef(false);
   const colors = useMemo(() => gradientColors(thread), [thread]);
+  // Flat base colors in Line2's interleaved layout: segment j carries
+  // point j's color at j*6..+2 and point j+1's at j*6+3..+5.
+  const baseFlat = useMemo(() => {
+    const flat = new Float32Array(SEGMENTS * 6);
+    for (let j = 0; j < SEGMENTS; j++) {
+      flat.set(colors[j], j * 6);
+      flat.set(colors[j + 1], j * 6 + 3);
+    }
+    return flat;
+  }, [colors]);
 
   const lineWidth = thread.kind === "faint" ? 1.2 : 1.6 + thread.tier * 0.45;
   const baseOpacity = thread.kind === "faint" ? 0.42 : 0.92;
+
+  /** When this thread's motif sounds, a pulse of light rides the strand. */
+  const applyPulse = (line: Line2): number => {
+    const now = audio.now();
+    const running = audio.get()?.state === "running";
+    // Drop stale entries (suspended context would burst-fire on resume).
+    frameState.pulses = frameState.pulses.filter(
+      (p) => running && now - p.atAudioTime < p.duration + 0.25
+    );
+    const pulse = frameState.pulses.find(
+      (p) => p.threadId === thread.id && now >= p.atAudioTime
+    );
+    const geom = line.geometry as unknown as {
+      attributes?: { instanceColorStart?: { data?: THREE.InterleavedBuffer } };
+    };
+    const buffer = geom.attributes?.instanceColorStart?.data;
+    if (!buffer) return 0;
+
+    if (!pulse) {
+      if (wasPulsing.current) {
+        (buffer.array as Float32Array).set(baseFlat);
+        buffer.needsUpdate = true;
+        wasPulsing.current = false;
+      }
+      return 0;
+    }
+
+    const p = Math.min(1, (now - pulse.atAudioTime) / pulse.duration);
+    const head = pulse.flip ? 1 - p : p;
+    const arr = buffer.array as Float32Array;
+    // Each point j is stored twice: as segment j's start and segment j-1's end.
+    for (let j = 0; j <= SEGMENTS; j++) {
+      const tv = j / SEGMENTS;
+      const g = Math.exp(-((tv - head) ** 2) / (2 * 0.09 * 0.09));
+      const mult = 1 + 2.2 * g * (1 - p * 0.4);
+      for (let c = 0; c < 3; c++) {
+        if (j < SEGMENTS) arr[j * 6 + c] = baseFlat[j * 6 + c] * mult;
+        if (j > 0) arr[(j - 1) * 6 + 3 + c] = baseFlat[(j - 1) * 6 + 3 + c] * mult;
+      }
+    }
+    buffer.needsUpdate = true;
+    wasPulsing.current = true;
+    // A gentle opacity lift rides along.
+    return 0.15 * Math.sin(Math.PI * p);
+  };
 
   useFrame((_, dt) => {
     const line = ref.current;
@@ -100,6 +157,8 @@ function ThreadLine({ thread }: ThreadLineProps) {
           frameState.pulseThreadId = null;
         }
       }
+      // The motif pulse: light rides the strand while its notes sound.
+      target = Math.min(1, target + applyPulse(line));
       mat.opacity += (target - mat.opacity) * Math.min(1, dt * 8);
     }
   });
@@ -119,6 +178,7 @@ function ThreadLine({ thread }: ThreadLineProps) {
       opacity={0}
       toneMapped={false}
       depthWrite={false}
+      renderOrder={1}
     />
   );
 }

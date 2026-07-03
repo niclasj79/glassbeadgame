@@ -3,6 +3,7 @@ import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
 import type { SharedProgress } from "@/game/progress";
 import { drawSession } from "@/game/session";
+import { pickIlluminationTarget } from "@/game/rules";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
 import type {
   CodexEntry,
@@ -44,6 +45,8 @@ interface GBGState {
   addThread: (thread: Thread) => void;
   /** Returns the finalized discovery (newToCodex resolved against the codex). */
   addDiscovery: (discovery: Discovery, motifs: MotifAward[]) => Discovery;
+  /** Spends one Insight; returns the pair the Game illuminates, or null. */
+  spendInsight: () => [string, string] | null;
   concludeSession: () => void;
   finishConcluding: () => void;
 }
@@ -109,6 +112,8 @@ export const useStore = create<GBGState>()(
         startedAt: Date.now(),
         interaction: idleInteraction(),
         curatedAvailable: draw.curatedAvailable,
+        insight: 1, // the Magister's gift — one illumination to learn the mechanic
+        illuminationsUsed: 0,
         daily: opts?.daily,
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
@@ -205,6 +210,8 @@ export const useStore = create<GBGState>()(
           : { firstFoundAt: Date.now(), count: 1 };
       }
       const motifPoints = motifs.reduce((sum, m) => sum + m.points, 0);
+      // Insight accrues from what deserves it: luminous finds and motifs.
+      const earnedInsight = (finalized.kind === "curated" ? 1 : 0) + motifs.length;
       set({
         codex,
         session: {
@@ -212,9 +219,25 @@ export const useStore = create<GBGState>()(
           discoveries: [...s.discoveries, finalized],
           motifs: [...s.motifs, ...motifs],
           score: s.score + finalized.points + motifPoints,
+          insight: s.insight + earnedInsight,
         },
       });
       return finalized;
+    },
+
+    spendInsight: () => {
+      const s = get().session;
+      if (!s || s.insight <= 0) return null;
+      const target = pickIlluminationTarget(s);
+      if (!target) return null;
+      set({
+        session: {
+          ...s,
+          insight: s.insight - 1,
+          illuminationsUsed: s.illuminationsUsed + 1,
+        },
+      });
+      return target;
     },
 
     concludeSession: () => {

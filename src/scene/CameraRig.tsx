@@ -56,11 +56,21 @@ export function CameraRig() {
     }
   }, [phase, reducedMotion, camera, aspect]);
 
-  // The concluding cinematic: rise to the pole and crown the finished web.
+  // The concluding cinematic: rise to the pole and crown the finished web,
+  // framed to the web's actual reach (the Lens may have spread it wide).
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   useEffect(() => {
     if (mode === "concluding" && !reducedMotion) {
-      transit.current = POSES.conclusion;
+      const r = frameState.rendered;
+      let maxSq = 0;
+      for (let i = 0; i < r.length; i += 3) {
+        maxSq = Math.max(maxSq, r[i] * r[i] + r[i + 1] * r[i + 1] + r[i + 2] * r[i + 2]);
+      }
+      const radius = Math.sqrt(maxSq) || 3;
+      transit.current = {
+        position: new THREE.Vector3(0.01, radius * 2.4 + 3, 0.01),
+        target: new THREE.Vector3(0, 0, 0),
+      };
     }
   }, [mode, reducedMotion]);
 
@@ -110,7 +120,10 @@ export function CameraRig() {
       !reducedMotion &&
       mode !== "reveal" &&
       mode !== "concluding" &&
-      ((phase === "arena" && idle && !frameState.aim.active) || phase === "title" || phase === "setup");
+      ((phase === "arena" && idle && !frameState.aim.active) ||
+        phase === "title" ||
+        phase === "setup" ||
+        phase === "conclusion"); // the mandala turns slowly under the Annotation
   });
 
   return (

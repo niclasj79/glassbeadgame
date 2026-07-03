@@ -45,7 +45,10 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
   const lensActive = useStore((s) => s.lensActive);
   const focusedBeadId = useStore((s) => s.focusedBeadId);
-  const threaded = useStore((s) => !!s.session?.threads.some((t) => t.a === id || t.b === id));
+  const degree = useStore(
+    (s) => s.session?.threads.filter((t) => t.a === id || t.b === id).length ?? 0
+  );
+  const threaded = degree > 0;
 
   const { coreMaterial, shellMaterial, haloMaterial, glyphMaterial, bobPhase } = useMemo(() => {
     const base = new THREE.Color(discipline?.color ?? "#8888aa");
@@ -123,8 +126,21 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
       symp && symp.id === id
         ? symp.strength * 0.22 * (0.5 + 0.5 * Math.sin(frameState.clock * 7))
         : 0;
+    // Woven beads run warmer; an Illumination flares both of its endpoints.
+    const warmth = Math.min(0.12, degree * 0.04);
+    const ill = frameState.illumination;
+    const illuminated =
+      ill && performance.now() < ill.until && (ill.a === id || ill.b === id)
+        ? 0.28 * (0.6 + 0.4 * Math.sin(frameState.clock * 5))
+        : 0;
     haloMaterial.opacity +=
-      (HALO_BASE_OPACITY + emphasis + breathGlow + sympathyGlow - haloMaterial.opacity) *
+      (HALO_BASE_OPACITY +
+        emphasis +
+        breathGlow +
+        sympathyGlow +
+        warmth +
+        illuminated -
+        haloMaterial.opacity) *
       0.1;
 
     // Label legibility: fade far-hemisphere and distant labels.

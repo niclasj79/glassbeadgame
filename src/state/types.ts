@@ -59,6 +59,11 @@ export interface SessionState {
   interaction: Interaction;
   /** Curated connections hidden among this draw's beads — the session's arc. */
   curatedAvailable: number;
+  /** Insight — the currency of illumination. Earned by luminous discoveries
+   *  and motifs; spent to have the Game briefly show where light hides. */
+  insight: number;
+  /** How many illuminations this session has already spent (seeds the pick). */
+  illuminationsUsed: number;
   /** Set when this session is the shared daily draw. */
   daily?: boolean;
 }

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { isCoarsePointer } from "@/lib/device";
+import { frameState } from "@/scene/frameState";
+import { illuminationChime } from "@/audio/sfx";
 import type { Discovery, MotifAward } from "@/state/types";
 import { GlassPanel } from "../components/GlassPanel";
 import { Button } from "../components/Button";
@@ -60,6 +62,19 @@ export function ArenaHud() {
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   const curatedAvailable = useStore((s) => s.session?.curatedAvailable ?? 0);
+  const insight = useStore((s) => s.session?.insight ?? 0);
+  const spendInsight = useStore((s) => s.spendInsight);
+
+  const illuminate = () => {
+    const pair = spendInsight();
+    if (!pair) return;
+    frameState.illumination = {
+      a: pair[0],
+      b: pair[1],
+      until: performance.now() + 4000,
+    };
+    illuminationChime(pair[0], pair[1]);
+  };
 
   const [journalOpen, setJournalOpen] = useState(false);
   // The welcome is a first-encounter ritual, not a per-session toll gate.
@@ -240,6 +255,27 @@ export function ArenaHud() {
             {lensActive ? "Close the Lens" : "The Lens"}
           </button>
 
+          {/* Illuminate — spend Insight to be shown where light hides. */}
+          {!lensActive && (
+            <button
+              onClick={illuminate}
+              disabled={insight <= 0}
+              title={
+                insight > 0
+                  ? "Spend one Insight: the Game briefly shows where a luminous connection hides"
+                  : "Luminous discoveries and motifs grant Insight"
+              }
+              className={
+                "pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full border px-6 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors " +
+                (insight > 0
+                  ? "border-resonance/50 bg-resonance/10 text-bright hover:bg-resonance/20"
+                  : "border-line/30 bg-surface/40 text-dim/50")
+              }
+            >
+              ✧ Illuminate · {insight}
+            </button>
+          )}
+
           <button
             onClick={() => setJournalOpen(true)}
             aria-label="Open discovery journal"
@@ -299,7 +335,7 @@ export function ArenaHud() {
         {mode !== "concluding" && activeHint && (
           <motion.p
             key={activeHint.id}
-            className="absolute bottom-8 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center font-ui text-xs leading-relaxed tracking-wide text-dim/80"
+            className="absolute bottom-[5.6rem] left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center font-ui text-xs leading-relaxed tracking-wide text-dim/80"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0, transition: { delay: activeHint.delay, duration: 1 } }}
             exit={{ opacity: 0, transition: { duration: 0.6 } }}

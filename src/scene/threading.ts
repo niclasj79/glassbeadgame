@@ -187,7 +187,8 @@ function commit(fromId: string, toId: string) {
     return cancelGesture();
   }
 
-  const { thread, discovery } = resolveAttempt(fromId, toId);
+  const priorFaints = session.discoveries.filter((d) => d.kind === "faint").length;
+  const { thread, discovery } = resolveAttempt(fromId, toId, priorFaints);
   const motifs = detectNewMotifs(session, thread);
   st.addThread(thread);
   const finalized = st.addDiscovery(discovery, motifs);

@@ -36,6 +36,8 @@ export const frameState = {
   /** Sympathetic-resonance candidate while threading: the bead that would
    *  form an undiscovered luminous connection with the origin. */
   sympathy: null as { id: string; strength: number; panX: number } | null,
+  /** An active Illumination: the Game briefly showing where light hides. */
+  illumination: null as { a: string; b: string; until: number } | null,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };
