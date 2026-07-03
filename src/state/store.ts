@@ -34,6 +34,7 @@ interface GBGState {
   setCodexOpen: (open: boolean) => void;
   setFocusedBead: (id: string | null) => void;
   setMuted: (muted: boolean) => void;
+  setBinaural: (on: boolean) => void;
   setQualityTier: (tier: QualityTier) => void;
   markHintSeen: (id: string) => void;
   mergeProgress: (progress: SharedProgress) => void;
@@ -59,7 +60,7 @@ interface PersistedSlice {
   codex: GBGState["codex"];
   sessionArchive: GBGState["sessionArchive"];
   lifetimeStats: GBGState["lifetimeStats"];
-  settings: Pick<Settings, "muted" | "hintsSeen">;
+  settings: Pick<Settings, "muted" | "binaural" | "hintsSeen">;
 }
 
 const MAX_SESSION_ARCHIVE = 12;
@@ -73,6 +74,7 @@ export const useStore = create<GBGState>()(
     codexOpen: false,
     settings: {
       muted: false,
+      binaural: true,
       qualityTier: initialQualityTier(),
       reducedMotion: prefersReducedMotion(),
       hintsSeen: {},
@@ -126,6 +128,8 @@ export const useStore = create<GBGState>()(
     setFocusedBead: (focusedBeadId) => set({ focusedBeadId }),
 
     setMuted: (muted) => set((st) => ({ settings: { ...st.settings, muted } })),
+
+    setBinaural: (binaural) => set((st) => ({ settings: { ...st.settings, binaural } })),
 
     setQualityTier: (qualityTier) =>
       set((st) => ({ settings: { ...st.settings, qualityTier } })),
@@ -258,7 +262,11 @@ export const useStore = create<GBGState>()(
           codex: s.codex,
           sessionArchive: s.sessionArchive,
           lifetimeStats: s.lifetimeStats,
-          settings: { muted: s.settings.muted, hintsSeen: s.settings.hintsSeen },
+          settings: {
+            muted: s.settings.muted,
+            binaural: s.settings.binaural,
+            hintsSeen: s.settings.hintsSeen,
+          },
         }),
         merge: (persisted, current) => {
           const p = (persisted ?? {}) as Partial<PersistedSlice>;
@@ -270,6 +278,7 @@ export const useStore = create<GBGState>()(
             settings: {
               ...current.settings, // qualityTier/reducedMotion stay device-derived
               muted: p.settings?.muted ?? current.settings.muted,
+              binaural: p.settings?.binaural ?? current.settings.binaural,
               hintsSeen: p.settings?.hintsSeen ?? current.settings.hintsSeen,
             },
           };

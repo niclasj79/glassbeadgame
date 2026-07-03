@@ -35,13 +35,30 @@ export function AudioBridge(): null {
 
   useEffect(() => {
     const unsubs = [
-      // Ambient lifecycle follows the phase.
+      // Ambient + binaural lifecycle follow the phase.
       useStore.subscribe(
         (s) => s.phase,
         (phase) => {
-          if (phase === "arena") ambient.start();
-          else if (phase === "title" || phase === "setup") ambient.stop();
-          // conclusion: the ambient continues under the mandala.
+          if (phase === "arena") {
+            ambient.start();
+            if (useStore.getState().settings.binaural) audio.startBinaural();
+          } else if (phase === "title" || phase === "setup") {
+            ambient.stop();
+            audio.stopBinaural();
+          }
+          // conclusion: ambient and bed continue under the mandala.
+        }
+      ),
+
+      // The binaural switch takes effect immediately, mid-session.
+      useStore.subscribe(
+        (s) => s.settings.binaural,
+        (on) => {
+          const inCosmos =
+            useStore.getState().phase === "arena" ||
+            useStore.getState().phase === "conclusion";
+          if (on && inCosmos) audio.startBinaural();
+          else if (!on) audio.stopBinaural();
         }
       ),
 

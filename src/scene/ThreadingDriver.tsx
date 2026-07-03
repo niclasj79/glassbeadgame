@@ -1,17 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   threadingEnv,
   handlePointerMove,
   handlePointerUp,
   handleKeyDown,
   devCommit,
+  pointerMotion,
 } from "./threading";
 import { frameState } from "./frameState";
 import { useStore } from "@/state/store";
 import { connectionByPair } from "@/content/connections";
 import { pairKey } from "@/content/types";
+import { audio } from "@/audio/engine";
+import { ambient } from "@/audio/ambient";
+import { updateSilk, updateSympathy } from "@/audio/sfx";
 
 /** Wires the pointer state machine to the live camera, canvas, and controls. */
 export function ThreadingDriver() {
@@ -73,6 +77,27 @@ export function ThreadingDriver() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
+
+  // The ~15 Hz frame→audio bridge: breath, silk, sympathy, and the air
+  // bed's camera-following pan. One throttle, four whispers.
+  const acc = useRef(0);
+  useFrame((state, dt) => {
+    acc.current += dt;
+    if (acc.current < 0.066) return;
+    acc.current = 0;
+
+    audio.applyBreath(frameState.breathPhase, frameState.breathDepth);
+
+    const mode = useStore.getState().session?.interaction.mode;
+    if (mode === "threading") {
+      updateSilk(pointerMotion.speed);
+      updateSympathy(frameState.sympathy);
+    }
+    pointerMotion.speed *= 0.82; // decay between events so stillness = silence
+
+    const az = Math.atan2(state.camera.position.x, state.camera.position.z);
+    ambient.setAirPan(Math.sin(az) * 0.5);
+  });
 
   return null;
 }

@@ -1,5 +1,5 @@
 import { audio } from "./engine";
-import { playVoice } from "./voices";
+import { playVoice, noiseSource } from "./voices";
 import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
@@ -32,6 +32,139 @@ export function selectTick(conceptId: string): void {
     gain: 0.09,
     release: 0.45,
   });
+
+  // The glass touch — a close-mic tap layered under the tick: the ASMR of
+  // a fingertip meeting a cold bead.
+  const t0 = ctx.currentTime;
+  const noise = noiseSource(ctx, 2.5);
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 3800;
+  bp.Q.value = 9;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.linearRampToValueAtTime(0.03, t0 + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26);
+  noise.connect(bp);
+  bp.connect(env);
+  env.connect(audio.sfxBus);
+  noise.start(t0);
+  noise.stop(t0 + 0.35);
+  playVoice(ctx, audio.sfxBus, "bell", noteForConcept(concept) * 4, {
+    gain: 0.012,
+    release: 0.35,
+  });
+}
+
+// ── The silk shimmer — a continuous close texture while a thread is drawn,
+// its brightness and level riding the pointer's velocity. Silence when still.
+let silkNodes: {
+  src: AudioBufferSourceNode;
+  bp: BiquadFilterNode;
+  gain: GainNode;
+} | null = null;
+
+export function setSilkActive(active: boolean): void {
+  const ctx = audio.get();
+  if (!ctx || !audio.sfxBus) return;
+  if (active && !silkNodes) {
+    const src = noiseSource(ctx, 3);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 2200;
+    bp.Q.value = 1.4;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    src.connect(bp);
+    bp.connect(gain);
+    gain.connect(audio.sfxBus);
+    src.start();
+    silkNodes = { src, bp, gain };
+  } else if (!active && silkNodes) {
+    const { src, gain } = silkNodes;
+    silkNodes = null;
+    gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1);
+    src.stop(ctx.currentTime + 0.6);
+  }
+}
+
+/** Pointer speed (px/frame, smoothed by the caller) → silk brightness. */
+export function updateSilk(speed: number): void {
+  const ctx = audio.get();
+  if (!ctx || !silkNodes) return;
+  const t = ctx.currentTime;
+  silkNodes.gain.gain.setTargetAtTime(Math.min(0.025, speed * 4e-4), t, 0.12);
+  silkNodes.bp.frequency.setTargetAtTime(
+    1500 + Math.min(3500, speed * 55),
+    t,
+    0.15
+  );
+}
+
+// ── Sympathetic resonance — one managed voice that sings the identity note
+// of the nearest bead holding an undiscovered luminous connection with the
+// thread's origin. Retune-with-a-dip: one voice, zero clicks.
+let sympathyNodes: {
+  osc: OscillatorNode;
+  gain: GainNode;
+  panner: StereoPannerNode;
+  currentId: string | null;
+} | null = null;
+
+export function updateSympathy(
+  candidate: { id: string; strength: number; panX: number } | null
+): void {
+  const ctx = audio.get();
+  if (!ctx || !audio.sfxBus) return;
+
+  if (!candidate) {
+    if (sympathyNodes) {
+      sympathyNodes.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
+      sympathyNodes.currentId = null;
+    }
+    return;
+  }
+
+  const concept = conceptById.get(candidate.id);
+  if (!concept) return;
+  const freq = noteForConcept(concept);
+  const t = ctx.currentTime;
+
+  if (!sympathyNodes) {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 1200;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    const panner = ctx.createStereoPanner();
+    osc.connect(lp);
+    lp.connect(gain);
+    gain.connect(panner);
+    panner.connect(audio.sfxBus);
+    osc.start();
+    sympathyNodes = { osc, gain, panner, currentId: candidate.id };
+  } else if (sympathyNodes.currentId !== candidate.id) {
+    // New candidate: dip, glide, restore — the dip masks the glide.
+    sympathyNodes.gain.gain.setTargetAtTime(0.0001, t, 0.08);
+    sympathyNodes.osc.frequency.setTargetAtTime(freq, t + 0.09, 0.05);
+    sympathyNodes.currentId = candidate.id;
+  }
+
+  sympathyNodes.gain.gain.setTargetAtTime(candidate.strength * 0.04, t + 0.02, 0.12);
+  sympathyNodes.panner.pan.setTargetAtTime(candidate.panX * 0.7, t, 0.1);
+}
+
+/** Full teardown when a gesture or session ends. */
+export function stopSympathy(): void {
+  const ctx = audio.get();
+  if (!ctx || !sympathyNodes) return;
+  const { osc, gain } = sympathyNodes;
+  sympathyNodes = null;
+  gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1);
+  osc.stop(ctx.currentTime + 0.8);
 }
 
 // A sustained, quiet, slightly tense dyad while a thread is being aimed.

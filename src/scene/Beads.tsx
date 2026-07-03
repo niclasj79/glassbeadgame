@@ -113,12 +113,19 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     g.scale.setScalar(scaleRef.current * breath);
 
     // Halo: hover/select warmth over the resilient base glow, breathing
-    // with the shared pulse.
+    // with the shared pulse. A sympathetic candidate shimmers — the eye's
+    // half of what the ear is already hearing.
     const emphasis = snapped ? 0.2 : hovered || focused || selected ? 0.13 : 0;
     const breathGlow =
       0.05 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
+    const symp = frameState.sympathy;
+    const sympathyGlow =
+      symp && symp.id === id
+        ? symp.strength * 0.22 * (0.5 + 0.5 * Math.sin(frameState.clock * 7))
+        : 0;
     haloMaterial.opacity +=
-      (HALO_BASE_OPACITY + emphasis + breathGlow - haloMaterial.opacity) * 0.1;
+      (HALO_BASE_OPACITY + emphasis + breathGlow + sympathyGlow - haloMaterial.opacity) *
+      0.1;
 
     // Label legibility: fade far-hemisphere and distant labels.
     if (label.current) {

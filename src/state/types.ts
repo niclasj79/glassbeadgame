@@ -77,6 +77,8 @@ export interface SessionMemory {
 
 export interface Settings {
   muted: boolean;
+  /** The theta-band binaural bed — headphone magic, honest off-switch. */
+  binaural: boolean;
   qualityTier: "high" | "base" | "potato";
   reducedMotion: boolean;
   hintsSeen: Record<string, boolean>;

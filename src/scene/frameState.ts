@@ -31,6 +31,11 @@ export const frameState = {
   /** Thread to flash (duplicate weave attempt) + when the flash began. */
   pulseThreadId: null as string | null,
   pulseAt: 0,
+  /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */
+  pulses: [] as { threadId: string; atAudioTime: number; duration: number; flip: boolean }[],
+  /** Sympathetic-resonance candidate while threading: the bead that would
+   *  form an undiscovered luminous connection with the origin. */
+  sympathy: null as { id: string; strength: number; panX: number } | null,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };
