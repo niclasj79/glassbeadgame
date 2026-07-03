@@ -46,7 +46,9 @@ export function ConclusionScreen() {
           transition={{ delay: 0.4, duration: 0.8 }}
           className="font-ui text-[11px] uppercase tracking-[0.55em] text-dim/80"
         >
-          The Game concludes
+          {session.daily
+            ? `Today's Draw concludes · ${new Date().toISOString().slice(0, 10)}`
+            : "The Game concludes"}
         </motion.p>
 
         <motion.h2

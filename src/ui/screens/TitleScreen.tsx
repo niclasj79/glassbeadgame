@@ -1,11 +1,12 @@
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useStore } from "@/state/store";
 import { rankFor, totalConnections } from "@/game/ranks";
+import { dailyPicks, dailySeed, utcDateKey } from "@/lib/daily";
+import { disciplineById } from "@/content/disciplines";
+import { epigraphForToday } from "@/content/epigraphs";
 import { Button } from "../components/Button";
 import { TitleMenu } from "../components/TitleMenu";
-
-const EPIGRAPH =
-  "The Glass Bead Game is thus a mode of playing with the total contents and values of our culture.";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -16,10 +17,24 @@ const fadeUp = {
 export function TitleScreen() {
   const goToSetup = useStore((s) => s.goToSetup);
   const setCodexOpen = useStore((s) => s.setCodexOpen);
+  const beginSession = useStore((s) => s.beginSession);
   const codexCount = useStore((s) => Object.keys(s.codex).length);
   const lifetimeStats = useStore((s) => s.lifetimeStats);
+  const lastDaily = useStore((s) => s.lastDaily);
+  const unlocks = useStore((s) => s.unlocks);
   const hasProgress =
     codexCount > 0 || lifetimeStats.sessions > 0 || lifetimeStats.totalScore > 0;
+
+  const epigraph = useMemo(() => epigraphForToday(unlocks), [unlocks]);
+  const todayPicks = useMemo(dailyPicks, []);
+  const playedToday = lastDaily?.date === utcDateKey();
+  const dailyGlyphs = todayPicks
+    .map((d) => disciplineById.get(d)?.glyph ?? "?")
+    .join(" × ");
+  const isMagister = rankFor(codexCount).name === "Magister Ludi";
+
+  const startDaily = () =>
+    beginSession(todayPicks, { seed: dailySeed(), daily: true });
 
   return (
     <motion.div
@@ -47,7 +62,10 @@ export function TitleScreen() {
       <motion.div
         {...fadeUp}
         transition={{ duration: 0.9, delay: 0.45 }}
-        className="mt-7 h-px w-24 bg-gradient-to-r from-transparent via-glow/60 to-transparent"
+        className={
+          "mt-7 h-px w-24 bg-gradient-to-r from-transparent to-transparent " +
+          (isMagister ? "via-resonance/70" : "via-glow/60")
+        }
       />
 
       <motion.blockquote
@@ -55,9 +73,9 @@ export function TitleScreen() {
         transition={{ duration: 0.9, delay: 0.55 }}
         className="mt-7 max-w-xl text-center font-display text-lg italic leading-relaxed text-dim text-balance"
       >
-        "{EPIGRAPH}"
+        "{epigraph.text}"
         <footer className="mt-3 font-ui text-[10px] uppercase not-italic tracking-[0.35em] text-dim/60">
-          Hermann Hesse
+          {epigraph.source}
         </footer>
       </motion.blockquote>
 
@@ -67,6 +85,15 @@ export function TitleScreen() {
         className="mt-12 flex flex-wrap items-center justify-center gap-4"
       >
         <Button onClick={goToSetup}>Begin the Game</Button>
+        <button
+          onClick={startDaily}
+          className="rounded-full border border-glow-3/40 bg-glow-3/5 px-7 py-3.5 font-ui text-xs uppercase tracking-[0.28em] text-bright transition-all duration-300 hover:border-glow-3/70 hover:bg-glow-3/15"
+          title="One shared draw for the whole world today"
+        >
+          {playedToday
+            ? `Today's Draw ✓ ${lastDaily?.score} · replay`
+            : `Today's Draw · ${dailyGlyphs}`}
+        </button>
         {codexCount > 0 && (
           <Button variant="ghost" onClick={() => setCodexOpen(true)}>
             Codex · {codexCount}/{totalConnections()}
