@@ -80,7 +80,7 @@ export function SessionReplay({ memory, onClose }: Props) {
       fromId: null,
       sticky: false,
       reveal: null,
-    } }) : ""),
+    }, curatedAvailable: 0 }) : ""),
     [memory]
   );
 

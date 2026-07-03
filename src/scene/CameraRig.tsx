@@ -36,8 +36,17 @@ export function CameraRig() {
   const phase = useStore((s) => s.phase);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
+  const aspect = useThree((s) => s.viewport.aspect);
+
   useEffect(() => {
-    const pose = POSES[phase] ?? POSES.title;
+    let pose = POSES[phase] ?? POSES.title;
+    // Portrait phones: pull in so the sphere fills the narrow frame.
+    if (phase === "arena" && aspect < 0.75) {
+      pose = {
+        position: new THREE.Vector3(0, 0.6, 8.2),
+        target: new THREE.Vector3(0, 0, 0),
+      };
+    }
     if (reducedMotion) {
       camera.position.copy(pose.position);
       controls.current?.target.copy(pose.target);
@@ -45,7 +54,7 @@ export function CameraRig() {
     } else {
       transit.current = pose;
     }
-  }, [phase, reducedMotion, camera]);
+  }, [phase, reducedMotion, camera, aspect]);
 
   // The concluding cinematic: rise to the pole and crown the finished web.
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");

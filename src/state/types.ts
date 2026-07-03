@@ -57,6 +57,10 @@ export interface SessionState {
   score: number;
   startedAt: number;
   interaction: Interaction;
+  /** Curated connections hidden among this draw's beads — the session's arc. */
+  curatedAvailable: number;
+  /** Set when this session is the shared daily draw. */
+  daily?: boolean;
 }
 
 export interface SessionMemory {

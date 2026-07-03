@@ -16,6 +16,22 @@ if (import.meta.env.DEV) {
   };
 }
 
+// Sweep away the archived v1 app's localStorage remnants (same origin).
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (
+      key === "glass-bead-game-state" ||
+      key === "game-error-log" ||
+      key.startsWith("session-offline") ||
+      key.startsWith("movements-offline")
+    ) {
+      localStorage.removeItem(key);
+    }
+  }
+} catch {
+  /* storage may be unavailable; nothing to clean */
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

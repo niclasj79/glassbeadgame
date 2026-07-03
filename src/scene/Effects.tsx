@@ -1,26 +1,61 @@
+import { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette, Noise } from "@react-three/postprocessing";
+import type { BloomEffect } from "postprocessing";
 import { useStore } from "@/state/store";
+import { frameState } from "./frameState";
 
 /**
  * The art direction lives here: threshold bloom over a near-black void.
- * Anything above ~0.28 luminance radiates; everything else recedes.
- * "potato" tier renders raw — boosted bead colors still read bright.
+ * Bloom survives at EVERY tier — losing it means losing the glass — the
+ * tiers only trade its richness (and the garnish passes) for headroom.
  */
+const TIER_BLOOM: Record<
+  "high" | "base" | "potato",
+  { intensity: number; radius: number; levels?: number }
+> = {
+  high: { intensity: 0.92, radius: 0.55 },
+  base: { intensity: 0.7, radius: 0.45 },
+  potato: { intensity: 0.5, radius: 0.35, levels: 3 },
+};
+
+function BreathDriver({ bloomRef, base }: { bloomRef: React.RefObject<BloomEffect>; base: number }) {
+  useFrame(() => {
+    const bloom = bloomRef.current;
+    if (!bloom) return;
+    // The synesthetic pulse: bloom inhales with the shared breath.
+    bloom.intensity =
+      base * (1 + 0.16 * frameState.breathDepth * Math.sin(frameState.breathPhase));
+  });
+  return null;
+}
+
 export function Effects() {
   const tier = useStore((s) => s.settings.qualityTier);
-  if (tier === "potato") return null;
+  const bloomRef = useRef<BloomEffect>(null);
+  const cfg = TIER_BLOOM[tier];
+
+  // EffectComposer instantiates every child as a pass — build the list
+  // explicitly so no non-effect nodes ever reach it.
+  const passes = [
+    <Bloom
+      key="bloom"
+      ref={bloomRef as never}
+      mipmapBlur
+      luminanceThreshold={0.32}
+      luminanceSmoothing={0.18}
+      intensity={cfg.intensity}
+      radius={cfg.radius}
+      levels={cfg.levels}
+    />,
+  ];
+  if (tier !== "potato") passes.push(<Vignette key="vignette" offset={0.3} darkness={0.65} />);
+  if (tier === "high") passes.push(<Noise key="noise" premultiply opacity={0.02} />);
 
   return (
-    <EffectComposer multisampling={0}>
-      <Bloom
-        mipmapBlur
-        luminanceThreshold={0.32}
-        luminanceSmoothing={0.18}
-        intensity={0.92}
-        radius={0.55}
-      />
-      <Vignette offset={0.3} darkness={0.65} />
-      <Noise premultiply opacity={0.02} />
-    </EffectComposer>
+    <>
+      <BreathDriver bloomRef={bloomRef} base={cfg.intensity} />
+      <EffectComposer multisampling={0}>{passes}</EffectComposer>
+    </>
   );
 }

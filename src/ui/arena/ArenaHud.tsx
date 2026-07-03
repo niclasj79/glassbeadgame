@@ -59,8 +59,17 @@ export function ArenaHud() {
   const setLens = useStore((s) => s.setLens);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
+  const curatedAvailable = useStore((s) => s.session?.curatedAvailable ?? 0);
+
   const [journalOpen, setJournalOpen] = useState(false);
-  const [welcomeOpen, setWelcomeOpen] = useState(true);
+  // The welcome is a first-encounter ritual, not a per-session toll gate.
+  const [welcomeOpen, setWelcomeOpen] = useState(
+    () => !useStore.getState().settings.hintsSeen.welcome
+  );
+  const dismissWelcome = () => {
+    setWelcomeOpen(false);
+    markHintSeen("welcome");
+  };
   const [faintToast, setFaintToast] = useState<Discovery | null>(null);
   const [motifToast, setMotifToast] = useState<MotifAward | null>(null);
   const seenDiscoveries = useRef(0);
@@ -100,8 +109,20 @@ export function ArenaHud() {
         text: "Open the Lens to see your web arranged along True, Good, and Beautiful",
       };
     }
+    const curatedFound = discoveries.filter((d) => d.kind === "curated").length;
+    if (
+      !hintsSeen.conclude &&
+      curatedFound > 0 &&
+      (curatedFound >= 3 || curatedFound >= curatedAvailable)
+    ) {
+      return {
+        id: "conclude",
+        delay: 1.4,
+        text: "When the weave feels complete, conclude the Game to receive its Annotation",
+      };
+    }
     return null;
-  }, [welcomeOpen, threadCount, discoveries.length, hintsSeen, coarse]);
+  }, [welcomeOpen, threadCount, discoveries, hintsSeen, coarse, curatedAvailable]);
 
   useEffect(() => {
     if (threadCount > 0 && !hintsSeen.weave) markHintSeen("weave");
@@ -135,6 +156,11 @@ export function ArenaHud() {
   }, [motifs]);
 
   const curatedCount = discoveries.filter((d) => d.kind === "curated").length;
+  // The invitation: once the weave has real substance, the way out glows.
+  const concludeInvites =
+    !hintsSeen.conclude &&
+    curatedCount > 0 &&
+    (curatedCount >= 3 || curatedCount >= curatedAvailable);
 
   return (
     <motion.div
@@ -154,30 +180,48 @@ export function ArenaHud() {
             <span className="hidden font-ui text-[11px] uppercase tracking-[0.22em] text-dim sm:inline">
               Resonance
             </span>
-            {threadCount > 0 && (
+            {/* The session's arc — always visible: how much light remains. */}
+            {curatedAvailable > 0 && (
               <>
-                <span className="hidden h-3 w-px bg-line/70 md:block" />
-                <span className="hidden font-ui text-[11px] tabular-nums text-dim md:inline">
-                  {threadCount} {threadCount === 1 ? "thread" : "threads"}
-                  {curatedCount > 0 && ` - ${curatedCount} luminous`}
+                <span className="h-3 w-px bg-line/70" />
+                <span
+                  className={
+                    "font-ui text-[11px] tabular-nums " +
+                    (curatedCount >= curatedAvailable ? "text-resonance" : "text-dim")
+                  }
+                >
+                  {curatedCount >= curatedAvailable
+                    ? "all luminous found"
+                    : `${curatedCount} of ${curatedAvailable} luminous`}
                 </span>
               </>
+            )}
+            {threadCount > 0 && (
+              <span className="hidden font-ui text-[11px] tabular-nums text-dim md:inline">
+                · {threadCount} {threadCount === 1 ? "thread" : "threads"}
+              </span>
             )}
           </GlassPanel>
 
           <button
             onClick={() => {
-              if (discoveries.length === 0) returnToTitle();
+              if (!hintsSeen.conclude) markHintSeen("conclude");
+              if (threadCount === 0 && discoveries.length === 0) returnToTitle();
               else concludeSession();
             }}
-            className="pointer-events-auto absolute right-4 top-4 rounded-full border border-line/40 bg-surface/50 px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] text-dim backdrop-blur-md transition-colors hover:border-resonance/60 hover:text-bright sm:right-5 sm:top-5"
+            className={
+              "pointer-events-auto absolute right-4 top-4 rounded-full border px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors sm:right-5 sm:top-5 " +
+              (concludeInvites
+                ? "animate-invite-pulse border-resonance/60 bg-resonance/10 text-bright"
+                : "border-line/40 bg-surface/50 text-dim hover:border-resonance/60 hover:text-bright")
+            }
           >
-            {discoveries.length === 0 ? (
-              "Leave"
+            {threadCount === 0 && discoveries.length === 0 ? (
+              "Leave the arena"
             ) : (
               <>
-                <span className="sm:hidden">Conclude</span>
-                <span className="hidden sm:inline">Conclude the Game</span>
+                <span className="sm:hidden">Conclude ✦</span>
+                <span className="hidden sm:inline">Conclude the Game ✦</span>
               </>
             )}
           </button>
@@ -227,22 +271,24 @@ export function ArenaHud() {
               className="w-full max-w-lg bg-void/80 p-7 text-center sm:p-8"
             >
               <p className="font-ui text-[10px] uppercase tracking-[0.45em] text-dim/75">
-                The Arena Opens
+                The Arena opens
               </p>
               <h2
                 id="arena-welcome-title"
                 className="mt-3 font-display text-3xl font-medium text-bright sm:text-4xl"
               >
-                Find the luminous connections
+                Weave the luminous connections
               </h2>
               <p className="mt-4 font-display text-lg italic leading-relaxed text-bright/90">
-                Test connections until you find the hidden luminous connections.
+                Among these beads hide {curatedAvailable > 0 ? curatedAvailable : "several"}{" "}
+                luminous connections — real correspondences between the disciplines.
               </p>
               <p className="mt-3 font-ui text-sm leading-relaxed text-dim">
-                Faint resonances still count as experiments. Luminous discoveries open the Codex.
+                Draw threads to seek them; even faint resonances teach the hand. When your
+                weave feels complete, conclude the Game.
               </p>
-              <Button className="mt-7" onClick={() => setWelcomeOpen(false)}>
-                Begin testing
+              <Button className="mt-7" onClick={dismissWelcome}>
+                Enter the weave
               </Button>
             </GlassPanel>
           </motion.div>

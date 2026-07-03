@@ -29,7 +29,7 @@ interface GBGState {
 
   goToSetup: () => void;
   returnToTitle: () => void;
-  beginSession: (picks: DisciplineId[]) => void;
+  beginSession: (picks: DisciplineId[], opts?: { seed?: number; daily?: boolean }) => void;
   setLens: (on: boolean) => void;
   setCodexOpen: (open: boolean) => void;
   setFocusedBead: (id: string | null) => void;
@@ -94,8 +94,8 @@ export const useStore = create<GBGState>()(
         focusedBeadId: null,
       }),
 
-    beginSession: (picks) => {
-      const draw = drawSession(picks);
+    beginSession: (picks, opts) => {
+      const draw = drawSession(picks, opts?.seed);
       const session: SessionState = {
         seed: draw.seed,
         disciplines: draw.disciplines,
@@ -106,6 +106,8 @@ export const useStore = create<GBGState>()(
         score: 0,
         startedAt: Date.now(),
         interaction: idleInteraction(),
+        curatedAvailable: draw.curatedAvailable,
+        daily: opts?.daily,
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
     },

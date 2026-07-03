@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import { mulberry32 } from "@/lib/utils";
 import { frameState } from "./frameState";
+import { makeRadialTexture } from "./textures";
 
 const STAR_COUNT = 3000;
 
@@ -67,22 +68,6 @@ function Starfield() {
   );
 }
 
-function makeRadialTexture(inner: string, outer: string): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, inner);
-  grad.addColorStop(1, outer);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 interface NebulaPlaneProps {
   color: string;
   position: [number, number, number];
@@ -105,7 +90,7 @@ function NebulaPlane({ color, position, scale, drift }: NebulaPlaneProps) {
       <meshBasicMaterial
         map={texture}
         transparent
-        opacity={0.5}
+        opacity={0.62}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
         toneMapped={false}

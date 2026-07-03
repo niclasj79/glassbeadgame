@@ -14,6 +14,11 @@ export const frameState = {
   timeScaleTarget: 1,
   /** Dilated elapsed time — advances by dt * timeScale; drives bobbing and drift. */
   clock: 0,
+  /** The Breath: one ~0.1 Hz meditative oscillation shared by bloom, halos,
+   *  lattice, and (via a throttled bridge) the ambient bus. Radians. */
+  breathPhase: 0,
+  /** 0..1 — eased down during reveals and to 0 under reduced motion. */
+  breathDepth: 1,
   /** True while a layout morph (lens toggle) is in flight; threads re-sample curves. */
   morphActive: false,
   /** Last user interaction with the camera or beads (performance.now()). */

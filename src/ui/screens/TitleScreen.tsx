@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useStore } from "@/state/store";
 import { rankFor, totalConnections } from "@/game/ranks";
 import { Button } from "../components/Button";
-import { ContinueLinkButton } from "../components/ContinueLinkButton";
+import { TitleMenu } from "../components/TitleMenu";
 
 const EPIGRAPH =
   "The Glass Bead Game is thus a mode of playing with the total contents and values of our culture.";
@@ -18,13 +18,8 @@ export function TitleScreen() {
   const setCodexOpen = useStore((s) => s.setCodexOpen);
   const codexCount = useStore((s) => Object.keys(s.codex).length);
   const lifetimeStats = useStore((s) => s.lifetimeStats);
-  const resetProgress = useStore((s) => s.resetProgress);
   const hasProgress =
     codexCount > 0 || lifetimeStats.sessions > 0 || lifetimeStats.totalScore > 0;
-
-  const freshStart = () => {
-    if (window.confirm("Clear this browser's Codex and start fresh?")) resetProgress();
-  };
 
   return (
     <motion.div
@@ -74,13 +69,7 @@ export function TitleScreen() {
         <Button onClick={goToSetup}>Begin the Game</Button>
         {codexCount > 0 && (
           <Button variant="ghost" onClick={() => setCodexOpen(true)}>
-            Codex - {codexCount}/{totalConnections()}
-          </Button>
-        )}
-        {hasProgress && <ContinueLinkButton />}
-        {hasProgress && (
-          <Button variant="ghost" onClick={freshStart}>
-            Fresh start
+            Codex · {codexCount}/{totalConnections()}
           </Button>
         )}
       </motion.div>
@@ -95,15 +84,7 @@ export function TitleScreen() {
         </motion.p>
       )}
 
-      {hasProgress && (
-        <motion.p
-          {...fadeUp}
-          transition={{ duration: 0.9, delay: 1 }}
-          className="mt-3 max-w-md text-center font-ui text-[11px] leading-relaxed tracking-[0.16em] text-dim/60"
-        >
-          Progress lives in this browser. A continue URL carries your Codex to another device.
-        </motion.p>
-      )}
+      {hasProgress && <TitleMenu />}
     </motion.div>
   );
 }

@@ -29,10 +29,15 @@ export default {
           "0%, 100%": { opacity: "0.6" },
           "50%": { opacity: "1" },
         },
+        "invite-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(42 92% 60% / 0)" },
+          "50%": { boxShadow: "0 0 22px 2px hsl(42 92% 60% / 0.35)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both",
         shimmer: "shimmer 3s ease-in-out infinite",
+        "invite-pulse": "invite-pulse 2.6s ease-in-out infinite",
       },
     },
   },

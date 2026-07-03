@@ -32,7 +32,9 @@ export function Lattice() {
 
   useFrame(() => {
     if (!group.current) return;
-    const breath = 0.75 + 0.25 * Math.sin(frameState.clock * 0.32);
+    // Synced to the shared Breath — one pulse across light and sound.
+    const breath =
+      0.78 + 0.22 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
     group.current.traverse((obj) => {
       const base = obj.userData.baseOpacity;
       if (typeof base !== "number") return;

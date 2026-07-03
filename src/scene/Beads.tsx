@@ -9,13 +9,20 @@ import { disciplineById } from "@/content/disciplines";
 import { hashString, smoothstep } from "@/lib/utils";
 import { frameState } from "./frameState";
 import { beadPointerHandlers } from "./threading";
+import { getHaloTexture, getGlyphTexture } from "./textures";
+
+import { isCoarsePointer } from "@/lib/device";
 
 export const BEAD_RADIUS = 0.15;
 const SHELL_SCALE = 1.42;
-const HIT_SCALE = 2.1;
+/** Fingers need bigger targets than cursors. */
+const HIT_SCALE = typeof window !== "undefined" && isCoarsePointer() ? 2.8 : 2.1;
 /** Un-tonemapped color boost that pushes bead cores above the bloom threshold. */
 const CORE_BOOST = 1.42;
 const BOB_AMPLITUDE = 0.035;
+/** Additive halo that keeps beads luminous even when postprocessing is gone. */
+const HALO_SCALE = 3.1;
+const HALO_BASE_OPACITY = 0.22;
 
 // One shared unit sphere; every bead scales it.
 const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
@@ -40,7 +47,7 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
   const focusedBeadId = useStore((s) => s.focusedBeadId);
   const threaded = useStore((s) => !!s.session?.threads.some((t) => t.a === id || t.b === id));
 
-  const { coreMaterial, shellMaterial, bobPhase } = useMemo(() => {
+  const { coreMaterial, shellMaterial, haloMaterial, glyphMaterial, bobPhase } = useMemo(() => {
     const base = new THREE.Color(discipline?.color ?? "#8888aa");
     return {
       coreMaterial: new THREE.MeshBasicMaterial({
@@ -49,6 +56,9 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
       }),
       shellMaterial: new THREE.MeshPhysicalMaterial({
         color: base,
+        // A colored ember inside the glass — beads stay jewels even when the
+        // quality tier strips the bloom pass.
+        emissive: base.clone().multiplyScalar(0.22),
         transparent: true,
         opacity: 0.3,
         roughness: 0.16,
@@ -57,9 +67,25 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         clearcoatRoughness: 0.28,
         depthWrite: false,
       }),
+      haloMaterial: new THREE.SpriteMaterial({
+        map: getHaloTexture(),
+        color: base,
+        transparent: true,
+        opacity: HALO_BASE_OPACITY,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+      glyphMaterial: new THREE.SpriteMaterial({
+        map: getGlyphTexture(discipline?.glyph ?? "?"),
+        color: base.clone().lerp(new THREE.Color("#ffffff"), 0.35),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
       bobPhase: (hashString(id) % 6283) / 1000,
     };
-  }, [discipline?.color, id]);
+  }, [discipline?.color, discipline?.glyph, id]);
 
   useFrame((state) => {
     const g = group.current;
@@ -86,13 +112,21 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
     g.scale.setScalar(scaleRef.current * breath);
 
+    // Halo: hover/select warmth over the resilient base glow, breathing
+    // with the shared pulse.
+    const emphasis = snapped ? 0.2 : hovered || focused || selected ? 0.13 : 0;
+    const breathGlow =
+      0.05 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
+    haloMaterial.opacity +=
+      (HALO_BASE_OPACITY + emphasis + breathGlow - haloMaterial.opacity) * 0.1;
+
     // Label legibility: fade far-hemisphere and distant labels.
     if (label.current) {
       const camDir = state.camera.position.clone().normalize();
       const beadDir = g.position.clone().normalize();
       const facing = smoothstep(-0.12, 0.32, camDir.dot(beadDir));
       const dist = state.camera.position.distanceTo(g.position);
-      const near = 1 - smoothstep(9, 14, dist);
+      const near = 1 - smoothstep(12, 18, dist);
       const target = lensActive
         ? hovered || selected || snapped || focused
           ? 1
@@ -108,6 +142,8 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         textObj.material.transparent = true;
         textObj.material.opacity += (target - textObj.material.opacity) * 0.15;
       }
+      // The glyph crest shares the label's fade, a touch dimmer.
+      glyphMaterial.opacity += (target * 0.85 - glyphMaterial.opacity) * 0.15;
     }
   });
 
@@ -120,6 +156,14 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         geometry={sphereGeometry}
         scale={BEAD_RADIUS * SHELL_SCALE}
         material={shellMaterial}
+      />
+      {/* Resilient glow — present at every quality tier. */}
+      <sprite material={haloMaterial} scale={BEAD_RADIUS * HALO_SCALE} />
+      {/* Discipline crest above the bead — identity at a glance. */}
+      <sprite
+        material={glyphMaterial}
+        scale={0.17}
+        position={[0, BEAD_RADIUS * SHELL_SCALE + 0.16, 0]}
       />
       {/* Enlarged invisible hit target carrying the weaving gesture handlers. */}
       <mesh
