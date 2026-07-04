@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { useStore } from "@/state/store";
+import { isCoarsePointer } from "@/lib/device";
 import { GlassPanel } from "../components/GlassPanel";
 
 const AXES = [
@@ -19,7 +21,10 @@ export function BeadInspectCard() {
   const interactionFocus = useStore((s) => s.session?.interaction.fromId ?? null);
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
-  const id = explicitFocus ?? interactionFocus;
+  const coarse = useMemo(isCoarsePointer, []);
+  // On touch devices, showing the card while a thread is being drawn covers the
+  // beads the player is trying to reach. Only show on explicit focus there.
+  const id = explicitFocus ?? (coarse ? null : interactionFocus);
   const concept = id ? conceptById.get(id) : undefined;
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
 
