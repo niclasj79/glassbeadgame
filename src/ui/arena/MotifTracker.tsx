@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { conceptById } from "@/content/concepts";
@@ -142,20 +142,60 @@ function Pips({ progress, max, complete }: { progress: number; max: number; comp
   );
 }
 
+const COLLAPSE_KEY = "gbg.motifsCollapsed";
+
 export function MotifTracker() {
   const session = useStore((s) => s.session);
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   const items = useMemo(() => (session ? motifProgress(session) : []), [session]);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(COLLAPSE_KEY) === "1"
+  );
+  const toggle = () => {
+    setCollapsed((v) => {
+      localStorage.setItem(COLLAPSE_KEY, v ? "0" : "1");
+      return !v;
+    });
+  };
 
   if (!session || session.threads.length === 0 || mode === "concluding") return null;
+
+  // Minimized: a quiet pill that remembers its place.
+  if (collapsed) {
+    return (
+      <button
+        onClick={toggle}
+        aria-expanded={false}
+        aria-label="Expand motifs"
+        className="pointer-events-auto absolute left-5 top-[4.6rem] hidden items-center gap-2 rounded-full border border-line/40 bg-void/62 px-4 py-2 font-ui text-[10px] uppercase tracking-[0.3em] text-dim backdrop-blur-md transition-colors hover:border-line/80 hover:text-bright md:flex"
+      >
+        Motifs {session.motifs.length}/3
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden>
+          <path d="M2 1l4 3-4 3" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+      </button>
+    );
+  }
 
   return (
     <GlassPanel className="pointer-events-auto absolute left-5 top-[4.6rem] hidden w-72 bg-void/62 p-3.5 md:block">
       <div className="flex items-center justify-between">
         <p className="font-ui text-[10px] uppercase tracking-[0.34em] text-dim">Motifs</p>
-        <p className="font-ui text-[10px] tabular-nums text-dim/70">
-          {session.motifs.length}/3
-        </p>
+        <span className="flex items-center gap-2.5">
+          <p className="font-ui text-[10px] tabular-nums text-dim/70">
+            {session.motifs.length}/3
+          </p>
+          <button
+            onClick={toggle}
+            aria-expanded
+            aria-label="Minimize motifs"
+            className="grid h-5 w-5 place-items-center rounded-full border border-line/40 text-dim transition-colors hover:border-line/80 hover:text-bright"
+          >
+            <svg width="8" height="2" viewBox="0 0 8 2" fill="none" aria-hidden>
+              <path d="M0 1h8" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </button>
+        </span>
       </div>
       <div className="mt-3 space-y-2">
         {items.map((item) => (
@@ -212,9 +252,12 @@ function MotifDiagram({ id }: { id: MotifAward["motifId"] }) {
 }
 
 export function MotifRitualToast({ motif }: { motif: MotifAward }) {
+  // NOTE: framer-motion owns `transform`, so Tailwind -translate-x-1/2 dies
+  // the moment y/scale animate. A plain flex wrapper does the centering.
   return (
+    <div className="pointer-events-none absolute inset-x-4 top-6 flex justify-center">
     <motion.div
-      className="absolute left-1/2 top-6 w-[min(430px,calc(100vw-2rem))] -translate-x-1/2"
+      className="w-[min(430px,100%)]"
       initial={{ opacity: 0, y: -14, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.98 }}
@@ -237,5 +280,6 @@ export function MotifRitualToast({ motif }: { motif: MotifAward }) {
         </div>
       </GlassPanel>
     </motion.div>
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { useStore } from "@/state/store";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { audio } from "@/audio/engine";
+import { currentTheme } from "@/themes/useTheme";
 import type { Thread } from "@/state/types";
 import { frameState } from "./frameState";
 import { arcMid } from "./curves";
@@ -14,12 +15,11 @@ import { arcMid } from "./curves";
 
 const SEGMENTS = 20; // drei's QuadraticBezierLine samples 20 segments = 21 points
 
-const FAINT_COLOR = new THREE.Color("#565a7d");
-
 function gradientColors(thread: Thread): [number, number, number][] {
   const out: [number, number, number][] = [];
   if (thread.kind === "faint") {
-    for (let i = 0; i <= SEGMENTS; i++) out.push([FAINT_COLOR.r, FAINT_COLOR.g, FAINT_COLOR.b]);
+    const faint = new THREE.Color(currentTheme().faintThread);
+    for (let i = 0; i <= SEGMENTS; i++) out.push([faint.r, faint.g, faint.b]);
     return out;
   }
   const ca = new THREE.Color(

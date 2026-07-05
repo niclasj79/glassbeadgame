@@ -23,6 +23,7 @@ const POSES: Record<string, Pose> = {
 };
 
 const IDLE_ORBIT_AFTER_MS = 10_000;
+const ORIGIN = new THREE.Vector3(0, 0, 0);
 
 /**
  * One camera, two authorities: the user's orbit, and scripted transits.
@@ -106,11 +107,29 @@ export function CameraRig() {
     const ctl = controls.current;
     if (!ctl) return;
 
+    // Impact kick: a quick FOV punch on curated discoveries — no position
+    // meddling, so OrbitControls never fights it.
+    if (frameState.kick > 0.001) {
+      frameState.kick *= Math.exp(-dt * 5);
+      const cam = state.camera as THREE.PerspectiveCamera;
+      cam.fov = 42 * (1 - 0.045 * Math.sin(frameState.kick * Math.PI));
+      cam.updateProjectionMatrix();
+    }
+
     if (transit.current) {
+      frameState.recenter = false; // a transit owns the target
       easing.damp3(state.camera.position, transit.current.position, 0.85, dt);
       easing.damp3(ctl.target, transit.current.target, 0.85, dt);
       if (state.camera.position.distanceTo(transit.current.position) < 0.04) {
         transit.current = null;
+      }
+    } else if (frameState.recenter) {
+      // Post-reveal homecoming: pan the orbit target back to the arena's
+      // heart without touching the camera — the world re-centers itself.
+      easing.damp3(ctl.target, ORIGIN, 0.7, dt);
+      if (ctl.target.lengthSq() < 0.002) {
+        ctl.target.set(0, 0, 0);
+        frameState.recenter = false;
       }
     }
 
@@ -136,7 +155,7 @@ export function CameraRig() {
       rotateSpeed={0.55}
       zoomSpeed={0.7}
       minDistance={4.2}
-      maxDistance={13}
+      maxDistance={aspect < 0.75 ? 20 : 16}
       autoRotateSpeed={0.35}
       onStart={() => {
         frameState.idleSince = performance.now();

@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { useStore } from "@/state/store";
-import { isCoarsePointer } from "@/lib/device";
 import { GlassPanel } from "../components/GlassPanel";
+
+/** The card is contemplation, not chatter: it waits out a dwell before
+ *  appearing, and never shows while a gesture or reveal is in flight. */
+const DWELL_MS = 2200;
 
 const AXES = [
   { label: "True", index: 0 },
@@ -18,13 +21,26 @@ function axisPercent(value: number): number {
 
 export function BeadInspectCard() {
   const explicitFocus = useStore((s) => s.focusedBeadId);
-  const interactionFocus = useStore((s) => s.session?.interaction.fromId ?? null);
+  const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
-  const coarse = useMemo(isCoarsePointer, []);
-  // On touch devices, showing the card while a thread is being drawn covers the
-  // beads the player is trying to reach. Only show on explicit focus there.
-  const id = explicitFocus ?? (coarse ? null : interactionFocus);
+
+  // Only a settled focus counts: the pointer must rest on a bead, with no
+  // weave in progress, for the dwell period.
+  const candidate = mode === "idle" ? explicitFocus : null;
+  const [dwelled, setDwelled] = useState<string | null>(null);
+  useEffect(() => {
+    if (!candidate) {
+      setDwelled(null);
+      return;
+    }
+    if (candidate === dwelled) return;
+    setDwelled(null);
+    const t = setTimeout(() => setDwelled(candidate), DWELL_MS);
+    return () => clearTimeout(t);
+  }, [candidate, dwelled]);
+
+  const id = candidate && candidate === dwelled ? candidate : null;
   const concept = id ? conceptById.get(id) : undefined;
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
 

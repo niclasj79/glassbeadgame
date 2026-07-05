@@ -1,8 +1,9 @@
-import { useMemo, useRef } from "react";
+﻿import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
 import { fibonacciSpherePositions, ARENA_RADIUS } from "@/game/layout";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 
 function circlePoints(radius: number, segments = 96): [number, number, number][] {
@@ -15,11 +16,12 @@ function circlePoints(radius: number, segments = 96): [number, number, number][]
 }
 
 /**
- * "The board" — a faint Fibonacci dot-shell and three great circles.
+ * "The board" - a faint Fibonacci dot-shell and three great circles.
  * Present but never loud; it breathes very slowly.
  */
 export function Lattice() {
   const group = useRef<THREE.Group>(null);
+  const theme = useCurrentTheme();
 
   const dotsGeometry = useMemo(() => {
     const positions = fibonacciSpherePositions(140, ARENA_RADIUS);
@@ -29,12 +31,15 @@ export function Lattice() {
   }, []);
 
   const circle = useMemo(() => circlePoints(ARENA_RADIUS), []);
+  const latticeColor = theme.latticeColor;
 
   useFrame(() => {
     if (!group.current) return;
-    // Synced to the shared Breath — one pulse across light and sound.
+    // Synced to the shared Breath - one pulse across light and sound.
+    // The board itself lifts as the weave completes.
     const breath =
-      0.78 + 0.22 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
+      (0.78 + 0.22 * Math.sin(frameState.breathPhase) * frameState.breathDepth) *
+      (1 + 0.35 * frameState.awakening);
     group.current.traverse((obj) => {
       const base = obj.userData.baseOpacity;
       if (typeof base !== "number") return;
@@ -51,7 +56,7 @@ export function Lattice() {
         <pointsMaterial
           size={0.028}
           sizeAttenuation
-          color="#585a92"
+          color={latticeColor}
           transparent
           opacity={0.4}
           depthWrite={false}
@@ -59,7 +64,7 @@ export function Lattice() {
       </points>
       <Line
         points={circle}
-        color="#4a4c80"
+        color={latticeColor}
         transparent
         opacity={0.16}
         lineWidth={1}
@@ -68,7 +73,7 @@ export function Lattice() {
       <Line
         points={circle}
         rotation={[Math.PI / 2, 0, 0]}
-        color="#4a4c80"
+        color={latticeColor}
         transparent
         opacity={0.16}
         lineWidth={1}
@@ -77,7 +82,7 @@ export function Lattice() {
       <Line
         points={circle}
         rotation={[0, Math.PI / 2, 0]}
-        color="#4a4c80"
+        color={latticeColor}
         transparent
         opacity={0.16}
         lineWidth={1}

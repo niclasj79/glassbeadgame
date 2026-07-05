@@ -66,6 +66,8 @@ export interface SessionState {
   illuminationsUsed: number;
   /** Set when this session is the shared daily draw. */
   daily?: boolean;
+  /** The world this session opens into (themes registry id). */
+  themeId: string;
 }
 
 export interface SessionMemory {

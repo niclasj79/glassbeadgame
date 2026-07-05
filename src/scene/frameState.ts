@@ -38,6 +38,25 @@ export const frameState = {
   sympathy: null as { id: string; strength: number; panX: number } | null,
   /** An active Illumination: the Game briefly showing where light hides. */
   illumination: null as { a: string; b: string; until: number } | null,
+  /** Pending particle-burst spawn requests, consumed by scene/Bursts. */
+  bursts: [] as {
+    x: number;
+    y: number;
+    z: number;
+    color: string;
+    count: number;
+    speed: number;
+  }[],
+  /** Starfield flare (0..1, decays) — the sky answers a discovery. */
+  flare: 0,
+  /** Camera FOV impact kick (0..1, decays). */
+  kick: 0,
+  /** The stage awakens: eased luminousFound/curatedAvailable (0..1).
+   *  Nebulae brighten, the lattice lifts, the music thickens with it. */
+  awakening: 0,
+  /** After a reveal's camera focus, drift the orbit target home so the
+   *  arena's center is the screen's center again. */
+  recenter: false,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };
@@ -60,6 +79,16 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
 export function setMorphTargets(targets: Float32Array): void {
   frameState.targets = targets.slice();
   frameState.morphActive = true;
+}
+
+/** Queue a particle burst for scene/Bursts to spawn. */
+export function emitBurst(
+  at: [number, number, number],
+  color: string,
+  count: number,
+  speed = 1.1
+): void {
+  frameState.bursts.push({ x: at[0], y: at[1], z: at[2], color, count, speed });
 }
 
 export function beadPosition(id: string): [number, number, number] | null {

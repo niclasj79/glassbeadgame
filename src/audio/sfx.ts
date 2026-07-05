@@ -1,4 +1,5 @@
 import { audio } from "./engine";
+import { ambient } from "./ambient";
 import { playVoice, noiseSource } from "./voices";
 import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
@@ -241,12 +242,13 @@ export function cancelGliss(): void {
   osc.stop(t + 0.4);
 }
 
-/** The discovery chord — a strum voiced by tier, guaranteed consonant. */
+/** The discovery chord — a strum voiced by tier, guaranteed consonant,
+ *  landing on the world's rhythmic grid like a note that belongs. */
 export function discoveryChord(discovery: Discovery): void {
   const ctx = audio.ensure();
   if (!ctx || !audio.sfxBus) return;
   const notes = chordForPair(discovery.a, discovery.b, discovery.tier);
-  const t0 = ctx.currentTime + 0.03;
+  const t0 = ambient.quantize();
   const tierGain = discovery.tier >= 3 ? 1.15 : discovery.tier === 2 ? 1.0 : 0.9;
   const release = discovery.tier >= 3 ? 3.2 : 2.2;
   for (const n of notes) {
@@ -265,7 +267,7 @@ export function faintDyad(discovery: Discovery): void {
   const a = conceptById.get(discovery.a);
   const b = conceptById.get(discovery.b);
   if (!a || !b) return;
-  const t0 = ctx.currentTime + 0.02;
+  const t0 = ambient.quantize();
   playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(a), { gain: 0.07, at: t0, release: 0.8 });
   playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(b) * 1.5, {
     gain: 0.055,

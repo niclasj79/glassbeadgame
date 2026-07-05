@@ -4,24 +4,20 @@ import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import { mulberry32 } from "@/lib/utils";
 import { useStore } from "@/state/store";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 import { makeRadialTexture } from "./textures";
 
 const STAR_COUNT = 3000;
 
-function Starfield() {
+function Starfield({ palette: paletteHex }: { palette: [string, string, string, string] }) {
   const ref = useRef<THREE.Points>(null);
 
   const geometry = useMemo(() => {
     const rng = mulberry32(0x5eed);
     const positions = new Float32Array(STAR_COUNT * 3);
     const colors = new Float32Array(STAR_COUNT * 3);
-    const palette = [
-      new THREE.Color("#cdd6ff"),
-      new THREE.Color("#ffffff"),
-      new THREE.Color("#ffe9d2"),
-      new THREE.Color("#9fb4ff"),
-    ];
+    const palette = paletteHex.map((c) => new THREE.Color(c));
     for (let i = 0; i < STAR_COUNT; i++) {
       // Uniform direction via normalized gaussian triple.
       let x = 0,
@@ -48,11 +44,18 @@ function Starfield() {
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     return g;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paletteHex.join()]);
 
   useFrame((_, dt) => {
-    if (!ref.current) return;
-    ref.current.rotation.y += dt * 0.0045 * frameState.timeScale;
+    const pts = ref.current;
+    if (!pts) return;
+    pts.rotation.y += dt * 0.0045 * frameState.timeScale;
+    // The sky answers discoveries: a brief flare through every star.
+    frameState.flare = Math.max(0, frameState.flare - dt / 1.1);
+    const mat = pts.material as THREE.PointsMaterial;
+    mat.opacity = 0.9 * (1 + 0.35 * frameState.flare);
+    mat.size = 0.085 * (1 + 0.3 * frameState.flare);
   });
 
   return (
@@ -83,6 +86,9 @@ function NebulaPlane({ color, position, scale, drift }: NebulaPlaneProps) {
   useFrame(() => {
     if (!ref.current) return;
     ref.current.rotation.z = frameState.clock * drift;
+    // Nebulae wax as the session awakens toward its full weave.
+    const mat = ref.current.material as THREE.MeshBasicMaterial;
+    mat.opacity = 0.62 * (1 + 0.35 * frameState.awakening);
   });
 
   return (
@@ -110,20 +116,27 @@ const FACULTY_NEBULAE: Record<string, string> = {
   "faculty-history": "rgba(40,180,210,0.12)",
 };
 
-/** Deep space: stars, three breathing nebulae, and near dust motes. */
+/** Deep space per the active world: stars, three breathing nebulae, dust. */
 export function Backdrop() {
   const unlocks = useStore((s) => s.unlocks);
+  const theme = useCurrentTheme();
   const facultyTint = unlocks.find((u) => u.startsWith("faculty-"));
-  const firstNebula =
-    (facultyTint && FACULTY_NEBULAE[facultyTint]) || "rgba(96,60,190,0.13)";
+  const firstNebula = (facultyTint && FACULTY_NEBULAE[facultyTint]) || theme.nebulae[0];
 
   return (
-    <group>
-      <Starfield />
+    <group key={theme.id}>
+      <Starfield palette={theme.starPalette} />
       <NebulaPlane color={firstNebula} position={[-9, 4, -34]} scale={46} drift={0.012} />
-      <NebulaPlane color="rgba(38,70,190,0.11)" position={[11, -5, -40]} scale={54} drift={-0.008} />
-      <NebulaPlane color="rgba(24,132,150,0.07)" position={[3, 9, -46]} scale={40} drift={0.006} />
-      <Sparkles count={90} scale={10} size={2} speed={0.22} opacity={0.35} color="#8ea8ff" />
+      <NebulaPlane color={theme.nebulae[1]} position={[11, -5, -40]} scale={54} drift={-0.008} />
+      <NebulaPlane color={theme.nebulae[2]} position={[3, 9, -46]} scale={40} drift={0.006} />
+      <Sparkles
+        count={90}
+        scale={10}
+        size={2}
+        speed={theme.sparkles.speed}
+        opacity={theme.sparkles.opacity}
+        color={theme.sparkles.color}
+      />
     </group>
   );
 }

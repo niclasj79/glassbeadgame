@@ -14,6 +14,8 @@ class AudioEngine {
   private breathGain: GainNode | null = null;
   /** Pad/drone lowpass whose cutoff the Breath sweeps. */
   breathFilter: BiquadFilterNode | null = null;
+  /** Center of the breath's filter sweep — each world sets its own. */
+  private breathCenter = 900;
   private binaural: {
     oscL: OscillatorNode;
     oscR: OscillatorNode;
@@ -108,11 +110,16 @@ class AudioEngine {
     this.breathGain.gain.setTargetAtTime(Math.pow(10, db / 20), t, 0.35);
     if (this.breathFilter) {
       this.breathFilter.frequency.setTargetAtTime(
-        900 + 350 * depth * Math.sin(phase),
+        this.breathCenter + 350 * depth * Math.sin(phase),
         t,
         0.4
       );
     }
+  }
+
+  /** Each world's pads breathe around their own darkness. */
+  setBreathCenter(hz: number): void {
+    this.breathCenter = hz;
   }
 
   /**
