@@ -233,13 +233,15 @@ export function devCommit(fromId: string, toId: string): void {
   commit(fromId, toId);
 }
 
-/** Ends the reveal moment: restores time, input, and idle state. */
+/** Ends the reveal moment: restores time, input, idle state — and drifts
+ *  the orbit target home so the arena is centered again. */
 export function dismissReveal() {
   const st = useStore.getState();
   if (st.session?.interaction.mode !== "reveal") return;
   st.setInteraction({ mode: "idle", reveal: null });
   frameState.timeScaleTarget = 1;
   frameState.idleSince = performance.now();
+  frameState.recenter = true;
   if (threadingEnv.controls) threadingEnv.controls.enabled = true;
 }
 

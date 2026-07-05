@@ -54,6 +54,9 @@ export const frameState = {
   /** The stage awakens: eased luminousFound/curatedAvailable (0..1).
    *  Nebulae brighten, the lattice lifts, the music thickens with it. */
   awakening: 0,
+  /** After a reveal's camera focus, drift the orbit target home so the
+   *  arena's center is the screen's center again. */
+  recenter: false,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
 };

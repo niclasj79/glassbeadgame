@@ -355,12 +355,14 @@ export function ArenaHud() {
         )}
       </AnimatePresence>
 
-      {/* The world's title card — Tetris Effect's level-opening breath. */}
+      {/* The world's title card — Tetris Effect's level-opening breath.
+          (Centering lives on a plain wrapper: framer owns `transform`.) */}
       <AnimatePresence>
         {introVisible && mode !== "concluding" && (
+          <div className="pointer-events-none absolute inset-x-4 top-[18%] flex justify-center">
           <motion.div
             key={`intro-${sessionSeed}`}
-            className="absolute left-1/2 top-[18%] -translate-x-1/2 text-center"
+            className="text-center"
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{
               opacity: 1,
@@ -380,20 +382,23 @@ export function ArenaHud() {
               {theme.tagline}
             </p>
           </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {mode !== "concluding" && activeHint && (
-          <motion.p
-            key={activeHint.id}
-            className="absolute bottom-[5.6rem] left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center font-ui text-xs leading-relaxed tracking-wide text-dim/80"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: activeHint.delay, duration: 1 } }}
-            exit={{ opacity: 0, transition: { duration: 0.6 } }}
-          >
-            {activeHint.text}
-          </motion.p>
+          <div className="pointer-events-none absolute inset-x-0 bottom-[5.6rem] flex justify-center px-6">
+            <motion.p
+              key={activeHint.id}
+              className="max-w-md text-center font-ui text-xs leading-relaxed tracking-wide text-dim/80"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0, transition: { delay: activeHint.delay, duration: 1 } }}
+              exit={{ opacity: 0, transition: { duration: 0.6 } }}
+            >
+              {activeHint.text}
+            </motion.p>
+          </div>
         )}
       </AnimatePresence>
 
