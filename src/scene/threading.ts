@@ -7,7 +7,8 @@ import { connectionByPair } from "@/content/connections";
 import { pairKey } from "@/content/types";
 import { smoothstep } from "@/lib/utils";
 import { hoverPing, selectTick, cancelGliss, setSilkActive, stopSympathy } from "@/audio/sfx";
-import { frameState } from "./frameState";
+import { currentTheme } from "@/themes/useTheme";
+import { frameState, beadPosition, emitBurst } from "./frameState";
 
 /**
  * THE one pointer file. Both gestures resolve through the same path:
@@ -192,6 +193,27 @@ function commit(fromId: string, toId: string) {
   const motifs = detectNewMotifs(session, thread);
   st.addThread(thread);
   const finalized = st.addDiscovery(discovery, motifs);
+
+  // The world answers the weave: particles at the joining point, a flare
+  // through the stars, a breath of impact in the lens.
+  const pa = beadPosition(fromId);
+  const pb = beadPosition(toId);
+  if (pa && pb) {
+    const mid: [number, number, number] = [
+      (pa[0] + pb[0]) / 2,
+      (pa[1] + pb[1]) / 2,
+      (pa[2] + pb[2]) / 2,
+    ];
+    const world = currentTheme();
+    if (finalized.kind === "curated") {
+      emitBurst(mid, world.burst.color, 26 + finalized.tier * 8, 1.2);
+      emitBurst(mid, world.burst.secondary, 14, 0.7);
+      frameState.flare = 1;
+      if (!st.settings.reducedMotion) frameState.kick = 1;
+    } else {
+      emitBurst(mid, world.faintThread, 10, 0.6);
+    }
+  }
 
   if (finalized.kind === "curated") {
     // The jewel moment: input locks, time dilates, the camera leans in,

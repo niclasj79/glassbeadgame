@@ -57,6 +57,22 @@ src/
 legacy/        the archived v1 (Lovable-generated) app — reference only
 ```
 
+### Adding a world theme
+
+Sessions open into rotating **worlds** (Tetris Effect-style): each world is
+one data file describing sky, light, particles, and musical temperament.
+
+1. Add a `WorldTheme` to `src/themes/worlds.ts` (see `tide` or `ember` for
+   the shape: nebulae, star palette, sparkles, fog, lattice color, bloom
+   bias, faint-thread color, burst tints, and `music` — slot tempo, drone
+   gain, motif bias, pad cutoff).
+2. Register it in the `THEMES` array in `src/themes/index.ts`.
+
+That's all — it immediately joins the per-session rotation and the daily
+cycle. Everything themed (backdrop, fog, lattice, bloom, faint threads,
+bursts, ambient tempo and darkness) reads from the registry; no scene or
+audio code changes needed.
+
 ### Adding a curated connection
 
 1. Pick two concept ids from `src/content/concepts.ts`.

@@ -6,6 +6,7 @@ import { drawSession } from "@/game/session";
 import { pickIlluminationTarget } from "@/game/rules";
 import { unlockIdsFor } from "@/game/progress";
 import { utcDateKey } from "@/lib/daily";
+import { themeForSession } from "@/themes";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
 import type {
   CodexEntry,
@@ -125,6 +126,7 @@ export const useStore = create<GBGState>()(
         insight: 1, // the Magister's gift — one illumination to learn the mechanic
         illuminationsUsed: 0,
         daily: opts?.daily,
+        themeId: themeForSession(draw.seed, opts?.daily).id,
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
     },

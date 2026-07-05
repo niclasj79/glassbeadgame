@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { isCoarsePointer } from "@/lib/device";
-import { frameState } from "@/scene/frameState";
+import { frameState, beadPosition, emitBurst } from "@/scene/frameState";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { illuminationChime } from "@/audio/sfx";
 import type { Discovery, MotifAward } from "@/state/types";
 import { GlassPanel } from "../components/GlassPanel";
@@ -74,6 +75,10 @@ export function ArenaHud() {
       until: performance.now() + 4000,
     };
     illuminationChime(pair[0], pair[1]);
+    for (const id of pair) {
+      const p = beadPosition(id);
+      if (p) emitBurst(p, "#ffe9b0", 10, 0.5);
+    }
   };
 
   const [journalOpen, setJournalOpen] = useState(false);
@@ -90,11 +95,30 @@ export function ArenaHud() {
   const seenDiscoveries = useRef(0);
   const seenMotifs = useRef(0);
 
+  const theme = useCurrentTheme();
+
   useEffect(() => {
     if (mode !== "concluding") return;
+    // The web's final bloom under the rising camera.
+    emitBurst([0, 0, 0], theme.burst.color, 48, 1.6);
+    emitBurst([0, 0.4, 0], theme.burst.secondary, 24, 0.9);
     const t = setTimeout(finishConcluding, reducedMotion ? 700 : 4200);
     return () => clearTimeout(t);
-  }, [mode, finishConcluding, reducedMotion]);
+  }, [mode, finishConcluding, reducedMotion, theme]);
+
+  // The world announces itself — once per session, after any welcome.
+  const [introVisible, setIntroVisible] = useState(false);
+  const introShownFor = useRef<number | null>(null);
+  const sessionSeed = useStore((s) => s.session?.seed ?? null);
+  const isDaily = useStore((s) => !!s.session?.daily);
+  useEffect(() => {
+    if (sessionSeed === null || welcomeOpen) return;
+    if (introShownFor.current === sessionSeed) return;
+    introShownFor.current = sessionSeed;
+    setIntroVisible(true);
+    const t = setTimeout(() => setIntroVisible(false), 4200);
+    return () => clearTimeout(t);
+  }, [sessionSeed, welcomeOpen]);
 
   const hintsSeen = useStore((s) => s.settings.hintsSeen);
   const markHintSeen = useStore((s) => s.markHintSeen);
@@ -327,6 +351,34 @@ export function ArenaHud() {
                 Enter the weave
               </Button>
             </GlassPanel>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* The world's title card — Tetris Effect's level-opening breath. */}
+      <AnimatePresence>
+        {introVisible && mode !== "concluding" && (
+          <motion.div
+            key={`intro-${sessionSeed}`}
+            className="absolute left-1/2 top-[18%] -translate-x-1/2 text-center"
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              transition: { duration: 1.1, ease: [0.22, 1, 0.36, 1] },
+            }}
+            exit={{ opacity: 0, y: -8, transition: { duration: 1.2 } }}
+          >
+            <p className="font-ui text-[10px] uppercase tracking-[0.55em] text-dim/70">
+              {isDaily ? "Today's Draw opens into" : "The Game opens into"}
+            </p>
+            <h2 className="mt-2 font-display text-4xl font-medium tracking-wide text-bright sm:text-5xl">
+              {theme.name}
+            </h2>
+            <p className="mt-2 font-display text-base italic text-dim">
+              {theme.tagline}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

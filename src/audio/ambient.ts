@@ -5,6 +5,7 @@ import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { hashString, mulberry32 } from "@/lib/utils";
 import { frameState } from "@/scene/frameState";
+import { currentTheme } from "@/themes/useTheme";
 import type { TimbreId } from "@/content/types";
 
 /**
@@ -18,7 +19,8 @@ import type { TimbreId } from "@/content/types";
 
 const TICK_MS = 25;
 const LOOKAHEAD_S = 1.2;
-const SLOT_S = 2.0; // one scheduling slot ≈ half a "bar" at largo
+/** Default slot ≈ half a "bar" at largo; each world sets its own tempo. */
+const DEFAULT_SLOT_S = 2.0;
 const MAX_ACTIVE_MOTIFS = 6;
 
 interface Motif {
@@ -43,10 +45,19 @@ class AmbientEngine {
     gain: GainNode;
     panner: StereoPannerNode;
   } | null = null;
+  // The active world's musical temperament (set at start()).
+  private slotS = DEFAULT_SLOT_S;
+  private droneGain = 0.14;
+  private motifBias = 1;
 
   start(): void {
     const ctx = audio.ensure();
     if (!ctx || this.running) return;
+    const world = currentTheme().music;
+    this.slotS = world.slotSeconds;
+    this.droneGain = world.droneGain;
+    this.motifBias = world.motifBias;
+    audio.setBreathCenter(world.padCutoff);
     this.running = true;
     this.motifs = [];
     this.slot = 0;
@@ -97,6 +108,22 @@ class AmbientEngine {
     src.stop(ctx.currentTime + 2.5);
   }
 
+  /**
+   * The next point on the world's rhythmic grid (slot/8) — discovery
+   * chords land on it, so every payoff arrives in time with the piece.
+   */
+  quantize(): number {
+    const ctx = audio.get();
+    if (!ctx || !this.running) return audio.now() + 0.02;
+    const grid = this.slotS / 8;
+    const now = ctx.currentTime;
+    const until = this.nextSlotTime - now;
+    const phase = ((until % grid) + grid) % grid;
+    let t = now + (phase < 0.03 ? phase + grid : phase);
+    if (t - now > grid + 0.05) t = now + grid;
+    return t;
+  }
+
   /** Camera azimuth → gentle stereo drift of the room tone. */
   setAirPan(pan: number): void {
     const ctx = audio.get();
@@ -136,7 +163,7 @@ class AmbientEngine {
 
     while (this.nextSlotTime < horizon) {
       this.scheduleSlot(ctx, this.nextSlotTime, this.slot);
-      this.nextSlotTime += SLOT_S;
+      this.nextSlotTime += this.slotS;
       this.slot += 1;
     }
   }
@@ -151,7 +178,7 @@ class AmbientEngine {
     if (slot >= this.droneRefreshAt) {
       this.droneRefreshAt = slot + 8;
       playVoice(ctx, ground, "drone", degreeToFreq(0, 2), {
-        gain: 0.14,
+        gain: this.droneGain,
         at: t,
         attack: 2.5,
         hold: 12,
@@ -166,16 +193,31 @@ class AmbientEngine {
       });
     }
 
-    // The choir: each thread's motif speaks with probability scaled by density.
+    // The heartbeat: past half-awakening, a low pulse enters on each slot —
+    // the stage is alive and knows it.
+    const awakening = frameState.awakening;
+    if (awakening >= 0.5) {
+      playVoice(ctx, ground, "drone", degreeToFreq(0, 2) * 0.5, {
+        gain: 0.05 * awakening,
+        at: t,
+        attack: 0.06,
+        hold: 0.05,
+        release: 0.7,
+      });
+    }
+
+    // The choir: each thread's motif speaks with probability scaled by
+    // density, thickening as the session awakens.
     const active = this.motifs.slice(-MAX_ACTIVE_MOTIFS * 2);
     const density = Math.min(active.length, MAX_ACTIVE_MOTIFS);
     if (density === 0) return;
-    const perMotifProb = 0.4 / Math.sqrt(density);
+    const perMotifProb =
+      (0.4 * this.motifBias * (1 + 0.6 * awakening)) / Math.sqrt(density);
     const gainScale = 1 / Math.sqrt(Math.max(1, density));
 
     for (const m of active) {
       if (m.rng() > perMotifProb) continue;
-      const jitter = m.rng() * (SLOT_S * 0.5);
+      const jitter = m.rng() * (this.slotS * 0.5);
       const usedFlip = m.flip;
       const first = m.flip ? m.freqB : m.freqA;
       const second = m.flip ? m.freqA : m.freqB;

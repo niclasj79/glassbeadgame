@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { conceptById } from "@/content/concepts";
 import { fibonacciSpherePositions, tbgPositions } from "@/game/layout";
 import { frameState, initFramePositions, setMorphTargets } from "./frameState";
@@ -9,6 +10,7 @@ import { Lattice } from "./Lattice";
 import { LensAxes } from "./LensAxes";
 import { Membranes } from "./Membranes";
 import { Illumination } from "./Illumination";
+import { Bursts } from "./Bursts";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
 import { ThreadPreview } from "./ThreadPreview";
@@ -63,6 +65,19 @@ export function Cosmos() {
         : 1;
     frameState.breathDepth += (depthTarget - frameState.breathDepth) * Math.min(1, dt * 2);
 
+    // The stage awakens with each luminous find.
+    const sess = st.session;
+    const awakeTarget =
+      sess && sess.curatedAvailable > 0
+        ? Math.min(
+            1,
+            sess.discoveries.filter((d) => d.kind === "curated").length /
+              sess.curatedAvailable
+          )
+        : 0;
+    frameState.awakening +=
+      (awakeTarget - frameState.awakening) * Math.min(1, dt * 0.8);
+
     // Layout morph toward targets.
     if (frameState.morphActive) {
       const { positions, targets } = frameState;
@@ -81,10 +96,16 @@ export function Cosmos() {
     }
   });
 
+  const theme = useCurrentTheme();
+
   return (
     <>
       <color attach="background" args={["#06090f"]} />
-      <fog attach="fog" args={["#06090f", 18, 90]} />
+      <fog
+        key={theme.id}
+        attach="fog"
+        args={[theme.fog.color, theme.fog.near, theme.fog.far]}
+      />
 
       <ambientLight intensity={0.45} />
       <directionalLight position={[4, 6, 3]} intensity={1.1} color="#dfe6ff" />
@@ -98,6 +119,7 @@ export function Cosmos() {
       <Threads />
       <Membranes />
       <Illumination />
+      <Bursts />
       <ThreadPreview />
       <ThreadingDriver />
       <CameraRig />

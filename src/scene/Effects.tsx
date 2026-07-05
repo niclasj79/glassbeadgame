@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette, Noise } from "@react-three/postprocessing";
 import type { BloomEffect } from "postprocessing";
 import { useStore } from "@/state/store";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 
 /**
@@ -23,17 +24,22 @@ function BreathDriver({ bloomRef, base }: { bloomRef: React.RefObject<BloomEffec
   useFrame(() => {
     const bloom = bloomRef.current;
     if (!bloom) return;
-    // The synesthetic pulse: bloom inhales with the shared breath.
+    // The synesthetic pulse: bloom inhales with the shared breath, and the
+    // whole stage glows a shade brighter as the weave completes.
     bloom.intensity =
-      base * (1 + 0.16 * frameState.breathDepth * Math.sin(frameState.breathPhase));
+      base *
+      (1 + 0.08 * frameState.awakening) *
+      (1 + 0.16 * frameState.breathDepth * Math.sin(frameState.breathPhase));
   });
   return null;
 }
 
 export function Effects() {
   const tier = useStore((s) => s.settings.qualityTier);
+  const theme = useCurrentTheme();
   const bloomRef = useRef<BloomEffect>(null);
   const cfg = TIER_BLOOM[tier];
+  const baseIntensity = cfg.intensity * theme.bloomBias;
 
   // EffectComposer instantiates every child as a pass — build the list
   // explicitly so no non-effect nodes ever reach it.
@@ -44,7 +50,7 @@ export function Effects() {
       mipmapBlur
       luminanceThreshold={0.32}
       luminanceSmoothing={0.18}
-      intensity={cfg.intensity}
+      intensity={baseIntensity}
       radius={cfg.radius}
       levels={cfg.levels}
     />,
@@ -54,7 +60,7 @@ export function Effects() {
 
   return (
     <>
-      <BreathDriver bloomRef={bloomRef} base={cfg.intensity} />
+      <BreathDriver bloomRef={bloomRef} base={baseIntensity} />
       <EffectComposer multisampling={0}>{passes}</EffectComposer>
     </>
   );

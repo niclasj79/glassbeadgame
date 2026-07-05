@@ -106,6 +106,15 @@ export function CameraRig() {
     const ctl = controls.current;
     if (!ctl) return;
 
+    // Impact kick: a quick FOV punch on curated discoveries — no position
+    // meddling, so OrbitControls never fights it.
+    if (frameState.kick > 0.001) {
+      frameState.kick *= Math.exp(-dt * 5);
+      const cam = state.camera as THREE.PerspectiveCamera;
+      cam.fov = 42 * (1 - 0.045 * Math.sin(frameState.kick * Math.PI));
+      cam.updateProjectionMatrix();
+    }
+
     if (transit.current) {
       easing.damp3(state.camera.position, transit.current.position, 0.85, dt);
       easing.damp3(ctl.target, transit.current.target, 0.85, dt);
