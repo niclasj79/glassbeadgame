@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useStore } from "@/state/store";
 import { composeAnnotation } from "@/content/annotations";
 import { totalConnections } from "@/game/ranks";
+import type { Discovery } from "@/state/types";
 import { RankSigil } from "../components/RankSigil";
 import { Button } from "../components/Button";
 import { ContinueLinkButton } from "../components/ContinueLinkButton";
 import { SessionPlateActions } from "../components/SessionPlateActions";
+import { ConnectionCard } from "../components/ConnectionCard";
 
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
@@ -24,12 +26,12 @@ export function ConclusionScreen() {
     () => (session ? composeAnnotation(session) : ""),
     [session]
   );
+  const [reading, setReading] = useState<Discovery | null>(null);
 
   if (!session) return null;
 
   const curated = session.discoveries.filter((d) => d.kind === "curated");
   const faint = session.discoveries.length - curated.length;
-  const newEntries = curated.filter((d) => d.newToCodex);
   const codexCount = Object.keys(codex).length;
 
   return (
@@ -85,24 +87,35 @@ export function ConclusionScreen() {
           <Stat value={session.motifs.length} label="Motifs" />
         </motion.div>
 
-        {/* New codex entries */}
-        {newEntries.length > 0 && (
+        {/* The Game's luminous connections — click any to read it again. */}
+        {curated.length > 0 && (
           <motion.div
             {...fadeUp}
             transition={{ delay: 1.3, duration: 0.9 }}
             className="mt-5 w-full"
           >
             <p className="text-center font-ui text-[10px] uppercase tracking-[0.4em] text-dim">
-              New to your codex
+              The connections of this Game
+              <span className="ml-2 normal-case tracking-normal text-dim/60">
+                · click to read again
+              </span>
             </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {newEntries.map((d) => (
-                <span
+              {curated.map((d) => (
+                <button
                   key={d.id}
-                  className="rounded-full border border-glow/40 bg-glow/10 px-4 py-1.5 font-display text-sm italic text-bright"
+                  onClick={() => setReading(d)}
+                  className={
+                    "rounded-full border px-4 py-1.5 font-display text-sm italic transition-all duration-200 " +
+                    (d.newToCodex
+                      ? "border-glow/40 bg-glow/10 text-bright hover:border-glow/80 hover:bg-glow/20"
+                      : "border-line/50 bg-surface/50 text-bright/90 hover:border-glow/60 hover:bg-glow/10")
+                  }
+                  title={d.newToCodex ? "New to your codex" : undefined}
                 >
+                  {d.newToCodex && <span className="mr-1.5 not-italic text-glow">✧</span>}
                   {d.title}
-                </span>
+                </button>
               ))}
             </div>
           </motion.div>
@@ -129,6 +142,8 @@ export function ConclusionScreen() {
         </motion.div>
         </div>
       </div>
+
+      <ConnectionCard discovery={reading} onClose={() => setReading(null)} />
     </motion.div>
   );
 }
