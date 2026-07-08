@@ -18,7 +18,10 @@ const contentGate = (): Plugin => ({
   },
 });
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ command, mode }) => ({
+  // GitHub Pages serves this project site under /glassbeadgame/. The dev
+  // server stays at "/" so local tooling and previews resolve normally.
+  base: command === "build" ? "/glassbeadgame/" : "/",
   server: {
     host: "::",
     port: 8080,
