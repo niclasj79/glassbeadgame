@@ -3,7 +3,8 @@ import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
 import type { SharedProgress } from "@/game/progress";
 import { drawSession } from "@/game/session";
-import { pickIlluminationTarget } from "@/game/rules";
+import { pickIlluminationTarget, CONSECRATION_POINTS } from "@/game/rules";
+import type { LensView } from "@/game/layout";
 import { unlockIdsFor } from "@/game/progress";
 import { utcDateKey } from "@/lib/daily";
 import { themeForSession } from "@/themes";
@@ -23,6 +24,8 @@ import type {
 interface GBGState {
   phase: Phase;
   lensActive: boolean;
+  /** Which plane of the Lens triptych is showing (1 Good×True, 2 Good×Beautiful, 3 True×Beautiful). */
+  lensView: LensView;
   codexOpen: boolean;
   settings: Settings;
   session: SessionState | null;
@@ -30,6 +33,8 @@ interface GBGState {
   sessionArchive: SessionMemory[];
   lifetimeStats: { sessions: number; totalScore: number };
   focusedBeadId: string | null;
+  /** A bead pinned open for reading (touch long-press); shows immediately. */
+  pinnedInspectId: string | null;
   /** Great Web milestones earned — persisted once earned, never revoked. */
   unlocks: string[];
   /** The last completed Daily Draw. */
@@ -39,8 +44,11 @@ interface GBGState {
   returnToTitle: () => void;
   beginSession: (picks: DisciplineId[], opts?: { seed?: number; daily?: boolean }) => void;
   setLens: (on: boolean) => void;
+  /** The Lens is a triptych: off → Good×True → Good×Beautiful → True×Beautiful → off. */
+  cycleLens: () => void;
   setCodexOpen: (open: boolean) => void;
   setFocusedBead: (id: string | null) => void;
+  setPinnedInspect: (id: string | null) => void;
   setMuted: (muted: boolean) => void;
   setBinaural: (on: boolean) => void;
   setQualityTier: (tier: QualityTier) => void;
@@ -54,6 +62,8 @@ interface GBGState {
   addDiscovery: (discovery: Discovery, motifs: MotifAward[]) => Discovery;
   /** Spends one Insight; returns the pair the Game illuminates, or null. */
   spendInsight: () => [string, string] | null;
+  /** Marks threads as consecrated by a motif and scores the elevation. */
+  consecrateThreads: (threadIds: string[], motifId: MotifAward["motifId"]) => void;
   concludeSession: () => void;
   finishConcluding: () => void;
 }
@@ -83,6 +93,7 @@ export const useStore = create<GBGState>()(
       (set, get) => ({
     phase: "title",
     lensActive: false,
+    lensView: 1 as LensView,
     codexOpen: false,
     settings: {
       muted: false,
@@ -98,6 +109,7 @@ export const useStore = create<GBGState>()(
     lastDaily: null,
     lifetimeStats: { sessions: 0, totalScore: 0 },
     focusedBeadId: null,
+    pinnedInspectId: null,
 
     goToSetup: () => set({ phase: "setup" }),
 
@@ -108,6 +120,7 @@ export const useStore = create<GBGState>()(
         lensActive: false,
         codexOpen: false,
         focusedBeadId: null,
+        pinnedInspectId: null,
       }),
 
     beginSession: (picks, opts) => {
@@ -128,7 +141,7 @@ export const useStore = create<GBGState>()(
         daily: opts?.daily,
         themeId: themeForSession(draw.seed, opts?.daily).id,
       };
-      set({ phase: "arena", session, lensActive: false, focusedBeadId: null });
+      set({ phase: "arena", session, lensActive: false, focusedBeadId: null, pinnedInspectId: null });
     },
 
     setLens: (on) => {
@@ -137,12 +150,28 @@ export const useStore = create<GBGState>()(
         // Entering the lens always cancels an in-flight gesture.
         set({ session: { ...s, interaction: idleInteraction() } });
       }
-      set({ lensActive: on });
+      set({ lensActive: on, lensView: 1 as LensView });
+    },
+
+    cycleLens: () => {
+      const st = get();
+      if (st.session && st.session.interaction.mode !== "idle") {
+        set({ session: { ...st.session, interaction: idleInteraction() } });
+      }
+      if (!st.lensActive) {
+        set({ lensActive: true, lensView: 1 as LensView });
+      } else if (st.lensView < 3) {
+        set({ lensView: (st.lensView + 1) as LensView });
+      } else {
+        set({ lensActive: false, lensView: 1 as LensView });
+      }
     },
 
     setCodexOpen: (open) => set({ codexOpen: open }),
 
     setFocusedBead: (focusedBeadId) => set({ focusedBeadId }),
+
+    setPinnedInspect: (pinnedInspectId) => set({ pinnedInspectId }),
 
     setMuted: (muted) => set((st) => ({ settings: { ...st.settings, muted } })),
 
@@ -244,6 +273,21 @@ export const useStore = create<GBGState>()(
         },
       });
       return finalized;
+    },
+
+    consecrateThreads: (threadIds, motifId) => {
+      const s = get().session;
+      if (!s || threadIds.length === 0) return;
+      const ids = new Set(threadIds);
+      set({
+        session: {
+          ...s,
+          threads: s.threads.map((t) =>
+            ids.has(t.id) && !t.consecratedBy ? { ...t, consecratedBy: motifId } : t
+          ),
+          score: s.score + threadIds.length * CONSECRATION_POINTS,
+        },
+      });
     },
 
     spendInsight: () => {

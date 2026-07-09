@@ -13,6 +13,9 @@ export interface Thread {
   /** 0 = faint, 1–3 = curated tier. */
   tier: 0 | 1 | 2 | 3;
   createdAt: number;
+  /** A completed motif consecrates the faint threads of its web — a state
+   *  between faint resonance and luminous connection. Holds the motif id. */
+  consecratedBy?: "triad" | "symposium" | "fugue";
 }
 
 export interface Discovery {
@@ -35,6 +38,9 @@ export interface MotifAward {
   name: string;
   points: number;
   at: number;
+  /** The beads that formed the motif — its persistent mark lives on them
+   *  (triangle corners, symposium members, the fugue's ordered path). */
+  beads?: string[];
 }
 
 export interface Interaction {

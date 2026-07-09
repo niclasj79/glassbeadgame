@@ -1,4 +1,28 @@
 import type { TimbreId } from "@/content/types";
+import { SCORE } from "./score";
+
+/** Human hands: per-note detune and level never repeat exactly. */
+function humanizeFreq(freq: number): number {
+  const cents = (Math.random() * 2 - 1) * SCORE.humanize.detuneCents;
+  return freq * Math.pow(2, cents / 1200);
+}
+function humanizeGain(gain: number): number {
+  return gain * (1 + (Math.random() * 2 - 1) * SCORE.humanize.gainJitter);
+}
+
+/** Delayed-onset vibrato for the sustaining voices. */
+function attachVibrato(ctx: AudioContext, osc: OscillatorNode, freq: number, t0: number): void {
+  if (SCORE.humanize.vibratoDepth <= 0) return;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = SCORE.humanize.vibratoHz * (0.9 + Math.random() * 0.2);
+  const depth = ctx.createGain();
+  depth.gain.setValueAtTime(0, t0);
+  depth.gain.linearRampToValueAtTime(freq * SCORE.humanize.vibratoDepth, t0 + 0.7);
+  lfo.connect(depth);
+  depth.connect(osc.frequency);
+  lfo.start(t0);
+  lfo.stop(t0 + 20);
+}
 
 export interface VoiceOptions {
   gain?: number;
@@ -19,11 +43,12 @@ export function playVoice(
   ctx: AudioContext,
   dest: AudioNode,
   timbre: TimbreId,
-  freq: number,
+  rawFreq: number,
   opts: VoiceOptions = {}
 ): void {
   const t0 = opts.at ?? ctx.currentTime;
-  const gain = opts.gain ?? 0.2;
+  const freq = humanizeFreq(rawFreq);
+  const gain = humanizeGain(opts.gain ?? 0.2);
 
   switch (timbre) {
     case "bell": {
@@ -60,6 +85,7 @@ export function playVoice(
       modGain.connect(carrier.frequency);
       const env = envelope(ctx, dest, gain, t0, opts.attack ?? 0.03, opts.hold ?? 0.15, opts.release ?? 1.1);
       carrier.connect(env);
+      attachVibrato(ctx, carrier, freq, t0);
       const stopAt = t0 + (opts.attack ?? 0.03) + (opts.hold ?? 0.15) + (opts.release ?? 1.1) + 0.1;
       carrier.start(t0);
       mod.start(t0);
@@ -128,6 +154,8 @@ function tone(
   osc.type = type;
   osc.frequency.value = freq;
   osc.connect(envelope(ctx, dest, peak, t0, attack, hold, release));
+  // Sustained voices breathe: slow notes earn a delayed-onset vibrato.
+  if (attack + hold + release > 2.2) attachVibrato(ctx, osc, freq, t0);
   osc.start(t0);
   osc.stop(t0 + attack + hold + release + 0.1);
 }

@@ -1,12 +1,20 @@
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useStore } from "@/state/store";
-import { resolveAttempt, detectNewMotifs } from "@/game/rules";
+import { resolveAttempt, detectNewMotifs, consecrateComponent } from "@/game/rules";
 import { ARENA_RADIUS } from "@/game/layout";
 import { connectionByPair } from "@/content/connections";
 import { pairKey } from "@/content/types";
 import { smoothstep } from "@/lib/utils";
-import { hoverPing, selectTick, cancelGliss, setSilkActive, stopSympathy } from "@/audio/sfx";
+import { isCoarsePointer } from "@/lib/device";
+import {
+  hoverPing,
+  selectTick,
+  cancelGliss,
+  setSilkActive,
+  stopSympathy,
+  consecrationChime,
+} from "@/audio/sfx";
 import { currentTheme } from "@/themes/useTheme";
 import { frameState, beadPosition, emitBurst } from "./frameState";
 
@@ -27,13 +35,28 @@ interface GestureState {
   pointerId: number;
   startX: number;
   startY: number;
+  /** Touch only: pending long-press-to-inspect timer. */
+  pressTimer: number | null;
+  pressedBeadId: string | null;
 }
 
 const gesture: GestureState = {
   pointerId: -1,
   startX: 0,
   startY: 0,
+  pressTimer: null,
+  pressedBeadId: null,
 };
+
+/** Hold a bead still this long (touch) and it opens for reading instead. */
+const LONG_PRESS_MS = 600;
+
+function clearPressTimer() {
+  if (gesture.pressTimer !== null) {
+    window.clearTimeout(gesture.pressTimer);
+    gesture.pressTimer = null;
+  }
+}
 
 /** Wired by ThreadingDriver once the scene exists. */
 export const threadingEnv = {
@@ -145,6 +168,8 @@ function beginThreading(sticky: boolean) {
 }
 
 function endGesture(opts?: { keepControlsLocked?: boolean }) {
+  clearPressTimer();
+  gesture.pressedBeadId = null;
   const { dom, controls } = threadingEnv;
   if (controls && !opts?.keepControlsLocked) controls.enabled = true;
   if (dom && gesture.pointerId >= 0) {
@@ -193,6 +218,19 @@ function commit(fromId: string, toId: string) {
   const motifs = detectNewMotifs(session, thread);
   st.addThread(thread);
   const finalized = st.addDiscovery(discovery, motifs);
+
+  // A completed motif consecrates the faint strands of its web — they rise
+  // to a silvered state between faint and luminous, and sing for it.
+  if (motifs.length > 0) {
+    const after = useStore.getState().session;
+    if (after) {
+      const toConsecrate = consecrateComponent(after.threads, thread.id);
+      if (toConsecrate.length > 0) {
+        st.consecrateThreads(toConsecrate, motifs[0].motifId);
+        consecrationChime(toConsecrate.length);
+      }
+    }
+  }
 
   // The world answers the weave: particles at the joining point, a flare
   // through the stars, a breath of impact in the lens.
@@ -282,6 +320,7 @@ export function beadPointerHandlers(id: string) {
       gesture.pointerId = e.pointerId;
       gesture.startX = e.clientX;
       gesture.startY = e.clientY;
+      gesture.pressedBeadId = id;
       if (dom) {
         try {
           dom.setPointerCapture(e.pointerId);
@@ -291,7 +330,27 @@ export function beadPointerHandlers(id: string) {
       }
       st.setInteraction({ mode: "pressed", fromId: id, sticky: false });
       st.setFocusedBead(id);
+      st.setPinnedInspect(null); // a new gesture always closes any open card
       selectTick(id);
+
+      // Touch has no hover, so it gets its own doorway to contemplation:
+      // hold the bead still and it opens for reading instead of weaving.
+      clearPressTimer();
+      if (isCoarsePointer()) {
+        gesture.pressTimer = window.setTimeout(() => {
+          gesture.pressTimer = null;
+          const now = useStore.getState();
+          if (
+            now.session?.interaction.mode === "pressed" &&
+            gesture.pressedBeadId === id
+          ) {
+            now.setInteraction({ mode: "idle", fromId: null, sticky: false });
+            endGesture();
+            now.setPinnedInspect(id);
+            hoverPing(id);
+          }
+        }, LONG_PRESS_MS);
+      }
     },
   };
 }
@@ -311,6 +370,7 @@ export function handlePointerMove(e: PointerEvent) {
   if (mode === "pressed") {
     const dist = Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY);
     if (dist >= DRAG_THRESHOLD_PX) {
+      clearPressTimer(); // moving means weaving, not reading
       beginThreading(false);
       updateAim(e.clientX, e.clientY);
     }
@@ -328,6 +388,7 @@ export function handlePointerUp(e: PointerEvent) {
   if (interaction.mode === "pressed") {
     // Short press: enter sticky threading — the thread now follows the pointer,
     // and the NEXT pointerup (the second click) resolves it.
+    clearPressTimer(); // released before the long-press: weaving it is
     beginThreading(true);
     updateAim(e.clientX, e.clientY);
     return;

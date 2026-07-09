@@ -4,20 +4,21 @@ import { useFrame } from "@react-three/fiber";
 import { Billboard, Line, Text } from "@react-three/drei";
 import interWoff from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
 import { useStore } from "@/state/store";
-import { LENS_EXTENT } from "@/game/layout";
+import { LENS_EXTENT, LENS_VIEWS } from "@/game/layout";
 
-const AXES = [
-  { dir: [1, 0, 0], label: "Beautiful", color: "#fb7185" },
-  { dir: [0, 1, 0], label: "True", color: "#60a5fa" },
-  { dir: [0, 0, 1], label: "Good", color: "#fbbf24" },
-] as const;
+const AXIS_COLORS: Record<string, string> = {
+  Good: "#fbbf24",
+  True: "#60a5fa",
+  Beautiful: "#fb7185",
+};
 
 /**
- * The transcendental axes, visible only through the Lens:
- * Beauty spans, Truth rises, Good advances.
+ * The visible pair of transcendental axes for the current Lens view.
+ * The third axis is folded away — it simply is not drawn.
  */
 export function LensAxes() {
   const lensActive = useStore((s) => s.lensActive);
+  const lensView = useStore((s) => s.lensView);
   const group = useRef<THREE.Group>(null);
   const opacity = useRef(0);
 
@@ -40,15 +41,22 @@ export function LensAxes() {
     });
   });
 
+  const view = LENS_VIEWS[lensView - 1] ?? LENS_VIEWS[0];
   const ext = LENS_EXTENT * 1.15;
+
+  const axes = [
+    { label: view.xAxis, dir: new THREE.Vector3(1, 0, 0) },
+    { label: view.yAxis, dir: new THREE.Vector3(0, 1, 0) },
+  ];
 
   return (
     <group ref={group} visible={false}>
-      {AXES.map(({ dir, label, color }) => {
-        const end = new THREE.Vector3(...dir).multiplyScalar(ext);
+      {axes.map(({ label, dir }) => {
+        const color = AXIS_COLORS[label] ?? "#9aa2ff";
+        const end = dir.clone().multiplyScalar(ext);
         const start = end.clone().multiplyScalar(-1);
         return (
-          <group key={label}>
+          <group key={`${view.id}-${label}`}>
             <Line
               points={[start.toArray(), end.toArray()]}
               color={color}

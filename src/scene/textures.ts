@@ -28,6 +28,29 @@ export function getHaloTexture(): THREE.CanvasTexture {
   return haloTexture;
 }
 
+let ringTexture: THREE.CanvasTexture | null = null;
+
+/** A thin luminous ring — the mark of a bead bound into a luminous connection. */
+export function getRingTexture(): THREE.CanvasTexture {
+  if (!ringTexture) {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 5;
+    ctx.shadowColor = "rgba(255,255,255,0.8)";
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 14, 0, Math.PI * 2);
+    ctx.stroke();
+    ringTexture = new THREE.CanvasTexture(canvas);
+    ringTexture.colorSpace = THREE.SRGBColorSpace;
+  }
+  return ringTexture;
+}
+
 const glyphTextures = new Map<string, THREE.CanvasTexture>();
 
 /**

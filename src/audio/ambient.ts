@@ -6,7 +6,9 @@ import { disciplineById } from "@/content/disciplines";
 import { hashString, mulberry32 } from "@/lib/utils";
 import { frameState } from "@/scene/frameState";
 import { currentTheme } from "@/themes/useTheme";
+import { SCORE } from "./score";
 import type { TimbreId } from "@/content/types";
+import type { MotifAward } from "@/state/types";
 
 /**
  * The generative soundtrack that grows with the web.
@@ -49,6 +51,11 @@ class AmbientEngine {
   private slotS = DEFAULT_SLOT_S;
   private droneGain = 0.14;
   private motifBias = 1;
+  /** Completed-motif ensemble voices — each motif joins the piece forever. */
+  private motifPatterns: { kind: MotifAward["motifId"]; freqs: number[]; rng: () => number }[] =
+    [];
+  /** The harmonic journey: which pentatonic degree grounds the drone now. */
+  private rootDegree: 0 | 4 = 0;
 
   start(): void {
     const ctx = audio.ensure();
@@ -60,6 +67,8 @@ class AmbientEngine {
     audio.setBreathCenter(world.padCutoff);
     this.running = true;
     this.motifs = [];
+    this.motifPatterns = [];
+    this.rootDegree = 0;
     this.slot = 0;
     this.nextSlotTime = ctx.currentTime + 0.15;
     this.droneRefreshAt = 0;
@@ -135,6 +144,36 @@ class AmbientEngine {
     );
   }
 
+  /** A completed motif takes a permanent seat in the ensemble. */
+  addMotifPattern(kind: MotifAward["motifId"], beadIds: string[]): void {
+    if (this.motifPatterns.some((p) => p.kind === kind)) return;
+    let freqs: number[] = [];
+    if (kind === "symposium") {
+      // The council chord: one tonic per discipline present, in its register.
+      const seen = new Set<string>();
+      for (const id of beadIds) {
+        const disc = conceptById.get(id)?.discipline;
+        if (!disc || seen.has(disc)) continue;
+        seen.add(disc);
+        const d = disciplineById.get(disc);
+        if (d) freqs.push(degreeToFreq(0, d.register === "low" ? 2 : d.register === "mid" ? 3 : 4));
+        if (freqs.length >= 3) break;
+      }
+    } else {
+      freqs = beadIds
+        .map((id) => conceptById.get(id))
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => noteForConcept(c));
+      if (kind === "triad") freqs = freqs.slice(0, 3);
+    }
+    if (freqs.length < 2) return;
+    this.motifPatterns.push({
+      kind,
+      freqs,
+      rng: mulberry32(hashString(`motif-${kind}`)),
+    });
+  }
+
   addThreadVoice(threadId: string, aId: string, bId: string): void {
     const a = conceptById.get(aId);
     const b = conceptById.get(bId);
@@ -171,20 +210,28 @@ class AmbientEngine {
   private scheduleSlot(ctx: AudioContext, t: number, slot: number): void {
     const bus = audio.ambientBus!;
 
+    // The harmonic journey: most phrases ground on C; every Nth leans onto
+    // A, the pentatonic's minor shadow — motion without ever losing home.
+    const phrase = Math.floor(slot / SCORE.harmony.phraseSlots);
+    this.rootDegree =
+      phrase % SCORE.harmony.cycle === SCORE.harmony.cycle - 1
+        ? SCORE.harmony.minorRootDegree
+        : 0;
+
     // The ground: root drone + slow pad, refreshed every 8 slots (~16s)
     // with overlapping envelopes so the floor never drops out. Both route
     // through the breath filter — the wave the whole cosmos inhales on.
     const ground = audio.breathFilter ?? bus;
     if (slot >= this.droneRefreshAt) {
       this.droneRefreshAt = slot + 8;
-      playVoice(ctx, ground, "drone", degreeToFreq(0, 2), {
+      playVoice(ctx, ground, "drone", degreeToFreq(this.rootDegree, 2), {
         gain: this.droneGain,
         at: t,
         attack: 2.5,
         hold: 12,
         release: 6,
       });
-      playVoice(ctx, ground, "pad", degreeToFreq(3, 2), {
+      playVoice(ctx, ground, "pad", degreeToFreq(this.rootDegree === 0 ? 3 : 1, 2), {
         gain: 0.05,
         at: t + 1.2,
         attack: 3,
@@ -197,13 +244,62 @@ class AmbientEngine {
     // the stage is alive and knows it.
     const awakening = frameState.awakening;
     if (awakening >= 0.5) {
-      playVoice(ctx, ground, "drone", degreeToFreq(0, 2) * 0.5, {
+      playVoice(ctx, ground, "drone", degreeToFreq(this.rootDegree, 2) * 0.5, {
         gain: 0.05 * awakening,
         at: t,
         attack: 0.06,
         hold: 0.05,
         release: 0.7,
       });
+    }
+
+    // Near-full awakening: a rare high shimmer, three quick falling bells.
+    if (awakening >= SCORE.shimmer.threshold && Math.random() < SCORE.shimmer.probability) {
+      const top = degreeToFreq(2, 5);
+      [top, top * 0.833, degreeToFreq(4, 4)].forEach((f, i) => {
+        playVoice(ctx, bus, "bell", f, {
+          gain: SCORE.shimmer.gain,
+          at: t + 0.4 + i * 0.19,
+          release: 1.6,
+        });
+      });
+    }
+
+    // The motif ensemble: completed motifs speak with their own voices.
+    for (const p of this.motifPatterns) {
+      if (p.rng() > SCORE.motifVoices.speakProbability) continue;
+      const start = t + p.rng() * (this.slotS * 0.4);
+      if (p.kind === "triad") {
+        p.freqs.forEach((f, i) =>
+          playVoice(ctx, ground, "pad", f, {
+            gain: SCORE.motifVoices.triadGain,
+            at: start + i * 0.09,
+            attack: 0.4,
+            hold: 0.8,
+            release: 2.2,
+          })
+        );
+      } else if (p.kind === "symposium") {
+        p.freqs.forEach((f) =>
+          playVoice(ctx, ground, "pad", f, {
+            gain: SCORE.motifVoices.symposiumGain,
+            at: start,
+            attack: 1.6,
+            hold: 1.8,
+            release: 3.5,
+          })
+        );
+      } else {
+        // The fugue subject: its beads' notes as a walking line.
+        const step = this.slotS / SCORE.motifVoices.fugueStepDivisor;
+        p.freqs.forEach((f, i) =>
+          playVoice(ctx, bus, "pluck", f, {
+            gain: SCORE.motifVoices.fugueGain,
+            at: start + i * step,
+            release: 0.9,
+          })
+        );
+      }
     }
 
     // The choir: each thread's motif speaks with probability scaled by

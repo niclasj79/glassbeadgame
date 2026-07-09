@@ -57,6 +57,18 @@ src/
 legacy/        the archived v1 (Lovable-generated) app — reference only
 ```
 
+### For composers
+
+All musical taste lives in one file: `src/audio/score.ts` — reverb size and
+wetness, per-note humanization, the harmonic phrase cycle, the motif
+ensemble's voices, shimmer, chime levels. Change numbers, save, and the dev
+server re-tunes live; nothing there can break the engine. The pitch space is
+C-major pentatonic across four octaves (everything is consonant by
+construction) and six synthesized timbres map onto the six disciplines. To
+introduce recorded samples later, `playVoice()` in `src/audio/voices.ts` is
+the single place every note is born — swap a timbre's branch for an
+`AudioBufferSourceNode` and the whole game plays your recordings.
+
 ### Adding a world theme
 
 Sessions open into rotating **worlds** (Tetris Effect-style): each world is

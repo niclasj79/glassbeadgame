@@ -17,9 +17,27 @@ const SEGMENTS = 20; // drei's QuadraticBezierLine samples 20 segments = 21 poin
 
 function gradientColors(thread: Thread): [number, number, number][] {
   const out: [number, number, number][] = [];
-  if (thread.kind === "faint") {
+  if (thread.kind === "faint" && !thread.consecratedBy) {
     const faint = new THREE.Color(currentTheme().faintThread);
     for (let i = 0; i <= SEGMENTS; i++) out.push([faint.r, faint.g, faint.b]);
+    return out;
+  }
+  if (thread.kind === "faint" && thread.consecratedBy) {
+    // Consecrated: the disciplines' colors surface through silver — a state
+    // between faint resonance and luminous connection.
+    const ca = new THREE.Color(
+      disciplineById.get(conceptById.get(thread.a)!.discipline)!.color
+    );
+    const cb = new THREE.Color(
+      disciplineById.get(conceptById.get(thread.b)!.discipline)!.color
+    );
+    const silver = new THREE.Color("#c9cede");
+    const c = new THREE.Color();
+    for (let i = 0; i <= SEGMENTS; i++) {
+      const t = i / SEGMENTS;
+      c.copy(ca).lerp(cb, t).lerp(silver, 0.45).multiplyScalar(0.6);
+      out.push([c.r, c.g, c.b]);
+    }
     return out;
   }
   const ca = new THREE.Color(
@@ -65,8 +83,10 @@ function ThreadLine({ thread }: ThreadLineProps) {
     return flat;
   }, [colors]);
 
-  const lineWidth = thread.kind === "faint" ? 1.2 : 1.6 + thread.tier * 0.45;
-  const baseOpacity = thread.kind === "faint" ? 0.42 : 0.92;
+  const consecrated = thread.kind === "faint" && !!thread.consecratedBy;
+  const lineWidth =
+    thread.kind === "curated" ? 1.6 + thread.tier * 0.45 : consecrated ? 1.45 : 1.2;
+  const baseOpacity = thread.kind === "curated" ? 0.92 : consecrated ? 0.68 : 0.42;
 
   /** When this thread's motif sounds, a pulse of light rides the strand. */
   const applyPulse = (line: Line2): number => {

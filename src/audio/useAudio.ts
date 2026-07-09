@@ -41,6 +41,13 @@ export function AudioBridge(): null {
         (phase) => {
           if (phase === "arena") {
             ambient.start();
+            // Re-seat the session's existing voices (e.g. after a reveal
+            // detour or a mid-session reload).
+            const sess = useStore.getState().session;
+            for (const t of sess?.threads ?? []) ambient.addThreadVoice(t.id, t.a, t.b);
+            for (const m of sess?.motifs ?? []) {
+              if (m.beads) ambient.addMotifPattern(m.motifId, m.beads);
+            }
             if (useStore.getState().settings.binaural) audio.startBinaural();
           } else if (phase === "title" || phase === "setup") {
             ambient.stop();
@@ -70,6 +77,18 @@ export function AudioBridge(): null {
             const threads = useStore.getState().session?.threads;
             const t = threads?.[threads.length - 1];
             if (t) ambient.addThreadVoice(t.id, t.a, t.b);
+          }
+        }
+      ),
+
+      // Each completed motif takes a permanent seat in the ensemble.
+      useStore.subscribe(
+        (s) => s.session?.motifs.length ?? 0,
+        (n, prev) => {
+          if (n > prev) {
+            const motifs = useStore.getState().session?.motifs;
+            const m = motifs?.[motifs.length - 1];
+            if (m?.beads) ambient.addMotifPattern(m.motifId, m.beads);
           }
         }
       ),

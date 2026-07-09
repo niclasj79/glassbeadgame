@@ -3,12 +3,13 @@ import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { conceptById } from "@/content/concepts";
-import { fibonacciSpherePositions, tbgPositions } from "@/game/layout";
+import { fibonacciSpherePositions, lensPlanePositions } from "@/game/layout";
 import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { Backdrop } from "./Backdrop";
 import { Lattice } from "./Lattice";
 import { LensAxes } from "./LensAxes";
 import { Membranes } from "./Membranes";
+import { MotifMarks } from "./MotifMarks";
 import { Illumination } from "./Illumination";
 import { Bursts } from "./Bursts";
 import { Beads } from "./Beads";
@@ -22,6 +23,7 @@ import { Effects } from "./Effects";
 export function Cosmos() {
   const beadIds = useStore((s) => s.session?.beadIds ?? null);
   const lensActive = useStore((s) => s.lensActive);
+  const lensView = useStore((s) => s.lensView);
 
   // A new session lays the beads out on the sphere.
   useEffect(() => {
@@ -30,12 +32,16 @@ export function Cosmos() {
     }
   }, [beadIds]);
 
-  // The lens morphs between sphere-lattice and transcendental axis space.
+  // The Lens morphs between the sphere and one of three transcendental
+  // planes — the triptych folds a different axis away in each view.
   useEffect(() => {
     if (!beadIds || beadIds.length === 0) return;
     const reduced = useStore.getState().settings.reducedMotion;
     const targets = lensActive
-      ? tbgPositions(beadIds.map((id) => conceptById.get(id)!))
+      ? lensPlanePositions(
+          beadIds.map((id) => conceptById.get(id)!),
+          lensView
+        )
       : fibonacciSpherePositions(beadIds.length);
     if (reduced) {
       frameState.positions = targets.slice();
@@ -44,7 +50,7 @@ export function Cosmos() {
     } else {
       setMorphTargets(targets);
     }
-  }, [lensActive, beadIds]);
+  }, [lensActive, lensView, beadIds]);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 20); // clamp hitches so damps never jump
@@ -118,6 +124,7 @@ export function Cosmos() {
       <Beads />
       <Threads />
       <Membranes />
+      <MotifMarks />
       <Illumination />
       <Bursts />
       <ThreadPreview />

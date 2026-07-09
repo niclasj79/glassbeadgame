@@ -21,9 +21,11 @@ function axisPercent(value: number): number {
 
 export function BeadInspectCard() {
   const explicitFocus = useStore((s) => s.focusedBeadId);
+  const pinned = useStore((s) => s.pinnedInspectId);
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
+  const setPinnedInspect = useStore((s) => s.setPinnedInspect);
 
   // Only a settled focus counts: the pointer must rest on a bead, with no
   // weave in progress, for the dwell period.
@@ -40,9 +42,15 @@ export function BeadInspectCard() {
     return () => clearTimeout(t);
   }, [candidate, dwelled]);
 
-  const id = candidate && candidate === dwelled ? candidate : null;
+  // A pin (touch long-press) opens instantly and stays until dismissed;
+  // otherwise the desktop dwell rule applies.
+  const id = pinned ?? (candidate && candidate === dwelled ? candidate : null);
   const concept = id ? conceptById.get(id) : undefined;
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
+  const close = () => {
+    setPinnedInspect(null);
+    setFocusedBead(null);
+  };
 
   return (
     <AnimatePresence>
@@ -74,7 +82,7 @@ export function BeadInspectCard() {
                 </p>
               </div>
               <button
-                onClick={() => setFocusedBead(null)}
+                onClick={close}
                 aria-label="Close bead focus"
                 className="rounded-full border border-line/50 px-2 py-1 font-ui text-[10px] uppercase tracking-[0.18em] text-dim transition-colors hover:border-line hover:text-bright"
               >

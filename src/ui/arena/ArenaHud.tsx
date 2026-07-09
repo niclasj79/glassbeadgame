@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { isCoarsePointer } from "@/lib/device";
 import { frameState, beadPosition, emitBurst } from "@/scene/frameState";
+import { LENS_VIEWS } from "@/game/layout";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { illuminationChime } from "@/audio/sfx";
 import type { Discovery, MotifAward } from "@/state/types";
@@ -59,7 +60,8 @@ export function ArenaHud() {
   const concludeSession = useStore((s) => s.concludeSession);
   const finishConcluding = useStore((s) => s.finishConcluding);
   const lensActive = useStore((s) => s.lensActive);
-  const setLens = useStore((s) => s.setLens);
+  const lensView = useStore((s) => s.lensView);
+  const cycleLens = useStore((s) => s.cycleLens);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   const curatedAvailable = useStore((s) => s.session?.curatedAvailable ?? 0);
@@ -141,6 +143,13 @@ export function ArenaHud() {
         text: "Every discovery is kept in your Journal - the book at the left edge",
       };
     }
+    if (coarse && threadCount >= 2 && !hintsSeen.inspect) {
+      return {
+        id: "inspect",
+        delay: 1.2,
+        text: "Hold a finger still on any bead to read what it holds",
+      };
+    }
     if (threadCount >= 3 && !hintsSeen.lens) {
       return {
         id: "lens",
@@ -172,6 +181,10 @@ export function ArenaHud() {
   useEffect(() => {
     if (lensActive && !hintsSeen.lens) markHintSeen("lens");
   }, [lensActive, hintsSeen.lens, markHintSeen]);
+  const pinnedInspectId = useStore((s) => s.pinnedInspectId);
+  useEffect(() => {
+    if (pinnedInspectId && !hintsSeen.inspect) markHintSeen("inspect");
+  }, [pinnedInspectId, hintsSeen.inspect, markHintSeen]);
 
   useEffect(() => {
     if (discoveries.length > seenDiscoveries.current) {
@@ -266,9 +279,9 @@ export function ArenaHud() {
           </button>
 
           <button
-            onClick={() => setLens(!lensActive)}
+            onClick={cycleLens}
             aria-pressed={lensActive}
-            title="The Lens: view the beads along True / Good / Beautiful"
+            title="The Lens triptych: Good × True, Good × Beautiful, True × Beautiful — tap again to turn the page, a fourth tap closes"
             className={
               "pointer-events-auto absolute right-5 top-[4.6rem] rounded-full border px-5 py-2.5 font-ui text-[11px] uppercase tracking-[0.25em] backdrop-blur-md transition-colors " +
               (lensActive
@@ -276,7 +289,7 @@ export function ArenaHud() {
                 : "border-line/40 bg-surface/50 text-dim hover:border-line/80 hover:text-bright")
             }
           >
-            {lensActive ? "Close the Lens" : "The Lens"}
+            {lensActive ? `Lens · ${LENS_VIEWS[lensView - 1].label} ▸` : "The Lens"}
           </button>
 
           {/* Illuminate — spend Insight to be shown where light hides. */}

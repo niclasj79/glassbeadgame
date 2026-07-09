@@ -135,7 +135,13 @@ export function detectNewMotifs(session: SessionState, newThread: Thread): Motif
     const nb = adj.get(newThread.b) ?? new Set();
     for (const x of na) {
       if (x !== newThread.b && nb.has(x)) {
-        awards.push({ motifId: "triad", name: "Triad", points: MOTIF_POINTS.triad, at: now });
+        awards.push({
+          motifId: "triad",
+          name: "Triad",
+          points: MOTIF_POINTS.triad,
+          at: now,
+          beads: [newThread.a, newThread.b, x],
+        });
         break;
       }
     }
@@ -163,36 +169,92 @@ export function detectNewMotifs(session: SessionState, newThread: Thread): Motif
         name: "Symposium",
         points: MOTIF_POINTS.symposium,
         at: now,
+        beads: [...component],
       });
     }
   }
 
   // Fugue: a simple path of five beads exists through the new thread.
-  if (!already.has("fugue") && longestPathThrough(adj, newThread.a, newThread.b) >= 5) {
-    awards.push({ motifId: "fugue", name: "Fugue", points: MOTIF_POINTS.fugue, at: now });
+  if (!already.has("fugue")) {
+    const path = longestPathThrough(adj, newThread.a, newThread.b);
+    if (path.length >= 5) {
+      awards.push({
+        motifId: "fugue",
+        name: "Fugue",
+        points: MOTIF_POINTS.fugue,
+        at: now,
+        beads: path.slice(0, 7), // the subject; keep it singable
+      });
+    }
   }
 
   return awards;
 }
 
-/** Longest simple path (in beads) that uses the edge a-b, capped for sanity. */
-function longestPathThrough(adj: Map<string, Set<string>>, a: string, b: string): number {
-  const longestFrom = (start: string, blocked: Set<string>): number => {
-    let best = 1;
-    const dfs = (node: string, visited: Set<string>, len: number) => {
-      if (len > best) best = len;
-      if (len >= 8) return; // more than enough for the fugue check
+/** Longest simple path (as ordered beads) using the edge a-b, capped for sanity. */
+function longestPathThrough(adj: Map<string, Set<string>>, a: string, b: string): string[] {
+  const longestFrom = (start: string, blocked: Set<string>): string[] => {
+    let best: string[] = [start];
+    const walk: string[] = [start];
+    const dfs = (node: string, visited: Set<string>) => {
+      if (walk.length > best.length) best = walk.slice();
+      if (walk.length >= 8) return; // more than enough for the fugue check
       for (const nxt of adj.get(node) ?? []) {
         if (!visited.has(nxt) && !blocked.has(nxt)) {
           visited.add(nxt);
-          dfs(nxt, visited, len + 1);
+          walk.push(nxt);
+          dfs(nxt, visited);
+          walk.pop();
           visited.delete(nxt);
         }
       }
     };
-    dfs(start, new Set([start, ...blocked]), 1);
+    dfs(start, new Set([start, ...blocked]));
     return best;
   };
-  // Path through edge = longest arm from a (avoiding b) + longest arm from b (avoiding a).
-  return longestFrom(a, new Set([b])) + longestFrom(b, new Set([a]));
+  // Path through the edge = arm from a (avoiding b), reversed, then the arm
+  // from b (avoiding a): ...→a→b→...
+  const armA = longestFrom(a, new Set([b]));
+  const armB = longestFrom(b, new Set([a]));
+  return [...armA.reverse(), ...armB];
+}
+
+/**
+ * Consecration: a completed motif elevates every faint thread in its web
+ * (the connected component of the closing thread) to a state between
+ * faint and luminous. Returns the ids of newly consecrated threads.
+ */
+export const CONSECRATION_POINTS = 3;
+
+export function consecrateComponent(
+  threads: Thread[],
+  anchorThreadId: string
+): string[] {
+  const anchor = threads.find((t) => t.id === anchorThreadId);
+  if (!anchor) return [];
+  const adj = new Map<string, Thread[]>();
+  for (const t of threads) {
+    if (!adj.has(t.a)) adj.set(t.a, []);
+    if (!adj.has(t.b)) adj.set(t.b, []);
+    adj.get(t.a)!.push(t);
+    adj.get(t.b)!.push(t);
+  }
+  const seen = new Set<string>([anchor.a]);
+  const stack = [anchor.a];
+  const memberThreads = new Set<string>();
+  while (stack.length) {
+    const node = stack.pop()!;
+    for (const t of adj.get(node) ?? []) {
+      memberThreads.add(t.id);
+      for (const nxt of [t.a, t.b]) {
+        if (!seen.has(nxt)) {
+          seen.add(nxt);
+          stack.push(nxt);
+        }
+      }
+    }
+  }
+  return threads
+    .filter((t) => memberThreads.has(t.id) && t.kind === "faint" && !t.consecratedBy)
+    .map((t) => t.id);
 }

@@ -1,5 +1,6 @@
 import { audio } from "./engine";
 import { ambient } from "./ambient";
+import { SCORE } from "./score";
 import { playVoice, noiseSource } from "./voices";
 import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
@@ -156,6 +157,23 @@ export function updateSympathy(
 
   sympathyNodes.gain.gain.setTargetAtTime(candidate.strength * 0.04, t + 0.02, 0.12);
   sympathyNodes.panner.pan.setTargetAtTime(candidate.panX * 0.7, t, 0.1);
+}
+
+/** Consecration: faint threads rising to silver — climbing bells, one per
+ *  thread elevated (capped), landing on the bright fifth. */
+export function consecrationChime(count: number): void {
+  const ctx = audio.ensure();
+  const bus = audio.sfxBus;
+  if (!ctx || !bus) return;
+  const t0 = ambient.quantize();
+  const steps = Math.min(4, 1 + count);
+  for (let i = 0; i < steps; i++) {
+    playVoice(ctx, bus, "bell", degreeToFreq([1, 2, 4, 0][i % 4], 4 + (i === 3 ? 1 : 0)), {
+      gain: SCORE.consecration.gain,
+      at: t0 + i * SCORE.consecration.noteGapSeconds,
+      release: 1.7,
+    });
+  }
 }
 
 /** The revelation arpeggio — Insight spent, light briefly shown. */

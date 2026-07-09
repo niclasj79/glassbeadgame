@@ -57,6 +57,39 @@ export function CameraRig() {
     }
   }, [phase, reducedMotion, camera, aspect]);
 
+  // The Lens: square up to whichever transcendental plane is showing, so
+  // each view of the triptych reads as a true chart. Leaving returns home.
+  const lensActive = useStore((s) => s.lensActive);
+  const lensView = useStore((s) => s.lensView);
+  const wasLensed = useRef(false);
+  useEffect(() => {
+    if (lensActive) {
+      wasLensed.current = true;
+      const pose = {
+        position: new THREE.Vector3(0, 0, aspect < 0.75 ? 11 : 9.4),
+        target: new THREE.Vector3(0, 0, 0),
+      };
+      if (reducedMotion) {
+        camera.position.copy(pose.position);
+        controls.current?.target.copy(pose.target);
+      } else {
+        transit.current = pose;
+      }
+    } else if (wasLensed.current && phase === "arena") {
+      wasLensed.current = false;
+      const pose =
+        aspect < 0.75
+          ? { position: new THREE.Vector3(0, 0.6, 8.2), target: new THREE.Vector3(0, 0, 0) }
+          : POSES.arena;
+      if (reducedMotion) {
+        camera.position.copy(pose.position);
+        controls.current?.target.copy(pose.target);
+      } else {
+        transit.current = pose;
+      }
+    }
+  }, [lensActive, lensView, phase, reducedMotion, camera, aspect]);
+
   // The concluding cinematic: rise to the pole and crown the finished web,
   // framed to the web's actual reach (the Lens may have spread it wide).
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");

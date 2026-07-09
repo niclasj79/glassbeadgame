@@ -9,7 +9,7 @@ import { disciplineById } from "@/content/disciplines";
 import { hashString, smoothstep } from "@/lib/utils";
 import { frameState } from "./frameState";
 import { beadPointerHandlers } from "./threading";
-import { getHaloTexture, getGlyphTexture } from "./textures";
+import { getHaloTexture, getGlyphTexture, getRingTexture } from "./textures";
 
 import { isCoarsePointer } from "@/lib/device";
 
@@ -40,6 +40,7 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
   const group = useRef<THREE.Group>(null);
   const core = useRef<THREE.Mesh>(null);
   const label = useRef<THREE.Object3D>(null);
+  const mote = useRef<THREE.Sprite>(null);
   const scaleRef = useRef(1);
 
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
@@ -49,8 +50,28 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     (s) => s.session?.threads.filter((t) => t.a === id || t.b === id).length ?? 0
   );
   const threaded = degree > 0;
+  // The bead's standing in the web: it evolves as the session deepens.
+  const standing = useStore((s) => {
+    const threads = s.session?.threads ?? [];
+    let luminous = false;
+    let consecrated = false;
+    for (const t of threads) {
+      if (t.a !== id && t.b !== id) continue;
+      if (t.kind === "curated") luminous = true;
+      else if (t.consecratedBy) consecrated = true;
+    }
+    return luminous ? "luminous" : consecrated ? "consecrated" : "plain";
+  });
 
-  const { coreMaterial, shellMaterial, haloMaterial, glyphMaterial, bobPhase } = useMemo(() => {
+  const {
+    coreMaterial,
+    shellMaterial,
+    haloMaterial,
+    glyphMaterial,
+    ringMaterial,
+    moteMaterial,
+    bobPhase,
+  } = useMemo(() => {
     const base = new THREE.Color(discipline?.color ?? "#8888aa");
     return {
       coreMaterial: new THREE.MeshBasicMaterial({
@@ -85,6 +106,24 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         transparent: true,
         opacity: 0,
         depthWrite: false,
+      }),
+      ringMaterial: new THREE.SpriteMaterial({
+        map: getRingTexture(),
+        color: base.clone().lerp(new THREE.Color("#ffffff"), 0.55),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+      moteMaterial: new THREE.SpriteMaterial({
+        map: getHaloTexture(),
+        color: new THREE.Color("#e7e2f5"),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
       }),
       bobPhase: (hashString(id) % 6283) / 1000,
     };
@@ -143,6 +182,21 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         haloMaterial.opacity) *
       0.1;
 
+    // Standing marks: a luminous ring settles in; a consecrated mote orbits.
+    const ringTarget = standing === "luminous" ? 0.42 : 0;
+    ringMaterial.opacity += (ringTarget - ringMaterial.opacity) * 0.06;
+    const moteTarget = standing !== "plain" ? 0.5 : 0;
+    moteMaterial.opacity += (moteTarget - moteMaterial.opacity) * 0.06;
+    if (mote.current && moteMaterial.opacity > 0.01) {
+      const t = frameState.clock * 0.9 + bobPhase * 2;
+      const r = BEAD_RADIUS * 2.1;
+      mote.current.position.set(
+        Math.cos(t) * r,
+        Math.sin(t * 0.63) * r * 0.4,
+        Math.sin(t) * r
+      );
+    }
+
     // Label legibility: fade far-hemisphere and distant labels.
     if (label.current) {
       const camDir = state.camera.position.clone().normalize();
@@ -182,6 +236,10 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
       />
       {/* Resilient glow — present at every quality tier. */}
       <sprite material={haloMaterial} scale={BEAD_RADIUS * HALO_SCALE} />
+      {/* Standing marks: the ring of a luminous bond; the orbiting mote of
+          consecration. Beads visibly evolve as the web deepens. */}
+      <sprite material={ringMaterial} scale={BEAD_RADIUS * 4.4} />
+      <sprite ref={mote} material={moteMaterial} scale={0.055} />
       {/* Discipline crest above the bead — identity at a glance. */}
       <sprite
         material={glyphMaterial}
@@ -220,9 +278,9 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
   );
 }
 
-function lensAnchorIds(beadIds: string[]): Set<string> {
+/** Anchors = extremes of the two axes the current Lens view shows. */
+function lensAnchorIds(beadIds: string[], axes: readonly number[]): Set<string> {
   const anchors = new Set<string>();
-  const axes = [0, 1, 2] as const;
   for (const axis of axes) {
     let highId: string | null = null;
     let lowId: string | null = null;
@@ -246,10 +304,18 @@ function lensAnchorIds(beadIds: string[]): Set<string> {
   return anchors;
 }
 
+// tbg = [true, beauty, good]; per Lens view, the two visible axis indices.
+const VIEW_AXES: Record<number, readonly number[]> = {
+  1: [2, 0], // Good × True
+  2: [2, 1], // Good × Beautiful
+  3: [0, 1], // True × Beautiful
+};
+
 export function Beads() {
   const beadIds = useStore((s) => s.session?.beadIds ?? null);
+  const lensView = useStore((s) => s.lensView);
   if (!beadIds || beadIds.length === 0) return null;
-  const anchors = lensAnchorIds(beadIds);
+  const anchors = lensAnchorIds(beadIds, VIEW_AXES[lensView] ?? VIEW_AXES[1]);
   return (
     <group>
       {beadIds.map((id, i) => (

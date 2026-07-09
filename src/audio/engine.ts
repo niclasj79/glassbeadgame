@@ -1,7 +1,27 @@
+import { SCORE } from "./score";
+
+/** Stereo impulse response: decorrelated exponentially decaying noise. */
+function makeImpulseResponse(
+  ctx: AudioContext,
+  seconds: number,
+  decay: number
+): AudioBuffer {
+  const length = Math.ceil(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+    }
+  }
+  return buffer;
+}
+
 /**
  * The audio engine singleton — context lifecycle and gain staging.
  * Everything audible flows: (voice) → ambientBus | sfxBus → master →
- * compressor → destination. No React in here.
+ * (dry + convolver wet) → compressor → destination. No React in here.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -16,6 +36,7 @@ class AudioEngine {
   breathFilter: BiquadFilterNode | null = null;
   /** Center of the breath's filter sweep — each world sets its own. */
   private breathCenter = 900;
+  private convolver: ConvolverNode | null = null;
   private binaural: {
     oscL: OscillatorNode;
     oscR: OscillatorNode;
@@ -47,6 +68,21 @@ class AudioEngine {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : AudioEngine.MASTER_LEVEL;
       this.master.connect(this.compressor);
+
+      // The room: a generated impulse response gives every voice a shared
+      // space — the single biggest step from "synthetic" toward "organic".
+      // Parallel wet path: master → convolver → wet gain → compressor.
+      this.convolver = this.ctx.createConvolver();
+      this.convolver.buffer = makeImpulseResponse(
+        this.ctx,
+        SCORE.reverb.seconds,
+        SCORE.reverb.decay
+      );
+      const wet = this.ctx.createGain();
+      wet.gain.value = SCORE.reverb.wet;
+      this.master.connect(this.convolver);
+      this.convolver.connect(wet);
+      wet.connect(this.compressor);
 
       this.breathGain = this.ctx.createGain();
       this.breathGain.gain.value = 1;
