@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, and the first executable audit task.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, and a completed M0 repository audit. The supervised test-baseline task is ready next.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time, starting with `docs/tasks/M0-001-repository-audit.md`.
+Codex may be used as the implementation interface for one supervised task at a time. The next eligible task is `docs/tasks/M0-002-test-baseline.md`.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 
@@ -46,10 +46,10 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 
 ```text
 Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
-and docs/tasks/M0-001-repository-audit.md.
+docs/tasks/M0-002-test-baseline.md, and the M0-001 audit deliverables.
 
 This is a supervised single-task run. Inspect the repository, produce a concise
-implementation plan, then execute only M0-001. Run every required check, update
+implementation plan, then execute only M0-002. Run every required check, update
 only the task deliverables, and open one reviewable pull request. Do not change
 gameplay behavior and do not begin another task.
 ```

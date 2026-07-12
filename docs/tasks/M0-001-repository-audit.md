@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Done
 
 ## Milestone
 
@@ -102,3 +102,9 @@ Summarize:
 ## Human review
 
 Required before merge because this audit defines the basis for later autonomous work.
+
+## Implementation notes
+
+- Completed by PR #6 and merged to `main` on 2026-07-12.
+- Added the repository, state-mutation, persistence, and validation-command maps under `docs/audits/`.
+- Recorded the missing automated test baseline, pull-request validation, deterministic browser mode, and performance budgets for follow-up M0 tasks.
