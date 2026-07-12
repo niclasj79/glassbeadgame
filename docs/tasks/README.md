@@ -24,7 +24,11 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-1. `M0-003-ci-pipeline.md` — establish pull-request quality gates and isolate validation from Pages deployment.
+None while M0-003 is in review.
+
+## Review queue
+
+1. `M0-003-ci-pipeline.md` — pull-request quality gates and isolated Pages deployment complete; awaiting human acceptance.
 
 ## Blocked queue
 

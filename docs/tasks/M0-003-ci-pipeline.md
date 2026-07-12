@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -85,3 +85,12 @@ Report workflow files, job/check names, local command parity, deployment behavio
 ## Human review
 
 Required because deployment and repository policy are affected. Auto-merge is prohibited.
+
+## Implementation notes
+
+- Added `.github/workflows/ci.yml` for pull requests, `main` pushes, and manual validation with the single branch-protectable check `CI / Quality Gates`.
+- CI uses Node 20, installs from `package-lock.json`, and runs the exact documented local sequence: typecheck, lint, unit tests, standalone content validation, and production build.
+- npm caching stores only downloaded package data; `node_modules`, `dist`, and generated test output are never restored from cache.
+- Pages deployment remains a separate elevated-permission workflow. Automatic deployment now follows only a successful CI run caused by a push to `main`, and checks out that validated commit SHA. Manual deployment is limited to `main`.
+- Updated official GitHub actions to the maintained major versions current during implementation. No application dependency changed.
+- Repository administrators must require `CI / Quality Gates` on `main`; branch protection remains hosted configuration and is not changed by this PR.

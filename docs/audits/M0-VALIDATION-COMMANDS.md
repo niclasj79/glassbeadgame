@@ -22,14 +22,32 @@ The standalone content command exercises both the authored corpus and deliberate
 
 ## GitHub Actions and deployment validation
 
-`.github/workflows/deploy.yml` runs on `main` push and manual dispatch:
+`.github/workflows/ci.yml` runs on every pull request, every push to `main`, and manual dispatch. It exposes one stable branch-protection check, `CI / Quality Gates`, with read-only repository permissions:
 
 ```text
 checkout -> Node 20/npm cache -> npm ci -> npm run typecheck
--> npm run build/content gate -> upload dist -> deploy Pages
+-> npm run lint -> npm test -> npm run validate:content -> npm run build
 ```
 
-It omits lint and all tests. There is no pull-request workflow, and deployment is part of the same workflow as validation. Branch-protection settings are hosted GitHub configuration and are not defined in the repository.
+The cache contains npm's downloaded package data only. It does not restore `node_modules`, `dist`, or generated test output, so `npm ci` and every validation command execute against the checked-out commit. GitHub step logs are the proportionate failure diagnostics because the current tests and build do not emit independent report files; uploading partial `dist` output would not improve diagnosis.
+
+`.github/workflows/deploy.yml` is a separate workflow with `contents: read`, `pages: write`, and `id-token: write`. Automatic deployment runs only after `CI` succeeds for a push whose head branch is `main`; it checks out the exact validated `workflow_run.head_sha`, rebuilds `dist`, uploads the Pages artifact, and deploys. Pull-request CI completions cannot deploy. Manual deployment is permitted only when the workflow is dispatched from `main`.
+
+Repository administrators must configure `main` branch protection to require pull requests and the exact check `CI / Quality Gates`, preferably with branches required to be up to date before merge. Branch protection is hosted GitHub configuration and is intentionally not mutated by the workflow PR.
+
+### M0-003 execution report
+
+| Check | Result | Evidence/notes |
+| --- | --- | --- |
+| Workflow structure | Passed locally | Both workflow files parse as YAML and expose the expected job maps. The M0-003 pull request run is the authoritative GitHub Actions semantic check. |
+| `npm ci` | Passed | Installed 327 packages from the lockfile. The existing deprecated transitive `three-mesh-bvh@0.7.8` and 2 audit findings (1 moderate, 1 high) remain outside this task's dependency scope. |
+| `npm run typecheck` | Passed | Strict application TypeScript completed with no diagnostics. |
+| `npm run lint` | Passed | ESLint completed with no diagnostics. |
+| `npm test` | Passed | 6 files and 24 tests passed. Each CI command is a direct step, so any nonzero test/type/lint/content/build exit fails `CI / Quality Gates`. |
+| `npm run validate:content` | Passed | 3 content-validator tests passed. |
+| `npm run build` | Passed | Vite transformed 1,122 modules and the production content gate passed. Existing R3F and Three chunk-size warnings remain non-failing baseline observations. |
+| Browser smoke | Not runnable | Browser/E2E automation is explicitly excluded until M0-004 establishes deterministic test mode. |
+| Targeted performance | Not required/runnable | M0-003 defines no performance check; M0-005 owns the measured baseline. |
 
 ## M0-001 execution report
 
