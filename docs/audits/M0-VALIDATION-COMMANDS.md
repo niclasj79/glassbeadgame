@@ -11,7 +11,7 @@
 | Content validation | `npm run validate:content` | Runs the content-validator suite without producing `dist`; `npm run build` and `npm run dev` continue to invoke `validateContent()` through `vite.config.ts::contentGate.buildStart` |
 | Production build | `npm run build` | Vite build, ES2020 target, Pages base path |
 | Browser smoke | `npm run test:browser` | Playwright 1.61.1 runs the deterministic-mode smoke in headless Chromium |
-| Performance check | None | Runtime Drei `PerformanceMonitor` changes quality, but no repeatable command/budget assertion exists |
+| Performance/bundle | `npm run bundle:check`; `npm run measure:performance` | Bundle ceilings gate CI; renderer-labelled frame distributions are non-gating reference evidence |
 | Preview | `npm run preview` | Serves the built output; no automated smoke consumes it |
 
 The standalone content command exercises both the authored corpus and deliberately malformed fixture data. The production build remains independently gated by the same validator and prints coverage warnings through the Vite plugin.
@@ -28,6 +28,7 @@ The standalone content command exercises both the authored corpus and deliberate
 checkout -> Node 20/npm cache -> npm ci -> npm run typecheck
 -> npm run lint -> npm test -> npm run validate:content -> npm run build
 -> install Playwright Chromium -> npm run test:browser
+-> npm run bundle:check
 ```
 
 ### M0-004 deterministic browser mode

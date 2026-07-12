@@ -24,11 +24,15 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-1. `M0-006-dependency-upgrade-decision.md` — audit dependencies and advisories, then recommend isolated follow-up actions without upgrading packages.
+None while M0-006 is in review.
+
+## In review
+
+1. `M0-006-dependency-upgrade-decision.md` — dependency decision complete; risk acceptance and Vite follow-up authorization await review.
 
 ## Blocked queue
 
-None.
+1. `M0-007-vite-security-upgrade.md` — proposed Vite 6.4.3 security upgrade; blocked pending explicit human approval of the M0-006 decision.
 
 ## Completed
 
