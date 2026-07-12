@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed M0 repository audit, and a deterministic unit-test baseline. The CI quality-gate task is in review.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed repository audit and unit-test baseline, enforced pull-request CI, and CI-gated Pages deployment. The deterministic browser test-mode task is ready next.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. M0-003 must be reviewed, accepted, and merged before another task becomes eligible.
+Codex may be used as the implementation interface for one supervised task at a time. The next eligible task is `docs/tasks/M0-004-deterministic-test-mode.md`.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 
@@ -45,12 +45,14 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 ## Supervised steering prompt
 
 ```text
-Read AGENTS.md, docs/CODEX-STEERING-READINESS.md,
-docs/tasks/M0-003-ci-pipeline.md, and docs/audits/M0-VALIDATION-COMMANDS.md.
+Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
+docs/tasks/M0-004-deterministic-test-mode.md, and its required reading.
 
-Review the M0-003 pull request against its acceptance criteria, workflow runs,
-deployment isolation, implementation notes, and reported checks. Do not mark
-M0-003 Done or begin another task until the change is accepted and merged.
+This is a supervised single-task run. Inspect the existing development hooks and
+nondeterministic browser inputs, produce a concise implementation plan, then
+execute only M0-004. Run every required check, update only the task deliverables,
+and open one reviewable pull request. Do not change gameplay rules or begin
+another task.
 ```
 
 ## Future autonomous steering prompt
