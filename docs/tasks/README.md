@@ -24,11 +24,7 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-None while M0-003 is in review.
-
-## Review queue
-
-1. `M0-003-ci-pipeline.md` — pull-request quality gates and isolated Pages deployment complete; awaiting human acceptance.
+1. `M0-004-deterministic-test-mode.md` — establish the fixed-seed browser route and repeatable Playwright smoke.
 
 ## Blocked queue
 
@@ -38,10 +34,10 @@ None.
 
 1. `M0-001-repository-audit.md` — accepted and merged in PR #6.
 2. `M0-002-test-baseline.md` — accepted and merged in PR #8.
+3. `M0-003-ci-pipeline.md` — accepted and merged in PR #10.
 
 ## Planned but not yet Ready
 
-- M0-004 deterministic test mode;
 - M0-005 performance and bundle baseline;
 - M0-006 dependency-upgrade decision;
 - M1-001 stable domain identifiers and events;

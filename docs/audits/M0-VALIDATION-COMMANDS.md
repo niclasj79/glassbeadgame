@@ -33,13 +33,13 @@ The cache contains npm's downloaded package data only. It does not restore `node
 
 `.github/workflows/deploy.yml` is a separate workflow with `contents: read`, `pages: write`, and `id-token: write`. Automatic deployment runs only after `CI` succeeds for a push whose head branch is `main`; it checks out the exact validated `workflow_run.head_sha`, rebuilds `dist`, uploads the Pages artifact, and deploys. Pull-request CI completions cannot deploy. Manual deployment is permitted only when the workflow is dispatched from `main`.
 
-Repository administrators must configure `main` branch protection to require pull requests and the exact check `CI / Quality Gates`, preferably with branches required to be up to date before merge. Branch protection is hosted GitHub configuration and is intentionally not mutated by the workflow PR.
+`main` branch protection was enabled after PR #10 merged. It requires pull requests, strict `CI / Quality Gates`, conversation resolution, and applies to administrators; force pushes and branch deletion are disabled. The repository has one administrator, so the required approving-review count is zero while the PR and required-check boundary remains enforced.
 
 ### M0-003 execution report
 
 | Check | Result | Evidence/notes |
 | --- | --- | --- |
-| Workflow structure | Passed locally | Both workflow files parse as YAML and expose the expected job maps. The M0-003 pull request run is the authoritative GitHub Actions semantic check. |
+| Workflow structure | Passed locally and in GitHub | Both workflow files parse as YAML. PR #10's `CI / Quality Gates` passed in 31 seconds, and the merged `main` CI run passed for commit `34e6d93`. |
 | `npm ci` | Passed | Installed 327 packages from the lockfile. The existing deprecated transitive `three-mesh-bvh@0.7.8` and 2 audit findings (1 moderate, 1 high) remain outside this task's dependency scope. |
 | `npm run typecheck` | Passed | Strict application TypeScript completed with no diagnostics. |
 | `npm run lint` | Passed | ESLint completed with no diagnostics. |
@@ -48,6 +48,8 @@ Repository administrators must configure `main` branch protection to require pul
 | `npm run build` | Passed | Vite transformed 1,122 modules and the production content gate passed. Existing R3F and Three chunk-size warnings remain non-failing baseline observations. |
 | Browser smoke | Not runnable | Browser/E2E automation is explicitly excluded until M0-004 establishes deterministic test mode. |
 | Targeted performance | Not required/runnable | M0-003 defines no performance check; M0-005 owns the measured baseline. |
+
+The Pages `workflow_run` then deployed the same validated commit successfully. No Pages workflow ran for the pull-request branch. Hosted branch protection was verified after merge with strict `CI / Quality Gates` required.
 
 ## M0-001 execution report
 
