@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, and accepted bundle budgets. The dependency decision is in review and recommends an isolated Vite security upgrade before M1.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, and accepted bundle budgets. The approved Vite security remediation is in review.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. No next task is eligible until M0-006 is reviewed and the proposed Vite security follow-up is explicitly approved or the risk is explicitly accepted.
+Codex may be used as the implementation interface for one supervised task at a time. No next task is eligible until M0-007 is reviewed and merged and the steering gate is advanced deliberately.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 

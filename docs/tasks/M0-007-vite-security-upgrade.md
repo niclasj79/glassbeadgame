@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked — requires explicit human approval of the M0-006 dependency decision.
+Review
 
 ## Objective
 
@@ -33,3 +33,12 @@ Upgrade only Vite from 5.4.21 to 6.4.3, regenerate the lockfile, remove the curr
 ## Required checks
 
 All repository checks plus `npm ls --all`, `npm audit --json`, development-server smoke, and workflow syntax.
+
+## Implementation notes
+
+- Human authorization was provided by the 2026-07-13 instruction to proceed after the merged M0-006 decision boundary.
+- Updated only direct Vite to exact 6.4.3 and regenerated its lockfile graph. Vite and Lovable tagger resolve esbuild 0.25.12; no unrelated direct dependency changed.
+- `npm audit --json` reports zero vulnerabilities and no longer contains any of the four M0-006 advisory paths. `npm ls --all` exits zero.
+- Verified the development content gate on explicit loopback port 4180, Playwright's explicit server, production `/glassbeadgame/` asset paths, ES2020 target, and named manual chunks.
+- Bundle delta versus M0-005 is +4,166 raw and +1,265 gzip-9 bytes total; every accepted ceiling passes.
+- The first `npm ci` attempt hit Windows `EPERM` because the manual dev smoke left its Vite child holding `esbuild.exe`; after stopping only that process tree, the clean install passed. This is a test-process cleanup issue, not a dependency failure.
