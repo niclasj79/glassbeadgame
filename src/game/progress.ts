@@ -2,6 +2,7 @@ import { connectionByPair, connections } from "@/content/connections";
 import { conceptById } from "@/content/concepts";
 import type { CodexEntry } from "@/state/types";
 import type { DisciplineId } from "@/content/types";
+import { gameNow } from "@/runtime/testMode";
 
 // ── Great Web milestones ───────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ function decodeBase64Url(token: string): string | null {
 export function makeSharedProgress(source: ProgressSource): SharedProgress {
   return {
     version: SHARE_VERSION,
-    exportedAt: Date.now(),
+    exportedAt: gameNow(),
     codex: cleanCodex(source.codex),
     lifetimeStats: cleanStats(source.lifetimeStats),
     hintsSeen: cleanHints(source.settings.hintsSeen),

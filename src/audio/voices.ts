@@ -1,20 +1,21 @@
 import type { TimbreId } from "@/content/types";
 import { SCORE } from "./score";
+import { runtimeRandom } from "@/runtime/testMode";
 
 /** Human hands: per-note detune and level never repeat exactly. */
 function humanizeFreq(freq: number): number {
-  const cents = (Math.random() * 2 - 1) * SCORE.humanize.detuneCents;
+  const cents = (runtimeRandom() * 2 - 1) * SCORE.humanize.detuneCents;
   return freq * Math.pow(2, cents / 1200);
 }
 function humanizeGain(gain: number): number {
-  return gain * (1 + (Math.random() * 2 - 1) * SCORE.humanize.gainJitter);
+  return gain * (1 + (runtimeRandom() * 2 - 1) * SCORE.humanize.gainJitter);
 }
 
 /** Delayed-onset vibrato for the sustaining voices. */
 function attachVibrato(ctx: AudioContext, osc: OscillatorNode, freq: number, t0: number): void {
   if (SCORE.humanize.vibratoDepth <= 0) return;
   const lfo = ctx.createOscillator();
-  lfo.frequency.value = SCORE.humanize.vibratoHz * (0.9 + Math.random() * 0.2);
+  lfo.frequency.value = SCORE.humanize.vibratoHz * (0.9 + runtimeRandom() * 0.2);
   const depth = ctx.createGain();
   depth.gain.setValueAtTime(0, t0);
   depth.gain.linearRampToValueAtTime(freq * SCORE.humanize.vibratoDepth, t0 + 0.7);
@@ -176,7 +177,7 @@ export function noiseSource(ctx: AudioContext, seconds: number): AudioBufferSour
     const len = Math.ceil(ctx.sampleRate * Math.max(2.5, seconds));
     sharedNoiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = sharedNoiseBuffer.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < len; i++) data[i] = runtimeRandom() * 2 - 1;
   }
   const src = ctx.createBufferSource();
   src.buffer = sharedNoiseBuffer;

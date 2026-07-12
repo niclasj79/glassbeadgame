@@ -38,3 +38,7 @@ jobs:
         run: npm run validate:content
       - name: Production build
         run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke
+        run: npm run test:browser

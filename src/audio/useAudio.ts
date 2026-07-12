@@ -5,6 +5,7 @@ import { ambient } from "./ambient";
 import { discoveryChord, faintDyad, setAimTension, conclusionCadence } from "./sfx";
 import { noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
+import { testMode } from "@/runtime/testMode";
 
 /**
  * The single React↔audio contact point. Mounted once in App; drives the
@@ -15,11 +16,13 @@ export function AudioBridge(): null {
   const muted = useStore((s) => s.settings.muted);
 
   useEffect(() => {
+    if (testMode.enabled) return;
     audio.setMuted(muted);
   }, [muted]);
 
   // Unlock on the first gesture anywhere (autoplay policy).
   useEffect(() => {
+    if (testMode.enabled) return;
     const unlock = () => {
       audio.ensure();
       window.removeEventListener("pointerdown", unlock);
@@ -34,6 +37,7 @@ export function AudioBridge(): null {
   }, []);
 
   useEffect(() => {
+    if (testMode.enabled) return;
     const unsubs = [
       // Ambient + binaural lifecycle follow the phase.
       useStore.subscribe(

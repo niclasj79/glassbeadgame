@@ -12,6 +12,7 @@ import { beadPointerHandlers } from "./threading";
 import { getHaloTexture, getGlyphTexture, getRingTexture } from "./textures";
 
 import { isCoarsePointer } from "@/lib/device";
+import { presentationNow } from "@/runtime/testMode";
 
 export const BEAD_RADIUS = 0.15;
 const SHELL_SCALE = 1.42;
@@ -169,7 +170,7 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     const warmth = Math.min(0.12, degree * 0.04);
     const ill = frameState.illumination;
     const illuminated =
-      ill && performance.now() < ill.until && (ill.a === id || ill.b === id)
+      ill && presentationNow() < ill.until && (ill.a === id || ill.b === id)
         ? 0.28 * (0.6 + 0.4 * Math.sin(frameState.clock * 5))
         : 0;
     haloMaterial.opacity +=

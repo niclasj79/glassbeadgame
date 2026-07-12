@@ -11,11 +11,68 @@ import {
 } from "./threading";
 import { frameState } from "./frameState";
 import { useStore } from "@/state/store";
-import { connectionByPair } from "@/content/connections";
-import { pairKey } from "@/content/types";
+import type { DisciplineId } from "@/content/types";
 import { audio } from "@/audio/engine";
 import { ambient } from "@/audio/ambient";
 import { updateSilk, updateSympathy } from "@/audio/sfx";
+import {
+  advanceTestClock,
+  gameNow,
+  resetTestRuntime,
+  testMode,
+  type TestSessionSnapshot,
+} from "@/runtime/testMode";
+
+const DISCIPLINES = new Set<DisciplineId>([
+  "mathematics",
+  "music",
+  "philosophy",
+  "physics",
+  "art",
+  "history",
+]);
+
+function testSnapshot(): TestSessionSnapshot {
+  const state = useStore.getState();
+  const session = state.session;
+  if (!testMode.enabled || !testMode.seedText || !session) {
+    throw new Error("test session is not active");
+  }
+  return {
+    phase: state.phase,
+    seed: session.seed,
+    seedText: testMode.seedText,
+    disciplines: [...session.disciplines],
+    beadIds: [...session.beadIds],
+    themeId: session.themeId,
+    startedAt: session.startedAt,
+    score: session.score,
+    threads: session.threads.map(({ id, a, b, kind, tier, createdAt }) => ({
+      id,
+      a,
+      b,
+      kind,
+      tier,
+      createdAt,
+    })),
+    discoveries: session.discoveries.map(({ id, kind, points }) => ({ id, kind, points })),
+    interactionMode: session.interaction.mode,
+    now: gameNow(),
+  };
+}
+
+function startTestSession(picks: DisciplineId[]): TestSessionSnapshot {
+  const unique = new Set(picks);
+  if ((picks.length !== 2 && picks.length !== 3) || unique.size !== picks.length) {
+    throw new Error("test session requires two or three distinct disciplines");
+  }
+  if (!picks.every((pick) => DISCIPLINES.has(pick))) {
+    throw new Error("test session contains an unknown discipline");
+  }
+  resetTestRuntime();
+  useStore.getState().beginSession(picks, { seed: testMode.seed! });
+  return testSnapshot();
+}
 
 /** Wires the pointer state machine to the live camera, canvas, and controls. */
 export function ThreadingDriver() {
@@ -29,12 +86,16 @@ export function ThreadingDriver() {
     threadingEnv.controls = controls as unknown as { enabled: boolean } | null;
   }, [camera, gl, controls]);
 
-  // Dev-only E2E hook: lets tests locate beads in screen space and drive the
-  // real pointer pipeline with synthetic events. Stripped from production.
+  // Explicit test-mode adapter: absent from ordinary development and production.
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!testMode.enabled) return;
     const v = new THREE.Vector3();
-    (window as unknown as Record<string, unknown>).__gbgTest = {
+    window.__gbgTest = {
+      seedText: testMode.seedText!,
+      seed: testMode.seed!,
+      startSession: startTestSession,
+      snapshot: testSnapshot,
+      advanceClock: advanceTestClock,
       beadScreen: (id: string) => {
         const i = frameState.beadIndex.get(id);
         if (i === undefined) return null;
@@ -52,18 +113,10 @@ export function ThreadingDriver() {
         };
       },
       beadIds: () => [...frameState.beadIndex.keys()],
-      canvas: () => gl.domElement,
-      curatedPairs: () => {
-        const ids = useStore.getState().session?.beadIds ?? [];
-        const out: [string, string][] = [];
-        for (let i = 0; i < ids.length; i++) {
-          for (let j = i + 1; j < ids.length; j++) {
-            if (connectionByPair.has(pairKey(ids[i], ids[j]))) out.push([ids[i], ids[j]]);
-          }
-        }
-        return out;
-      },
       weave: (a: string, b: string) => devCommit(a, b),
+    };
+    return () => {
+      delete window.__gbgTest;
     };
   }, [camera, gl]);
 

@@ -5,12 +5,12 @@
 | Concern | Repository command | How it is wired |
 | --- | --- | --- |
 | Lockfile install | `npm ci` | `package-lock.json` lockfile v3; also used by Pages workflow |
-| Type checking | `npm run typecheck` | `tsc --noEmit -p tsconfig.app.json`; strict active `src/` only |
+| Type checking | `npm run typecheck` | Strict application and Playwright TypeScript configurations |
 | Lint | `npm run lint` | ESLint over repository; `dist`, `legacy`, and `node_modules` ignored |
 | Unit/logic tests | `npm test` | Vitest 3.2.7 runs the deterministic Node-only characterization suite once; `npm run test:watch` is the local watch mode |
 | Content validation | `npm run validate:content` | Runs the content-validator suite without producing `dist`; `npm run build` and `npm run dev` continue to invoke `validateContent()` through `vite.config.ts::contentGate.buildStart` |
 | Production build | `npm run build` | Vite build, ES2020 target, Pages base path |
-| Browser smoke | None | No Playwright/Cypress dependency, config, files, or package script found |
+| Browser smoke | `npm run test:browser` | Playwright 1.61.1 runs the deterministic-mode smoke in headless Chromium |
 | Performance check | None | Runtime Drei `PerformanceMonitor` changes quality, but no repeatable command/budget assertion exists |
 | Preview | `npm run preview` | Serves the built output; no automated smoke consumes it |
 
@@ -18,38 +18,57 @@ The standalone content command exercises both the authored corpus and deliberate
 
 ## Development-only browser seam
 
-`src/scene/ThreadingDriver.tsx` publishes `window.__gbgTest` only in Vite development mode. It exposes bead screen coordinates/IDs, the canvas, curated pairs, and `weave(a,b)` routed through `threading.ts::devCommit` and the real private commit path. `src/main.tsx` similarly publishes `window.__gbg.state`. These are useful harness seams, but no current command or checked-in test invokes them, and both are stripped/disabled in production mode.
+`src/scene/ThreadingDriver.tsx` publishes the typed `window.__gbgTest` adapter only when Vite development mode and a valid `?testMode=1&seed=<stable-seed>` route are both active. It exposes sanitized session state, controlled clock advancement, rendered bead locations, and `weave(a,b)` routed through `threading.ts::devCommit` and the real private commit path. Ordinary development exposes neither this adapter nor the former broad `window.__gbg` state getter, and production builds cannot activate the test mode.
 
 ## GitHub Actions and deployment validation
 
-`.github/workflows/ci.yml` runs on every pull request, every push to `main`, and manual dispatch. It exposes one stable branch-protection check, `CI / Quality Gates`, with read-only repository permissions:
+`.github/workflows/ci.yml` runs on every pull request, every push to `main`, and manual dispatch. It exposes one stable branch-protection check context, `Quality Gates`, with read-only repository permissions (the Actions UI prefixes it with workflow/event information).
 
 ```text
 checkout -> Node 20/npm cache -> npm ci -> npm run typecheck
 -> npm run lint -> npm test -> npm run validate:content -> npm run build
+-> install Playwright Chromium -> npm run test:browser
 ```
+
+### M0-004 deterministic browser mode
+
+Local parity requires a one-time `npx playwright install chromium`, followed by the normal validation sequence and `npm run test:browser`. CI uses `npx playwright install --with-deps chromium` so the pinned Playwright package supplies the matching browser runtime and Linux system libraries.
+
+The canonical route is `http://127.0.0.1:4173/?testMode=1&seed=castalia-golden-001`. Playwright starts the Vite development server automatically, fixes the Chromium viewport and emulation inputs, uses clean contexts, and verifies deterministic session snapshots and a real commit. Mouse/touch/keyboard interaction, audio unlock/scheduling, approved screenshots, WebGL fallback/recovery, offline behavior, persistence failures, accessibility, and performance remain explicitly outside this smoke.
+
+| M0-004 check | Result | Evidence/notes |
+| --- | --- | --- |
+| `npm ci` | Passed | Installed 330 packages from the lockfile. The existing deprecated `three-mesh-bvh@0.7.8` warning and 2 audit findings (1 moderate, 1 high) remain outside this task. |
+| `npm run typecheck` | Passed | Strict application and Playwright configurations completed without diagnostics. |
+| `npm run lint` | Passed | ESLint completed without diagnostics. |
+| `npm test` | Passed | 7 files and 26 tests passed, including 2 test-mode boundary tests. |
+| `npm run validate:content` | Passed | All 3 content-validator tests passed. |
+| `npm run build` | Passed | Vite transformed 1,123 modules. Existing R3F and Three chunk-size warnings remain non-failing baseline observations. |
+| `npm run test:browser` | Passed | All 3 Chromium scenarios passed from clean contexts in 50.9 seconds. |
+| Workflow syntax | Locally reviewed | CI retains direct ordered steps and adds the matching Chromium install plus browser command after build; the hosted `Quality Gates` result is required at the PR boundary. |
+| Targeted performance | Not required | M0-005 owns measured performance and bundle baselines. |
 
 The cache contains npm's downloaded package data only. It does not restore `node_modules`, `dist`, or generated test output, so `npm ci` and every validation command execute against the checked-out commit. GitHub step logs are the proportionate failure diagnostics because the current tests and build do not emit independent report files; uploading partial `dist` output would not improve diagnosis.
 
 `.github/workflows/deploy.yml` is a separate workflow with `contents: read`, `pages: write`, and `id-token: write`. Automatic deployment runs only after `CI` succeeds for a push whose head branch is `main`; it checks out the exact validated `workflow_run.head_sha`, rebuilds `dist`, uploads the Pages artifact, and deploys. Pull-request CI completions cannot deploy. Manual deployment is permitted only when the workflow is dispatched from `main`.
 
-`main` branch protection was enabled after PR #10 merged. It requires pull requests, strict `CI / Quality Gates`, conversation resolution, and applies to administrators; force pushes and branch deletion are disabled. The repository has one administrator, so the required approving-review count is zero while the PR and required-check boundary remains enforced.
+`main` branch protection was enabled after PR #10 merged. It requires pull requests, strict `Quality Gates`, conversation resolution, and applies to administrators; force pushes and branch deletion are disabled. The repository has one administrator, so the required approving-review count is zero while the PR and required-check boundary remains enforced.
 
 ### M0-003 execution report
 
 | Check | Result | Evidence/notes |
 | --- | --- | --- |
-| Workflow structure | Passed locally and in GitHub | Both workflow files parse as YAML. PR #10's `CI / Quality Gates` passed in 31 seconds, and the merged `main` CI run passed for commit `34e6d93`. |
+| Workflow structure | Passed locally and in GitHub | Both workflow files parse as YAML. PR #10's `Quality Gates` check passed in 31 seconds, and the merged `main` CI run passed for commit `34e6d93`. |
 | `npm ci` | Passed | Installed 327 packages from the lockfile. The existing deprecated transitive `three-mesh-bvh@0.7.8` and 2 audit findings (1 moderate, 1 high) remain outside this task's dependency scope. |
 | `npm run typecheck` | Passed | Strict application TypeScript completed with no diagnostics. |
 | `npm run lint` | Passed | ESLint completed with no diagnostics. |
-| `npm test` | Passed | 6 files and 24 tests passed. Each CI command is a direct step, so any nonzero test/type/lint/content/build exit fails `CI / Quality Gates`. |
+| `npm test` | Passed | 6 files and 24 tests passed. Each CI command is a direct step, so any nonzero test/type/lint/content/build exit fails `Quality Gates`. |
 | `npm run validate:content` | Passed | 3 content-validator tests passed. |
 | `npm run build` | Passed | Vite transformed 1,122 modules and the production content gate passed. Existing R3F and Three chunk-size warnings remain non-failing baseline observations. |
 | Browser smoke | Not runnable | Browser/E2E automation is explicitly excluded until M0-004 establishes deterministic test mode. |
 | Targeted performance | Not required/runnable | M0-003 defines no performance check; M0-005 owns the measured baseline. |
 
-The Pages `workflow_run` then deployed the same validated commit successfully. No Pages workflow ran for the pull-request branch. Hosted branch protection was verified after merge with strict `CI / Quality Gates` required.
+The Pages `workflow_run` then deployed the same validated commit successfully. No Pages workflow ran for the pull-request branch. Hosted branch protection was verified after merge with strict `Quality Gates` required.
 
 ## M0-001 execution report
 

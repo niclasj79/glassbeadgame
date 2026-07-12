@@ -1,4 +1,5 @@
 import { SCORE } from "./score";
+import { runtimeRandom, testMode } from "@/runtime/testMode";
 
 /** Stereo impulse response: decorrelated exponentially decaying noise. */
 function makeImpulseResponse(
@@ -12,7 +13,7 @@ function makeImpulseResponse(
     const data = buffer.getChannelData(ch);
     for (let i = 0; i < length; i++) {
       const t = i / length;
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+      data[i] = (runtimeRandom() * 2 - 1) * Math.pow(1 - t, decay);
     }
   }
   return buffer;
@@ -49,7 +50,7 @@ class AudioEngine {
 
   /** Create (or resume) the context. Must first be called from a user gesture. */
   ensure(): AudioContext | null {
-    if (typeof window === "undefined") return null;
+    if (typeof window === "undefined" || testMode.enabled) return null;
     if (!this.ctx) {
       const Ctor =
         window.AudioContext ??

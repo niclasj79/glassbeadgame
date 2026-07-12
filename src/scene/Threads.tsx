@@ -11,6 +11,7 @@ import { currentTheme } from "@/themes/useTheme";
 import type { Thread } from "@/state/types";
 import { frameState } from "./frameState";
 import { arcMid } from "./curves";
+import { presentationNow } from "@/runtime/testMode";
 // (useStore is also read transiently inside useFrame for the concluding lift.)
 
 const SEGMENTS = 20; // drei's QuadraticBezierLine samples 20 segments = 21 points
@@ -170,7 +171,7 @@ function ThreadLine({ thread }: ThreadLineProps) {
       let target = concluding ? Math.min(1, baseOpacity + 0.35) : baseOpacity;
       // Duplicate-weave flash: the existing thread answers instead.
       if (frameState.pulseThreadId === thread.id) {
-        const age = (performance.now() - frameState.pulseAt) / 1000;
+        const age = (presentationNow() - frameState.pulseAt) / 1000;
         if (age < 0.9) {
           target = Math.min(1, target + Math.sin(age * Math.PI * 4) * 0.5 * (1 - age));
         } else {

@@ -5,6 +5,7 @@ import { QuadraticBezierLine } from "@react-three/drei";
 import type { Line2 } from "three-stdlib";
 import { frameState } from "./frameState";
 import { arcMid } from "./curves";
+import { presentationNow } from "@/runtime/testMode";
 
 const vStart = new THREE.Vector3();
 const vEnd = new THREE.Vector3();
@@ -23,7 +24,7 @@ export function Illumination() {
   useEffect(() => {
     const t = setInterval(() => {
       const ill = frameState.illumination;
-      setActive(!!ill && performance.now() < ill.until);
+      setActive(!!ill && presentationNow() < ill.until);
     }, 150);
     return () => clearInterval(t);
   }, []);
@@ -43,7 +44,7 @@ export function Illumination() {
       setPoints: (a: THREE.Vector3, b: THREE.Vector3, m: THREE.Vector3) => void;
     }).setPoints(vStart, vEnd, vMid);
 
-    const remaining = (ill.until - performance.now()) / 1000;
+    const remaining = (ill.until - presentationNow()) / 1000;
     const mat = line.material as unknown as { dashOffset: number; opacity: number };
     mat.dashOffset -= dt * 2.2; // hurried marching — a whisper, not a claim
     const fadeIn = Math.min(1, (4 - remaining) * 2.5);

@@ -1,3 +1,5 @@
+import { presentationNow } from "@/runtime/testMode";
+
 /**
  * Per-frame mutable state shared across scene components, deliberately outside
  * React: positions morph, time dilates, and idleness accrues at 60Hz — none of
@@ -73,7 +75,7 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.clock = 0;
   frameState.hoveredId = null;
   frameState.aim.active = false;
-  frameState.idleSince = performance.now();
+  frameState.idleSince = presentationNow();
 }
 
 export function setMorphTargets(targets: Float32Array): void {

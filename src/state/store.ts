@@ -9,6 +9,7 @@ import { unlockIdsFor } from "@/game/progress";
 import { utcDateKey } from "@/lib/daily";
 import { themeForSession } from "@/themes";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
+import { gameNow } from "@/runtime/testMode";
 import type {
   CodexEntry,
   Discovery,
@@ -133,7 +134,7 @@ export const useStore = create<GBGState>()(
         discoveries: [],
         motifs: [],
         score: 0,
-        startedAt: Date.now(),
+        startedAt: gameNow(),
         interaction: idleInteraction(),
         curatedAvailable: draw.curatedAvailable,
         insight: 1, // the Magister's gift — one illumination to learn the mechanic
@@ -250,7 +251,7 @@ export const useStore = create<GBGState>()(
         finalized = { ...discovery, newToCodex: !prev };
         codex[discovery.id] = prev
           ? { ...prev, count: prev.count + 1 }
-          : { firstFoundAt: Date.now(), count: 1 };
+          : { firstFoundAt: gameNow(), count: 1 };
       }
       const motifPoints = motifs.reduce((sum, m) => sum + m.points, 0);
       // Insight accrues from what deserves it: luminous finds and motifs.
@@ -318,9 +319,9 @@ export const useStore = create<GBGState>()(
       const s = get().session;
       if (!s) return;
       const memory: SessionMemory = {
-        id: `${s.seed}-${Date.now()}`,
+        id: `${s.seed}-${gameNow()}`,
         seed: s.seed,
-        endedAt: Date.now(),
+        endedAt: gameNow(),
         disciplines: s.disciplines,
         beadIds: s.beadIds,
         threads: s.threads,
