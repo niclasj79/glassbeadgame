@@ -25,8 +25,11 @@ M0 — Trustworthy baseline
 ## Ready queue
 
 1. `M0-001-repository-audit.md` — map current state ownership, mutations, persistence, input, audio, scene, tests, and deployment.
-2. `M0-002-test-baseline.md` — establish the unit-test harness and baseline characterization tests. Depends on M0-001.
-3. `M0-003-ci-pipeline.md` — establish required CI checks and deployment separation. Depends on M0-002.
+
+## Blocked queue
+
+1. `M0-002-test-baseline.md` — blocked by M0-001.
+2. `M0-003-ci-pipeline.md` — blocked by M0-001 and M0-002.
 
 ## Planned but not yet Ready
 
