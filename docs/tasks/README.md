@@ -24,7 +24,11 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-1. `M0-002-test-baseline.md` — establish the unit-test and characterization-test baseline documented by M0-001.
+None while M0-002 is in review.
+
+## Review queue
+
+1. `M0-002-test-baseline.md` — test runner and characterization baseline complete; awaiting human acceptance.
 
 ## Blocked queue
 

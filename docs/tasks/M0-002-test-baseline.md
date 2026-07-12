@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -95,3 +95,11 @@ Report:
 ## Human review
 
 Required because the selected harness and characterization boundary shape all later migration work.
+
+## Implementation notes
+
+- Added pinned Vitest 3.2.7 with stable `npm test`, local watch, and standalone content-validation commands.
+- Added 24 Node-only characterization tests across six suites for session generation, content/pairs, attempts/scoring, motifs/consecration, ranks/progress, Annotation, Zustand mutations, and persistence partialization/restore.
+- Added an optional typed fixture input to `validateContent`; its default production behavior remains unchanged.
+- Controlled wall time with fake clocks and recorded the remaining browser, audio, rendering, persistence, and nondeterminism gaps in `docs/audits/M0-VALIDATION-COMMANDS.md`.
+- M0-003 remains blocked until this task is reviewed, accepted, merged, and transitioned to Done.

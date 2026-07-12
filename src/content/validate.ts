@@ -1,7 +1,13 @@
 import { disciplines } from "./disciplines";
 import { concepts } from "./concepts";
 import { connections } from "./connections";
-import { pairKey, type DisciplineId } from "./types";
+import {
+  pairKey,
+  type Concept,
+  type CuratedConnection,
+  type Discipline,
+  type DisciplineId,
+} from "./types";
 
 export interface ValidationReport {
   errors: string[];
@@ -9,10 +15,18 @@ export interface ValidationReport {
   stats: string[];
 }
 
+export interface ContentValidationInput {
+  disciplines: readonly Discipline[];
+  concepts: readonly Concept[];
+  connections: readonly CuratedConnection[];
+}
+
 const CONCEPTS_PER_DISCIPLINE = 15;
 const INSIGHT_MIN = 120;
 const INSIGHT_MAX = 480;
 const CROSS_PAIR_MIN = 4;
+
+const authoredContent: ContentValidationInput = { disciplines, concepts, connections };
 
 /**
  * Structural integrity for the whole content layer. Runs on every dev-server
@@ -20,7 +34,8 @@ const CROSS_PAIR_MIN = 4;
  * Checks activate as the corresponding data lands: an empty concepts or
  * connections array is legal scaffolding, a *wrong* one is a build failure.
  */
-export function validateContent(): ValidationReport {
+export function validateContent(content: ContentValidationInput = authoredContent): ValidationReport {
+  const { disciplines, concepts, connections } = content;
   const errors: string[] = [];
   const warnings: string[] = [];
   const stats: string[] = [];
