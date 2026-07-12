@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed repository audit and unit-test baseline, enforced pull-request CI, CI-gated Pages deployment, and a merged deterministic browser test mode. The performance and bundle baseline is in review.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, and accepted bundle budgets. The dependency-upgrade decision is ready next.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. No next task is eligible until M0-005 and its first budgets are reviewed and merged.
+Codex may be used as the implementation interface for one supervised task at a time. The next eligible task is `docs/tasks/M0-006-dependency-upgrade-decision.md`.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 
@@ -46,11 +46,11 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 
 ```text
 Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
-docs/tasks/M0-005-performance-bundle-baseline.md, and its required reading.
+docs/tasks/M0-006-dependency-upgrade-decision.md, and its required reading.
 
-This is a supervised single-task run. Inspect the existing bundle, quality tiers,
-render/audio resource lifetimes, and deterministic browser seam, produce a concise implementation plan, then
-execute only M0-005. Run every required check, update only the task deliverables,
+This is a supervised single-task run. Inventory direct and transitive dependencies,
+advisories, compatibility constraints, and existing capabilities, produce a concise plan, then
+execute only M0-006. Run every required check, update only the task deliverables,
 and open one reviewable pull request. Do not change gameplay rules or begin
 another task.
 ```
