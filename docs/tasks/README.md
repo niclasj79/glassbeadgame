@@ -24,19 +24,16 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-None while M0-002 is in review.
-
-## Review queue
-
-1. `M0-002-test-baseline.md` — test runner and characterization baseline complete; awaiting human acceptance.
+1. `M0-003-ci-pipeline.md` — establish pull-request quality gates and isolate validation from Pages deployment.
 
 ## Blocked queue
 
-1. `M0-003-ci-pipeline.md` — blocked by M0-002.
+None.
 
 ## Completed
 
 1. `M0-001-repository-audit.md` — accepted and merged in PR #6.
+2. `M0-002-test-baseline.md` — accepted and merged in PR #8.
 
 ## Planned but not yet Ready
 
