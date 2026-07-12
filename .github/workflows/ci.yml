@@ -42,3 +42,5 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser smoke
         run: npm run test:browser
+      - name: Bundle budget
+        run: npm run bundle:check

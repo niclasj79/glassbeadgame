@@ -1,4 +1,5 @@
 import type { DisciplineId } from "@/content/types";
+import type { QualityTier } from "@/lib/device";
 import { hashString, mulberry32 } from "@/lib/utils";
 
 const CONTROLLED_EPOCH_MS = Date.UTC(2025, 0, 1, 12, 0, 0);
@@ -7,6 +8,8 @@ export interface TestModeConfig {
   enabled: boolean;
   seedText: string | null;
   seed: number | null;
+  qualityTier: QualityTier;
+  reducedMotion: boolean;
 }
 
 export interface TestSessionSnapshot {
@@ -44,6 +47,19 @@ export interface BrowserTestAdapter {
   beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
   weave(a: string, b: string): void;
+  startFrameSample(): void;
+  finishFrameSample(): FrameSample;
+  rendererInfo(): { renderer: string; vendor: string; software: boolean };
+  presentationProfile(): { qualityTier: QualityTier; reducedMotion: boolean };
+}
+
+export interface FrameSample {
+  sampleCount: number;
+  medianMs: number;
+  p95Ms: number;
+  p99Ms: number;
+  longFrames: number;
+  effectiveFps: number;
 }
 
 declare global {
@@ -53,13 +69,15 @@ declare global {
 }
 
 export function parseTestMode(search: string, development: boolean): TestModeConfig {
-  if (!development) return { enabled: false, seedText: null, seed: null };
+  if (!development) return { enabled: false, seedText: null, seed: null, qualityTier: "base", reducedMotion: false };
   const params = new URLSearchParams(search);
   const seedText = params.get("seed")?.trim() ?? "";
   if (params.get("testMode") !== "1" || seedText.length === 0) {
-    return { enabled: false, seedText: null, seed: null };
+    return { enabled: false, seedText: null, seed: null, qualityTier: "base", reducedMotion: false };
   }
-  return { enabled: true, seedText, seed: hashString(seedText) };
+  const quality = params.get("quality");
+  const qualityTier: QualityTier = quality === "high" || quality === "potato" ? quality : "base";
+  return { enabled: true, seedText, seed: hashString(seedText), qualityTier, reducedMotion: params.get("reducedMotion") === "1" };
 }
 
 const search = typeof window === "undefined" ? "" : window.location?.search ?? "";
@@ -67,6 +85,7 @@ export const testMode = parseTestMode(search, import.meta.env.DEV);
 
 let controlledNow = CONTROLLED_EPOCH_MS;
 let seededRandom = mulberry32(testMode.seed ?? 0);
+let frameSamples: number[] | null = null;
 
 export function resetTestRuntime(): void {
   if (!testMode.enabled) return;
@@ -93,4 +112,37 @@ export function advanceTestClock(milliseconds: number): number {
   }
   controlledNow += Math.floor(milliseconds);
   return controlledNow;
+}
+
+export function startFrameSample(): void {
+  if (!testMode.enabled) throw new Error("test mode is not active");
+  frameSamples = [];
+}
+
+export function recordFrameSample(deltaSeconds: number): void {
+  frameSamples?.push(deltaSeconds * 1000);
+}
+
+export function finishFrameSample(): FrameSample {
+  if (!frameSamples || frameSamples.length === 0) throw new Error("no frame sample is active");
+  const result = summarizeFrameSamples(frameSamples);
+  frameSamples = null;
+  return result;
+}
+
+export function summarizeFrameSamples(samples: readonly number[]): FrameSample {
+  if (samples.length === 0 || samples.some((value) => !Number.isFinite(value) || value <= 0)) {
+    throw new Error("frame samples must contain positive finite milliseconds");
+  }
+  const values = samples.slice().sort((a, b) => a - b);
+  const percentile = (p: number) => values[Math.min(values.length - 1, Math.ceil(values.length * p) - 1)];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return {
+    sampleCount: values.length,
+    medianMs: percentile(0.5),
+    p95Ms: percentile(0.95),
+    p99Ms: percentile(0.99),
+    longFrames: values.filter((value) => value > 50).length,
+    effectiveFps: 1000 / (total / values.length),
+  };
 }

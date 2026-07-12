@@ -38,9 +38,13 @@ npm run validate:content  # content gate without producing dist
 npm run build             # production build; also runs the content gate
 npx playwright install chromium  # first browser-test setup
 npm run test:browser      # deterministic Chromium smoke
+npm run bundle:check      # portable production-bundle regression gate
+npm run measure:performance  # renderer-labelled frame reference report
 
 npm run dev               # local server: http://localhost:8080
 ```
+
+`measure:performance` writes ignored reports under `artifacts/performance/`; its frame rates are reference evidence, not a hardware-independent CI gate.
 
 Pull requests run the same install and validation sequence in GitHub Actions.
 The required branch-protection check is `Quality Gates`.
