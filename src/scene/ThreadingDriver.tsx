@@ -18,7 +18,10 @@ import { updateSilk, updateSympathy } from "@/audio/sfx";
 import {
   advanceTestClock,
   gameNow,
+  finishFrameSample,
+  recordFrameSample,
   resetTestRuntime,
+  startFrameSample,
   testMode,
   type TestSessionSnapshot,
 } from "@/runtime/testMode";
@@ -114,6 +117,19 @@ export function ThreadingDriver() {
       },
       beadIds: () => [...frameState.beadIndex.keys()],
       weave: (a: string, b: string) => devCommit(a, b),
+      startFrameSample,
+      finishFrameSample,
+      rendererInfo: () => {
+        const context = gl.getContext();
+        const extension = context.getExtension("WEBGL_debug_renderer_info");
+        const renderer = extension ? String(context.getParameter(extension.UNMASKED_RENDERER_WEBGL)) : "unavailable";
+        const vendor = extension ? String(context.getParameter(extension.UNMASKED_VENDOR_WEBGL)) : "unavailable";
+        return { renderer, vendor, software: /swiftshader|llvmpipe|software/iu.test(`${renderer} ${vendor}`) };
+      },
+      presentationProfile: () => {
+        const { qualityTier, reducedMotion } = useStore.getState().settings;
+        return { qualityTier, reducedMotion };
+      },
     };
     return () => {
       delete window.__gbgTest;
@@ -135,6 +151,7 @@ export function ThreadingDriver() {
   // bed's camera-following pan. One throttle, four whispers.
   const acc = useRef(0);
   useFrame((state, dt) => {
+    if (testMode.enabled) recordFrameSample(dt);
     acc.current += dt;
     if (acc.current < 0.066) return;
     acc.current = 0;

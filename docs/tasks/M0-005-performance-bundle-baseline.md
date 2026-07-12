@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -128,3 +128,11 @@ Report:
 ## Human review
 
 Required to accept the first budgets and interpret audiovisual quality, comfort, and hardware representativeness. Automated measurements do not authorize visual or audio degradation and must not be treated as physical-device certification.
+
+## Implementation notes
+
+- Added a zero-dependency production bundle reporter with stable hashed-asset identities, raw/gzip-9 accounting, category totals, JSON output, and five proposed portable regression ceilings.
+- Extended only the development test boundary with explicit quality/reduced-motion inputs, real R3F delta sampling, and WebGL renderer identification. Ordinary runtime behavior remains unchanged.
+- Added desktop-base and mobile-potato reference profiles with two-second warm-up and five-second idle-arena samples. They report evidence but do not gate CI because the observed runner uses SwiftShader.
+- CI runs the portable bundle budget after the existing build and browser smoke. Generated reports remain ignored unless evidence is deliberately copied into the reviewed audit.
+- Recorded bundle results, frame distributions, resource-lifetime bounds, proposed budgets, methodology, hot paths, and unverified device/audio/memory gaps in `docs/audits/M0-PERFORMANCE-BASELINE.md`.

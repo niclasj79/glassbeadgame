@@ -12,7 +12,7 @@ export function probeWebGL(): boolean {
 }
 
 export function prefersReducedMotion(): boolean {
-  if (testMode.enabled) return true;
+  if (testMode.enabled) return testMode.reducedMotion;
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
@@ -26,7 +26,7 @@ export function isCoarsePointer(): boolean {
  * if sustained frame drops are observed. "potato" is reached only by demotion.
  */
 export function initialQualityTier(): QualityTier {
-  if (testMode.enabled) return "base";
+  if (testMode.enabled) return testMode.qualityTier;
   const cores = navigator.hardwareConcurrency ?? 4;
   if (isCoarsePointer() && cores <= 6) return "base";
   if (cores <= 4) return "base";

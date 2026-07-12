@@ -24,7 +24,11 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-1. `M0-005-performance-bundle-baseline.md` — measure bundle and runtime performance, establish reviewable budgets, and add repeatable checks.
+None while M0-005 is in review.
+
+## In review
+
+1. `M0-005-performance-bundle-baseline.md` — performance and bundle baseline implemented; proposed budgets await human acceptance.
 
 ## Blocked queue
 
