@@ -24,11 +24,7 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-None while M0-005 is in review.
-
-## In review
-
-1. `M0-005-performance-bundle-baseline.md` — performance and bundle baseline implemented; proposed budgets await human acceptance.
+1. `M0-006-dependency-upgrade-decision.md` — audit dependencies and advisories, then recommend isolated follow-up actions without upgrading packages.
 
 ## Blocked queue
 
@@ -40,10 +36,10 @@ None.
 2. `M0-002-test-baseline.md` — accepted and merged in PR #8.
 3. `M0-003-ci-pipeline.md` — accepted and merged in PR #10.
 4. `M0-004-deterministic-test-mode.md` — accepted and merged in PR #12.
+5. `M0-005-performance-bundle-baseline.md` — accepted with initial bundle budgets and merged in PR #14.
 
 ## Planned but not yet Ready
 
-- M0-006 dependency-upgrade decision;
 - M1-001 stable domain identifiers and events;
 - M1-002 pure session reducer;
 - M1-003 replay and serialization;
