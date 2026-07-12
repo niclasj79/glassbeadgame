@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, and a completed M0 repository audit. The supervised test-baseline task is ready next.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, and a completed M0 repository audit. The supervised test-baseline task is in review.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. The next eligible task is `docs/tasks/M0-002-test-baseline.md`.
+Codex may be used as the implementation interface for one supervised task at a time. M0-002 must be reviewed and accepted before M0-003 becomes eligible.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 
@@ -45,13 +45,12 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 ## Supervised steering prompt
 
 ```text
-Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
-docs/tasks/M0-002-test-baseline.md, and the M0-001 audit deliverables.
+Read AGENTS.md, docs/CODEX-STEERING-READINESS.md,
+docs/tasks/M0-002-test-baseline.md, and docs/audits/M0-VALIDATION-COMMANDS.md.
 
-This is a supervised single-task run. Inspect the repository, produce a concise
-implementation plan, then execute only M0-002. Run every required check, update
-only the task deliverables, and open one reviewable pull request. Do not change
-gameplay behavior and do not begin another task.
+Review the M0-002 pull request against its acceptance criteria, implementation
+notes, test gaps, and reported checks. Do not mark M0-002 Done or unblock M0-003
+until the change is accepted and merged. Do not begin another task.
 ```
 
 ## Future autonomous steering prompt

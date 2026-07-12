@@ -14,5 +14,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "src/content"]
+  "include": ["vite.config.ts", "vitest.config.ts", "src/content"]
 }
