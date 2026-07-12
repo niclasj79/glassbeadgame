@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -118,7 +118,7 @@ It must not create an alternative game-rule implementation. Hidden curated endpo
 - `npm run validate:content`;
 - `npm run build`;
 - `npm run test:browser`;
-- workflow syntax and the pull request's `CI / Quality Gates` run.
+- workflow syntax and the pull request's `Quality Gates` run.
 
 Targeted performance checks are not required; M0-005 owns the measured baseline.
 
@@ -137,3 +137,12 @@ Report:
 ## Human review
 
 Required because the task introduces a browser automation boundary, test-only state access, and CI runtime changes. Automated checks do not validate audiovisual comfort or artistic quality.
+
+## Implementation notes
+
+- Added a development-gated `testMode` runtime that converts the stable URL seed, supplies controlled game and presentation clocks, and replaces browser-tested random inputs without changing the Web Audio scheduling clock.
+- Fixed test-mode device inputs, canvas DPR, reduced motion, and audio startup. Ordinary development and production retain their existing device, timing, randomness, and audio behavior.
+- Replaced the broad development globals with a typed `window.__gbgTest` adapter that exists only for a valid test-mode route and delegates to the real session store and thread commit seam.
+- Pinned `@playwright/test` 1.61.1 as a development dependency. CI installs its Chromium runtime after the production build and runs `npm run test:browser`.
+- Browser coverage proves identical clean-context snapshots for `castalia-golden-001`, repeatability plus a different draw for another seed, controlled timestamp advancement, a real thread commit, and absence of test globals in ordinary development.
+- Remaining gaps are pointer/touch/keyboard interaction, audio unlock and scheduling behavior, screenshot approval, WebGL fallback and recovery, offline/PWA behavior, real-browser persistence failures, accessibility auditing, and performance budgets.

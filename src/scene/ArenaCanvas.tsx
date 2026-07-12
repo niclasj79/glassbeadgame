@@ -4,6 +4,7 @@ import { PerformanceMonitor } from "@react-three/drei";
 import { useStore } from "@/state/store";
 import { initialQualityTier } from "@/lib/device";
 import { Cosmos } from "./Cosmos";
+import { testMode } from "@/runtime/testMode";
 
 /**
  * The one persistent WebGL canvas. Every screen renders above it; phase
@@ -63,11 +64,17 @@ export function ArenaCanvas() {
     setQualityTier(ceilingTier.current === "potato" ? "potato" : "base");
   }, [setQualityTier]);
 
+  const cosmos = (
+    <Suspense fallback={null}>
+      <Cosmos />
+    </Suspense>
+  );
+
   return (
     <div className="absolute inset-0" style={{ touchAction: "none" }}>
       <Canvas
         key={canvasKey}
-        dpr={[1, 2]}
+        dpr={testMode.enabled ? 1 : [1, 2]}
         gl={{
           antialias: true,
           powerPreference: "high-performance",
@@ -77,16 +84,18 @@ export function ArenaCanvas() {
         camera={{ fov: 42, near: 0.1, far: 160, position: [0, 0.5, 13.8] }}
         onCreated={handleCreated}
       >
-        <PerformanceMonitor
-          onDecline={demote}
-          onIncline={promote}
-          flipflops={4}
-          onFallback={settle}
-        >
-          <Suspense fallback={null}>
-            <Cosmos />
-          </Suspense>
-        </PerformanceMonitor>
+        {testMode.enabled ? (
+          cosmos
+        ) : (
+          <PerformanceMonitor
+            onDecline={demote}
+            onIncline={promote}
+            flipflops={4}
+            onFallback={settle}
+          >
+            {cosmos}
+          </PerformanceMonitor>
+        )}
       </Canvas>
 
       {contextLost && (

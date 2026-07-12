@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { easing } from "maath";
 import { useStore } from "@/state/store";
 import { frameState } from "./frameState";
+import { presentationNow } from "@/runtime/testMode";
 
 interface Pose {
   position: THREE.Vector3;
@@ -167,7 +168,7 @@ export function CameraRig() {
     }
 
     const mode = useStore.getState().session?.interaction.mode ?? "idle";
-    const idle = performance.now() - frameState.idleSince > IDLE_ORBIT_AFTER_MS;
+    const idle = presentationNow() - frameState.idleSince > IDLE_ORBIT_AFTER_MS;
     ctl.autoRotate =
       !reducedMotion &&
       mode !== "reveal" &&
@@ -191,11 +192,11 @@ export function CameraRig() {
       maxDistance={aspect < 0.75 ? 20 : 16}
       autoRotateSpeed={0.35}
       onStart={() => {
-        frameState.idleSince = performance.now();
+        frameState.idleSince = presentationNow();
         transit.current = null;
       }}
       onChange={() => {
-        frameState.idleSince = performance.now();
+        frameState.idleSince = presentationNow();
       }}
     />
   );

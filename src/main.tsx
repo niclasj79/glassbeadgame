@@ -6,15 +6,6 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "./index.css";
 import App from "./App";
-import { useStore } from "./state/store";
-
-if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__gbg = {
-    get state() {
-      return useStore.getState();
-    },
-  };
-}
 
 // Sweep away the archived v1 app's localStorage remnants (same origin).
 try {

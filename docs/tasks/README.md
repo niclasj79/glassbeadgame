@@ -24,7 +24,11 @@ M0 — Trustworthy baseline
 
 ## Ready queue
 
-1. `M0-004-deterministic-test-mode.md` — establish the fixed-seed browser route and repeatable Playwright smoke.
+None while M0-004 is in review.
+
+## In review
+
+1. `M0-004-deterministic-test-mode.md` — deterministic browser route and repeatable Playwright smoke implemented; awaiting review and merge.
 
 ## Blocked queue
 

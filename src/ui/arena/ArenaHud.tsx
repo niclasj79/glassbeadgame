@@ -7,6 +7,7 @@ import { LENS_VIEWS } from "@/game/layout";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { illuminationChime } from "@/audio/sfx";
 import type { Discovery, MotifAward } from "@/state/types";
+import { presentationNow } from "@/runtime/testMode";
 import { GlassPanel } from "../components/GlassPanel";
 import { Button } from "../components/Button";
 import { BeadInspectCard } from "./BeadInspectCard";
@@ -74,7 +75,7 @@ export function ArenaHud() {
     frameState.illumination = {
       a: pair[0],
       b: pair[1],
-      until: performance.now() + 4000,
+      until: presentationNow() + 4000,
     };
     illuminationChime(pair[0], pair[1]);
     for (const id of pair) {

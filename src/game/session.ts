@@ -2,6 +2,7 @@ import { concepts, conceptById } from "@/content/concepts";
 import { connections, connectionByPair } from "@/content/connections";
 import { pairKey, type DisciplineId } from "@/content/types";
 import { mulberry32, shuffle } from "@/lib/utils";
+import { runtimeRandom } from "@/runtime/testMode";
 
 export interface SessionDraw {
   seed: number;
@@ -21,7 +22,7 @@ const SEEDED_CONNECTIONS = 4;
  * open exploration, plus one or two bridge beads from outside disciplines.
  */
 export function drawSession(picks: DisciplineId[], seed?: number): SessionDraw {
-  const s = seed ?? ((Math.random() * 0x7fffffff) | 0);
+  const s = seed ?? ((runtimeRandom() * 0x7fffffff) | 0);
   const rng = mulberry32(s);
   const perPick = picks.length === 2 ? 5 : 4;
   const bridgeCount = picks.length === 2 ? 2 : 1;

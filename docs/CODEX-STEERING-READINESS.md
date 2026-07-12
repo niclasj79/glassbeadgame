@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed repository audit and unit-test baseline, enforced pull-request CI, and CI-gated Pages deployment. The deterministic browser test-mode task is ready next.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed repository audit and unit-test baseline, enforced pull-request CI, and CI-gated Pages deployment. The deterministic browser test-mode task is in review.
 
 It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. The next eligible task is `docs/tasks/M0-004-deterministic-test-mode.md`.
+Codex may be used as the implementation interface for one supervised task at a time. No next task is eligible until M0-004 is reviewed and merged and the queue is advanced deliberately.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 

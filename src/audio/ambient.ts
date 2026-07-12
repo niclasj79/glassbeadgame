@@ -5,6 +5,7 @@ import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { hashString, mulberry32 } from "@/lib/utils";
 import { frameState } from "@/scene/frameState";
+import { runtimeRandom } from "@/runtime/testMode";
 import { currentTheme } from "@/themes/useTheme";
 import { SCORE } from "./score";
 import type { TimbreId } from "@/content/types";
@@ -254,7 +255,7 @@ class AmbientEngine {
     }
 
     // Near-full awakening: a rare high shimmer, three quick falling bells.
-    if (awakening >= SCORE.shimmer.threshold && Math.random() < SCORE.shimmer.probability) {
+    if (awakening >= SCORE.shimmer.threshold && runtimeRandom() < SCORE.shimmer.probability) {
       const top = degreeToFreq(2, 5);
       [top, top * 0.833, degreeToFreq(4, 4)].forEach((f, i) => {
         playVoice(ctx, bus, "bell", f, {

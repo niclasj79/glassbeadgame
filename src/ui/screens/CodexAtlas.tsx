@@ -5,6 +5,7 @@ import { disciplineById, disciplines } from "@/content/disciplines";
 import type { CuratedConnection, DisciplineId } from "@/content/types";
 import { TIER_POINTS } from "@/game/rules";
 import type { CodexEntry, Discovery, SessionMemory } from "@/state/types";
+import { gameNow } from "@/runtime/testMode";
 import { GlassPanel } from "../components/GlassPanel";
 import { Button } from "../components/Button";
 
@@ -81,7 +82,7 @@ function memoryFromConnection(conn: CuratedConnection): SessionMemory {
   return {
     id: `codex-${conn.id}`,
     seed: 0,
-    endedAt: Date.now(),
+    endedAt: gameNow(),
     disciplines: [
       conceptById.get(conn.pair[0])!.discipline,
       conceptById.get(conn.pair[1])!.discipline,
@@ -94,7 +95,7 @@ function memoryFromConnection(conn: CuratedConnection): SessionMemory {
         b: conn.pair[1],
         kind: "curated",
         tier: conn.tier,
-        createdAt: Date.now(),
+        createdAt: gameNow(),
       },
     ],
     discoveries: [discovery],

@@ -6,12 +6,13 @@ import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import type { Discovery } from "@/state/types";
+import { presentationNow } from "@/runtime/testMode";
 
 let lastHoverAt = 0;
 
 /** A bead announces its identity note on hover — the sphere is an instrument. */
 export function hoverPing(conceptId: string): void {
-  const now = performance.now();
+  const now = presentationNow();
   if (now - lastHoverAt < 90) return;
   lastHoverAt = now;
   const ctx = audio.get();

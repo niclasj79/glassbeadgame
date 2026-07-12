@@ -16,6 +16,7 @@ import {
   consecrationChime,
 } from "@/audio/sfx";
 import { currentTheme } from "@/themes/useTheme";
+import { presentationNow, testMode } from "@/runtime/testMode";
 import { frameState, beadPosition, emitBurst } from "./frameState";
 
 /**
@@ -84,7 +85,7 @@ function interactionMode() {
 }
 
 function markActive() {
-  frameState.idleSince = performance.now();
+  frameState.idleSince = presentationNow();
 }
 
 /** Ray → arena-sphere aim point; falls back to the silhouette when the ray misses. */
@@ -209,7 +210,7 @@ function commit(fromId: string, toId: string) {
   if (session.threads.some((t) => t.id === key)) {
     // Already woven — flash the existing thread instead of committing.
     frameState.pulseThreadId = key;
-    frameState.pulseAt = performance.now();
+    frameState.pulseAt = presentationNow();
     return cancelGesture();
   }
 
@@ -267,7 +268,7 @@ function commit(fromId: string, toId: string) {
 
 /** Dev-only E2E seam: drives the exact same commit path as a real gesture. */
 export function devCommit(fromId: string, toId: string): void {
-  if (!import.meta.env.DEV) return;
+  if (!testMode.enabled) return;
   commit(fromId, toId);
 }
 
@@ -278,7 +279,7 @@ export function dismissReveal() {
   if (st.session?.interaction.mode !== "reveal") return;
   st.setInteraction({ mode: "idle", reveal: null });
   frameState.timeScaleTarget = 1;
-  frameState.idleSince = performance.now();
+  frameState.idleSince = presentationNow();
   frameState.recenter = true;
   if (threadingEnv.controls) threadingEnv.controls.enabled = true;
 }

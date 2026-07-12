@@ -3,6 +3,7 @@ import { connectionByPair } from "@/content/connections";
 import { pairKey } from "@/content/types";
 import { hashString, mulberry32, pick } from "@/lib/utils";
 import type { Discovery, MotifAward, SessionState, Thread } from "@/state/types";
+import { gameNow } from "@/runtime/testMode";
 
 export const FAINT_POINTS = 2;
 /** From the third faint onward the Game rewards it less — exploration is
@@ -47,7 +48,7 @@ export interface AttemptResult {
 export function resolveAttempt(aId: string, bId: string, priorFaints = 0): AttemptResult {
   const key = pairKey(aId, bId);
   const curated = connectionByPair.get(key);
-  const now = Date.now();
+  const now = gameNow();
 
   if (curated) {
     return {
@@ -127,7 +128,7 @@ export function detectNewMotifs(session: SessionState, newThread: Thread): Motif
     adj.get(t.b)!.add(t.a);
   }
   const already = new Set(session.motifs.map((m) => m.motifId));
-  const now = Date.now();
+  const now = gameNow();
 
   // Triad: the new thread closes a triangle.
   if (!already.has("triad")) {
