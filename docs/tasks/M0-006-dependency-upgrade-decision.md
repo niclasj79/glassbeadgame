@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -117,3 +117,10 @@ Report:
 ## Human review
 
 Required to accept risk, approve any removal/replacement, and authorize every major-version or security-sensitive follow-up. Completing this decision task does not authorize an upgrade implementation.
+
+## Implementation notes
+
+- Recorded the complete direct inventory, active-use evidence, outdated set, peer constraints, advisories, deprecation path, reachability classification, and primary sources in `docs/audits/M0-DEPENDENCY-DECISION.md`.
+- Recommended one immediate isolated Vite 6.4.3 security follow-up and marked its task Blocked pending human approval; no package or lockfile mutation occurred.
+- Deferred coupled React/R3F/Drei/postprocessing/Three, CSS, lint, motion, test, and TypeScript majors to separate future decisions rather than combining them with M1.
+- Decided M1 is blocked only until the Vite security follow-up is approved and merged; the deprecated BVH transitive and other outdated majors do not independently block domain work.
