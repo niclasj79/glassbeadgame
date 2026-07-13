@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -200,6 +200,7 @@ Human review is required before merge because the serialized event-log format an
 
 ## Implementation notes
 
+- Accepted and merged in PR #23 on 2026-07-13 after the required protected `Quality Gates` check passed; the exact `main` merge commit `3f9f1d4` then passed CI run `29259727713`.
 - Added the immutable `SessionEventLogV1` envelope with fixed format/version constants and only the canonical ordered schema-version-1 event sequence.
 - Added strict unknown-input and JSON decoding for the envelope and all eleven accepted event payload variants. Accepted values are rebuilt through the existing branded-ID and event constructors, deeply frozen, checked for deterministic event IDs, and replay-validated without trimming, coercion, repair, sorting, defaults, or discarded fields.
 - Added compact canonical serialization with fixed property order and byte-identical output for semantically identical accepted logs regardless of source insertion order.

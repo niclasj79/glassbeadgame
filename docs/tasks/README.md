@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-None while M1-003 is in review.
+1. `M1-004-zustand-domain-session-adapter.md` — isolated reactive adapter over the canonical event log and reduced session state.
 
 ## In review
 
-1. `M1-003-replay-and-serialization.md` — validated canonical event-log serialization and deterministic domain replay.
+None.
 
 ## Blocked queue
 
@@ -45,10 +45,10 @@ None.
 7. `M0-007-vite-security-upgrade.md` — accepted and merged in PR #17; Vite/esbuild advisories cleared.
 8. `M1-001-stable-domain-identifiers-and-events.md` — accepted and merged in PR #19; also completed the recorded low-risk steering dry run.
 9. `M1-002-pure-session-reducer.md` — accepted and merged in PR #21; established the immutable schema-version-1 session model and exhaustive pure reducer.
+10. `M1-003-replay-and-serialization.md` — accepted and merged in PR #23; established validated canonical serialization and deterministic replay.
 
 ## Planned but not yet Ready
 
-- M1-004 Zustand adapter;
 - M1-005 migrate one current interaction;
 - M1-006 remove replaced mutation path.
 
