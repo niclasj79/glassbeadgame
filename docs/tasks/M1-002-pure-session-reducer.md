@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -176,4 +176,10 @@ Human review is required before merge because reducer semantics become the found
 
 ## Implementation notes
 
-- None yet.
+- Added the minimal immutable `SessionStateV1` model for session identity/setup, ordering, attention, selection, hypothesis, committed threads, distinct outcome variants, completed motifs, Attunement, and conclusion. It contains no legacy score, progression, presentation, wall-clock, persistence, or snapshot fields.
+- Added one exhaustive `reduceSession(previous, event)` implementation with stable typed transition errors for lifecycle, session identity, sequence, relative time, session concepts, references, duplicate identities/outcomes, pair/hypothesis mismatches, and Attunement state.
+- Added a reusable deterministic full-session fixture covering all eleven accepted event types, both documented and Open Thread outcomes, two committed threads, motif completion, Attunement, and conclusion.
+- Added focused tests for all transitions and rejection families, equal relative times, repeated authored-relation references, Open Thread uniqueness, deterministic deep immutability, and non-mutation on successful and rejected transitions.
+- No accepted event/identifier contract or current Zustand, persistence, content, gameplay, scene, UI, audio, browser, or deployment path changed or imports the new model/reducer.
+- No authoritative-document conflict or compatibility change was discovered.
+- Required validation passed: lockfile install (zero vulnerabilities), type checking, linting, 68 unit tests across 9 files, 3 content-validation tests, production build, bundle-budget check, and all 3 browser smoke tests. The domain import scan and final diff check also passed; the install retained the repository's existing `three-mesh-bvh@0.7.8` deprecation warning.
