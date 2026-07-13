@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -220,4 +220,14 @@ Human review is required before merge because this task introduces the first pro
 
 ## Implementation notes
 
-- None yet.
+- Added an injectable application-runtime coordinator that validates two-or-three distinct disciplines, performs exactly one draw, clock read, and theme selection, then prepares one schema-version-1 `session.started` event plus the complete legacy presentation projection from those captured values.
+- Added the explicit `legacy-content.v1` migration content-pack marker, deterministic `session:<startedAt>:<seed>` identity, canonical decimal seed, selected theme/world ID, and ordered branded concept IDs. The complete one-event log is rebuilt and replay-validated before publication.
+- Added one runtime-owned, deliberately non-persisted domain-session store. Each start replaces its prior log atomically through the accepted adapter and returns the exact immutable log/state references exposed by that store.
+- Added the narrow legacy `applySessionStart` projection action. It performs no draw, clock, theme, event, or domain work, clones the prepared compatibility values, and preserves the existing arena transition and initial live-session fields. The old `beginSession` entry remains only as an unused deprecated guard reserved for M1-006 deletion.
+- Routed setup, Daily Draw, and deterministic test-mode starts through the single stable runtime `startSession` function. No active production or browser-test caller invokes `beginSession`.
+- Extended the development-only browser snapshot with canonical event count, session ID, seed, world, and concept order. The existing real weave still follows its unchanged legacy path and remains outside this task.
+- Added 8 focused coordinator/composition tests covering one-time dependency calls, exact event/projection mapping, input non-mutation, byte determinism across fresh stores, replacement rather than append, invalid-input and preparation-failure atomicity, exact production references, persistence exclusion, and the deprecated guard. Updated the legacy store characterization tests to start through the migrated runtime path.
+- No event schema, reducer, replay, draw, theme, gameplay, weave, relation, content, persistence, scene/audio behavior, dependency, or deployment contract changed. No storage key/database or persisted domain snapshot was added.
+- Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 13 unit-test files with 115 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,517 raw bytes / 1,270,758 gzip bytes total and 1,581,875 raw / 465,817 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; and focused caller, import, persistence, and ownership inspections. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
+- The required targeted performance reference passed both profiles on local SwiftShader: desktop-base sampled 22 frames with 249.7 ms median / 330.0 ms p95, and mobile-potato sampled 52 frames with 109.5 ms median / 171.3 ms p95. These software-renderer measurements are recorded as environment evidence, not hardware or human audiovisual acceptance.
+- Human review remains required for the first production canonical-session ownership cutover and its temporary legacy presentation projection. No architecture conflict or additional specification proposal was discovered.

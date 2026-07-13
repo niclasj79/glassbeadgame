@@ -10,6 +10,8 @@ import {
   pointerMotion,
 } from "./threading";
 import { frameState } from "./frameState";
+import { startSession } from "@/runtime/session";
+import { domainSessionStore } from "@/state/domainSession";
 import { useStore } from "@/state/store";
 import type { DisciplineId } from "@/content/types";
 import { audio } from "@/audio/engine";
@@ -26,19 +28,17 @@ import {
   type TestSessionSnapshot,
 } from "@/runtime/testMode";
 
-const DISCIPLINES = new Set<DisciplineId>([
-  "mathematics",
-  "music",
-  "philosophy",
-  "physics",
-  "art",
-  "history",
-]);
-
 function testSnapshot(): TestSessionSnapshot {
   const state = useStore.getState();
   const session = state.session;
-  if (!testMode.enabled || !testMode.seedText || !session) {
+  const domain = domainSessionStore.getState();
+  if (
+    !testMode.enabled ||
+    !testMode.seedText ||
+    !session ||
+    !domain.eventLog ||
+    !domain.session
+  ) {
     throw new Error("test session is not active");
   }
   return {
@@ -61,19 +61,19 @@ function testSnapshot(): TestSessionSnapshot {
     discoveries: session.discoveries.map(({ id, kind, points }) => ({ id, kind, points })),
     interactionMode: session.interaction.mode,
     now: gameNow(),
+    domainSession: {
+      eventCount: domain.eventLog.events.length,
+      sessionId: domain.session.sessionId,
+      seed: domain.session.seed,
+      worldId: domain.session.worldId,
+      conceptIds: [...domain.session.conceptIds],
+    },
   };
 }
 
 function startTestSession(picks: DisciplineId[]): TestSessionSnapshot {
-  const unique = new Set(picks);
-  if ((picks.length !== 2 && picks.length !== 3) || unique.size !== picks.length) {
-    throw new Error("test session requires two or three distinct disciplines");
-  }
-  if (!picks.every((pick) => DISCIPLINES.has(pick))) {
-    throw new Error("test session contains an unknown discipline");
-  }
   resetTestRuntime();
-  useStore.getState().beginSession(picks, { seed: testMode.seed! });
+  startSession(picks, { seed: testMode.seed! });
   return testSnapshot();
 }
 

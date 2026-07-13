@@ -3,13 +3,13 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { disciplines } from "@/content/disciplines";
 import type { DisciplineId } from "@/content/types";
+import { startSession } from "@/runtime/session";
 import { useStore } from "@/state/store";
 import { Button } from "../components/Button";
 
 const MAX_PICKS = 3;
 
 export function SetupScreen() {
-  const beginSession = useStore((s) => s.beginSession);
   const returnToTitle = useStore((s) => s.returnToTitle);
   const [picks, setPicks] = useState<DisciplineId[]>([]);
 
@@ -112,7 +112,7 @@ export function SetupScreen() {
         <Button variant="ghost" onClick={returnToTitle}>
           Back
         </Button>
-        <Button disabled={!ready} onClick={() => ready && beginSession(picks)}>
+        <Button disabled={!ready} onClick={() => ready && startSession(picks)}>
           {ready ? "Enter the Arena" : `Choose ${Math.max(0, 2 - picks.length)} more`}
         </Button>
       </motion.div>

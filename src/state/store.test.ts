@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connections } from "@/content/connections";
 import { resolveAttempt } from "@/game/rules";
+import { startSession } from "@/runtime/session";
 import { makeThread } from "@/test/fixtures";
+import { domainSessionStore } from "./domainSession";
 import type { MotifAward } from "./types";
 import { useStore } from "./store";
 
@@ -11,6 +13,7 @@ describe("legacy Zustand mutation and persistence baseline", () => {
   beforeEach(() => {
     localStorage.clear();
     useStore.setState(useStore.getInitialState(), true);
+    domainSessionStore.setState(domainSessionStore.getInitialState(), true);
     vi.useFakeTimers();
     vi.setSystemTime(fixedNow);
   });
@@ -18,7 +21,7 @@ describe("legacy Zustand mutation and persistence baseline", () => {
   afterEach(() => vi.useRealTimers());
 
   it("starts deterministically with a supplied seed and prevents duplicate threads", () => {
-    useStore.getState().beginSession(["mathematics", "music"], { seed: 777 });
+    startSession(["mathematics", "music"], { seed: 777 });
     const firstSession = useStore.getState().session!;
     const thread = makeThread(firstSession.beadIds[0], firstSession.beadIds[1]);
 
@@ -30,7 +33,7 @@ describe("legacy Zustand mutation and persistence baseline", () => {
   });
 
   it("characterizes discovery, motif, codex, insight, and consecration updates", () => {
-    useStore.getState().beginSession(["mathematics", "music"], { seed: 777 });
+    startSession(["mathematics", "music"], { seed: 777 });
     const connection = connections[0];
     const attempt = resolveAttempt(connection.pair[0], connection.pair[1]);
     const motif: MotifAward = { motifId: "triad", name: "Triad", points: 15, at: Date.now() };
@@ -84,7 +87,7 @@ describe("legacy Zustand mutation and persistence baseline", () => {
   it("caps the archive, totals completed sessions, and records the UTC daily result", () => {
     for (let index = 0; index < 13; index++) {
       vi.setSystemTime(new Date(fixedNow.getTime() + index * 1_000));
-      useStore.getState().beginSession(["mathematics", "music"], {
+      startSession(["mathematics", "music"], {
         seed: index,
         daily: index === 12,
       });
@@ -100,7 +103,7 @@ describe("legacy Zustand mutation and persistence baseline", () => {
   });
 
   it("persists only the declared durable slice and restores device-derived settings", async () => {
-    useStore.getState().beginSession(["mathematics", "music"], { seed: 777 });
+    startSession(["mathematics", "music"], { seed: 777 });
     useStore.getState().setMuted(true);
     useStore.getState().markHintSeen("weave");
 

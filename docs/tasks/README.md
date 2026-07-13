@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-1. `M1-005-migrate-session-start.md` — route standard, daily, and deterministic-test session starts through the canonical domain adapter.
+None while M1-005 is in review.
 
 ## In review
 
-None.
+1. `M1-005-migrate-session-start.md` — route standard, daily, and deterministic-test session starts through the canonical domain adapter.
 
 ## Blocked queue
 

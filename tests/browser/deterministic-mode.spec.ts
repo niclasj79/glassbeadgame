@@ -37,6 +37,12 @@ test("same stable seed produces the same session and real commit result", async 
   expect(first.discoveries).toHaveLength(1);
   expect(first.threads[0].createdAt - first.startedAt).toBe(250);
   expect(first.now - first.startedAt).toBe(250);
+  expect(first.domainSession).toMatchObject({
+    eventCount: 1,
+    seed: String(first.seed),
+    worldId: first.themeId,
+    conceptIds: first.beadIds,
+  });
 });
 
 test("a different stable seed changes the repeatable draw", async ({ browser }) => {
