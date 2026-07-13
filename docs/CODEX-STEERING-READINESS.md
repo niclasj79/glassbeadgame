@@ -6,9 +6,9 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a fully specified M1 domain task in the Ready queue. The approved Vite security remediation is merged.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a fully specified M1 domain task. Hosted branch protection requires strict `Quality Gates`, and the recorded low-risk steering dry run is in review.
 
-It is not yet ready for unattended self-deploying implementation loops because required branch protection and the recorded autonomous dry run remain incomplete.
+It is not yet ready for unattended self-deploying implementation loops because the dry-run PR requires human review and merge before the final reviewed readiness transition.
 
 ## Required transition gate
 
@@ -28,9 +28,18 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. M1-001 is fully specified and Ready, but the permitted readiness sequence advances next through branch protection and a recorded documentation-only or low-risk dry run.
+Codex may be used as the implementation interface for one supervised task at a time. No next roadmap task is eligible while the M1-001 dry-run PR is in review.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
+
+## Recorded steering-loop dry run
+
+- Date: 2026-07-13.
+- Protection precondition: GitHub's hosted `main` protection required strict `Quality Gates`, required pull requests and resolved conversations, included administrators, and disabled force pushes and deletion.
+- Selection: M1-001 was the first Ready task; M0-001 through M0-007 were Done and no active task owned `src/domain/ids.ts` or `src/domain/events/**`.
+- Isolation: the run created `codex/M1-001-domain-events`, implemented only the declared low-risk domain-contract scope, ran every required check, and opened one reviewable PR.
+- Safety boundary: no automatic merge, deployment mutation, persistence migration, current-state integration, gameplay change, or next-task selection occurred.
+- Acceptance: the dry run counts toward the transition gate only after its PR is reviewed and merged.
 
 ## What may not happen yet
 

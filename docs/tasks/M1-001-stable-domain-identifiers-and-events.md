@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -186,4 +186,10 @@ Human review is required before merge because this establishes the compatibility
 
 ## Implementation notes
 
-- None yet.
+- Added dependency-free branded identifiers and rejecting constructors in `src/domain/ids.ts`. Existing authored strings remain unchanged, while event IDs use a deterministic length-prefixed session/sequence encoding.
+- Added an immutable schema-version-1 event union, closed relation/input vocabularies, normalized gesture summaries, invariant validation, and deterministic factories under `src/domain/events/`.
+- Added focused compile-time and runtime coverage for all eleven event variants, identifier separation, exhaustive narrowing, deterministic frozen values, invalid envelope fields, distinct pair endpoints, and optional gesture measurements.
+- No current caller, Zustand state, persistence record, content model, gameplay rule, scene, UI, or audio path imports or emits the new events.
+- This task was the recorded low-risk steering-loop dry run: it was selected as the first Ready task with all dependencies Done and no overlapping active owner; one isolated branch and one reviewable PR were produced, with no automatic merge or next-task selection.
+- Branch protection was verified before selection: strict `Quality Gates` is required on `main`, pull requests and conversation resolution are enforced, administrators are included, and force pushes/deletions are disabled.
+- Required checks passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 8 unit-test files with 53 tests; 3 content-validation tests; production build; bundle ceilings; 3 deterministic browser tests; `git diff --check`; and focused inspection finding no forbidden framework, presentation, platform, or storage references under `src/domain/`. The existing deprecated `three-mesh-bvh@0.7.8` transitive warning remains unchanged.
