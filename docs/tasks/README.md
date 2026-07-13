@@ -24,7 +24,7 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-001-attention-command-boundary.md` — add an isolated canonical Attend command over the accepted event/reducer/adapter contracts.
+1. `M2-002-candidate-resonance-model.md` — add the pure deterministic, complete-candidate, non-spoiling weak/medium/high resonance evaluator.
 
 ## In review
 
@@ -49,10 +49,11 @@ None.
 11. `M1-004-zustand-domain-session-adapter.md` — accepted and merged in PR #25; established the isolated reactive adapter over the canonical event log and reduced session state.
 12. `M1-005-migrate-session-start.md` — accepted and merged in PR #27; migrated standard, Daily Draw, and deterministic-test starts through the canonical domain adapter.
 13. `M1-006-remove-legacy-session-start.md` — accepted and merged in PR #29; removed the final deprecated legacy session-start surface and closed the accepted cutover.
+14. `M2-001-attention-command-boundary.md` — accepted and merged in PR #32; established the isolated canonical Attend command seam without production input integration.
 
 ## Planned but not yet Ready
 
-M2-002 candidate resonance model sequencing begins only after M2-001 is accepted, the applicable `CAV-001` through `CAV-004` director decisions are reviewed, and a reviewed task packet defines its content inputs and non-spoiler contract.
+Tasks after M2-002 are not yet Ready. Production attention/resonance integration remains gated by the applicable `I-001` through `I-013` decisions, especially focus/Attend separation, reversible attention, immediate consequences, candidate selection, cancellation, and input equivalence.
 
 ## Director design companions
 
@@ -60,7 +61,7 @@ M2-002 candidate resonance model sequencing begins only after M2-001 is accepted
 - `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-013`;
 - `../CONTENT-AUDIOVISUAL-REFERENCE.md` — representative pairs, provisional relation grammar, resonance boundaries, and content/audiovisual decisions `CAV-001` through `CAV-010`.
 
-Unanswered director decisions do not authorize Codex to infer product behavior. They block only the task types named in each record. M2-001 remains eligible because it is an isolated command seam with no production input, content, or presentation integration.
+Director decisions `CAV-001` through `CAV-004` are accepted and authorize only the pure, unintegrated M2-002 resonance-model contract. The attended-viewpoint/directional-sweep metaphor in `INTERACTION-DECISIONS.md` is accepted as guidance, not literal mechanics. Other unanswered director decisions continue to block only the task types named in their records and do not authorize Codex to infer production interaction behavior.
 
 ## Ownership rules
 

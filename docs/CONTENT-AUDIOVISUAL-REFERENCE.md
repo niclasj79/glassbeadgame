@@ -2,7 +2,7 @@
 
 ## Status
 
-Director review required before M2 resonance modeling, M3 slice-content acceptance, or M4 audiovisual-grammar acceptance.
+Director decisions CAV-001 through CAV-004 are accepted. CAV-005 through CAV-010 remain pending before their named M3/M4/content-production boundaries.
 
 This is a working reference set, not the final content pack and not a source of accepted factual claims. Existing prototype copy is used only to identify promising examples. Every documented relation still requires normalized facets, a reviewed relation type, evidence class, and at least one verified source under the later content task.
 
@@ -209,29 +209,33 @@ This pair illustrates an outcome that may be interpretable without an accepted d
 
 - **Question:** Are the five documented reference pairs and one Open Thread example the right working set for M2–M4?
 - **Recommended default:** Accept them as prototypes, subject to granularity and source review; add one Image-led and one Matter-led example if the final set remains too Measure/Sound-heavy.
-- **Director answer:** _Pending._
-- **Blocks:** M2 resonance fixtures and M4 representative grammar prototypes.
+- **Director answer:** Accepted as recommended. Use the five documented pairs and one Open Thread as provisional M2–M4 fixtures, subject to granularity and source review, and add Image-led/Matter-led coverage if the working set remains too Measure/Sound-heavy.
+- **Status:** Accepted by the game design director on 2026-07-13; effective after reviewed merge.
+- **Clears:** Provisional M2 resonance fixtures and M4 representative grammar prototypes may use this working set without treating its claims as final content.
 
 ### CAV-002 — Primary versus multiple intentions
 
 - **Question:** Should every documented pair support all four player intentions, or may the outcome say that one reading is unsupported/weak?
 - **Recommended default:** Allow multiple honest readings, but never promise all four. A documented result may refine or complicate the intention while preserving the player's authorship; weak readings become specific Open Threads or unresolved states.
-- **Director answer:** _Pending._
-- **Blocks:** Outcome-resolution rules and content schema.
+- **Director answer:** Accepted as recommended. Permit multiple honest readings without requiring every pair to support all four intentions; unsupported readings become specific Open Threads or unresolved states rather than being fabricated or silently rejected.
+- **Status:** Accepted by the game design director on 2026-07-13; effective after reviewed merge.
+- **Clears:** Outcome-resolution and content-schema tasks may preserve player authorship while distinguishing supported, weak, and unresolved readings.
 
 ### CAV-003 — Resonance inputs
 
 - **Question:** Which data may determine high/medium/weak resonance?
 - **Recommended default:** Reviewed facets, documented-relation presence without endpoint disclosure, session topology, and current web context; never raw authored tier, source count, hidden completion value, or a binary known-pair flag by itself.
-- **Director answer:** _Pending._
-- **Blocks:** M2-002 candidate resonance model.
+- **Director answer:** Accepted as recommended. Candidate resonance may use reviewed facet/structural support, documented-relation presence without endpoint disclosure, session topology, and current web context. It must not use raw authored tier, source count, hidden completion value, or a binary known-pair flag by itself.
+- **Status:** Accepted by the game design director on 2026-07-13; effective after reviewed merge.
+- **Clears:** M2-002 may define a deterministic relation-neutral candidate resonance model over explicit evidence inputs.
 
 ### CAV-004 — Resonance language
 
 - **Question:** Should players see qualitative labels such as high/medium/weak, or only perceive the bands audiovisually?
 - **Recommended default:** No persistent numeric or categorical HUD label in ordinary play; provide accessible descriptive text on focus and in test mode.
-- **Director answer:** _Pending._
-- **Blocks:** Resonance UI and accessibility representation.
+- **Director answer:** Accepted as recommended. Ordinary play receives no persistent numeric or categorical resonance HUD; accessible descriptive text may identify the qualitative band on focus and in test mode.
+- **Status:** Accepted by the game design director on 2026-07-13; effective after reviewed merge.
+- **Clears:** Later resonance presentation/accessibility work may map internal bands to nonnumeric audiovisual signals and focused descriptive text.
 
 ### CAV-005 — Final slice concept granularity
 
