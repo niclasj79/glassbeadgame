@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-1. `M1-002-pure-session-reducer.md` — deterministic immutable reduction of the accepted schema-version-1 event vocabulary.
+None while M1-002 is in review.
 
 ## In review
 
-None.
+1. `M1-002-pure-session-reducer.md` — deterministic immutable reduction of the accepted schema-version-1 event vocabulary.
 
 ## Blocked queue
 
