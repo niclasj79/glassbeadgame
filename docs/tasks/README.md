@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-None while M1-001 is in review.
+1. `M1-002-pure-session-reducer.md` — deterministic immutable reduction of the accepted schema-version-1 event vocabulary.
 
 ## In review
 
-1. `M1-001-stable-domain-identifiers-and-events.md` — stable identifiers and the initial versioned domain-event contract; also records the low-risk steering dry run.
+None.
 
 ## Blocked queue
 
@@ -43,10 +43,10 @@ None.
 5. `M0-005-performance-bundle-baseline.md` — accepted with initial bundle budgets and merged in PR #14.
 6. `M0-006-dependency-upgrade-decision.md` — accepted and merged in PR #16; authorized isolated Vite remediation next.
 7. `M0-007-vite-security-upgrade.md` — accepted and merged in PR #17; Vite/esbuild advisories cleared.
+8. `M1-001-stable-domain-identifiers-and-events.md` — accepted and merged in PR #19; also completed the recorded low-risk steering dry run.
 
 ## Planned but not yet Ready
 
-- M1-002 pure session reducer;
 - M1-003 replay and serialization;
 - M1-004 Zustand adapter;
 - M1-005 migrate one current interaction;
