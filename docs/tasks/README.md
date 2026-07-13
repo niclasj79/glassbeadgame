@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-None while M1-004 is in review.
+1. `M1-005-migrate-session-start.md` — route standard, daily, and deterministic-test session starts through the canonical domain adapter.
 
 ## In review
 
-1. `M1-004-zustand-domain-session-adapter.md` — isolated reactive adapter over the canonical event log and reduced session state.
+None.
 
 ## Blocked queue
 
@@ -46,11 +46,11 @@ None.
 8. `M1-001-stable-domain-identifiers-and-events.md` — accepted and merged in PR #19; also completed the recorded low-risk steering dry run.
 9. `M1-002-pure-session-reducer.md` — accepted and merged in PR #21; established the immutable schema-version-1 session model and exhaustive pure reducer.
 10. `M1-003-replay-and-serialization.md` — accepted and merged in PR #23; established validated canonical serialization and deterministic replay.
+11. `M1-004-zustand-domain-session-adapter.md` — accepted and merged in PR #25; established the isolated reactive adapter over the canonical event log and reduced session state.
 
 ## Planned but not yet Ready
 
-- M1-005 migrate one current interaction;
-- M1-006 remove replaced mutation path.
+- M1-006 remove the replaced legacy `beginSession` mutation surface after M1-005 acceptance.
 
 ## Ownership rules
 

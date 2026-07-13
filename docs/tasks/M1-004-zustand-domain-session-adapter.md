@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -201,3 +201,4 @@ Human review is required before merge because this adapter establishes the state
 - No legacy store/type, current caller, persistence path, domain contract, gameplay rule, presentation path, browser behavior, dependency, or deployment path was changed or migrated. Focused scans found no forbidden adapter import and no production adapter caller or instance.
 - No authoritative-document conflict, architecture proposal, compatibility exception, or unresolved product decision was discovered.
 - Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 11 unit-test files with 107 tests; 3 content-validation tests; production build; bundle ceilings; 3 deterministic browser tests; `git diff --check`; and focused dependency, caller, and rule-ownership inspections. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged. Targeted performance measurement was not required because no runtime path was integrated.
+- Accepted and merged in PR #25 on 2026-07-13. The exact `main` merge commit `1a337fb` passed the complete Quality Gates workflow in CI run `29262274014`.
