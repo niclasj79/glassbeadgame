@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-1. `M1-001-stable-domain-identifiers-and-events.md` — stable identifiers and the initial versioned domain-event contract.
+None while M1-001 is in review.
 
 ## In review
 
-None.
+1. `M1-001-stable-domain-identifiers-and-events.md` — stable identifiers and the initial versioned domain-event contract; also records the low-risk steering dry run.
 
 ## Blocked queue
 
