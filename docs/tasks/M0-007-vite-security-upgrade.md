@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Objective
 
@@ -36,6 +36,7 @@ All repository checks plus `npm ls --all`, `npm audit --json`, development-serve
 
 ## Implementation notes
 
+- Accepted and merged in PR #17 on 2026-07-13 after the required Quality Gates check passed.
 - Human authorization was provided by the 2026-07-13 instruction to proceed after the merged M0-006 decision boundary.
 - Updated only direct Vite to exact 6.4.3 and regenerated its lockfile graph. Vite and Lovable tagger resolve esbuild 0.25.12; no unrelated direct dependency changed.
 - `npm audit --json` reports zero vulnerabilities and no longer contains any of the four M0-006 advisory paths. `npm ls --all` exits zero.
