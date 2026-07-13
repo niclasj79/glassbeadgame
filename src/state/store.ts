@@ -2,12 +2,10 @@ import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
 import type { DisciplineId } from "@/content/types";
 import type { SharedProgress } from "@/game/progress";
-import { drawSession } from "@/game/session";
 import { pickIlluminationTarget, CONSECRATION_POINTS } from "@/game/rules";
 import type { LensView } from "@/game/layout";
 import { unlockIdsFor } from "@/game/progress";
 import { utcDateKey } from "@/lib/daily";
-import { themeForSession } from "@/themes";
 import { initialQualityTier, prefersReducedMotion, type QualityTier } from "@/lib/device";
 import { gameNow } from "@/runtime/testMode";
 import type {
@@ -17,6 +15,7 @@ import type {
   MotifAward,
   Phase,
   SessionMemory,
+  SessionStartProjection,
   SessionState,
   Settings,
   Thread,
@@ -43,6 +42,8 @@ interface GBGState {
 
   goToSetup: () => void;
   returnToTitle: () => void;
+  applySessionStart: (projection: SessionStartProjection) => void;
+  /** @deprecated M1-005 routes every active caller through runtime/session. */
   beginSession: (picks: DisciplineId[], opts?: { seed?: number; daily?: boolean }) => void;
   setLens: (on: boolean) => void;
   /** The Lens is a triptych: off → Good×True → Good×Beautiful → True×Beautiful → off. */
@@ -124,25 +125,24 @@ export const useStore = create<GBGState>()(
         pinnedInspectId: null,
       }),
 
-    beginSession: (picks, opts) => {
-      const draw = drawSession(picks, opts?.seed);
+    applySessionStart: (projection) => {
       const session: SessionState = {
-        seed: draw.seed,
-        disciplines: draw.disciplines,
-        beadIds: draw.beadIds,
-        threads: [],
-        discoveries: [],
-        motifs: [],
-        score: 0,
-        startedAt: gameNow(),
-        interaction: idleInteraction(),
-        curatedAvailable: draw.curatedAvailable,
-        insight: 1, // the Magister's gift — one illumination to learn the mechanic
-        illuminationsUsed: 0,
-        daily: opts?.daily,
-        themeId: themeForSession(draw.seed, opts?.daily).id,
+        ...projection,
+        disciplines: [...projection.disciplines],
+        beadIds: [...projection.beadIds],
+        threads: projection.threads.map((thread) => ({ ...thread })),
+        discoveries: projection.discoveries.map((discovery) => ({ ...discovery })),
+        motifs: projection.motifs.map((motif) => ({
+          ...motif,
+          beads: motif.beads ? [...motif.beads] : undefined,
+        })),
+        interaction: { ...projection.interaction },
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null, pinnedInspectId: null });
+    },
+
+    beginSession: () => {
+      throw new Error("beginSession is deprecated; use runtime/session startSession");
     },
 
     setLens: (on) => {

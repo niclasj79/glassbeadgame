@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
+import { startSession } from "@/runtime/session";
 import { useStore } from "@/state/store";
 import { rankFor, totalConnections } from "@/game/ranks";
 import { dailyPicks, dailySeed, utcDateKey } from "@/lib/daily";
@@ -17,7 +18,6 @@ const fadeUp = {
 export function TitleScreen() {
   const goToSetup = useStore((s) => s.goToSetup);
   const setCodexOpen = useStore((s) => s.setCodexOpen);
-  const beginSession = useStore((s) => s.beginSession);
   const codexCount = useStore((s) => Object.keys(s.codex).length);
   const lifetimeStats = useStore((s) => s.lifetimeStats);
   const lastDaily = useStore((s) => s.lastDaily);
@@ -34,7 +34,7 @@ export function TitleScreen() {
   const isMagister = rankFor(codexCount).name === "Magister Ludi";
 
   const startDaily = () =>
-    beginSession(todayPicks, { seed: dailySeed(), daily: true });
+    startSession(todayPicks, { seed: dailySeed(), daily: true });
 
   return (
     <motion.div

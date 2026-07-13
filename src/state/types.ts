@@ -76,6 +76,24 @@ export interface SessionState {
   themeId: string;
 }
 
+/** Prepared, non-persisted compatibility view for the legacy presentation store. */
+export interface SessionStartProjection {
+  readonly seed: number;
+  readonly disciplines: readonly DisciplineId[];
+  readonly beadIds: readonly string[];
+  readonly threads: readonly Thread[];
+  readonly discoveries: readonly Discovery[];
+  readonly motifs: readonly MotifAward[];
+  readonly score: number;
+  readonly startedAt: number;
+  readonly interaction: Readonly<Interaction>;
+  readonly curatedAvailable: number;
+  readonly insight: number;
+  readonly illuminationsUsed: number;
+  readonly daily?: boolean;
+  readonly themeId: string;
+}
+
 export interface SessionMemory {
   id: string;
   seed: number;

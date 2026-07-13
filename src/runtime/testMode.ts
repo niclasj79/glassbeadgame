@@ -36,6 +36,13 @@ export interface TestSessionSnapshot {
   }>;
   interactionMode: string;
   now: number;
+  domainSession: {
+    eventCount: number;
+    sessionId: string;
+    seed: string;
+    worldId: string;
+    conceptIds: string[];
+  };
 }
 
 export interface BrowserTestAdapter {
