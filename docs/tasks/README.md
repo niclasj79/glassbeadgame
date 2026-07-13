@@ -20,11 +20,11 @@ Codex may select only the first Ready task whose dependencies are Done and whose
 
 ## Current milestone
 
-M1 — Domain foundation
+M2 — New interaction loop
 
 ## Ready queue
 
-1. `M1-006-remove-legacy-session-start.md` — remove the deprecated legacy `beginSession` surface after the accepted canonical cutover.
+1. `M2-001-attention-command-boundary.md` — add an isolated canonical Attend command over the accepted event/reducer/adapter contracts.
 
 ## In review
 
@@ -48,10 +48,11 @@ None.
 10. `M1-003-replay-and-serialization.md` — accepted and merged in PR #23; established validated canonical serialization and deterministic replay.
 11. `M1-004-zustand-domain-session-adapter.md` — accepted and merged in PR #25; established the isolated reactive adapter over the canonical event log and reduced session state.
 12. `M1-005-migrate-session-start.md` — accepted and merged in PR #27; migrated standard, Daily Draw, and deterministic-test starts through the canonical domain adapter.
+13. `M1-006-remove-legacy-session-start.md` — accepted and merged in PR #29; removed the final deprecated legacy session-start surface and closed the accepted cutover.
 
 ## Planned but not yet Ready
 
-None. M2 task sequencing begins only after M1-006 is accepted and the M1 gate is closed by a reviewed queue change.
+M2-002 candidate resonance model sequencing begins only after M2-001 is accepted and a reviewed task packet defines its content inputs and non-spoiler contract.
 
 ## Ownership rules
 

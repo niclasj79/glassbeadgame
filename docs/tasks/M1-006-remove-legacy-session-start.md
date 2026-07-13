@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -145,3 +145,4 @@ Human review is required before merge because this cleanup removes the final leg
 - Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 13 unit-test files with 114 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,517 raw bytes / 1,270,758 gzip bytes total and 1,581,875 raw / 465,817 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; zero-reference and caller scans; and focused ownership, persistence, and diff inspection. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
 - The targeted performance reference was not required because this task removes only an unreachable throwing guard and its test; no active runtime path changed.
 - Human review remains required because this removes the final legacy rollback surface and completes the accepted session-start ownership cutover. No architecture conflict, product decision, compatibility exception, or specification proposal was discovered.
+- Accepted and merged in PR #29 on 2026-07-13. The exact `main` merge commit `f730dd1` passed the complete Quality Gates workflow in CI run `29272348902`.
