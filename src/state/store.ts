@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
-import type { DisciplineId } from "@/content/types";
 import type { SharedProgress } from "@/game/progress";
 import { pickIlluminationTarget, CONSECRATION_POINTS } from "@/game/rules";
 import type { LensView } from "@/game/layout";
@@ -43,8 +42,6 @@ interface GBGState {
   goToSetup: () => void;
   returnToTitle: () => void;
   applySessionStart: (projection: SessionStartProjection) => void;
-  /** @deprecated M1-005 routes every active caller through runtime/session. */
-  beginSession: (picks: DisciplineId[], opts?: { seed?: number; daily?: boolean }) => void;
   setLens: (on: boolean) => void;
   /** The Lens is a triptych: off → Good×True → Good×Beautiful → True×Beautiful → off. */
   cycleLens: () => void;
@@ -139,10 +136,6 @@ export const useStore = create<GBGState>()(
         interaction: { ...projection.interaction },
       };
       set({ phase: "arena", session, lensActive: false, focusedBeadId: null, pinnedInspectId: null });
-    },
-
-    beginSession: () => {
-      throw new Error("beginSession is deprecated; use runtime/session startSession");
     },
 
     setLens: (on) => {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -139,4 +139,9 @@ Human review is required before merge because this cleanup removes the final leg
 
 ## Implementation notes
 
-- None yet.
+- Removed the deprecated `GBGState.beginSession` declaration and comment, its inactive throwing Zustand initializer entry, the `DisciplineId` import used only by that declaration, and the focused deprecated-guard test. No replacement alias, wrapper, setter, or compatibility surface was added.
+- A repository scan found zero `beginSession` references under active `src/` and `tests/`. Setup, Daily Draw, and deterministic test mode still use the same runtime `startSession` boundary, and `applySessionStart` remains the sole legacy session-start projection action.
+- The runtime coordinator, production domain-session adapter, compatibility projection implementation, persistence middleware, production callers, browser snapshot, domain code, gameplay, scene, audio, UI, content, dependencies, and deployment files are unchanged. The canonical domain event log remains non-persisted and active runtime behavior is unchanged.
+- Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 13 unit-test files with 114 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,517 raw bytes / 1,270,758 gzip bytes total and 1,581,875 raw / 465,817 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; zero-reference and caller scans; and focused ownership, persistence, and diff inspection. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
+- The targeted performance reference was not required because this task removes only an unreachable throwing guard and its test; no active runtime path changed.
+- Human review remains required because this removes the final legacy rollback surface and completes the accepted session-start ownership cutover. No architecture conflict, product decision, compatibility exception, or specification proposal was discovered.
