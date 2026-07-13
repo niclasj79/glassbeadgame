@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -229,4 +229,11 @@ Human review is required before merge because the provisional calibration become
 
 ## Implementation notes
 
-- None yet.
+- Selected on 2026-07-14 after PR #33 and its protected checks were accepted, the exact `main` merge commit `524b7a8` passed push CI run `29288430660`, and no open PR or active task owned the declared domain boundary.
+- Implementation plan: add closed resonance/support and typed-error contracts under `src/domain/relations/resonance/`; validate complete candidate coverage before applying the accepted calibration once; return only frozen candidate identity/band results in canonical session order; cover thresholds, determinism, immutability, invalid inputs, and non-spoiler shape; then run the full required suite and focused ownership scans.
+- Added closed, frozen `weak`/`medium`/`high` and `0`/`1`/`2` vocabularies; explicit evidence, request, and result types over branded `ConceptId`; and a typed `CandidateResonanceError` boundary with stable codes for session concepts, attended membership, candidate identity/coverage, support levels, and documented-presence shape.
+- The pure evaluator validates an exact evidence entry for every non-attended session concept, applies the accepted generative-support plus conditional documented-bonus calibration in one internal function, and returns every frozen `{ candidateId, band }` result in canonical session order. Evidence order cannot affect deep equality or serialized JSON, and documented presence alone remains weak.
+- Added 30 focused tests covering closed vocabularies, every threshold, documented/open high candidates, documented-only weakness, topology/context influence, canonical order, evidence-order independence, byte determinism, deep result immutability, input non-mutation, exact non-spoiler output keys, and typed failures for invalid sessions, attention, identities, coverage, every support field/invalid value shape, and documented-presence shape.
+- Required validation passed: clean lockfile installation with zero vulnerabilities; typecheck; lint; 15 unit-test files with 152 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,418 raw bytes / 1,270,711 gzip bytes total and 1,581,776 raw / 465,775 gzip JavaScript bytes; 3 deterministic browser tests; and `git diff --check`. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk notices remain unchanged.
+- Focused scans found only the branded ID type and local-module production imports, no browser/framework/content/game/runtime/state/scene/audio/UI/platform dependency, no external production caller, exactly `{ candidateId, band }` on the result contract, and one calibration owner. No current content, game, event, reducer, command, state, persistence, input, scene, audiovisual, browser, dependency, or deployment path changed.
+- The targeted performance reference was not required because the evaluator remains unintegrated and does not change an active runtime path. Human review remains required for the provisional calibration; no architecture conflict, content assertion, compatibility exception, or specification proposal was discovered.
