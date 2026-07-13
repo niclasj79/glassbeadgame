@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -186,6 +186,7 @@ Human review is required before merge because this establishes the compatibility
 
 ## Implementation notes
 
+- Accepted and merged in PR #19 on 2026-07-13 after the required protected `Quality Gates` check passed.
 - Added dependency-free branded identifiers and rejecting constructors in `src/domain/ids.ts`. Existing authored strings remain unchanged, while event IDs use a deterministic length-prefixed session/sequence encoding.
 - Added an immutable schema-version-1 event union, closed relation/input vocabularies, normalized gesture summaries, invariant validation, and deterministic factories under `src/domain/events/`.
 - Added focused compile-time and runtime coverage for all eleven event variants, identifier separation, exhaustive narrowing, deterministic frozen values, invalid envelope fields, distinct pair endpoints, and optional gesture measurements.

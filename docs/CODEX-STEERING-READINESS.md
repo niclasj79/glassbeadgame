@@ -2,13 +2,13 @@
 
 ## Status
 
-`NOT_READY`
+`READY`
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a fully specified M1 domain task. Hosted branch protection requires strict `Quality Gates`, and the recorded low-risk steering dry run is in review.
+The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, a completed low-risk steering dry run, and a fully specified M1 domain task in the Ready queue.
 
-It is not yet ready for unattended self-deploying implementation loops because the dry-run PR requires human review and merge before the final reviewed readiness transition.
+It is ready for one isolated autonomous task-selection run at a time. `READY` does not authorize automatic merge, deployment from task branches, overlapping work, or bypassing a task's human-review boundary.
 
 ## Required transition gate
 
@@ -26,11 +26,21 @@ Change this status to `READY` only when all of the following are true:
 - branch protection requires the established quality checks;
 - an autonomous loop has been dry-run on a documentation-only or low-risk task.
 
+## Transition evidence
+
+- Documentation foundation: accepted and merged in PR #5.
+- Trustworthy baseline: M0-001 through M0-005 are Done via PRs #6, #8, #10, #12, and #14; the accepted dependency decision and Vite security remediation are Done via PRs #16 and #17.
+- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for PR #19 and again on its exact `main` merge commit `3383f50` in CI run `29253025707`.
+- Deployment isolation: pull requests run read-only CI; Pages runs separately only after successful `main` push CI or a manual dispatch on `main` and checks out the validated SHA.
+- Ready domain work: `M1-002-pure-session-reducer.md` is fully specified, depends only on Done M1-001, owns an isolated domain boundary, and has objective acceptance criteria and checks.
+- Hosted protection: `main` requires strict `Quality Gates`, pull requests, resolved conversations, and administrator enforcement; force pushes and deletion are disabled.
+- Dry run: M1-001 was selected from Ready with dependencies Done and no ownership overlap, implemented on one isolated branch, fully validated, reviewed, and merged in PR #19 without automatic merge or next-task selection.
+
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. No next roadmap task is eligible while the M1-001 dry-run PR is in review.
+Codex may select M1-002 as the first eligible Ready task and execute it through the autonomous steering prompt below.
 
-It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
+Each run must create one branch and one reviewable PR, report every required check, and stop. Human review remains required wherever the task or repository boundaries require it.
 
 ## Recorded steering-loop dry run
 
@@ -39,32 +49,32 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 - Selection: M1-001 was the first Ready task; M0-001 through M0-007 were Done and no active task owned `src/domain/ids.ts` or `src/domain/events/**`.
 - Isolation: the run created `codex/M1-001-domain-events`, implemented only the declared low-risk domain-contract scope, ran every required check, and opened one reviewable PR.
 - Safety boundary: no automatic merge, deployment mutation, persistence migration, current-state integration, gameplay change, or next-task selection occurred.
-- Acceptance: the dry run counts toward the transition gate only after its PR is reviewed and merged.
+- Acceptance: the protected check passed, and PR #19 was reviewed and merged on 2026-07-13. The exact merge commit then passed the complete `main` Quality Gates workflow.
 
-## What may not happen yet
+## What remains prohibited
 
 - unattended multi-task loops;
 - automatic production deployment from task branches;
 - automatic merging;
 - concurrent tasks touching state, persistence, input, scene, or audio boundaries;
-- event architecture implementation before the audit and test baseline;
-- dependency major upgrades;
-- gameplay changes.
+- selecting tasks that are not Ready or whose dependencies are not Done;
+- work outside the selected task's declared scope;
+- bypassing human review for specification, compatibility, persistence, accessibility, dependency-major, deployment, content, or audiovisual-quality changes.
 
 ## Supervised steering prompt
 
 ```text
 Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
-and the assigned readiness-gate task and its required reading.
+the assigned task, and its required reading.
 
-This is a supervised single-task run. Execute only the assigned readiness-gate task.
+This is a supervised single-task run. Execute only the assigned task.
 Run every required check, update only its task deliverables, and open one reviewable
 pull request. Do not change gameplay rules or begin another task.
 ```
 
-## Future autonomous steering prompt
+## Autonomous steering prompt
 
-Use only after status is `READY`:
+Use while status is `READY`:
 
 ```text
 Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, and docs/tasks/README.md.
