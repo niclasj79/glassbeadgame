@@ -109,3 +109,9 @@ The npm advisory database is not a complete supply-chain assessment. No candidat
 | `npm run measure:performance` | Passed | Both profiles emitted SwiftShader-labelled reports; desktop 3.93 and mobile-sized 8.92 effective fps in this run, non-gating. |
 | Package/lock/source/config/workflow mutation | None | Git diff contains documentation only. |
 | Hosted `Quality Gates` | Pending | Required at the PR boundary. |
+
+## Approved remediation outcome
+
+M0-007 implemented the approved narrow path on 2026-07-13: Vite 6.4.3 exact, esbuild 0.25.12, and no unrelated direct upgrade. `npm audit --json` now reports zero vulnerabilities across 391 graph entries; all four cited Vite/esbuild advisories are absent. The known Drei → `three-mesh-bvh@0.7.8` deprecation remains deliberately deferred and is not an npm advisory.
+
+Vite 6 preserved the content plugin, explicit hosts/ports, Pages asset base, ES2020 production target, and manual chunks. Total bundle changed from 2,400,583/1,264,685 raw/gzip-9 bytes to 2,404,749/1,265,950: +4,166 raw and +1,265 gzip-9, within accepted ceilings. Full unit, content, build, deterministic browser, and renderer-labelled reference checks passed. M1 is no longer blocked by the dependency decision once M0-007 is reviewed and merged.

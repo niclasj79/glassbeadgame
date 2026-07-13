@@ -28,11 +28,11 @@ None while M0-006 is in review.
 
 ## In review
 
-1. `M0-006-dependency-upgrade-decision.md` — dependency decision complete; risk acceptance and Vite follow-up authorization await review.
+1. `M0-007-vite-security-upgrade.md` — isolated Vite 6.4.3 remediation complete; awaiting human review.
 
 ## Blocked queue
 
-1. `M0-007-vite-security-upgrade.md` — proposed Vite 6.4.3 security upgrade; blocked pending explicit human approval of the M0-006 decision.
+None.
 
 ## Completed
 
@@ -41,6 +41,7 @@ None while M0-006 is in review.
 3. `M0-003-ci-pipeline.md` — accepted and merged in PR #10.
 4. `M0-004-deterministic-test-mode.md` — accepted and merged in PR #12.
 5. `M0-005-performance-bundle-baseline.md` — accepted with initial bundle budgets and merged in PR #14.
+6. `M0-006-dependency-upgrade-decision.md` — accepted and merged in PR #16; authorized isolated Vite remediation next.
 
 ## Planned but not yet Ready
 
