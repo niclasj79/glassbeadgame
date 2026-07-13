@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-1. `M1-004-zustand-domain-session-adapter.md` — isolated reactive adapter over the canonical event log and reduced session state.
+None while M1-004 is in review.
 
 ## In review
 
-None.
+1. `M1-004-zustand-domain-session-adapter.md` — isolated reactive adapter over the canonical event log and reduced session state.
 
 ## Blocked queue
 
