@@ -11,6 +11,9 @@ The current target is the vertical slice defined by:
 - `docs/ARCHITECTURE.md`
 - `docs/CURRENT-STATE-AUDIT.md`
 - `docs/ROADMAP.md`
+- `docs/PLAYTEST-PLAN.md`
+- `docs/INTERACTION-DECISIONS.md`
+- `docs/CONTENT-AUDIOVISUAL-REFERENCE.md`
 - the assigned file under `docs/tasks/`
 
 Read the assigned task and all required documents before editing code.

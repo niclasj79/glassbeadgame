@@ -52,7 +52,15 @@ None.
 
 ## Planned but not yet Ready
 
-M2-002 candidate resonance model sequencing begins only after M2-001 is accepted and a reviewed task packet defines its content inputs and non-spoiler contract.
+M2-002 candidate resonance model sequencing begins only after M2-001 is accepted, the applicable `CAV-001` through `CAV-004` director decisions are reviewed, and a reviewed task packet defines its content inputs and non-spoiler contract.
+
+## Director design companions
+
+- `../PLAYTEST-PLAN.md` — milestone hypotheses, observation protocol, proposed success criteria, and playtest decisions `P-001` through `P-008`;
+- `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-013`;
+- `../CONTENT-AUDIOVISUAL-REFERENCE.md` — representative pairs, provisional relation grammar, resonance boundaries, and content/audiovisual decisions `CAV-001` through `CAV-010`.
+
+Unanswered director decisions do not authorize Codex to infer product behavior. They block only the task types named in each record. M2-001 remains eligible because it is an isolated command seam with no production input, content, or presentation integration.
 
 ## Ownership rules
 

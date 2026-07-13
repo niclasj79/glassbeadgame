@@ -41,6 +41,9 @@ The current `focusedBeadId`, `pinnedInspectId`, hover, dwell, and press behavior
 - `docs/CURRENT-STATE-AUDIT.md`, especially the `src/state/` and `src/scene/` migration risks;
 - `docs/DECISIONS.md`, especially ADR-003, ADR-008, and ADR-011;
 - `docs/ROADMAP.md`, especially the M1 gate, M2 work/gate, and unsafe parallelism;
+- `docs/PLAYTEST-PLAN.md`, especially the M2 hypotheses and director decision boundaries;
+- `docs/INTERACTION-DECISIONS.md`, especially the state-layer separation and M2-001 non-blocking boundary;
+- `docs/CONTENT-AUDIOVISUAL-REFERENCE.md`, as reference context only; no content or audiovisual behavior is owned by this task;
 - `docs/audits/M0-STATE-MUTATION-MAP.md`;
 - `docs/tasks/M1-001-stable-domain-identifiers-and-events.md` through `M1-006-remove-legacy-session-start.md`.
 
