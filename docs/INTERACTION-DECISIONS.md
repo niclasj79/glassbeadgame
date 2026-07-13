@@ -47,6 +47,41 @@ This is a discussion baseline, not an accepted flow.
 8. Commit once; then receive the outcome and coordinated consequence.
 9. Cancel at any provisional stage to restore the previously accepted state.
 
+## Director metaphor reference — attended viewpoint and directional sweep
+
+**Status:** Accepted as a directional design metaphor on 2026-07-13, not as a literal fiction, camera prescription, control scheme, or combat system.
+
+Attending to one bead may feel like taking up an embodied viewpoint around it: comparable to seeing one's own vessel in a third-person space game while remaining zoomed out enough to read the whole spherical arena. Directing attention across the visible sphere then feels like sweeping an instrument or field of inquiry. Beads inside the foregrounded sector answer with audiovisual resonance, allowing the player to sense promising material before selecting a candidate.
+
+The useful design translations are:
+
+- **attended bead as temporary point of view:** the chosen idea becomes the player's situated reference without making the rest of the web disappear;
+- **whole-arena legibility:** focus increases intimacy but preserves enough overview to compare directions, candidates, and topology;
+- **directional inquiry:** aim, sweep, sector, or frustum-like emphasis can make attention feel active rather than menu-based;
+- **candidate response:** multiple foregrounded beads may answer with different relation-neutral strengths; the response communicates generative possibility, never target lock or correctness;
+- **intention as tool mode:** choosing Echo, Passage, Tension, or Ground changes what kind of action the player is preparing, with an immediate change in preview behavior.
+
+The tool analogies describe semantic energy, not literal weapons:
+
+| Intention | Directional metaphor | Transferable feel |
+| --- | --- | --- |
+| Echo | echolocation pulse | emit, listen, receive a returning structural answer |
+| Passage | bolt or directed discharge | send something across the interval and transform it in transit |
+| Tension | lasso, tether, or tractor beam | catch, hold, pull against, or sustain an unresolved relation |
+| Ground | area-of-effect restorative field | establish a surrounding base that supports, settles, or enables |
+
+### Guardrails
+
+- Do not introduce enemies, damage, ammunition, cooldown optimization, lock-on correctness, twitch targeting, failure punishment, or militarized tone.
+- A directional sweep is presentation/input context, not part of the pure resonance rule and not a hidden endpoint filter.
+- The same decisions and information must remain available through touch, keyboard, controller-compatible, reduced-motion, audio-reduced, and simplified representations; a literal free-aim frustum cannot be the only route.
+- The metaphor does not resolve I-001 through I-013. Camera distance, focus activation, candidate-selection gesture, relation-choice presentation, cancellation, and input equivalence still require their named decisions and human testing.
+- The world remains the primary interface. Any supporting DOM surface mirrors the spatial act instead of replacing it with a conventional target list or weapons HUD.
+
+### Relationship to M2 sequencing
+
+M2-002 may use this metaphor to explain why every session candidate receives a neutral internal resonance band and why presentation may foreground a directional subset. The pure model must remain camera-, frustum-, input-, and audiovisual-implementation independent. A later production-integration task may test directional sweep behavior only after the applicable interaction decisions are accepted.
+
 ## Input-equivalence proposal
 
 Equivalent means the same decision, reversibility, information, and consequence—not identical physical motion.

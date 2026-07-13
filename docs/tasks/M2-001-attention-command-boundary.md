@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -174,3 +174,4 @@ Human review is required before merge because this establishes the first reusabl
 - No production composition, input, React, legacy focus/inspection state, scene, audio, UI, persistence, content, browser behavior, accepted domain contract, adapter implementation, dependency, or deployment path changed. Focused scans found no forbidden production dependency and no production import or instantiation of the command; the command contains one clock read, one event construction, and one adapter append with no duplicated validation/reducer rule.
 - Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 14 unit-test files with 122 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,418 raw bytes / 1,270,711 gzip bytes total and 1,581,776 raw / 465,775 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; and all focused dependency, caller, and ownership scans. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
 - The targeted performance reference was not required because the command remains unintegrated and no active runtime path changes. Human review remains required for this first reusable post-start command seam; no architecture conflict, compatibility exception, or specification proposal was discovered.
+- Accepted and merged in PR #32 on 2026-07-13. The exact `main` merge commit `5ab774d` passed the complete Quality Gates workflow in CI run `29280913233`.
