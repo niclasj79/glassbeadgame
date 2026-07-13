@@ -20,15 +20,15 @@ Codex may select only the first Ready task whose dependencies are Done and whose
 
 ## Current milestone
 
-M0 — Trustworthy baseline
+M1 — Domain foundation
 
 ## Ready queue
 
-None while M0-006 is in review.
+1. `M1-001-stable-domain-identifiers-and-events.md` — stable identifiers and the initial versioned domain-event contract.
 
 ## In review
 
-1. `M0-007-vite-security-upgrade.md` — isolated Vite 6.4.3 remediation complete; awaiting human review.
+None.
 
 ## Blocked queue
 
@@ -42,10 +42,10 @@ None.
 4. `M0-004-deterministic-test-mode.md` — accepted and merged in PR #12.
 5. `M0-005-performance-bundle-baseline.md` — accepted with initial bundle budgets and merged in PR #14.
 6. `M0-006-dependency-upgrade-decision.md` — accepted and merged in PR #16; authorized isolated Vite remediation next.
+7. `M0-007-vite-security-upgrade.md` — accepted and merged in PR #17; Vite/esbuild advisories cleared.
 
 ## Planned but not yet Ready
 
-- M1-001 stable domain identifiers and events;
 - M1-002 pure session reducer;
 - M1-003 replay and serialization;
 - M1-004 Zustand adapter;

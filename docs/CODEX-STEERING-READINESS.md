@@ -6,9 +6,9 @@
 
 ## Meaning
 
-The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, and accepted bundle budgets. The approved Vite security remediation is in review.
+The repository now has a canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, a completed trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a fully specified M1 domain task in the Ready queue. The approved Vite security remediation is merged.
 
-It is not yet ready for unattended self-deploying implementation loops because the trustworthy baseline has not been completed on the default branch.
+It is not yet ready for unattended self-deploying implementation loops because required branch protection and the recorded autonomous dry run remain incomplete.
 
 ## Required transition gate
 
@@ -28,7 +28,7 @@ Change this status to `READY` only when all of the following are true:
 
 ## What may happen now
 
-Codex may be used as the implementation interface for one supervised task at a time. No next task is eligible until M0-007 is reviewed and merged and the steering gate is advanced deliberately.
+Codex may be used as the implementation interface for one supervised task at a time. M1-001 is fully specified and Ready, but the permitted readiness sequence advances next through branch protection and a recorded documentation-only or low-risk dry run.
 
 It must create a branch and reviewable PR, report its checks, and stop after the task. Human review is required.
 
@@ -46,13 +46,11 @@ It must create a branch and reviewable PR, report its checks, and stop after the
 
 ```text
 Read AGENTS.md, docs/CODEX-STEERING-READINESS.md, docs/tasks/README.md,
-docs/tasks/M0-006-dependency-upgrade-decision.md, and its required reading.
+and the assigned readiness-gate task and its required reading.
 
-This is a supervised single-task run. Inventory direct and transitive dependencies,
-advisories, compatibility constraints, and existing capabilities, produce a concise plan, then
-execute only M0-006. Run every required check, update only the task deliverables,
-and open one reviewable pull request. Do not change gameplay rules or begin
-another task.
+This is a supervised single-task run. Execute only the assigned readiness-gate task.
+Run every required check, update only its task deliverables, and open one reviewable
+pull request. Do not change gameplay rules or begin another task.
 ```
 
 ## Future autonomous steering prompt
