@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-1. `M1-003-replay-and-serialization.md` — validated canonical event-log serialization and deterministic domain replay.
+None while M1-003 is in review.
 
 ## In review
 
-None.
+1. `M1-003-replay-and-serialization.md` — validated canonical event-log serialization and deterministic domain replay.
 
 ## Blocked queue
 
