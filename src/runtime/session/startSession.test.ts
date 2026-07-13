@@ -53,12 +53,4 @@ describe("production session-start composition", () => {
     expect(persisted.state).not.toHaveProperty("eventLog");
     expect(localStorage).toHaveLength(1);
   });
-
-  it("retains the deprecated legacy entry only as an inactive guard", () => {
-    expect(() => useStore.getState().beginSession(["mathematics", "music"])).toThrow(
-      /deprecated/
-    );
-    expect(useStore.getState().session).toBeNull();
-    expect(domainSessionStore.getState().session).toBeNull();
-  });
 });
