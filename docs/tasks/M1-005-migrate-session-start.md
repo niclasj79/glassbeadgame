@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -231,3 +231,4 @@ Human review is required before merge because this task introduces the first pro
 - Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 13 unit-test files with 115 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,517 raw bytes / 1,270,758 gzip bytes total and 1,581,875 raw / 465,817 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; and focused caller, import, persistence, and ownership inspections. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
 - The required targeted performance reference passed both profiles on local SwiftShader: desktop-base sampled 22 frames with 249.7 ms median / 330.0 ms p95, and mobile-potato sampled 52 frames with 109.5 ms median / 171.3 ms p95. These software-renderer measurements are recorded as environment evidence, not hardware or human audiovisual acceptance.
 - Human review remains required for the first production canonical-session ownership cutover and its temporary legacy presentation projection. No architecture conflict or additional specification proposal was discovered.
+- Accepted and merged in PR #27 on 2026-07-13. The exact `main` merge commit `243e15f` passed the complete Quality Gates workflow in CI run `29270714954`.

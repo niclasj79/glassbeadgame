@@ -24,11 +24,11 @@ M1 — Domain foundation
 
 ## Ready queue
 
-None while M1-005 is in review.
+1. `M1-006-remove-legacy-session-start.md` — remove the deprecated legacy `beginSession` surface after the accepted canonical cutover.
 
 ## In review
 
-1. `M1-005-migrate-session-start.md` — route standard, daily, and deterministic-test session starts through the canonical domain adapter.
+None.
 
 ## Blocked queue
 
@@ -47,10 +47,11 @@ None.
 9. `M1-002-pure-session-reducer.md` — accepted and merged in PR #21; established the immutable schema-version-1 session model and exhaustive pure reducer.
 10. `M1-003-replay-and-serialization.md` — accepted and merged in PR #23; established validated canonical serialization and deterministic replay.
 11. `M1-004-zustand-domain-session-adapter.md` — accepted and merged in PR #25; established the isolated reactive adapter over the canonical event log and reduced session state.
+12. `M1-005-migrate-session-start.md` — accepted and merged in PR #27; migrated standard, Daily Draw, and deterministic-test starts through the canonical domain adapter.
 
 ## Planned but not yet Ready
 
-- M1-006 remove the replaced legacy `beginSession` mutation surface after M1-005 acceptance.
+None. M2 task sequencing begins only after M1-006 is accepted and the M1 gate is closed by a reviewed queue change.
 
 ## Ownership rules
 
