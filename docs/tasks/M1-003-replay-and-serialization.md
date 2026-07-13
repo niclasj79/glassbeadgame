@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -200,4 +200,12 @@ Human review is required before merge because the serialized event-log format an
 
 ## Implementation notes
 
-- None yet.
+- Added the immutable `SessionEventLogV1` envelope with fixed format/version constants and only the canonical ordered schema-version-1 event sequence.
+- Added strict unknown-input and JSON decoding for the envelope and all eleven accepted event payload variants. Accepted values are rebuilt through the existing branded-ID and event constructors, deeply frozen, checked for deterministic event IDs, and replay-validated without trimming, coercion, repair, sorting, defaults, or discarded fields.
+- Added compact canonical serialization with fixed property order and byte-identical output for semantically identical accepted logs regardless of source insertion order.
+- Added ordered replay through the existing `reduceSession` only. Transition failures retain the failing index, rejected event ID, underlying stable transition code, and original `SessionTransitionError` as the cause.
+- Added a closed typed log-error contract distinguishing parse, decode, serialize, and replay stages plus the required stable failure families and paths.
+- Added 33 focused tests covering all event variants, the full-session round trip, deterministic serialization/replay, valid in-progress logs, deep immutability, malformed JSON/envelopes/events/payloads/gestures, unsupported versions/types, invalid IDs, empty logs, serialization validation, and reducer-failure preservation.
+- No accepted event, identifier, model, or reducer contract changed. No Zustand, legacy replay, current gameplay, persistence, content, presentation, browser, dependency, or deployment path imports or uses the new replay boundary.
+- No authoritative-document conflict, migration, compatibility exception, or silent normalization was introduced.
+- Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 10 unit-test files with 101 tests; 3 content-validation tests; production build; bundle ceilings; 3 deterministic browser tests; `git diff --check`; and focused inspections finding no forbidden imports, current callers, duplicated transition rules, or silent normalization. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged. Targeted performance measurement was not required because no runtime path was integrated.
