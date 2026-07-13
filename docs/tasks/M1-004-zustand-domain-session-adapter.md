@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -193,4 +193,11 @@ Human review is required before merge because this adapter establishes the state
 
 ## Implementation notes
 
-- None yet.
+- Added an isolated `createDomainSessionStore()` factory over Zustand's vanilla API. Each call returns an empty independent store with stable load, append, and clear action identities; no singleton or React hook is exported.
+- Kept the validated `SessionEventLogV1` as the sole canonical session record and exposed `SessionStateV1` only as the immutable projection replayed from that exact log. No independent session setter or generic adapter mutation API was introduced.
+- Added atomic load and append operations that delegate unknown-input rebuilding, full-log validation, and cross-event consistency to `decodeSessionEventLogV1`, then derive the published state through `replaySessionEventLogV1`. Rejections propagate without publication, reference changes, or subscriber notification.
+- Added atomic in-memory clear behavior with an observable no-op for an already empty adapter. Previously returned immutable log/state values remain unchanged.
+- Added 6 focused tests covering store isolation, action stability, rebuilt deeply immutable loads, one notification per accepted operation, full-fixture append/load equivalence and order, input and prior-value non-mutation, failed load/append atomicity, forged-event rejection, and clear/no-op behavior.
+- No legacy store/type, current caller, persistence path, domain contract, gameplay rule, presentation path, browser behavior, dependency, or deployment path was changed or migrated. Focused scans found no forbidden adapter import and no production adapter caller or instance.
+- No authoritative-document conflict, architecture proposal, compatibility exception, or unresolved product decision was discovered.
+- Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 11 unit-test files with 107 tests; 3 content-validation tests; production build; bundle ceilings; 3 deterministic browser tests; `git diff --check`; and focused dependency, caller, and rule-ownership inspections. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged. Targeted performance measurement was not required because no runtime path was integrated.
