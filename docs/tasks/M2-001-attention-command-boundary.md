@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -167,4 +167,10 @@ Human review is required before merge because this establishes the first reusabl
 
 ## Implementation notes
 
-- None yet.
+- Added an isolated `createAttendConceptCommand()` factory under `src/runtime/commands/attention/` with explicit dependency, result, attended-event, command, and typed `no-active-session` error contracts. No production singleton or caller was added.
+- The command reads the canonical adapter once before the clock, captures the injected clock exactly once, constructs one accepted schema-version-1 `bead.attended` event from the current session identity and next sequence, and publishes only through the adapter's stable `appendEvent` action. It returns the created event plus the exact immutable log/state references published by that atomic update.
+- Domain constructors, replay validation, the reducer, and the adapter retain all validation ownership. Missing canonical state fails before the clock; unknown concepts, concluded sessions, time regression, and invalid captured time propagate the accepted typed failures without translation or partial publication.
+- Added 8 focused tests covering exact event identity/sequence/time mapping, deep immutability, one notification, action/reference stability, byte determinism, consecutive attention replacement, preservation of provisional pair/hypothesis and committed thread/outcome/motif state, input non-mutation, missing sessions, unknown concepts, concluded sessions, clock regression, and event-construction failure.
+- No production composition, input, React, legacy focus/inspection state, scene, audio, UI, persistence, content, browser behavior, accepted domain contract, adapter implementation, dependency, or deployment path changed. Focused scans found no forbidden production dependency and no production import or instantiation of the command; the command contains one clock read, one event construction, and one adapter append with no duplicated validation/reducer rule.
+- Required validation passed: clean lockfile install with zero vulnerabilities; typecheck; lint; 14 unit-test files with 122 tests; 3 content-validation tests; production build; bundle ceilings at 2,422,418 raw bytes / 1,270,711 gzip bytes total and 1,581,776 raw / 465,775 gzip JavaScript bytes; 3 deterministic browser tests; `git diff --check`; and all focused dependency, caller, and ownership scans. The existing `three-mesh-bvh@0.7.8` deprecation and established large-chunk build notices remain unchanged.
+- The targeted performance reference was not required because the command remains unintegrated and no active runtime path changes. Human review remains required for this first reusable post-start command seam; no architecture conflict, compatibility exception, or specification proposal was discovered.
