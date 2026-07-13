@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -176,6 +176,7 @@ Human review is required before merge because reducer semantics become the found
 
 ## Implementation notes
 
+- Accepted and merged in PR #21 on 2026-07-13 after the required protected `Quality Gates` check passed; the exact `main` merge commit `4c2175b` then passed CI run `29257407771`.
 - Added the minimal immutable `SessionStateV1` model for session identity/setup, ordering, attention, selection, hypothesis, committed threads, distinct outcome variants, completed motifs, Attunement, and conclusion. It contains no legacy score, progression, presentation, wall-clock, persistence, or snapshot fields.
 - Added one exhaustive `reduceSession(previous, event)` implementation with stable typed transition errors for lifecycle, session identity, sequence, relative time, session concepts, references, duplicate identities/outcomes, pair/hypothesis mismatches, and Attunement state.
 - Added a reusable deterministic full-session fixture covering all eleven accepted event types, both documented and Open Thread outcomes, two committed threads, motif completion, Attunement, and conclusion.
