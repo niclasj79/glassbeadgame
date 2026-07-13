@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. M1-004 is in review.
+The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. M1-004 is accepted and the first production session-start migration task is specified in the Ready queue.
 
 It is ready for one isolated autonomous task-selection run at a time. `READY` does not authorize automatic merge, deployment from task branches, overlapping work, or bypassing a task's human-review boundary.
 
@@ -30,15 +30,15 @@ Change this status to `READY` only when all of the following are true:
 
 - Documentation foundation: accepted and merged in PR #5.
 - Trustworthy baseline: M0-001 through M0-005 are Done via PRs #6, #8, #10, #12, and #14; the accepted dependency decision and Vite security remediation are Done via PRs #16 and #17.
-- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for PRs #19, #21, and #23 and their exact `main` merge commits, most recently `3f9f1d4` in CI run `29259727713`.
+- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for PRs #19, #21, #23, and #25 and their exact `main` merge commits, most recently `1a337fb` in CI run `29262274014`.
 - Deployment isolation: pull requests run read-only CI; Pages runs separately only after successful `main` push CI or a manual dispatch on `main` and checks out the validated SHA.
-- Ready domain work: M1-003 was accepted in PR #23; M1-004 was selected from Ready with Done dependencies, isolated state-adapter ownership, and objective acceptance criteria and checks.
+- Ready domain work: M1-004 was accepted in PR #25; M1-005 is fully specified, depends on Done M1-001 through M1-004, owns the isolated session-start cutover boundary, and has objective acceptance criteria and checks.
 - Hosted protection: `main` requires strict `Quality Gates`, pull requests, resolved conversations, and administrator enforcement; force pushes and deletion are disabled.
 - Dry run: M1-001 was selected from Ready with dependencies Done and no ownership overlap, implemented on one isolated branch, fully validated, reviewed, and merged in PR #19 without automatic merge or next-task selection.
 
 ## What may happen now
 
-No next task is eligible while M1-004 is in review. After acceptance, the task queue must be advanced deliberately before another autonomous run.
+Codex may select M1-005 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
 
 Each run must create one branch and one reviewable PR, report every required check, and stop. Human review remains required wherever the task or repository boundaries require it.
 
