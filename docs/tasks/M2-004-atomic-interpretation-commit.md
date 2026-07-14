@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -253,6 +253,9 @@ later gesture feel, input equivalence, presentation, or artistic acceptance.
 
 ## Implementation notes
 
+- Accepted and merged in PR #38 on 2026-07-14. The exact `main` merge commit
+  `d8c200e` passed Quality Gates run `29336060556` and Pages deployment run
+  `29336185499`.
 - Selected on 2026-07-14 after PR #37 was reviewed and merged, its exact
   `main` merge commit `2d4d6ea` passed CI run `29335050180`, no PR remained
   open, and no active task owned the domain-session publication boundary.

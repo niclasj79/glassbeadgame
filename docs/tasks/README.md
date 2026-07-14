@@ -24,7 +24,7 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-004-atomic-interpretation-commit.md` — publish an accepted candidate draft and gesture as one validated atomic pair → hypothesis → thread batch.
+1. `M2-005-deterministic-gesture-profile.md` — derive one validated, immutable expressive profile from normalized pointer or hold-and-confirm samples.
 
 ## In review
 
@@ -52,14 +52,16 @@ None.
 14. `M2-001-attention-command-boundary.md` — accepted and merged in PR #32; established the isolated canonical Attend command seam without production input integration.
 15. `M2-002-candidate-resonance-model.md` — accepted and merged in PR #34; established the pure complete-candidate, non-spoiling weak/medium/high resonance evaluator.
 16. `M2-003-ephemeral-interpretation-draft.md` — accepted and merged in PR #36; established the isolated immutable Attend → arm intention → select candidate draft and accepted pre-weave cancellation transitions.
+17. `M2-004-atomic-interpretation-commit.md` — accepted and merged in PR #38; established one validated atomic pair → hypothesis → thread publication boundary.
 
 ## Planned but not yet Ready
 
-Tasks after M2-004 are not yet Ready. Production attention/resonance/draft
-integration, gesture capture, placeholder presentation, input equivalence, and
-camera/audio/UI work must be specified as separate reviewed packets after the
-atomic durable seam is accepted. Their personal device, comfort, and artistic
-quality gates remain human-review boundaries rather than unresolved decisions.
+Tasks after M2-005 are not yet Ready. Production attention/resonance/draft
+integration, browser input capture, placeholder presentation, input-equivalent
+controls, and camera/audio/UI work must be specified as separate reviewed
+packets after the pure gesture-profile seam is accepted. Their personal device,
+comfort, and artistic quality gates remain human-review boundaries rather than
+unresolved decisions.
 
 ## Director design companions
 
