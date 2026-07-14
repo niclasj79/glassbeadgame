@@ -24,7 +24,7 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-002-candidate-resonance-model.md` — add the pure deterministic, complete-candidate, non-spoiling weak/medium/high resonance evaluator.
+1. `M2-003-ephemeral-interpretation-draft.md` — add the isolated immutable Attend → arm intention → select candidate draft and accepted pre-weave cancellation transitions.
 
 ## In review
 
@@ -50,10 +50,11 @@ None.
 12. `M1-005-migrate-session-start.md` — accepted and merged in PR #27; migrated standard, Daily Draw, and deterministic-test starts through the canonical domain adapter.
 13. `M1-006-remove-legacy-session-start.md` — accepted and merged in PR #29; removed the final deprecated legacy session-start surface and closed the accepted cutover.
 14. `M2-001-attention-command-boundary.md` — accepted and merged in PR #32; established the isolated canonical Attend command seam without production input integration.
+15. `M2-002-candidate-resonance-model.md` — accepted and merged in PR #34; established the pure complete-candidate, non-spoiling weak/medium/high resonance evaluator.
 
 ## Planned but not yet Ready
 
-Tasks after M2-002 are not yet Ready. Production attention/resonance integration remains gated by the applicable `I-001` through `I-013` decisions, especially focus/Attend separation, reversible attention, immediate consequences, candidate selection, cancellation, and input equivalence.
+Tasks after M2-003 are not yet Ready. Production input/camera/audiovisual integration requires the accepted decisions' device and comfort tests; relation copy, weave transition, expressive input equivalence, and overture work remain gated by I-007 through I-009, I-013, and P-005 as applicable.
 
 ## Director design companions
 
@@ -61,7 +62,7 @@ Tasks after M2-002 are not yet Ready. Production attention/resonance integration
 - `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-013`;
 - `../CONTENT-AUDIOVISUAL-REFERENCE.md` — representative pairs, provisional relation grammar, resonance boundaries, and content/audiovisual decisions `CAV-001` through `CAV-010`.
 
-Director decisions `CAV-001` through `CAV-004` are accepted and authorize only the pure, unintegrated M2-002 resonance-model contract. The attended-viewpoint/directional-sweep metaphor in `INTERACTION-DECISIONS.md` is accepted as guidance, not literal mechanics. Other unanswered director decisions continue to block only the task types named in their records and do not authorize Codex to infer production interaction behavior.
+Director decisions `CAV-001` through `CAV-004`, `I-001` through `I-006`, and `I-010` through `I-012` are accepted. The attended-viewpoint/directional-sweep, armed-intention, and camera-performance metaphors in `INTERACTION-DECISIONS.md` are binding design guidance with their stated non-combat, accessibility, comfort, and durable-state guardrails. Other unanswered director decisions continue to block only the task types named in their records.
 
 ## Ownership rules
 

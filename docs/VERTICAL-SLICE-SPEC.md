@@ -92,6 +92,8 @@ Selecting or dwelling on a bead brings its identity into focus. Nearby or semant
 - the bead’s internal motif becomes legible;
 - candidate beads emit relation-neutral resonance signals;
 - audio leaves space through reduced density or call-and-response.
+- a smooth camera transition may place the attended bead in a lower-left or lower-right situated posture while the whole spherical arena remains legible;
+- reduced-motion presentation communicates the same situated attention without requiring camera travel.
 
 ## 7. Resonance preview
 
@@ -114,7 +116,7 @@ Make potential relationships perceptible before commitment without turning the g
 
 ## 8. Relation declaration
 
-After selecting two beads, the player chooses one intention:
+After attending to one bead, the player arms one intention before selecting the second bead:
 
 - Echo;
 - Passage;
@@ -123,10 +125,13 @@ After selecting two beads, the player chooses one intention:
 
 ### Rules
 
-- a relation intention is required before commitment;
-- choice changes preview appearance and sound immediately;
-- choice does not determine whether the pair is documented;
-- cancel returns to the prior state without durable mutation;
+- the four intention choices appear world-anchored beside the attended bead with an equivalent accessible DOM control;
+- arming changes the attended bead’s preview appearance and sound immediately;
+- while the intention is armed, the player selects a second bead from the still-visible arena;
+- choice does not determine candidate strength, correctness, or whether the eventual pair is documented;
+- armed intention and candidate selection remain an ephemeral draft until commitment;
+- cancel or re-Attend returns to the applicable prior state without durable mutation;
+- on commitment, the selected pair, declared relation, and thread are recorded as one ordered atomic event batch;
 - the declared relation is included in the durable thread event.
 
 ## 9. Expressive weaving
@@ -361,16 +366,17 @@ The canonical integration scenario must demonstrate:
 1. session start;
 2. attention to Fibonacci Sequence;
 3. perceptible resonance with Counterpoint;
-4. Echo declaration;
-5. expressive weave;
-6. documented Bartók/Fibonacci revelation;
-7. semantic thread and musical transformation;
-8. a later Prime Numbers and Polyrhythm relation;
-9. completion of a Canon-like motif;
-10. Attunement;
-11. conclusion performance;
-12. qualitative portrait;
-13. deterministic reload from the event log.
+4. Echo arming beside the attended bead;
+5. Counterpoint selection through the armed Echo intention;
+6. expressive weave;
+7. documented Bartók/Fibonacci revelation;
+8. semantic thread and musical transformation;
+9. a later Prime Numbers and Polyrhythm relation;
+10. completion of a Canon-like motif;
+11. Attunement;
+12. conclusion performance;
+13. qualitative portrait;
+14. deterministic reload from the event log.
 
 ## 24. Explicit exclusions
 

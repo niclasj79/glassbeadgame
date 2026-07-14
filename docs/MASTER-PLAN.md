@@ -83,8 +83,8 @@ No timer, failure state, aggressive reward loop, or distracting HUD should domin
 
 1. Attend to a bead.
 2. Notice candidate resonances.
-3. Select another bead.
-4. Declare a relation.
+3. Arm a relation intention.
+4. Select another bead through that intention.
 5. Weave expressively.
 6. Receive a documented revelation or an Open Thread.
 7. Transform the world.
