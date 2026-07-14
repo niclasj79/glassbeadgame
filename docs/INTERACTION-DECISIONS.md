@@ -2,7 +2,9 @@
 
 ## Status
 
-Director decisions I-001 through I-006 and I-010 through I-012 are accepted. I-007 through I-009 and I-013 remain pending before their named production boundaries.
+Director decisions I-001 through I-013 are accepted. Exact audiovisual pacing,
+camera comfort, device behavior, and artistic quality remain subject to the
+personal playtest gates recorded in `PLAYTEST-PLAN.md`.
 
 This record refines interaction questions left deliberately open by `VERTICAL-SLICE-SPEC.md`. It does not authorize changes to the accepted domain event schema, reducer, persistence, or accessibility contract. The accepted pre-weave flow is represented as ephemeral draft state so existing durable pair/hypothesis/thread events can remain an atomic commit sequence.
 
@@ -76,7 +78,9 @@ The tool analogies describe semantic energy, not literal weapons:
 - Do not introduce enemies, damage, ammunition, cooldown optimization, lock-on correctness, twitch targeting, failure punishment, or militarized tone.
 - A directional sweep is presentation/input context, not part of the pure resonance rule and not a hidden endpoint filter.
 - The same decisions and information must remain available through touch, keyboard, controller-compatible, reduced-motion, audio-reduced, and simplified representations; a literal free-aim frustum cannot be the only route.
-- The metaphor does not override the accepted I-001 through I-006/I-010 through I-012 constraints or resolve pending I-007 through I-009/I-013. Exact camera comfort, expressive input, microcopy, weave transition, and overture behavior still require their named decisions and human testing.
+- The metaphor does not override accepted I-001 through I-013. Exact camera
+  comfort, expressive input feel, microcopy legibility, weave transition, and
+  overture behavior still require director-led personal testing.
 - The world remains the primary interface. Any supporting DOM surface mirrors the spatial act instead of replacing it with a conventional target list or weapons HUD.
 
 ### Relationship to M2 sequencing
@@ -175,23 +179,25 @@ Director answers become binding only after reviewed merge. If an answer changes 
 
 - **Question:** Are the player-facing names final, and what first-use phrase accompanies each?
 - **Recommended default:** Keep the four names and test these phrases: Echo — “shares a form”; Passage — “carries or transforms”; Tension — “opposes or complicates”; Ground — “supports or embodies.”
-- **Director answer:** _Pending._
-- **Blocks:** Onboarding copy, accessible labels, captions, and content authoring examples.
+- **Director answer:** Accepted as recommended. Retain Echo — “shares a form”; Passage — “carries or transforms”; Tension — “opposes or complicates”; and Ground — “supports or embodies” as the first-use phrases to test.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Clears:** Onboarding copy, accessible labels, captions, and content authoring examples may use this provisional player-facing vocabulary, subject to personal playtest revision.
 
 ### I-008 — Timing of declaration
 
 - **Question:** After intention arming and candidate selection, when does the armed intention become the durable declared hypothesis and how may the player re-arm before weaving?
 - **Recommended default:** Keep arming and candidate selection ephemeral; apply the intention immediately to the provisional pair preview; record the pair, hypothesis, and committed thread only as one ordered atomic commit batch. A fluent shortcut may remember focus position but never silently reuse a prior intention.
-- **Director answer:** _Pending._
-- **Blocks:** Commit-state machine and gesture capture order.
-- **Accepted partial direction from I-005/I-006:** Intention arming precedes candidate selection and expressive weaving. This record remains pending only for fluent shortcuts, re-arming after candidate selection, and the exact transition into gesture capture/commit.
+- **Director answer:** Accepted as recommended. Arming and candidate selection remain ephemeral and immediately affect the provisional preview. Pair selection, hypothesis, and thread commitment are published only as one ordered atomic batch after expressive confirmation. Re-arming or a fluent shortcut must be an explicit action; it may preserve focus position but never silently reuse a prior intention.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Clears:** Atomic commit-state and gesture-capture sequencing may be implemented without changing schema-version-1 event payloads.
 
 ### I-009 — Keyboard/controller expressive equivalent
 
 - **Question:** What counts as expressive weaving when no free pointer path exists?
 - **Recommended default:** A hold-and-confirm interaction captures duration and input modality, with optional directional modulation; unavailable geometric fields remain absent. It receives the same intellectual outcome and a deliberately authored audiovisual phrasing, not a penalty or fake pointer path.
-- **Director answer:** _Pending._
-- **Blocks:** Keyboard/controller gesture profile and accessibility acceptance.
+- **Director answer:** Accepted as recommended. Keyboard/controller weaving uses a hold-and-confirm interaction that records duration and modality, with optional directional modulation; unavailable geometric fields remain absent and receive neither a penalty nor a fabricated pointer path.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Clears:** Keyboard/controller gesture profiles and equivalent placeholder phrasing, subject to the personal device gate in P-005.
 
 ### I-010 — Cancel hierarchy
 
@@ -233,8 +239,9 @@ Director answers become binding only after reviewed merge. If an answer changes 
 
 - **Question:** Should the first three beads constrain the available path, demonstrate through staging, or permit free exploration with contextual help?
 - **Recommended default:** Stage a strong first resonance and progressively reveal affordances without locking incorrect actions; show text only after hesitation or an unavailable action.
-- **Director answer:** _Pending._
-- **Blocks:** Overture/onboarding task, not isolated command work.
+- **Director answer:** Accepted as recommended. Stage a strong first resonance and progressively reveal affordances without locking alternative actions; show contextual text only after hesitation or an unavailable action.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Clears:** Overture/onboarding work after its implementation dependencies are Done.
 
 ## Decision gate by task type
 
@@ -244,6 +251,6 @@ Director answers become binding only after reviewed merge. If an answer changes 
 | M2-003 ephemeral interpretation draft | I-001 through I-006, I-010 through I-012; accepted |
 | Production attention/camera integration | Accepted I-001, I-002, I-003, I-011, I-012 plus human comfort/input testing |
 | Pair selection and pre-weave cancellation | Accepted I-004, I-005, I-006, I-010, I-011 |
-| Relation declaration and weave transition | Accepted I-006/I-012 plus pending I-007/I-008 |
+| Relation declaration and weave transition | I-006 through I-008 and I-012; accepted |
 | Gesture/input equivalence | I-005, I-009, I-010, plus playtest device decision P-005 |
-| Overture | I-001 through I-013 as applicable |
+| Overture | I-001 through I-013; accepted, subject to implementation dependencies |

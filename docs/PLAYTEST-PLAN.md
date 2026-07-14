@@ -2,13 +2,22 @@
 
 ## Status
 
-Director review required.
+P-001 through P-005 are accepted for a director-led personal project. P-006
+through P-008 remain pending before their named later-milestone boundaries.
 
-This document is an operational companion to `MASTER-PLAN.md` and `VERTICAL-SLICE-SPEC.md`. It does not change their product contract. Proposed thresholds and unanswered director decisions below are not accepted requirements until reviewed and merged with an explicit answer.
+This document is an operational companion to `MASTER-PLAN.md` and `VERTICAL-SLICE-SPEC.md`. It does not change their product contract. Unanswered director decisions below are not accepted requirements until reviewed and merged with an explicit answer.
 
 ## Purpose
 
 Playtesting begins before the complete vertical slice, but each build must be judged only on the hypothesis it is capable of testing. The current prototype can test atmosphere and preservation qualities; it cannot validate the redesigned interpretation-and-composition thesis.
+
+The game design director is the sole primary target audience and acceptance
+authority for ordinary personal playtesting. Repeated self-play is therefore the
+main evidence source. Builds may be shared informally with acquaintances for
+optional reactions, but no participant cohort, recruitment target, or sample-size
+claim is required. Informal feedback can reveal defects, confusion, comfort
+problems, or possibilities; it does not overrule the director's intended personal
+experience or become statistical evidence.
 
 The program separates five questions:
 
@@ -21,10 +30,12 @@ The program separates five questions:
 ## Evidence rules
 
 - Observe behavior before asking for opinions.
-- Do not explain a control until the participant is genuinely blocked; record the intervention.
+- During self-play, distinguish prior design knowledge from what the build itself
+  communicates. During optional informal sharing, do not explain a control until
+  the person is genuinely blocked; record the intervention when useful.
 - Record exact build/commit, device, input mode, audio mode, viewport, and seed.
 - Separate a defect, comprehension failure, taste response, accessibility barrier, and missing feature.
-- Do not treat one enthusiastic quote as validation or one confused participant as a mandate.
+- Do not treat an enthusiastic or confused informal reaction as a release vote.
 - Automated tests establish correctness and repeatability; they do not establish comfort, meaning, pacing, or artistic quality.
 - Content assertions are not accepted because a participant finds them plausible.
 - A failed milestone playtest creates design evidence, not a player failure.
@@ -114,14 +125,22 @@ Follow-up decision or task proposal:
 - Which step feels redundant, interruptive, or unclear?
 - Do camera sweeps feel like expressive phrasing, and can participants using reduced motion follow the same state changes comfortably?
 
-### Proposed success criteria
+### Accepted personal success criteria
 
-- At least four of five first-time participants complete one full loop with no more than one facilitator intervention.
-- At least four of five correctly state that resonance is possibility, not correctness.
-- Every participant can cancel and resume without a reload or unintended durable event.
-- Every critical action is completed by mouse, touch, and keyboard in dedicated test passes.
-- No participant is blocked by color-only meaning or dexterity.
-- Median time to the first committed interpretation is at most ninety seconds in the overture build.
+- The director can repeatedly complete one full loop without a workaround,
+  accidental legacy action, or text-heavy reminder.
+- Resonance continues to feel like generative possibility rather than a hidden
+  correct endpoint during repeated sessions.
+- Every provisional stage can be cancelled and resumed without reload or an
+  unintended durable event.
+- Every critical action is completed in dedicated desktop mouse/keyboard and
+  modern touch passes, with headphones, muted/captioned, reduced-motion, and one
+  low-tier GPU profile checked from M2 onward.
+- No required meaning is color-only and no required action becomes a dexterity
+  test in any supported personal device pass.
+- The ninety-second first-recognition target remains an aspirational diagnostic
+  when sharing informally with someone unfamiliar; it is not a numerical
+  acceptance threshold for the director's already-informed self-play.
 
 ## M3 playtest — documented relations and Open Threads
 
@@ -140,12 +159,14 @@ Follow-up decision or task proposal:
 - When the game responds with fragility or silence, does the participant understand what remains unresolved?
 - Does the result refine or erase the participant's declared interpretation?
 
-### Proposed success criteria
+### Accepted personal success criteria
 
-- At least four of five participants correctly distinguish documented, open, and weak/unresolved outcomes.
-- No tested Open Thread is described as generic praise or invented fact by more than one participant.
+- The director consistently distinguishes documented, open, and weak/unresolved
+  outcomes during repeated sessions and can explain the evidence boundary.
+- No tested Open Thread reads to the director as generic praise or invented fact;
+  any similar informal reaction is recorded as a design warning.
 - All documented assertions shown in the build have reviewed sources and evidence classes.
-- At least half of each participant's threads can be explained by that participant after the session.
+- The director can explain at least half of the committed threads after a session.
 
 ## M4 playtest — semantic audiovisual grammar
 
@@ -164,11 +185,13 @@ Follow-up decision or task proposal:
 - Does repeated feedback remain legible without becoming exhausting?
 - Does controlled dissonance communicate Tension or merely sound wrong?
 
-### Proposed success criteria
+### Accepted personal success criteria
 
-- Each participant identifies at least three of the four categories from unlabeled multimodal examples.
+- In separated blind-reference passes, the director can identify at least three
+  of the four categories from unlabeled multimodal examples and the distinctions
+  remain useful during ordinary play.
 - No category depends on color alone; every category has a non-color visual pattern and a textual/audio-equivalent description.
-- Human review accepts comfort, pacing, hierarchy, and cross-modal coherence for at least one representative pair per category.
+- Director review accepts comfort, pacing, hierarchy, and cross-modal coherence for at least one representative pair per category.
 
 ## M5 playtest — motifs and topology response
 
@@ -185,11 +208,13 @@ Follow-up decision or task proposal:
 - Do players start optimizing a visible rule instead of interpreting concepts?
 - Are topology responses cumulative, legible, and bounded in performance cost?
 
-### Proposed success criteria
+### Accepted personal success criteria
 
-- Participants distinguish the two prescribed golden-path variants without seeing their labels.
-- At least four of five participants can explain a completed motif using concepts and relations, not points or degree counts.
-- Human review finds that the motif changes scene and music materially without obscuring ongoing play.
+- The director distinguishes the two prescribed golden-path variants without
+  relying on their labels.
+- The director can explain a completed motif using concepts and relations, not
+  points or degree counts.
+- Director review finds that the motif changes scene and music materially without obscuring ongoing play.
 
 ## M6 playtest — full internal vertical slice
 
@@ -209,13 +234,13 @@ Follow-up decision or task proposal:
 - Does the portrait sound specific to the web or generically flattering?
 - What would they deliberately do differently in another Game?
 
-### Proposed success criteria
+### Accepted personal success criteria
 
-- At least four of five participants describe the final web as their interpretation.
-- At least four of five recognize two or more session-specific moments in the conclusion.
-- The participant can explain at least half of the threads and at least three relation categories.
+- The director experiences the final web as their interpretation and recognizes
+  two or more session-specific moments in the conclusion.
+- The director can explain at least half of the threads and at least three relation categories.
 - Replay produces the same domain result and materially equivalent performance structure.
-- No participant reports timer pressure, failure punishment, or a need to grind score.
+- Repeated self-play produces no timer pressure, failure punishment, or perceived need to grind score.
 
 ## M7/M8 playtests — resilience and release
 
@@ -224,14 +249,17 @@ Follow-up decision or task proposal:
 - The golden path works offline after initial load, survives reload, and restores the correct event-derived session.
 - Reduced motion, reduced bloom, keyboard, captions/text equivalents, touch, and quality fallbacks preserve critical meaning.
 - Target desktop and mobile devices meet accepted comfort and performance budgets.
-- External participants understand the experience without developer context.
+- Optional informal viewers can navigate the shared build without requiring a
+  technical explanation, while P-007 continues to govern any deliberate wider
+  external test.
 
 ### Proposed success criteria
 
 - All supported input/accessibility/device matrices have a recorded pass or an accepted issue.
 - No P0/P1 defect remains.
-- External testing evaluates the Master Plan's experience criteria with no facilitator explanation of the thesis.
-- Release content, sources, copy, audio, and audiovisual comfort receive explicit human acceptance.
+- Director self-play evaluates the Master Plan's experience criteria; optional
+  informal feedback is recorded without becoming a cohort gate.
+- Release content, sources, copy, audio, and audiovisual comfort receive explicit director acceptance.
 
 ## Director decision queue
 
@@ -241,36 +269,36 @@ Complete the `Director answer` field and change the status only through reviewed
 
 - **Question:** Should supervised player testing begin at the complete M2 gate, or earlier with a partial attention/resonance prototype?
 - **Recommended default:** Run a three-person formative test as soon as attention + resonance + cancellation is visible, then a five-person gate test at M2 completion.
-- **Director answer:** _Pending._
-- **Status:** Director decision required before the first production M2 interaction prototype is scheduled.
+- **Director answer:** Adapted for personal playtesting. Begin repeated director self-play as soon as attention, resonance, and cancellation are visible; run a complete personal gate pass at M2 completion. Share builds with acquaintances only when useful for informal feedback.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 
 ### P-002 — Participant cohorts
 
 - **Question:** Who must be represented in formative and gate tests?
 - **Recommended default:** Mix knowledge-game newcomers, art/music-curious players, one accessibility-focused participant, and no more than one person already familiar with the project.
-- **Director answer:** _Pending._
-- **Status:** Director decision required before recruiting.
+- **Director answer:** No cohort or recruitment requirement. The director is the sole primary target audience; acquaintances may provide optional informal feedback without demographic or familiarity quotas.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 
 ### P-003 — Numerical thresholds
 
 - **Question:** Are the proposed four-of-five comprehension thresholds and ninety-second first-recognition target accepted?
 - **Recommended default:** Accept them as internal warning thresholds, not statistical proof or release guarantees.
-- **Director answer:** _Pending._
-- **Status:** Director decision required before M2 gate evaluation.
+- **Director answer:** Do not use four-of-five or median-time thresholds as acceptance gates for this personal project. Treat confusion, unintended answer-seeking, friction, and the ninety-second aspiration as qualitative warning signals during self-play or informal sharing.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 
 ### P-004 — Recording and privacy
 
 - **Question:** May sessions record screen, pointer path, audio, or participant voice, and what consent/retention policy applies?
 - **Recommended default:** Written consent; screen and voice optional; use participant codes; store only what is required for the finding; define deletion date before recording.
-- **Director answer:** _Pending._
-- **Status:** Director decision required before any recording.
+- **Director answer:** The director may record their own sessions and retain only what is useful. Informal feedback is unrecorded by default; do not capture another person's screen, pointer path, audio, or voice without explicit consent and an agreed deletion point.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 
 ### P-005 — Target devices for internal gates
 
 - **Question:** Which concrete desktop, mobile, audio, and assistive setups are mandatory at M2, M4, and M7?
 - **Recommended default:** Desktop mouse/keyboard, modern iOS or Android touch, headphones and muted/captioned passes, reduced motion, and one low-tier GPU profile from M2 onward.
-- **Director answer:** _Pending._
-- **Status:** Director decision required before claiming input or audiovisual coverage.
+- **Director answer:** Accepted as recommended. From M2 onward, personal gates cover desktop mouse/keyboard, a modern iOS or Android touch device, headphones and muted/captioned passes, reduced motion, and one available low-tier GPU profile. Record an unavailable setup explicitly rather than claiming coverage.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 
 ### P-006 — Session-length target
 

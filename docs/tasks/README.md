@@ -24,7 +24,7 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-003-ephemeral-interpretation-draft.md` — add the isolated immutable Attend → arm intention → select candidate draft and accepted pre-weave cancellation transitions.
+1. `M2-004-atomic-interpretation-commit.md` — publish an accepted candidate draft and gesture as one validated atomic pair → hypothesis → thread batch.
 
 ## In review
 
@@ -51,10 +51,15 @@ None.
 13. `M1-006-remove-legacy-session-start.md` — accepted and merged in PR #29; removed the final deprecated legacy session-start surface and closed the accepted cutover.
 14. `M2-001-attention-command-boundary.md` — accepted and merged in PR #32; established the isolated canonical Attend command seam without production input integration.
 15. `M2-002-candidate-resonance-model.md` — accepted and merged in PR #34; established the pure complete-candidate, non-spoiling weak/medium/high resonance evaluator.
+16. `M2-003-ephemeral-interpretation-draft.md` — accepted and merged in PR #36; established the isolated immutable Attend → arm intention → select candidate draft and accepted pre-weave cancellation transitions.
 
 ## Planned but not yet Ready
 
-Tasks after M2-003 are not yet Ready. Production input/camera/audiovisual integration requires the accepted decisions' device and comfort tests; relation copy, weave transition, expressive input equivalence, and overture work remain gated by I-007 through I-009, I-013, and P-005 as applicable.
+Tasks after M2-004 are not yet Ready. Production attention/resonance/draft
+integration, gesture capture, placeholder presentation, input equivalence, and
+camera/audio/UI work must be specified as separate reviewed packets after the
+atomic durable seam is accepted. Their personal device, comfort, and artistic
+quality gates remain human-review boundaries rather than unresolved decisions.
 
 ## Director design companions
 
@@ -62,7 +67,14 @@ Tasks after M2-003 are not yet Ready. Production input/camera/audiovisual integr
 - `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-013`;
 - `../CONTENT-AUDIOVISUAL-REFERENCE.md` — representative pairs, provisional relation grammar, resonance boundaries, and content/audiovisual decisions `CAV-001` through `CAV-010`.
 
-Director decisions `CAV-001` through `CAV-004`, `I-001` through `I-006`, and `I-010` through `I-012` are accepted. The attended-viewpoint/directional-sweep, armed-intention, and camera-performance metaphors in `INTERACTION-DECISIONS.md` are binding design guidance with their stated non-combat, accessibility, comfort, and durable-state guardrails. Other unanswered director decisions continue to block only the task types named in their records.
+Director decisions `CAV-001` through `CAV-004`, `I-001` through `I-013`, and
+`P-001` through `P-005` are accepted. The attended-viewpoint/directional-sweep,
+armed-intention, and camera-performance metaphors in
+`INTERACTION-DECISIONS.md` are binding design guidance with their stated
+non-combat, accessibility, comfort, and durable-state guardrails. P-001 through
+P-004 establish director self-play as the primary evidence source and make
+feedback from acquaintances optional and informal. Other unanswered decisions
+continue to block only the later task types named in their records.
 
 ## Ownership rules
 
