@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -272,6 +272,46 @@ remain later director-led playtest gates.
 
 ## Implementation notes
 
+- Selected on 2026-07-14 after PR #39 was reviewed and merged, its exact
+  `main` merge commit `fa77aed` passed CI run `29339063847` and Pages deployment
+  run `29339191696`, no PR remained open, and no active task owned
+  `src/runtime/gestureProfile/**`.
+- Implementation plan: add the closed typed builder error, validate normalized
+  sample intervals/coordinates/pressure without repair, calculate the specified
+  duration/path/speed/variance/curvature/pressure profile, prove hold-only
+  equivalence and deterministic immutability in focused tests, then run the
+  complete required suite and ownership/caller scans.
+- Added the pure `buildGestureProfile` boundary, explicit readonly input/sample
+  contracts, and the closed `GestureProfileBuildError` vocabulary. Validation
+  rejects unsupported modalities, invalid intervals/sample collections/times,
+  non-monotonic order, partial or mixed coordinates, non-finite calculations,
+  and invalid pressure without sorting, clamping, coercion, or mutation.
+- The builder always records modality and duration; derives normalized path
+  length, elapsed-time average speed, population variance of segment speeds,
+  mean normalized turning angle, and supplied-pressure mean exactly as
+  specified; omits unavailable geometry for hold-only input; and returns a new
+  frozen byte-deterministic profile.
+- Added 34 focused tests covering mouse, touch, pen, keyboard, controller, and
+  unknown modalities; straight, turning, unequal-speed, stationary, one-point,
+  coordinate-free, zero-duration, pressure, and out-of-viewport cases; every
+  closed error code; input non-mutation; freezing; and byte identity.
+- Required validation passed: clean lockfile installation with zero
+  vulnerabilities; typecheck; lint; 18 unit-test files with 228 tests; 3 content
+  validation tests; production build; bundle ceilings at 2,422,605 raw bytes /
+  1,270,785 gzip bytes total and 1,581,963 raw / 465,848 gzip JavaScript bytes;
+  3 deterministic browser tests; and `git diff --check`. The existing
+  `three-mesh-bvh@0.7.8` deprecation and established large-chunk notices remain
+  unchanged.
+- Focused scans found only event-domain type/constant and local error imports,
+  no browser/React/Three/Zustand/Web Audio/event-construction dependency, no
+  production caller, and no changes outside the owned gesture-profile boundary
+  and this task file. Event, reducer, replay, state, input, presentation,
+  content, dependency, and deployment contracts remain unchanged.
+- The targeted performance reference was not required because the pure builder
+  is unintegrated and changes no active per-frame, input, rendering, or audio
+  path. Human review remains required for later gesture feel, device comfort,
+  directional modulation, and audiovisual phrasing; no compatibility proposal
+  or specification conflict was discovered.
 - Ready packet proposed on 2026-07-14 after PR #38 was reviewed and merged. Its
   exact `main` merge commit `d8c200e` passed Quality Gates run `29336060556` and
   Pages deployment run `29336185499`; no PR remained open and no active task
