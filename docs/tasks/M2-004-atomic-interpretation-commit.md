@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -253,4 +253,47 @@ later gesture feel, input equivalence, presentation, or artistic acceptance.
 
 ## Implementation notes
 
-- None yet.
+- Selected on 2026-07-14 after PR #37 was reviewed and merged, its exact
+  `main` merge commit `2d4d6ea` passed CI run `29335050180`, no PR remained
+  open, and no active task owned the domain-session publication boundary.
+- Implementation plan: add one shared validated adapter batch-publication path
+  while preserving `appendEvent`; add the typed commit command over an accepted
+  candidate draft, stable thread identity, and gesture; prove exact event order,
+  one clock read/update/notification, immutability, determinism, and atomic
+  failures; then run the complete required suite and focused ownership scans.
+- Added `appendEvents` to the canonical domain-session adapter. It rejects empty
+  or non-array input, rebuilds and replays the complete candidate log before one
+  Zustand setter call, publishes the matching frozen log/session together, and
+  leaves exact prior references untouched on any decode or replay failure.
+  Existing `appendEvent` now uses the same internal validation/publication path.
+- Added the typed `createInterpretationCommitCommand` boundary and closed
+  `no-active-session` / `draft-not-ready` errors. A successful command reads its
+  injected clock once, constructs the existing pair, hypothesis, and thread
+  events at one time with three consecutive sequences, freezes the tuple,
+  invokes `appendEvents` once, and returns the exact published log/session
+  references without mutating or clearing the draft.
+- Expanded adapter coverage from 6 to 9 tests and added 15 focused command tests.
+  They cover ordered payloads/identities, one notification and batch call, zero
+  `appendEvent` calls, stable action references, replay equivalence, input
+  non-mutation, deep freezing, byte determinism, missing session, every wrong
+  draft stage, malformed batch content, invalid time/gesture/intention/thread
+  identity, unknown concepts, and a duplicate-thread rejection at the third
+  transition with no intermediate publication.
+- Required validation passed: clean lockfile installation with zero
+  vulnerabilities; typecheck; lint; 17 unit-test files with 194 tests; 3 content
+  validation tests; production build; bundle ceilings at 2,422,605 raw bytes /
+  1,270,785 gzip bytes total and 1,581,963 raw / 465,848 gzip JavaScript bytes;
+  3 deterministic browser tests; and `git diff --check`. The adapter addition is
+  +187 raw / +74 gzip bytes total versus the prior baseline. The existing
+  `three-mesh-bvh@0.7.8` deprecation and established large-chunk notices remain
+  unchanged.
+- Focused scans found one `now()` call, exactly three event constructions, one
+  `appendEvents` call, no `appendEvent` loop, and one adapter setter only after
+  complete batch decode/replay. No production module imports or instantiates the
+  command, and no event schema, ID, model, reducer, replay, draft, gesture,
+  content, legacy game, persistence, input, scene, camera, audio, UI, browser,
+  dependency, or deployment file changed.
+- The targeted performance reference was not required because the command is
+  unintegrated and no active render/input/audio behavior changed. Human review
+  remains required for the durable batch boundary and adapter API; no
+  compatibility proposal or specification conflict was discovered.

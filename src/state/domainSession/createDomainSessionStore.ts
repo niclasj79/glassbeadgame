@@ -14,41 +14,57 @@ export interface DomainSessionAdapterState {
   readonly session: SessionStateV1 | null;
   readonly loadEventLog: (input: unknown) => void;
   readonly appendEvent: (event: SessionEventV1) => void;
+  readonly appendEvents: (events: readonly SessionEventV1[]) => void;
   readonly clearSession: () => void;
 }
 
 export type DomainSessionStore = StoreApi<DomainSessionAdapterState>;
 
 export function createDomainSessionStore(): DomainSessionStore {
-  return createStore<DomainSessionAdapterState>()((set, get) => ({
-    eventLog: null,
-    session: null,
+  return createStore<DomainSessionAdapterState>()((set, get) => {
+    const appendEvents = (events: readonly SessionEventV1[]): void => {
+      if (!Array.isArray(events)) {
+        throw new TypeError("event batch must be an array");
+      }
+      if (events.length === 0) {
+        throw new RangeError("event batch must not be empty");
+      }
 
-    loadEventLog: (input) => {
-      const eventLog = decodeSessionEventLogV1(input);
-      const session = replaySessionEventLogV1(eventLog);
-
-      set({ eventLog, session });
-    },
-
-    appendEvent: (event) => {
       const currentEvents = get().eventLog?.events ?? [];
       const candidate = {
         format: SESSION_EVENT_LOG_FORMAT,
         schemaVersion: SESSION_EVENT_LOG_SCHEMA_VERSION,
-        events: [...currentEvents, event],
+        events: [...currentEvents, ...events],
       };
       const eventLog = decodeSessionEventLogV1(candidate);
       const session = replaySessionEventLogV1(eventLog);
 
       set({ eventLog, session });
-    },
+    };
 
-    clearSession: () => {
-      const { eventLog, session } = get();
-      if (eventLog === null && session === null) return;
+    return {
+      eventLog: null,
+      session: null,
 
-      set({ eventLog: null, session: null });
-    },
-  }));
+      loadEventLog: (input) => {
+        const eventLog = decodeSessionEventLogV1(input);
+        const session = replaySessionEventLogV1(eventLog);
+
+        set({ eventLog, session });
+      },
+
+      appendEvent: (event) => {
+        appendEvents([event]);
+      },
+
+      appendEvents,
+
+      clearSession: () => {
+        const { eventLog, session } = get();
+        if (eventLog === null && session === null) return;
+
+        set({ eventLog: null, session: null });
+      },
+    };
+  });
 }
