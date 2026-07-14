@@ -23,7 +23,10 @@ import {
   type DomainSessionStore,
 } from "../../../state/domainSession";
 import { AttendConceptCommandError } from "./AttendConceptCommandError";
-import { createAttendConceptCommand } from "./createAttendConceptCommand";
+import {
+  createAttendConceptCommand,
+  createAttendConceptPreparation,
+} from "./createAttendConceptCommand";
 
 const IDS = Object.freeze({
   sessionId: toSessionId("session.attend-command"),
@@ -86,6 +89,52 @@ function expectReplayFailure(
 }
 
 describe("createAttendConceptCommand", () => {
+  it("shares one validated preparation between split and one-shot publication", () => {
+    const splitStore = createDomainSessionStore();
+    const oneShotStore = createDomainSessionStore();
+    loadEvents(splitStore, [START_EVENT]);
+    loadEvents(oneShotStore, [START_EVENT]);
+    const splitBefore = splitStore.getState();
+    const splitNow = createClock(250);
+    const oneShotNow = createClock(250);
+    const preparation = createAttendConceptPreparation({
+      domainStore: splitStore,
+      now: splitNow,
+    });
+    const attend = createAttendConceptCommand({
+      domainStore: oneShotStore,
+      now: oneShotNow,
+    });
+    let splitNotifications = 0;
+    splitStore.subscribe(() => {
+      splitNotifications += 1;
+    });
+
+    const prepared = preparation.prepare(IDS.fibonacciId);
+
+    expect(splitNow).toHaveBeenCalledOnce();
+    expect(splitNotifications).toBe(0);
+    expect(splitStore.getState()).toBe(splitBefore);
+    expect(prepared.activeEventLog).toBe(splitBefore.eventLog);
+    expect(prepared.activeSession).toBe(splitBefore.session);
+    expect(Object.isFrozen(prepared)).toBe(true);
+    expect(Object.isFrozen(prepared.event)).toBe(true);
+
+    const splitResult = preparation.publish(prepared);
+    const oneShotResult = attend(IDS.fibonacciId);
+
+    expect(splitNotifications).toBe(1);
+    expect(oneShotNow).toHaveBeenCalledOnce();
+    expect(splitResult.event).toBe(prepared.event);
+    expect(splitResult.event).toEqual(oneShotResult.event);
+    expect(serializeSessionEventLogV1(splitResult.eventLog)).toBe(
+      serializeSessionEventLogV1(oneShotResult.eventLog)
+    );
+    expect(splitResult.session).toEqual(oneShotResult.session);
+    expect(splitResult.eventLog).toBe(splitStore.getState().eventLog);
+    expect(splitResult.session).toBe(splitStore.getState().session);
+  });
+
   it("appends one canonical attended event and returns exact published references", () => {
     const domainStore = createDomainSessionStore();
     loadEvents(domainStore, [START_EVENT]);

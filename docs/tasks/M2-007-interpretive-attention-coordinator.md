@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -349,6 +349,47 @@ camera comfort, or device equivalence.
 
 ## Implementation notes
 
+- Selected on 2026-07-14 after PR #43 was reviewed and merged, its exact
+  `main` merge commit `d814d50` passed Quality Gates run `29365817388`, no PR
+  remained open, and no active task owned `src/runtime/interpretation/**` or the
+  M2-001 attention-command seam.
+- Implementation plan: extract one shared, validated Attend preparation and
+  publication pair while preserving the existing one-shot command; add one
+  injectable interpretation-attention coordinator that preflights canonical
+  Attend, draft replacement, evidence, and resonance before publishing draft
+  then domain state; prove exact references, ordering, re-Attend behavior,
+  failure atomicity, immutability, determinism, and absent production callers;
+  then run the complete repository and focused boundary checks.
+- Implemented one shared `createAttendConceptPreparation` seam under M2-001.
+  It captures and validates the canonical event once without publishing, and
+  the existing `createAttendConceptCommand` now composes that same preparation
+  and publication path without changing its public callable contract.
+- Added the exported injectable interpretation-attention coordinator. It reads
+  canonical membership, prepares Attend, preflights draft replacement, resolves
+  and evaluates complete evidence once, publishes the accepted draft first and
+  the prepared canonical Attend second, then returns a frozen wrapper around
+  the exact published event, log, session, draft, and resonance references.
+- Added one shared-preparation compatibility test and 16 coordinator tests.
+  The focused run passes 25 tests; the complete suite passes 20 files and 264
+  tests. Covered success/reference identity, publication and notification
+  order, every draft-stage re-Attend, no-session/unknown/concluded/time errors,
+  evidence and resonance rejections, resolver failure, atomicity, input
+  non-mutation/non-retention, deep freezing, and byte-identical fresh runs.
+- Required checks passed: clean `npm ci` (330 packages, zero vulnerabilities;
+  existing `three-mesh-bvh@0.7.8` deprecation only), typecheck, lint, unit tests,
+  content validation, production build, bundle report and ceiling check, three
+  deterministic Playwright smoke tests, and `git diff --check`. Final bundle
+  figures remained 2,422,605 raw / 1,270,785 gzip bytes total, 1,581,963 raw /
+  465,848 gzip JavaScript bytes, and 683,665 bytes for the largest asset.
+- Focused scans found only accepted domain, command, draft, adapter, and
+  resonance imports; no production caller; no copied event/reducer/replay,
+  resonance-band, draft-stage, or generic store-mutation rule; and no changed
+  production input, legacy, scene, audio, UI, persistence, content, dependency,
+  browser-test, or deployment file. A targeted performance reference was not
+  required because this task adds no active runtime path or production caller.
+- No production interaction, presentation, persistence, durable schema, or
+  dependency changed. No compatibility proposal was required. Human review is
+  still required for this new sequencing seam before merge.
 - Ready packet proposed on 2026-07-14 after PR #42 was reviewed and merged. Its
   exact `main` merge commit `c7000d3` passed Quality Gates run `29364475654` and
   Pages deployment run `29364591720`; no PR remained open and no active task
