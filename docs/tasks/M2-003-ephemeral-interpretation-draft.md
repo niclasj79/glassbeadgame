@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -233,3 +233,6 @@ Human review is required before merge because this state machine fixes the inter
   deployment path changed, and no compatibility proposal or specification
   conflict was discovered. Human review remains required for the interaction
   order and cancellation semantics before merge.
+- Accepted and merged in PR #36 on 2026-07-14. The exact `main` merge commit
+  `5244da1` passed the complete Quality Gates workflow in CI run `29327765404`
+  and the isolated Pages deployment completed successfully.
