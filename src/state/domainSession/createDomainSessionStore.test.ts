@@ -49,6 +49,7 @@ describe("createDomainSessionStore", () => {
 
     expect(first.getState().loadEventLog).toBe(initial.loadEventLog);
     expect(first.getState().appendEvent).toBe(initial.appendEvent);
+    expect(first.getState().appendEvents).toBe(initial.appendEvents);
     expect(first.getState().clearSession).toBe(initial.clearSession);
     expect(second.getState().eventLog).toBeNull();
     expect(second.getState().session).toBeNull();
@@ -111,11 +112,84 @@ describe("createDomainSessionStore", () => {
     expect(appendedStore.getState().eventLog?.events).toEqual(fixtureEvents);
     expect(appendedStore.getState().loadEventLog).toBe(actions.loadEventLog);
     expect(appendedStore.getState().appendEvent).toBe(actions.appendEvent);
+    expect(appendedStore.getState().appendEvents).toBe(actions.appendEvents);
     expect(appendedStore.getState().clearSession).toBe(actions.clearSession);
     for (const pair of priorPairs) {
       expectDeeplyFrozen(pair.eventLog);
       expectDeeplyFrozen(pair.session);
     }
+  });
+
+  it("appends a validated event batch with one immutable publication", () => {
+    const store = createDomainSessionStore();
+    const before = store.getState();
+    const batch = fixtureEvents.slice(0, 5);
+    const batchSnapshot = structuredClone(batch);
+    let notifications = 0;
+    store.subscribe(() => {
+      notifications += 1;
+    });
+
+    store.getState().appendEvents(batch);
+
+    const published = store.getState();
+    expect(notifications).toBe(1);
+    expect(batch).toEqual(batchSnapshot);
+    expect(published.eventLog?.events).toEqual(batch);
+    expect(published.session?.threads).toHaveLength(1);
+    expect(published.session?.selectedPair).toBeNull();
+    expect(published.session?.hypothesis).toBeNull();
+    expect(published.eventLog).not.toBe(before.eventLog);
+    expect(published.session).not.toBe(before.session);
+    expect(published.loadEventLog).toBe(before.loadEventLog);
+    expect(published.appendEvent).toBe(before.appendEvent);
+    expect(published.appendEvents).toBe(before.appendEvents);
+    expect(published.clearSession).toBe(before.clearSession);
+    expectDeeplyFrozen(published.eventLog);
+    expectDeeplyFrozen(published.session);
+  });
+
+  it("rejects empty and malformed batches without publishing", () => {
+    const store = createDomainSessionStore();
+    const before = store.getState();
+    let notifications = 0;
+    store.subscribe(() => {
+      notifications += 1;
+    });
+
+    expect(() => store.getState().appendEvents([])).toThrow(RangeError);
+    expect(() =>
+      store.getState().appendEvents(null as unknown as readonly SessionEventV1[])
+    ).toThrow(TypeError);
+    expect(() =>
+      store
+        .getState()
+        .appendEvents([null as unknown as SessionEventV1])
+    ).toThrow(SessionEventLogError);
+
+    expect(notifications).toBe(0);
+    expect(store.getState()).toBe(before);
+  });
+
+  it("rejects a later invalid batch event without exposing an intermediate state", () => {
+    const store = createDomainSessionStore();
+    store.getState().appendEvents(fixtureEvents.slice(0, 2));
+    const before = store.getState();
+    const batch = [fixtureEvents[2], fixtureEvents[7]];
+    const batchSnapshot = structuredClone(batch);
+    let notifications = 0;
+    store.subscribe(() => {
+      notifications += 1;
+    });
+
+    expect(() => store.getState().appendEvents(batch)).toThrow(SessionEventLogError);
+
+    expect(batch).toEqual(batchSnapshot);
+    expect(notifications).toBe(0);
+    expect(store.getState()).toBe(before);
+    expect(store.getState().eventLog).toBe(before.eventLog);
+    expect(store.getState().session).toBe(before.session);
+    expect(store.getState().appendEvents).toBe(before.appendEvents);
   });
 
   it("leaves existing state and actions untouched when a load fails", () => {
@@ -145,6 +219,7 @@ describe("createDomainSessionStore", () => {
     expect(store.getState().session).toBe(before.session);
     expect(store.getState().loadEventLog).toBe(before.loadEventLog);
     expect(store.getState().appendEvent).toBe(before.appendEvent);
+    expect(store.getState().appendEvents).toBe(before.appendEvents);
     expect(store.getState().clearSession).toBe(before.clearSession);
   });
 
