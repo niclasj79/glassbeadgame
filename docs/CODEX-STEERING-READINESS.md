@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed, M2-001 established the accepted isolated Attend command seam, and M2-002 is specified as the next pure candidate-resonance task.
+The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed, M2-001 established canonical Attend, M2-002 established pure candidate resonance, and M2-003 is specified as the next isolated ephemeral interpretation-draft task.
 
 It is ready for one isolated autonomous task-selection run at a time. `READY` does not authorize automatic merge, deployment from task branches, overlapping work, or bypassing a task's human-review boundary.
 
@@ -30,15 +30,15 @@ Change this status to `READY` only when all of the following are true:
 
 - Documentation foundation: accepted and merged in PR #5.
 - Trustworthy baseline: M0-001 through M0-005 are Done via PRs #6, #8, #10, #12, and #14; the accepted dependency decision and Vite security remediation are Done via PRs #16 and #17.
-- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for PRs #19, #21, #23, #25, #27, #29, and #32 and their exact `main` merge commits, most recently `5ab774d` in CI run `29280913233`.
+- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for PRs #19, #21, #23, #25, #27, #29, #32, #33, and #34 and their exact `main` merge commits, most recently `20a3402` in CI run `29289284887`.
 - Deployment isolation: pull requests run read-only CI; Pages runs separately only after successful `main` push CI or a manual dispatch on `main` and checks out the validated SHA.
-- Ready domain work: M2-001 was accepted in PR #32, establishing the isolated canonical Attend command without production input integration. Director decisions CAV-001 through CAV-004 are accepted, and M2-002 is fully specified with a pure complete-candidate resonance contract, explicit provisional calibration, non-spoiler output, objective acceptance criteria, and no production presentation/input ownership.
+- Ready domain work: M2-002 was accepted in PR #34, establishing the pure complete-candidate resonance model. Director decisions I-001 through I-006 and I-010 through I-012 accept the focus/Attend split, armed-intention order, pre-weave cancellation, immediate consequences, and camera-performance direction. M2-003 is fully specified as an immutable ephemeral draft state machine with objective acceptance criteria and no durable or production integration ownership.
 - Hosted protection: `main` requires strict `Quality Gates`, pull requests, resolved conversations, and administrator enforcement; force pushes and deletion are disabled.
 - Dry run: M1-001 was selected from Ready with dependencies Done and no ownership overlap, implemented on one isolated branch, fully validated, reviewed, and merged in PR #19 without automatic merge or next-task selection.
 
 ## What may happen now
 
-Codex may select M2-002 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
+Codex may select M2-003 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
 
 Each run must create one branch and one reviewable PR, report every required check, and stop. Human review remains required wherever the task or repository boundaries require it.
 

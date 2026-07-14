@@ -93,7 +93,7 @@ Follow-up decision or task proposal:
 
 ### Hypotheses
 
-- **M2-01:** A player can discover attention, select a candidate, declare an intention, weave, commit, and cancel without a text-heavy tutorial.
+- **M2-01:** A player can discover attention, arm an intention, select a candidate through it, weave, commit, and cancel without a text-heavy tutorial.
 - **M2-02:** Resonance preview suggests possibility without communicating a hidden correct endpoint.
 - **M2-03:** Echo, Passage, Tension, and Ground are understandable enough to support a choice before polished audiovisual grammar exists.
 - **M2-04:** Mouse, touch, and keyboard paths express the same decisions and consequences, even when their gestures are not physically identical.
@@ -105,11 +105,14 @@ Follow-up decision or task proposal:
 - What first causes the participant to attend to a bead?
 - What do they think candidate resonance means?
 - Do they assume the strongest resonance is the correct answer?
+- Do the lower-corner attended posture and nearby intention icons read as situated inquiry rather than combat targeting?
+- After arming an intention, do they understand that selecting another bead applies that interpretive tool without guaranteeing a correct relation?
 - Can they explain the four intentions in their own words?
 - At what point do they expect commitment to occur?
 - Can they cancel at attention, pair, intention, and weave stages and recover their prior context?
 - Does the keyboard path feel authored or merely tolerated?
 - Which step feels redundant, interruptive, or unclear?
+- Do camera sweeps feel like expressive phrasing, and can participants using reduced motion follow the same state changes comfortably?
 
 ### Proposed success criteria
 
