@@ -24,7 +24,9 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-006-reactive-interpretation-draft-adapter.md` — expose the accepted ephemeral interpretation draft through one isolated reactive adapter.
+1. `M2-007-interpretive-attention-coordinator.md` — coordinate one explicit
+   Attend across the canonical event log, accepted candidate-resonance model,
+   and reactive ephemeral draft without production input or presentation.
 
 ## In review
 
@@ -54,15 +56,18 @@ None.
 16. `M2-003-ephemeral-interpretation-draft.md` — accepted and merged in PR #36; established the isolated immutable Attend → arm intention → select candidate draft and accepted pre-weave cancellation transitions.
 17. `M2-004-atomic-interpretation-commit.md` — accepted and merged in PR #38; established one validated atomic pair → hypothesis → thread publication boundary.
 18. `M2-005-deterministic-gesture-profile.md` — accepted and merged in PR #40; established deterministic normalized pointer and honest hold-only gesture profiles.
+19. `M2-006-reactive-interpretation-draft-adapter.md` — accepted and merged in
+    PR #42; established the isolated reactive owner for the accepted ephemeral
+    interpretation draft.
 
 ## Planned but not yet Ready
 
-Tasks after M2-006 are not yet Ready. Production attention/resonance/draft
-coordination, browser input capture, placeholder presentation, input-equivalent
-controls, and camera/audio/UI work must be specified as separate reviewed
-packets after the reactive draft seam is accepted. Their personal device,
-comfort, and artistic quality gates remain human-review boundaries rather than
-unresolved decisions.
+Tasks after M2-007 are not yet Ready. Production composition and browser input
+capture, placeholder presentation, input-equivalent controls, commit/reset
+coordination, and camera/audio/UI work must be specified as separate reviewed
+packets after the interpretive-attention seam is accepted. Their personal
+device, comfort, and artistic quality gates remain human-review boundaries
+rather than unresolved decisions.
 
 ## Director design companions
 

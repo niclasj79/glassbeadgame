@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -312,6 +312,9 @@ comfort.
 
 ## Implementation notes
 
+- Accepted and merged in PR #42 on 2026-07-14. The exact `main` merge commit
+  `c7000d3` passed Quality Gates run `29364475654` and Pages deployment run
+  `29364591720`.
 - Selected on 2026-07-14 after PR #41 was reviewed and merged, its exact
   `main` merge commit `cd518bf` passed Quality Gates run `29359290671`, no PR
   remained open, and no active task owned `src/state/interactionDraft/**`.
