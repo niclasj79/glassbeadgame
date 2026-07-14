@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -272,6 +272,9 @@ remain later director-led playtest gates.
 
 ## Implementation notes
 
+- Accepted and merged in PR #40 on 2026-07-14. The exact `main` merge commit
+  `bc6da55` passed Quality Gates run `29358570399` and Pages deployment run
+  `29358691405`.
 - Selected on 2026-07-14 after PR #39 was reviewed and merged, its exact
   `main` merge commit `fa77aed` passed CI run `29339063847` and Pages deployment
   run `29339191696`, no PR remained open, and no active task owned

@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed; M2-001 through M2-004 established canonical Attend, pure candidate resonance, the ephemeral interpretation draft, and its atomic durable commit boundary; M2-005 is specified as the next isolated deterministic gesture-profile seam.
+The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed; M2-001 through M2-005 established canonical Attend, pure candidate resonance, the ephemeral interpretation draft, its atomic durable commit boundary, and deterministic expressive gesture profiles; M2-006 is specified as the next isolated reactive draft adapter.
 
 It is ready for one isolated autonomous task-selection run at a time. `READY` does not authorize automatic merge, deployment from task branches, overlapping work, or bypassing a task's human-review boundary.
 
@@ -30,15 +30,15 @@ Change this status to `READY` only when all of the following are true:
 
 - Documentation foundation: accepted and merged in PR #5.
 - Trustworthy baseline: M0-001 through M0-005 are Done via PRs #6, #8, #10, #12, and #14; the accepted dependency decision and Vite security remediation are Done via PRs #16 and #17.
-- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for the completed task PRs and their exact `main` merge commits, most recently PR #38 at `d8c200e` in CI run `29336060556`.
+- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for the completed task PRs and their exact `main` merge commits, most recently PR #40 at `bc6da55` in CI run `29358570399`.
 - Deployment isolation: pull requests run read-only CI; Pages runs separately only after successful `main` push CI or a manual dispatch on `main` and checks out the validated SHA.
-- Ready domain work: M2-004 was accepted in PR #38, establishing the atomic interpretation-commit boundary. Director decisions I-001 through I-013 accept the complete M2 ordering, microcopy, atomic declaration timing, input equivalence, cancellation, immediate consequences, camera-performance direction, and overture strategy. P-001 through P-005 establish director-led personal playtesting and its device gate. M2-005 is fully specified as one deterministic normalized gesture-profile builder with objective acceptance criteria and no production input or presentation ownership.
+- Ready domain work: M2-005 was accepted in PR #40, establishing deterministic normalized pointer and honest hold-only gesture profiles. Director decisions I-001 through I-013 accept the complete M2 ordering, microcopy, atomic declaration timing, input equivalence, cancellation, immediate consequences, camera-performance direction, and overture strategy. P-001 through P-005 establish director-led personal playtesting and its device gate. M2-006 is fully specified as one vanilla reactive adapter over the accepted ephemeral draft rules with objective acceptance criteria and no durable, production-input, or presentation ownership.
 - Hosted protection: `main` requires strict `Quality Gates`, pull requests, resolved conversations, and administrator enforcement; force pushes and deletion are disabled.
 - Dry run: M1-001 was selected from Ready with dependencies Done and no ownership overlap, implemented on one isolated branch, fully validated, reviewed, and merged in PR #19 without automatic merge or next-task selection.
 
 ## What may happen now
 
-Codex may select M2-005 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
+Codex may select M2-006 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
 
 Each run must create one branch and one reviewable PR, report every required check, and stop. Human review remains required wherever the task or repository boundaries require it.
 
