@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -312,6 +312,44 @@ comfort.
 
 ## Implementation notes
 
+- Selected on 2026-07-14 after PR #41 was reviewed and merged, its exact
+  `main` merge commit `cd518bf` passed Quality Gates run `29359290671`, no PR
+  remained open, and no active task owned `src/state/interactionDraft/**`.
+- Implementation plan: add one narrow vanilla-store factory whose stable
+  actions delegate to the accepted draft transitions; hide raw `setState` from
+  the public store type; prove exact sequencing, re-Attend/re-arm, cancellation,
+  reset/no-op behavior, failure atomicity, immutability, determinism, isolation,
+  and input non-mutation; then run the complete suite and focused ownership and
+  caller scans.
+- Implemented `createInterpretationDraftStore` and its local public index under
+  `src/state/interactionDraft/`. The factory exposes only `getState`,
+  `getInitialState`, and `subscribe`; its stable actions publish the exact
+  frozen M2-003 values and delegate every transition, validation, error, no-op,
+  cancellation, and reset rule to the accepted pure draft module.
+- Added 19 focused tests covering isolated factories and the narrow type,
+  Attend -> arm -> select publication and ordered pairs, every active re-Attend
+  and reset stage, explicit re-arm, the complete cancellation hierarchy,
+  inactive no-ops, every accepted M2-003 error code with failure atomicity,
+  input/prior-value immutability, deep freezing, determinism, and byte identity.
+- Required checks passed: clean `npm ci` (330 packages, zero vulnerabilities;
+  the existing `three-mesh-bvh@0.7.8` deprecation notice remains), typecheck,
+  lint, 19 test files / 247 unit tests, content validation (3 tests), production
+  build (1,136 transformed modules), bundle report and ceiling check, 3
+  deterministic Playwright browser tests, and `git diff --check`.
+- Bundle report remained at 2,422,605 total raw / 1,270,785 total gzip bytes,
+  1,581,963 JavaScript raw / 465,848 JavaScript gzip bytes, with a 683,665-byte
+  largest asset. A targeted performance reference was not required because the
+  factory is intentionally uninstantiated and changes no active per-frame,
+  input, rendering, or audio path.
+- Focused import, caller, ownership, and diff scans confirmed that production
+  code imports only Zustand vanilla, M2-003 draft rules/types, and domain
+  ID/intention types; no production module imports the adapter; no draft rule or
+  generic mutation path is copied into Zustand; and every changed source/test
+  file remains inside `src/state/interactionDraft/**`.
+- Self-review found no specification conflict or compatibility proposal. No
+  production interaction, canonical/durable state, persistence, presentation,
+  dependency, or deployment behavior changed. Human review remains required
+  for this new ephemeral ownership seam before merge.
 - Ready packet proposed on 2026-07-14 after PR #40 was reviewed and merged. Its
   exact `main` merge commit `bc6da55` passed Quality Gates run `29358570399` and
   Pages deployment run `29358691405`; no PR remained open and no active task
