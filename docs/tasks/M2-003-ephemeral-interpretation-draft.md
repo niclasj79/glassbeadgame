@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -191,4 +191,45 @@ Human review is required before merge because this state machine fixes the inter
 
 ## Implementation notes
 
-- None yet.
+- Selected on 2026-07-14 after confirming M2-002 and the reviewed director-decision
+  merge were Done, the exact `main` merge commit passed CI, no PR remained open,
+  and no active task owned the declared runtime boundary.
+- Implementation plan: add a closed immutable draft vocabulary and stable typed
+  failures; implement pure Attend, arm, candidate-select, and Cancel transitions;
+  prove replacement, cancellation, identity/order rejection, immutability,
+  determinism, and the durable-state boundary with focused tests; then run the
+  complete required suite and inspect the final diff and dependency/caller scans.
+- Added closed, frozen inactive/attending/armed/candidate-selected draft types,
+  an inactive singleton, and a typed `InterpretationDraftError` boundary with
+  stable codes for invalid sessions, unknown or identical concepts, unsupported
+  intentions, and invalid transition order.
+- Implemented pure Attend replacement, intention arming/replacement, ordered
+  attended-to-candidate selection, and the accepted one-step Cancel hierarchy.
+  The transition module accepts only branded concept identities, the canonical
+  relation-intention vocabulary, and session membership context; it does not
+  construct events or accept gesture, resonance, input, or presentation data.
+- Added 24 focused tests covering every stage and accepted intention, re-Attend
+  discard, intention replacement, pair order, every Cancel step, invalid session
+  and identity shapes, unsupported intentions, out-of-order actions, runtime
+  fail-closed behavior, input non-mutation, deep freezing, byte-stable JSON, and
+  absence of durable, temporal, store, gesture, resonance, or presentation fields.
+- Required validation passed: clean lockfile installation with zero
+  vulnerabilities; typecheck; lint; 16 unit-test files with 176 tests; 3 content
+  validation tests; production build; bundle ceilings at 2,422,418 raw bytes /
+  1,270,711 gzip bytes total and 1,581,776 raw / 465,775 gzip JavaScript bytes;
+  3 deterministic browser tests; and `git diff --check`. The existing
+  `three-mesh-bvh@0.7.8` deprecation and established large-chunk notices remain
+  unchanged.
+- Focused scans found only accepted domain identity/intention/pair imports, no
+  event construction, reducer, replay, command, store, content, scene, audio,
+  UI, framework, browser, network, storage, time, or randomness dependency; no
+  external production caller; and no durable result field. Membership checking
+  exists only at the draft boundary required by this task; candidate resonance,
+  event sequencing, canonical session rules, and presentation behavior were not
+  copied or changed.
+- The targeted performance reference was not required because this module is
+  unintegrated and changes no active runtime path. No production, durable state,
+  content, input, camera, audiovisual, persistence, browser, dependency, or
+  deployment path changed, and no compatibility proposal or specification
+  conflict was discovered. Human review remains required for the interaction
+  order and cancellation semantics before merge.
