@@ -1,7 +1,10 @@
 import { createSessionEvent, type SessionEventV1 } from "../../../domain/events";
 import type { ConceptId } from "../../../domain/ids";
 import type { SessionStateV1 } from "../../../domain/model";
-import type { SessionEventLogV1 } from "../../../domain/replay";
+import {
+  decodeSessionEventLogV1,
+  type SessionEventLogV1,
+} from "../../../domain/replay";
 import type { DomainSessionStore } from "../../../state/domainSession";
 import { AttendConceptCommandError } from "./AttendConceptCommandError";
 
@@ -23,10 +26,21 @@ export interface AttendConceptResult {
 
 export type AttendConcept = (conceptId: ConceptId) => AttendConceptResult;
 
-export function createAttendConceptCommand(
+export interface PreparedAttendConcept {
+  readonly activeEventLog: SessionEventLogV1;
+  readonly activeSession: SessionStateV1;
+  readonly event: BeadAttendedEventV1;
+}
+
+export interface AttendConceptPreparation {
+  readonly prepare: (conceptId: ConceptId) => PreparedAttendConcept;
+  readonly publish: (prepared: PreparedAttendConcept) => AttendConceptResult;
+}
+
+export function createAttendConceptPreparation(
   dependencies: AttendConceptCommandDependencies
-): AttendConcept {
-  return (conceptId) => {
+): AttendConceptPreparation {
+  const prepare = (conceptId: ConceptId): PreparedAttendConcept => {
     const active = dependencies.domainStore.getState();
     if (active.eventLog === null || active.session === null) {
       throw new AttendConceptCommandError(
@@ -44,7 +58,21 @@ export function createAttendConceptCommand(
       payload: { conceptId },
     });
 
-    active.appendEvent(event);
+    decodeSessionEventLogV1({
+      format: active.eventLog.format,
+      schemaVersion: active.eventLog.schemaVersion,
+      events: [...active.eventLog.events, event],
+    });
+
+    return Object.freeze({
+      activeEventLog: active.eventLog,
+      activeSession: active.session,
+      event,
+    });
+  };
+
+  const publish = (prepared: PreparedAttendConcept): AttendConceptResult => {
+    dependencies.domainStore.getState().appendEvent(prepared.event);
 
     const published = dependencies.domainStore.getState();
     if (published.eventLog === null || published.session === null) {
@@ -52,9 +80,21 @@ export function createAttendConceptCommand(
     }
 
     return Object.freeze({
-      event,
+      event: prepared.event,
       eventLog: published.eventLog,
       session: published.session,
     });
+  };
+
+  return Object.freeze({ prepare, publish });
+}
+
+export function createAttendConceptCommand(
+  dependencies: AttendConceptCommandDependencies
+): AttendConcept {
+  const preparation = createAttendConceptPreparation(dependencies);
+
+  return (conceptId) => {
+    return preparation.publish(preparation.prepare(conceptId));
   };
 }
