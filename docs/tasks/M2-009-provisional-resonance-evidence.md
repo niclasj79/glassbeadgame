@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -394,6 +394,9 @@ accessible presentation, input equivalence, or replacement timing in M3.
 
 ## Implementation notes
 
+- Accepted and merged in PR #48 on 2026-07-15. The exact `main` merge commit
+  `3c590f5` passed Quality Gates run `29422757687` and Pages deployment run
+  `29422904373`.
 - Implemented `resolveProvisionalCandidateEvidence` and its public callable
   alias as a pure deterministic adapter over one private, deeply frozen table
   containing exactly the five accepted reference pairs and one accepted Open

@@ -6,7 +6,7 @@
 
 ## Meaning
 
-The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed; M2-001 through M2-008 established canonical Attend, pure candidate resonance, the ephemeral interpretation draft, its atomic durable commit boundary, deterministic expressive gesture profiles, one reactive draft owner, and headless attention and expressive-commit coordinators; M2-009 is specified as the next isolated provisional resonance-evidence resolver.
+The repository has a reviewed canonical product direction, vertical-slice contract, target architecture, migration audit, roadmap, foundational decisions, task protocol, trustworthy measurement baseline, enforced pull-request CI, CI-gated Pages deployment, deterministic browser test mode, accepted bundle budgets, and a completed low-risk steering dry run. The M1 domain foundation gate is closed; M2-001 through M2-009 established canonical Attend, pure candidate resonance, the ephemeral interpretation draft, its atomic durable commit boundary, deterministic expressive gesture profiles, one reactive draft owner, headless attention and expressive-commit coordinators, and the provisional resonance-evidence policy; M2-010 is specified as the next isolated deterministic thread-identity boundary.
 
 It is ready for one isolated autonomous task-selection run at a time. `READY` does not authorize automatic merge, deployment from task branches, overlapping work, or bypassing a task's human-review boundary.
 
@@ -30,15 +30,15 @@ Change this status to `READY` only when all of the following are true:
 
 - Documentation foundation: accepted and merged in PR #5.
 - Trustworthy baseline: M0-001 through M0-005 are Done via PRs #6, #8, #10, #12, and #14; the accepted dependency decision and Vite security remediation are Done via PRs #16 and #17.
-- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for the completed task PRs and their exact `main` merge commits, most recently PR #46 at `46c29ba` in CI run `29406943154`.
+- Validation: local commands are documented in `docs/audits/M0-VALIDATION-COMMANDS.md`; protected `Quality Gates` passed for the completed task PRs and their exact `main` merge commits, most recently PR #48 at `3c590f5` in CI run `29422757687`.
 - Deployment isolation: pull requests run read-only CI; Pages runs separately only after successful `main` push CI or a manual dispatch on `main` and checks out the validated SHA.
-- Ready domain work: M2-008 was accepted in PR #46, establishing one injectable coordinator over the accepted gesture builder, atomic commit command, canonical adapter, and reactive draft reset. Director decisions CAV-001 through CAV-004 authorize provisional M2 resonance fixtures while forbidding unreviewed claims, hidden correctness, and endpoint disclosure; I-001 through I-013 accept the complete M2 interaction ordering and immediate-consequence direction; P-001 through P-005 establish director-led personal playtesting and its device gate. M2-009 is fully specified as one deterministic read-only resolver that supplies complete session-ordered provisional evidence to the accepted attention coordinator without adding production composition, presentation, durable meaning, or final content claims.
+- Ready domain work: M2-009 was accepted in PR #48, establishing one deterministic read-only resolver that supplies complete session-ordered provisional evidence to the accepted attention coordinator without asserting final content truth. Director decisions CAV-001 through CAV-004 authorize those temporary M2 fixtures while forbidding unreviewed claims, hidden correctness, and endpoint disclosure; I-001 through I-013 accept the complete M2 interaction ordering and immediate-consequence direction; P-001 through P-005 establish director-led personal playtesting and its device gate. M2-010 is fully specified to derive the stable collision-safe `ThreadId` required by the future input adapter from the exact canonical reduced session, without time, randomness, composition, input, presentation, persistence, or a production caller. Production composition remains reserved for the later reviewed cutover that also owns active input arbitration and placeholder-presentation ownership under M2-007 and M2-008.
 - Hosted protection: `main` requires strict `Quality Gates`, pull requests, resolved conversations, and administrator enforcement; force pushes and deletion are disabled.
 - Dry run: M1-001 was selected from Ready with dependencies Done and no ownership overlap, implemented on one isolated branch, fully validated, reviewed, and merged in PR #19 without automatic merge or next-task selection.
 
 ## What may happen now
 
-Codex may select M2-009 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
+Codex may select M2-010 as the first eligible Ready task after this queue-advancement change is reviewed and merged.
 
 Each run must create one branch and one reviewable PR, report every required check, and stop. Human review remains required wherever the task or repository boundaries require it.
 

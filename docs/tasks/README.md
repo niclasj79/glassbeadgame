@@ -24,9 +24,9 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-009-provisional-resonance-evidence.md` — resolve complete deterministic
-   provisional candidate evidence from the accepted M2 reference fixtures
-   without asserting final content or wiring a production interaction.
+1. `M2-010-deterministic-thread-identity.md` — derive one stable,
+   session-namespaced, collision-safe thread ID from the canonical reduced
+   session without time, randomness, persistence, or a production caller.
 
 ## In review
 
@@ -65,14 +65,18 @@ None.
 21. `M2-008-interpretation-commit-coordinator.md` — accepted and merged in PR
     #46; established one headless coordinator for exact gesture construction,
     atomic interpretation commit, and post-success reactive draft reset.
+22. `M2-009-provisional-resonance-evidence.md` — accepted and merged in PR #48;
+    established the deterministic private six-fixture evidence resolver with
+    complete canonical candidate coverage and no production caller or final
+    content claim.
 
 ## Planned but not yet Ready
 
-Tasks after M2-009 are not yet Ready. Production composition and browser input
-capture, placeholder presentation, input-equivalent controls, and camera/audio/
-UI work must be specified as separate reviewed packets after the provisional
-evidence seam is accepted. Their personal device, comfort, and artistic quality
-gates remain human-review boundaries rather than unresolved decisions.
+Tasks after M2-010 are not yet Ready. Production composition must remain in the
+same separately reviewed cutover packet that owns active input arbitration and
+placeholder presentation, as required by M2-007 and M2-008. Browser capture,
+input-equivalent controls, and camera/audio/UI work must respect their personal
+device, comfort, accessibility, and artistic-quality human-review boundaries.
 
 ## Director design companions
 
