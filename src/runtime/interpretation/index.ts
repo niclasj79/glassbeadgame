@@ -13,3 +13,7 @@ export {
   type InterpretationCommitCoordinatorDependencies,
   type InterpretiveCommitResult,
 } from "./createInterpretationCommitCoordinator";
+export {
+  resolveProvisionalCandidateEvidence,
+  type ResolveProvisionalCandidateEvidence,
+} from "./resolveProvisionalCandidateEvidence";

@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -394,6 +394,51 @@ accessible presentation, input equivalence, or replacement timing in M3.
 
 ## Implementation notes
 
+- Implemented `resolveProvisionalCandidateEvidence` and its public callable
+  alias as a pure deterministic adapter over one private, deeply frozen table
+  containing exactly the five accepted reference pairs and one accepted Open
+  Thread pair. Both endpoint directions produce the specified support; every
+  other valid candidate receives explicit zero support in unchanged canonical
+  session order.
+- Each call returns fresh deeply frozen evidence entries and a fresh frozen
+  array. The resolver neither validates session membership nor calculates
+  bands: focused integration confirms that the unchanged M2-002 evaluator
+  produces high, medium, and weak and retains its exact
+  `attended-concept-not-in-session` rejection.
+- Added 12 focused tests covering the public/private boundary, both directions
+  of all six fixtures, unknown and overlapping candidates, exact fields and
+  ordering, evaluator integration, deep freezing, fresh-reference isolation,
+  byte identity, non-mutation, non-retention, and boundary-owned validation.
+- Required checks passed on 2026-07-15: clean `npm ci` (330 packages, zero
+  vulnerabilities; existing `three-mesh-bvh@0.7.8` deprecation warning only),
+  typecheck, lint, 22 unit files / 297 tests, content validation (3 tests),
+  production build, bundle report and ceiling, and all 3 deterministic browser
+  smoke tests. The build retained its existing over-500 kB chunk warning.
+- Bundle ceilings passed at 2,422,605 raw / 1,270,785 gzip total,
+  1,581,963 raw / 465,848 gzip JavaScript, and 683,665 bytes for the largest
+  asset. A targeted runtime performance reference was not required because the
+  resolver deliberately has no active production caller and changes no shipped
+  runtime path.
+- `git diff --check` and focused dependency, caller, ownership, and changed-file
+  scans passed. No content, domain model, state, coordinator, production input,
+  legacy path, scene, audio, UI, persistence, dependency, browser-test, CI, or
+  deployment file changed; topology support remains zero and documented
+  relation presence remains false throughout.
+- No production interaction, presentation, persistence, outcome policy,
+  content claim, or durable schema changed. No compatibility proposal or
+  authoritative-document conflict was discovered. Human review remains
+  required for the temporary director-approved evidence meaning and its future
+  M3 replacement.
+- Selected on 2026-07-15 after PR #47 was reviewed and merged. Its exact
+  `main` merge commit `f1cf7b5` passed Quality Gates run `29421280180`; no PR
+  remained open, every dependency was Done, and no active work owned
+  `src/runtime/interpretation/**` or the provisional evidence seam.
+- Implementation plan: add one pure exported resolver over a private frozen
+  six-fixture classification table; map canonical session candidates to exact
+  reference, Open Thread, or zero-support evidence without validation or band
+  calculation; prove symmetry, ordering, evaluator integration, immutability,
+  determinism, non-retention, and absent production/legacy dependencies; then
+  run every required repository and focused boundary check.
 - Ready packet proposed on 2026-07-15 after PR #46 was reviewed and merged. Its
   exact `main` merge commit `46c29ba` passed Quality Gates run `29406943154`
   and Pages deployment run `29407049510`; no PR remained open and no active
