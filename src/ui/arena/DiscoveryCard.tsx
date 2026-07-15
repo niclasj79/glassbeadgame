@@ -3,8 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
-import { dismissReveal } from "@/scene/threading";
 import type { Discovery } from "@/state/types";
+
+function dismissReveal(): void {
+  useStore.getState().setInteraction({ mode: "idle", reveal: null });
+}
 
 function TierMarks({ tier }: { tier: number }) {
   return (

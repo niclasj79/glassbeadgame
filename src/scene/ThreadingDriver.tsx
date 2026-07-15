@@ -5,18 +5,18 @@ import {
   threadingEnv,
   handlePointerMove,
   handlePointerUp,
+  handlePointerCancel,
   handleKeyDown,
-  devCommit,
-  pointerMotion,
 } from "./threading";
 import { frameState } from "./frameState";
 import { startSession } from "@/runtime/session";
 import { domainSessionStore } from "@/state/domainSession";
+import { interpretationDraftStore } from "@/state/interactionDraft";
+import { interpretationPresentationStore } from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
 import type { DisciplineId } from "@/content/types";
 import { audio } from "@/audio/engine";
 import { ambient } from "@/audio/ambient";
-import { updateSilk, updateSympathy } from "@/audio/sfx";
 import {
   advanceTestClock,
   gameNow,
@@ -60,6 +60,8 @@ function testSnapshot(): TestSessionSnapshot {
     })),
     discoveries: session.discoveries.map(({ id, kind, points }) => ({ id, kind, points })),
     interactionMode: session.interaction.mode,
+    draftStage: interpretationDraftStore.getState().draft.stage,
+    message: interpretationPresentationStore.getState().message,
     now: gameNow(),
     domainSession: {
       eventCount: domain.eventLog.events.length,
@@ -67,6 +69,14 @@ function testSnapshot(): TestSessionSnapshot {
       seed: domain.session.seed,
       worldId: domain.session.worldId,
       conceptIds: [...domain.session.conceptIds],
+      attendedConceptId: domain.session.attendedConceptId,
+      eventTypes: domain.eventLog.events.map((event) => event.type),
+      threads: domain.session.threads.map((thread) => ({
+        id: thread.id,
+        pair: [String(thread.pair[0]), String(thread.pair[1])],
+        intention: thread.intention,
+        inputModality: thread.gesture.inputModality,
+      })),
     },
   };
 }
@@ -116,7 +126,12 @@ export function ThreadingDriver() {
         };
       },
       beadIds: () => [...frameState.beadIndex.keys()],
-      weave: (a: string, b: string) => devCommit(a, b),
+      reloadCanonical: () => {
+        const eventLog = domainSessionStore.getState().eventLog;
+        if (!eventLog) throw new Error("canonical event log is unavailable");
+        domainSessionStore.getState().loadEventLog(JSON.parse(JSON.stringify(eventLog)));
+        return testSnapshot();
+      },
       startFrameSample,
       finishFrameSample,
       rendererInfo: () => {
@@ -139,10 +154,12 @@ export function ThreadingDriver() {
   useEffect(() => {
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
@@ -157,13 +174,6 @@ export function ThreadingDriver() {
     acc.current = 0;
 
     audio.applyBreath(frameState.breathPhase, frameState.breathDepth);
-
-    const mode = useStore.getState().session?.interaction.mode;
-    if (mode === "threading") {
-      updateSilk(pointerMotion.speed);
-      updateSympathy(frameState.sympathy);
-    }
-    pointerMotion.speed *= 0.82; // decay between events so stillness = silence
 
     const az = Math.atan2(state.camera.position.x, state.camera.position.z);
     ambient.setAirPan(Math.sin(az) * 0.5);

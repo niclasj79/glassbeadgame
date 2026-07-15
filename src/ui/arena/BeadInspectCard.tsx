@@ -3,6 +3,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { useStore } from "@/state/store";
+import { useStore as useVanillaStore } from "zustand";
+import { interpretationPresentationStore } from "@/state/interpretationPresentation";
+import { productionInterpretation } from "@/runtime/interpretation";
 import { GlassPanel } from "../components/GlassPanel";
 
 /** The card is contemplation, not chatter: it waits out a dwell before
@@ -22,14 +25,16 @@ function axisPercent(value: number): number {
 export function BeadInspectCard() {
   const explicitFocus = useStore((s) => s.focusedBeadId);
   const pinned = useStore((s) => s.pinnedInspectId);
-  const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
+  const weaving = useVanillaStore(
+    interpretationPresentationStore,
+    (state) => state.weaving
+  );
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
-  const setPinnedInspect = useStore((s) => s.setPinnedInspect);
 
   // Only a settled focus counts: the pointer must rest on a bead, with no
   // weave in progress, for the dwell period.
-  const candidate = mode === "idle" ? explicitFocus : null;
+  const candidate = weaving ? null : explicitFocus;
   const [dwelled, setDwelled] = useState<string | null>(null);
   useEffect(() => {
     if (!candidate) {
@@ -48,7 +53,7 @@ export function BeadInspectCard() {
   const concept = id ? conceptById.get(id) : undefined;
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
   const close = () => {
-    setPinnedInspect(null);
+    productionInterpretation.closeInspection();
     setFocusedBead(null);
   };
 

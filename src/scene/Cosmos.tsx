@@ -8,9 +8,6 @@ import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { Backdrop } from "./Backdrop";
 import { Lattice } from "./Lattice";
 import { LensAxes } from "./LensAxes";
-import { Membranes } from "./Membranes";
-import { MotifMarks } from "./MotifMarks";
-import { Illumination } from "./Illumination";
 import { Bursts } from "./Bursts";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
@@ -123,9 +120,6 @@ export function Cosmos() {
       <LensAxes />
       <Beads />
       <Threads />
-      <Membranes />
-      <MotifMarks />
-      <Illumination />
       <Bursts />
       <ThreadPreview />
       <ThreadingDriver />

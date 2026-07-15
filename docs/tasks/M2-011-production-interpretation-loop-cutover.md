@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -528,6 +528,51 @@ accepts only the M2 placeholder loop; it does not accept final camera, audio,
 content truth, persistence, M3 outcomes, or M4 artistic quality.
 
 ## Implementation notes
+
+- Implemented on `codex/M2-011-production-interpretation-loop`: one production
+  controller now composes the accepted Attend and Commit coordinators over the
+  singleton draft adapter and a presentation-only resonance/capture/status
+  store. World beads and accessible DOM controls share its stage-aware actions;
+  gesture capture is capped at 128 strictly ordered samples; session
+  replacement, cancellation, blur, pointer loss, and unmount clear transient
+  state.
+- The active arena now presents Attend, the four named intentions, candidate
+  choice, Weave/Commit, staged Cancel, Details, complete non-numeric resonance,
+  an attended camera posture, provisional patterned threads, and canonical
+  committed placeholder threads. Core thread rendering and endpoint standing
+  read only `SessionStateV1.threads`; no canonical commit mirrors into legacy
+  threads, discoveries, score, or reveal state.
+- Removed the live and test `resolveAttempt`/hidden-pair/pair-key commit route.
+  Browser coverage exercises mouse, touch-emulated and keyboard decisions,
+  cancellation, exact five-event ordering and deterministic thread identity,
+  guarded canonical codec reload, and ordinary-mode adapter absence.
+- Verification: clean `npm ci` (0 vulnerabilities); typecheck and lint passed;
+  310 unit tests and 6 deterministic browser tests passed; content validation,
+  production build, bundle ceiling, `git diff --check`, and focused ownership,
+  legacy, and dual-source scans passed. The bundle remains within the accepted
+  ceiling at 1,565,054 JavaScript raw bytes / 461,701 gzip bytes.
+- Targeted performance completed only on software SwiftShader: desktop-base
+  3.9 effective FPS (24 samples) and mobile-potato/reduced-motion 9.3 effective
+  FPS (64 samples). These results record the constrained runner and do not
+  replace director review on physical desktop/touch devices and available
+  low-tier GPU, headphones and muted/textual use, or motion comfort.
+- No domain schema, intellectual outcome, content claim, persistence,
+  dependency, CI, deployment, PWA, or final audiovisual grammar changed.
+  M2 presentation remains deliberately placeholder-quality pending human
+  review and later M3/M4 work.
+- Selected on 2026-07-15 after PR #51 was reviewed and merged. Its exact
+  `main` merge commit `8685612` passed Quality Gates run `29444480534`; all 16
+  dependencies were Done, no PR remained open, and no active work owned the
+  production interpretation, arena input, scene-thread, or placeholder-control
+  boundaries.
+- Implementation plan: compose one production draft/presentation/controller
+  stack over the accepted M2 seams; replace the active legacy pair commit with
+  stage-aware bead, intention, cancellation, inspection, and bounded gesture
+  actions; render resonance, preview, camera posture, and committed threads from
+  accepted draft/domain state; update the guarded test adapter and real mouse,
+  touch-emulated, keyboard, cancellation, and replay-reload browser gates; then
+  run all repository, bundle, performance, ownership, accessibility, and
+  dual-source checks before human review.
 
 - Ready packet proposed on 2026-07-15 after M2-010 was reviewed and merged in
   PR #50. Its exact `main` merge commit `68d3c25` passed Quality Gates run

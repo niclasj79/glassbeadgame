@@ -5,6 +5,8 @@ import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { easing } from "maath";
 import { useStore } from "@/state/store";
+import { useStore as useVanillaStore } from "zustand";
+import { interpretationDraftStore } from "@/state/interactionDraft";
 import { frameState } from "./frameState";
 import { presentationNow } from "@/runtime/testMode";
 
@@ -37,8 +39,34 @@ export function CameraRig() {
   const camera = useThree((s) => s.camera);
   const phase = useStore((s) => s.phase);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
+  const lensActive = useStore((s) => s.lensActive);
+  const lensView = useStore((s) => s.lensView);
 
   const aspect = useThree((s) => s.viewport.aspect);
+
+  // M2 situated attention: lean toward the attended bead without losing the sphere.
+  useEffect(() => {
+    if (phase !== "arena" || lensActive || draft.stage === "inactive") return;
+    const index = frameState.beadIndex.get(String(draft.attendedConceptId));
+    if (index === undefined) return;
+    const rendered = frameState.rendered;
+    const bead = new THREE.Vector3(
+      rendered[index * 3],
+      rendered[index * 3 + 1],
+      rendered[index * 3 + 2]
+    );
+    const pose = {
+      position: POSES.arena.position.clone().addScaledVector(bead, 0.08),
+      target: bead.multiplyScalar(0.28).add(new THREE.Vector3(0.45, 0.2, 0)),
+    };
+    if (reducedMotion) {
+      camera.position.copy(pose.position);
+      controls.current?.target.copy(pose.target);
+    } else {
+      transit.current = pose;
+    }
+  }, [draft, phase, lensActive, reducedMotion, camera]);
 
   useEffect(() => {
     let pose = POSES[phase] ?? POSES.title;
@@ -60,8 +88,6 @@ export function CameraRig() {
 
   // The Lens: square up to whichever transcendental plane is showing, so
   // each view of the triptych reads as a true chart. Leaving returns home.
-  const lensActive = useStore((s) => s.lensActive);
-  const lensView = useStore((s) => s.lensView);
   const wasLensed = useRef(false);
   useEffect(() => {
     if (lensActive) {

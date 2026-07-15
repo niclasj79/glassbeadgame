@@ -35,6 +35,8 @@ export interface TestSessionSnapshot {
     points: number;
   }>;
   interactionMode: string;
+  draftStage: string;
+  message: string;
   now: number;
   domainSession: {
     eventCount: number;
@@ -42,6 +44,9 @@ export interface TestSessionSnapshot {
     seed: string;
     worldId: string;
     conceptIds: string[];
+    attendedConceptId: string | null;
+    eventTypes: string[];
+    threads: Array<{ id: string; pair: readonly [string, string]; intention: string; inputModality: string }>;
   };
 }
 
@@ -53,7 +58,7 @@ export interface BrowserTestAdapter {
   advanceClock(milliseconds: number): number;
   beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
-  weave(a: string, b: string): void;
+  reloadCanonical(): TestSessionSnapshot;
   startFrameSample(): void;
   finishFrameSample(): FrameSample;
   rendererInfo(): { renderer: string; vendor: string; software: boolean };
