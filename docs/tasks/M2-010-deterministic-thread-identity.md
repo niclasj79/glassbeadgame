@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -344,6 +344,51 @@ beyond the local single-session vertical slice.
 
 ## Implementation notes
 
+- Implemented `createInterpretationThreadId` and its explicit public callable
+  type under `src/runtime/interpretation/**`. The pure helper reads the passed
+  canonical thread array once, compares exact occupied identities in a local
+  `Set`, and returns the first available positive sequence in the required
+  `thread:<S.length>:<S>:<N>` namespace. It has no production caller.
+- Added 10 focused tests covering exact empty/contiguous/gapped allocation,
+  arbitrary imported identities, separator-heavy and UTF-16 namespaces,
+  repeated calls, canonical serialize/decode/replay parity, advancement after
+  an accepted commit, concluded sessions, non-mutation/non-retention, and
+  import/call isolation from clocks, randomness, and UUIDs.
+- Verification passed: clean lockfile install (330 packages, 0
+  vulnerabilities; existing `three-mesh-bvh` deprecation warning), typecheck,
+  lint, 23 unit files / 307 tests, 3 content-validation tests, production build
+  (1,136 modules), bundle report and ceiling check, and 3 deterministic
+  Playwright checks. Final bundle metrics exactly match the merged baseline:
+  2,422,605 raw / 1,270,785 gzip total, 1,581,963 raw / 465,848 gzip
+  JavaScript, and 683,665 bytes for the largest asset. The existing Vite
+  greater-than-500-kB chunk advisory remains unchanged.
+- Focused scans confirmed only the accepted domain ID constructor/types and
+  reduced-session type are imported; `session.threads` is read once; one
+  canonical identity-format literal exists; no production caller exists beyond
+  the local export; and no clock, random, UUID, hash, store, persistence,
+  reducer/replay validation, event/commit, legacy-pair, or presentation owner
+  entered production code. The owned four-file diff passes `git diff --check`.
+  Self-review also removed an internal word that Tailwind interpreted as a CSS
+  utility, restoring byte-for-byte bundle parity with `main`.
+- A targeted performance reference was not run because the new function has no
+  active production caller and changes no emitted production asset. No domain
+  event/schema, reducer, replay, commit/coordinator, store, input, persistence,
+  legacy state, content, audiovisual presentation, browser test, CI,
+  deployment, or dependency behavior changed.
+- Human review remains required because this packet defines the stable identity
+  format that a later cutover will write into durable thread events. It does
+  not claim concurrent-writer, cross-device, or migration guarantees.
+
+- Selected on 2026-07-15 after PR #49 was reviewed and merged. Its exact
+  `main` merge commit `9aa8eef` passed Quality Gates run `29439686409`; no PR
+  remained open, every dependency was Done, and no active work owned
+  `src/runtime/interpretation/**` or the thread-identity derivation boundary.
+- Implementation plan: add one exported pure allocator that reads the exact
+  canonical thread array once, builds a fixed exact-identity collision set,
+  and returns the lowest free positive ordinal in the length-prefixed session
+  namespace; add focused canonical replay/commit, collision, namespace,
+  determinism, immutability, non-retention, and environment-isolation tests;
+  then run every required repository check and focused ownership scan.
 - Ready packet proposed on 2026-07-15 after PR #48 was reviewed and merged.
   Its exact `main` merge commit `3c590f5` passed Quality Gates run
   `29422757687` and Pages deployment run `29422904373`; no PR remained open and
