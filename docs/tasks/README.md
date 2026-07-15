@@ -24,9 +24,10 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-010-deterministic-thread-identity.md` — derive one stable,
-   session-namespaced, collision-safe thread ID from the canonical reduced
-   session without time, randomness, persistence, or a production caller.
+1. `M2-011-production-interpretation-loop-cutover.md` — replace the active
+   hidden-pair weaving route with one canonical Attend → arm → candidate →
+   Weave → Commit path for mouse, touch/pen, and keyboard using placeholder
+   world/accessible presentation.
 
 ## In review
 
@@ -69,14 +70,18 @@ None.
     established the deterministic private six-fixture evidence resolver with
     complete canonical candidate coverage and no production caller or final
     content claim.
+23. `M2-010-deterministic-thread-identity.md` — accepted and merged in PR #50;
+    established one pure replay-stable, session-namespaced, first-free thread
+    identity derivation without a mutable allocator or production caller.
 
 ## Planned but not yet Ready
 
-Tasks after M2-010 are not yet Ready. Production composition must remain in the
-same separately reviewed cutover packet that owns active input arbitration and
-placeholder presentation, as required by M2-007 and M2-008. Browser capture,
-input-equivalent controls, and camera/audio/UI work must respect their personal
-device, comfort, accessibility, and artistic-quality human-review boundaries.
+Tasks after M2-011 are not yet Ready. M2-011 is the single reviewed production
+cutover packet required by M2-007, M2-008, and M2-010: it owns production
+composition, active input arbitration, stable identity timing, removal of the
+legacy hidden-answer commit path, and minimum placeholder presentation
+together. M3 outcomes and M4 camera/audio/artistic grammar remain separate
+human-review boundaries rather than hidden additions to the cutover.
 
 ## Director design companions
 

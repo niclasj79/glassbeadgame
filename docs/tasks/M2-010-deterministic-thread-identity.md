@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -343,6 +343,10 @@ future migration, concurrent-writer, cross-device, or persistence guarantees
 beyond the local single-session vertical slice.
 
 ## Implementation notes
+
+- Accepted and merged in PR #50 on 2026-07-15. The exact `main` merge commit
+  `68d3c25` passed Quality Gates run `29443245356` and Pages deployment run
+  `29443359078`.
 
 - Implemented `createInterpretationThreadId` and its explicit public callable
   type under `src/runtime/interpretation/**`. The pure helper reads the passed
