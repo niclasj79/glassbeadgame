@@ -24,9 +24,9 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-008-interpretation-commit-coordinator.md` — coordinate one expressive
-   commit from the reactive candidate draft through the accepted gesture and
-   atomic command owners, then reset the draft only after canonical success.
+1. `M2-009-provisional-resonance-evidence.md` — resolve complete deterministic
+   provisional candidate evidence from the accepted M2 reference fixtures
+   without asserting final content or wiring a production interaction.
 
 ## In review
 
@@ -62,15 +62,17 @@ None.
 20. `M2-007-interpretive-attention-coordinator.md` — accepted and merged in PR
     #44; established one headless coordinator for canonical Attend, complete
     candidate resonance, and reactive draft publication.
+21. `M2-008-interpretation-commit-coordinator.md` — accepted and merged in PR
+    #46; established one headless coordinator for exact gesture construction,
+    atomic interpretation commit, and post-success reactive draft reset.
 
 ## Planned but not yet Ready
 
-Tasks after M2-008 are not yet Ready. Production composition and browser input
-capture, placeholder evidence and presentation, input-equivalent controls, and
-camera/audio/UI work must be specified as separate reviewed packets after the
-headless commit/reset seam is accepted. Their personal device, comfort, and
-artistic quality gates remain human-review boundaries rather than unresolved
-decisions.
+Tasks after M2-009 are not yet Ready. Production composition and browser input
+capture, placeholder presentation, input-equivalent controls, and camera/audio/
+UI work must be specified as separate reviewed packets after the provisional
+evidence seam is accepted. Their personal device, comfort, and artistic quality
+gates remain human-review boundaries rather than unresolved decisions.
 
 ## Director design companions
 

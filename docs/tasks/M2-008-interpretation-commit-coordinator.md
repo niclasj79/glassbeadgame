@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -343,6 +343,9 @@ artistic quality.
 
 ## Implementation notes
 
+- Accepted and merged in PR #46 on 2026-07-15. The exact `main` merge commit
+  `46c29ba` passed Quality Gates run `29406943154` and Pages deployment run
+  `29407049510`.
 - Implemented one injectable `createInterpretationCommitCoordinator` that
   captures the accepted reactive draft, builds the accepted gesture profile,
   invokes the accepted atomic commit command, then performs exactly one
