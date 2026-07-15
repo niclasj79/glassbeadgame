@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -349,6 +349,9 @@ camera comfort, or device equivalence.
 
 ## Implementation notes
 
+- Accepted and merged in PR #44 on 2026-07-14. The exact `main` merge commit
+  `45c40cf` passed Quality Gates run `29370493332` and Pages deployment run
+  `29370605521`.
 - Selected on 2026-07-14 after PR #43 was reviewed and merged, its exact
   `main` merge commit `d814d50` passed Quality Gates run `29365817388`, no PR
   remained open, and no active task owned `src/runtime/interpretation/**` or the
