@@ -35,6 +35,19 @@ export interface TestSessionSnapshot {
     points: number;
   }>;
   interactionMode: string;
+  focusedBeadId: string | null;
+  draftStage: string;
+  draftAttendedConceptId: string | null;
+  draftIntention: string | null;
+  draftCandidateConceptId: string | null;
+  candidateResonance: Array<{
+    candidateId: string;
+    band: "weak" | "medium" | "high";
+  }>;
+  weaving: boolean;
+  snappedConceptId: string | null;
+  message: string;
+  failureMessage: string | null;
   now: number;
   domainSession: {
     eventCount: number;
@@ -42,6 +55,23 @@ export interface TestSessionSnapshot {
     seed: string;
     worldId: string;
     conceptIds: string[];
+    attendedConceptId: string | null;
+    eventTypes: string[];
+    threads: Array<{
+      id: string;
+      pair: readonly [string, string];
+      intention: string;
+      inputModality: string;
+      gesture: {
+        inputModality: string;
+        durationMs?: number;
+        pathLengthViewport?: number;
+        curvature?: number;
+        averageSpeedViewportPerSecond?: number;
+        speedVariance?: number;
+        pressure?: number;
+      };
+    }>;
   };
 }
 
@@ -53,7 +83,8 @@ export interface BrowserTestAdapter {
   advanceClock(milliseconds: number): number;
   beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
-  weave(a: string, b: string): void;
+  canonicalEventLog(): string;
+  reloadCanonical(): TestSessionSnapshot;
   startFrameSample(): void;
   finishFrameSample(): FrameSample;
   rendererInfo(): { renderer: string; vendor: string; software: boolean };

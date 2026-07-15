@@ -24,14 +24,13 @@ M2 — New interaction loop
 
 ## Ready queue
 
-1. `M2-011-production-interpretation-loop-cutover.md` — replace the active
-   hidden-pair weaving route with one canonical Attend → arm → candidate →
-   Weave → Commit path for mouse, touch/pen, and keyboard using placeholder
-   world/accessible presentation.
+None.
 
 ## In review
 
-None.
+1. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
+   the canonical interpretation path; awaiting the required director
+   interaction, accessibility, and audiovisual review.
 
 ## Blocked queue
 
