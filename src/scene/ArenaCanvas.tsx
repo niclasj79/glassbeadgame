@@ -5,6 +5,7 @@ import { useStore } from "@/state/store";
 import { initialQualityTier } from "@/lib/device";
 import { Cosmos } from "./Cosmos";
 import { testMode } from "@/runtime/testMode";
+import { handleArenaMiss } from "./threading";
 
 /**
  * The one persistent WebGL canvas. Every screen renders above it; phase
@@ -83,6 +84,7 @@ export function ArenaCanvas() {
         }}
         camera={{ fov: 42, near: 0.1, far: 160, position: [0, 0.5, 13.8] }}
         onCreated={handleCreated}
+        onPointerMissed={handleArenaMiss}
       >
         {testMode.enabled ? (
           cosmos

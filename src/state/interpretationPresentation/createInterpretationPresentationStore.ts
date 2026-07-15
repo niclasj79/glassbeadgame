@@ -8,12 +8,14 @@ const IDLE_MESSAGE = "Choose a bead to Attend.";
 export interface InterpretationPresentationState {
   readonly candidateResonance: readonly CandidateResonance[];
   readonly message: string;
+  readonly failureMessage: string | null;
   readonly weaving: boolean;
   readonly lastCommittedThreadId: ThreadId | null;
   readonly publishAttention: (
     candidateResonance: readonly CandidateResonance[]
   ) => void;
   readonly announce: (message: string) => void;
+  readonly announceFailure: (message: string) => void;
   readonly setWeaving: (weaving: boolean) => void;
   readonly publishCommit: (threadId: ThreadId) => void;
   readonly clearAttention: () => void;
@@ -27,6 +29,7 @@ export function createInterpretationPresentationStore(): InterpretationPresentat
   return createStore<InterpretationPresentationState>()((set) => ({
     candidateResonance: EMPTY_RESONANCE,
     message: IDLE_MESSAGE,
+    failureMessage: null,
     weaving: false,
     lastCommittedThreadId: null,
 
@@ -34,24 +37,29 @@ export function createInterpretationPresentationStore(): InterpretationPresentat
       set({
         candidateResonance,
         message: "Attention set. Choose an intention.",
+        failureMessage: null,
         weaving: false,
         lastCommittedThreadId: null,
       }),
 
-    announce: (message) => set({ message }),
+    announce: (message) => set({ message, failureMessage: null }),
+
+    announceFailure: (failureMessage) => set({ failureMessage }),
 
     setWeaving: (weaving) =>
       set({
         weaving,
+        failureMessage: null,
         message: weaving
           ? "Weaving. Release to Commit; Escape cancels the gesture."
-          : "Candidate held. Weave when ready.",
+          : "Gesture released. The interpretation is held.",
       }),
 
     publishCommit: (lastCommittedThreadId) =>
       set({
         candidateResonance: EMPTY_RESONANCE,
         message: "Thread committed. The web now holds your interpretation.",
+        failureMessage: null,
         weaving: false,
         lastCommittedThreadId,
       }),
@@ -60,6 +68,7 @@ export function createInterpretationPresentationStore(): InterpretationPresentat
       set({
         candidateResonance: EMPTY_RESONANCE,
         message: IDLE_MESSAGE,
+        failureMessage: null,
         weaving: false,
         lastCommittedThreadId: null,
       }),
@@ -68,6 +77,7 @@ export function createInterpretationPresentationStore(): InterpretationPresentat
       set({
         candidateResonance: EMPTY_RESONANCE,
         message: IDLE_MESSAGE,
+        failureMessage: null,
         weaving: false,
         lastCommittedThreadId: null,
       }),

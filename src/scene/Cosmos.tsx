@@ -12,6 +12,7 @@ import { Bursts } from "./Bursts";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
 import { ThreadPreview } from "./ThreadPreview";
+import { IntentionConstellation } from "./IntentionConstellation";
 import { ThreadingDriver } from "./ThreadingDriver";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
@@ -119,6 +120,7 @@ export function Cosmos() {
       <Lattice />
       <LensAxes />
       <Beads />
+      <IntentionConstellation />
       <Threads />
       <Bursts />
       <ThreadPreview />

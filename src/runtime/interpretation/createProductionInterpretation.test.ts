@@ -53,14 +53,13 @@ function harness() {
 }
 
 describe("createProductionInterpretation", () => {
-  it("routes the whole draft through one canonical atomic commit", () => {
+  it("routes a directional release through one canonical atomic commit", () => {
     const h = harness();
     h.interpretation.activateConcept(fibonacci);
     h.interpretation.armIntention("echo");
-    h.interpretation.activateConcept(counterpoint);
-    h.interpretation.beginWeave("mouse", { xViewport: 0.1, yViewport: 0.2 });
+    h.interpretation.beginDirectionalWeave("mouse", { xViewport: 0.1, yViewport: 0.2 });
     h.setNow(150);
-    h.interpretation.commitWeave({ xViewport: 0.4, yViewport: 0.5 });
+    h.interpretation.commitDirectionalWeave(counterpoint, { xViewport: 0.4, yViewport: 0.5 });
 
     expect(h.domainStore.getState().eventLog?.events.map((event) => event.type)).toEqual([
       "session.started", "bead.attended", "pair.selected", "relation.hypothesized", "thread.committed",
@@ -70,6 +69,50 @@ describe("createProductionInterpretation", () => {
     });
     expect(h.draftStore.getState().draft.stage).toBe("inactive");
     expect(h.presentationStore.getState().message).toMatch(/committed/i);
+  });
+
+  it("abandons a missed directional gesture without losing the armed draft", () => {
+    const h = harness();
+    h.interpretation.activateConcept(fibonacci);
+    h.interpretation.armIntention("passage");
+    const count = h.domainStore.getState().eventLog?.events.length;
+
+    h.interpretation.beginDirectionalWeave("touch", { xViewport: 0.2, yViewport: 0.4 });
+    h.interpretation.cancelWeave();
+
+    expect(h.interpretation.isWeaving()).toBe(false);
+    expect(h.draftStore.getState().draft).toMatchObject({
+      stage: "armed",
+      attendedConceptId: fibonacci,
+      intention: "passage",
+    });
+    expect(h.domainStore.getState().eventLog?.events.length).toBe(count);
+  });
+
+  it("restores the armed draft when a directional Commit is rejected", () => {
+    const h = harness();
+    h.interpretation.activateConcept(fibonacci);
+    h.interpretation.armIntention("echo");
+    const eventCount = h.domainStore.getState().eventLog?.events.length;
+    const message = h.presentationStore.getState().message;
+    h.interpretation.beginDirectionalWeave("mouse");
+    h.setNow(50);
+
+    expect(() =>
+      h.interpretation.commitDirectionalWeave(counterpoint)
+    ).toThrow();
+    expect(h.interpretation.isWeaving()).toBe(false);
+    expect(h.draftStore.getState().draft).toMatchObject({
+      stage: "armed",
+      attendedConceptId: fibonacci,
+      intention: "echo",
+    });
+    expect(h.presentationStore.getState().message).toBe(message);
+    expect(h.presentationStore.getState().failureMessage).toMatch(
+      /Commit was not completed.+interpretation is still held/i
+    );
+    expect(h.domainStore.getState().eventLog?.events.length).toBe(eventCount);
+    expect(h.domainStore.getState().session?.threads).toHaveLength(0);
   });
 
   it("cancels one level at a time without durable writes", () => {

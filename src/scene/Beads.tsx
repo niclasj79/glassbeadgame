@@ -143,10 +143,13 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     frameState.rendered[i * 3 + 2] = g.position.z;
 
     const selected = draft.stage !== "inactive" && String(draft.attendedConceptId) === id;
-    const snapped = draft.stage === "candidate-selected" && String(draft.candidateConceptId) === id;
+    const snapped =
+      frameState.snapId === id ||
+      (draft.stage === "candidate-selected" &&
+        String(draft.candidateConceptId) === id);
     const hovered = frameState.hoveredId === id;
     const focused = focusedBeadId === id;
-    const targetScale = snapped ? 1.24 : focused ? 1.2 : selected ? 1.18 : hovered ? 1.12 : 1;
+    const targetScale = snapped ? 1.34 : focused ? 1.2 : selected ? 1.18 : hovered ? 1.12 : 1;
     scaleRef.current += (targetScale - scaleRef.current) * 0.12;
     const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
     g.scale.setScalar(scaleRef.current * breath);
@@ -168,7 +171,7 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
         haloMaterial.opacity) *
       0.1;
 
-    const ringTarget = threaded ? 0.35 : 0;
+    const ringTarget = snapped ? 0.72 : threaded ? 0.35 : 0;
     ringMaterial.opacity += (ringTarget - ringMaterial.opacity) * 0.06;
     const moteTarget = 0;
     moteMaterial.opacity += (moteTarget - moteMaterial.opacity) * 0.06;

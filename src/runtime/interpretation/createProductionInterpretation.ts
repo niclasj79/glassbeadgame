@@ -21,6 +21,7 @@ export interface GesturePoint {
 interface ActiveGestureCapture {
   readonly inputModality: InputModality;
   readonly startedAtMs: number;
+  readonly messageBeforeCapture: string;
   readonly samples: NormalizedGestureSample[];
 }
 
@@ -41,8 +42,16 @@ export interface ProductionInterpretation {
     inputModality: InputModality,
     point?: GesturePoint
   ) => void;
+  readonly beginDirectionalWeave: (
+    inputModality: InputModality,
+    point?: GesturePoint
+  ) => void;
   readonly updateWeave: (point: GesturePoint) => void;
   readonly commitWeave: (point?: GesturePoint) => void;
+  readonly commitDirectionalWeave: (
+    candidateConceptId: ConceptId,
+    point?: GesturePoint
+  ) => void;
   readonly commitAssistively: () => void;
   readonly cancelWeave: () => void;
   readonly isWeaving: () => boolean;
@@ -53,6 +62,14 @@ export interface ProductionInterpretation {
 
 function sampleAt(atMs: number, point: GesturePoint): NormalizedGestureSample {
   return Object.freeze({ atMs, ...point });
+}
+
+function commitFailureMessage(error: unknown): string {
+  const reason =
+    error instanceof Error
+      ? error.message
+      : "the gesture could not be validated";
+  return `Commit was not completed: ${reason}. Your interpretation is still held.`;
 }
 
 export function createProductionInterpretation(
@@ -93,6 +110,67 @@ export function createProductionInterpretation(
     capture.samples.push(sampleAt(atMs, point));
   };
 
+  const beginCapture = (
+    inputModality: InputModality,
+    point?: GesturePoint
+  ): void => {
+    const startedAtMs = dependencies.now();
+    capture = {
+      inputModality,
+      startedAtMs,
+      messageBeforeCapture: dependencies.presentationStore.getState().message,
+      samples: point ? [sampleAt(startedAtMs, point)] : [],
+    };
+    dependencies.presentationStore.getState().setWeaving(true);
+  };
+
+  const commitCapture = (point?: GesturePoint): void => {
+    if (!capture) return;
+    const endedAtMs = dependencies.now();
+    if (point) appendPoint(point, endedAtMs);
+    const activeCapture = capture;
+    try {
+      const session = dependencies.domainStore.getState().session;
+      if (!session) throw new Error("an active canonical session is required");
+      const threadId = createInterpretationThreadId(session);
+      commitInterpretively({
+        threadId,
+        gesture: {
+          inputModality: activeCapture.inputModality,
+          startedAtMs: activeCapture.startedAtMs,
+          endedAtMs,
+          ...(activeCapture.samples.length === 0
+            ? {}
+            : { samples: Object.freeze([...activeCapture.samples]) }),
+        },
+      });
+      dependencies.setInspection(null);
+      dependencies.presentationStore.getState().publishCommit(threadId);
+    } catch (error) {
+      dependencies.presentationStore.getState().setWeaving(false);
+      dependencies.presentationStore
+        .getState()
+        .announce(activeCapture.messageBeforeCapture);
+      dependencies.presentationStore
+        .getState()
+        .announceFailure(commitFailureMessage(error));
+      throw error;
+    } finally {
+      capture = null;
+    }
+  };
+
+  const announceHeldDraft = (): void => {
+    const draft = dependencies.draftStore.getState().draft;
+    dependencies.presentationStore
+      .getState()
+      .announce(
+        draft.stage === "armed"
+          ? "Intention held. Draw toward another bead."
+          : "Candidate held. Weave when ready."
+      );
+  };
+
   return Object.freeze({
     activateConcept: (conceptId: ConceptId) => {
       const draft = dependencies.draftStore.getState().draft;
@@ -128,7 +206,7 @@ export function createProductionInterpretation(
       dependencies.draftStore.getState().armIntention(intention);
       dependencies.presentationStore
         .getState()
-        .announce(`${intention} armed. Choose another bead.`);
+        .announce(`${intention} armed. Draw toward another bead.`);
       return dependencies.draftStore.getState().draft;
     },
 
@@ -136,6 +214,7 @@ export function createProductionInterpretation(
       if (capture) {
         capture = null;
         dependencies.presentationStore.getState().setWeaving(false);
+        announceHeldDraft();
         return dependencies.draftStore.getState().draft;
       }
       dependencies.draftStore.getState().cancel();
@@ -149,7 +228,7 @@ export function createProductionInterpretation(
       } else {
         dependencies.presentationStore
           .getState()
-          .announce("Intention held. Choose another bead.");
+          .announce("Intention held. Draw toward another bead.");
       }
       return draft;
     },
@@ -160,13 +239,19 @@ export function createProductionInterpretation(
       if (draft.stage !== "candidate-selected") {
         throw new Error("a candidate-selected draft is required to Weave");
       }
-      const startedAtMs = dependencies.now();
-      capture = {
-        inputModality,
-        startedAtMs,
-        samples: point ? [sampleAt(startedAtMs, point)] : [],
-      };
-      dependencies.presentationStore.getState().setWeaving(true);
+      beginCapture(inputModality, point);
+    },
+
+    beginDirectionalWeave: (
+      inputModality: InputModality,
+      point?: GesturePoint
+    ) => {
+      if (capture) return;
+      const draft = dependencies.draftStore.getState().draft;
+      if (draft.stage !== "armed") {
+        throw new Error("an armed draft is required to begin a directional Weave");
+      }
+      beginCapture(inputModality, point);
     },
 
     updateWeave: (point: GesturePoint) => {
@@ -175,27 +260,43 @@ export function createProductionInterpretation(
     },
 
     commitWeave: (point?: GesturePoint) => {
+      commitCapture(point);
+    },
+
+    commitDirectionalWeave: (
+      candidateConceptId: ConceptId,
+      point?: GesturePoint
+    ) => {
       if (!capture) return;
-      const endedAtMs = dependencies.now();
-      if (point) appendPoint(point, endedAtMs);
       const activeCapture = capture;
-      const session = dependencies.domainStore.getState().session;
-      if (!session) throw new Error("an active canonical session is required");
-      const threadId = createInterpretationThreadId(session);
-      commitInterpretively({
-        threadId,
-        gesture: {
-          inputModality: activeCapture.inputModality,
-          startedAtMs: activeCapture.startedAtMs,
-          endedAtMs,
-          ...(activeCapture.samples.length === 0
-            ? {}
-            : { samples: Object.freeze([...activeCapture.samples]) }),
-        },
-      });
-      capture = null;
-      dependencies.setInspection(null);
-      dependencies.presentationStore.getState().publishCommit(threadId);
+      const draft = dependencies.draftStore.getState().draft;
+      if (draft.stage !== "armed") {
+        capture = null;
+        dependencies.presentationStore.getState().setWeaving(false);
+        throw new Error("an armed draft is required to finish a directional Weave");
+      }
+      try {
+        dependencies.draftStore
+          .getState()
+          .selectCandidate(candidateConceptId, requireSessionConceptIds());
+        commitCapture(point);
+      } catch (error) {
+        if (
+          dependencies.draftStore.getState().draft.stage ===
+          "candidate-selected"
+        ) {
+          dependencies.draftStore.getState().cancel();
+        }
+        capture = null;
+        dependencies.presentationStore.getState().setWeaving(false);
+        dependencies.presentationStore
+          .getState()
+          .announce(activeCapture.messageBeforeCapture);
+        dependencies.presentationStore
+          .getState()
+          .announceFailure(commitFailureMessage(error));
+        throw error;
+      }
     },
 
     commitAssistively: () => {
@@ -220,6 +321,7 @@ export function createProductionInterpretation(
       if (!capture) return;
       capture = null;
       dependencies.presentationStore.getState().setWeaving(false);
+      announceHeldDraft();
     },
 
     isWeaving: () => capture !== null,
