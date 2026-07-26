@@ -2,7 +2,7 @@
 
 ## Status
 
-Director decisions I-001 through I-013 are accepted. Exact audiovisual pacing,
+Director decisions I-001 through I-014 are accepted. Exact audiovisual pacing,
 camera comfort, device behavior, and artistic quality remain subject to the
 personal playtest gates recorded in `PLAYTEST-PLAN.md`.
 
@@ -38,16 +38,23 @@ Recommended conceptual separation:
 
 ## Proposed interaction sequence
 
-This sequence is accepted through candidate selection. Weaving details remain subject to I-008 and I-009.
+This sequence is accepted through I-014. Pointer/touch/pen and coordinate-free
+routes express the same decisions with different physical phrasing.
 
 1. Move focus to a bead: it responds lightly without changing durable state.
 2. Explicitly Attend: the bead becomes primary; a smooth camera sweep places it in a lower-left or lower-right attended posture while preserving the whole arena; noise recedes and candidate resonance appears.
 3. Inspect if desired: read the concept without advancing the interpretation.
 4. Choose Echo, Passage, Tension, or Ground from four world-anchored icons beside the attended bead, mirrored by an equivalent accessible DOM surface.
 5. The chosen intention visibly moves into and arms the attended bead. This changes its tool-ready response immediately but remains an ephemeral draft.
-6. While the arena remains in the attended aiming posture, sweep across relation-neutral candidate resonance and activate a second bead. This creates the provisional candidate pair and applies the armed intention to its preview.
-7. Weave or confirm expressively.
-8. Commit once. A future commit command records `pair.selected`, `relation.hypothesized`, and `thread.committed` as one atomic ordered batch; then the player receives the outcome and coordinated consequence.
+6. For pointer/touch/pen, draw from the armed bead across relation-neutral
+   candidate resonance. A nearby bead latches provisionally; releasing on that
+   latch selects it and commits through the same atomic coordinator. Releasing
+   without a latch preserves the armed draft.
+7. For keyboard, controller-compatible, or assistive operation, activate the
+   candidate provisionally and use the accepted coordinate-free hold/confirm.
+8. Commit once. The commit command records `pair.selected`,
+   `relation.hypothesized`, and `thread.committed` as one atomic ordered batch;
+   then the player receives the outcome and coordinated consequence.
 9. Cancel at any provisional stage by discarding only the ephemeral draft and restoring the prior accepted stage.
 
 ## Director metaphor reference — attended viewpoint and directional sweep
@@ -78,7 +85,7 @@ The tool analogies describe semantic energy, not literal weapons:
 - Do not introduce enemies, damage, ammunition, cooldown optimization, lock-on correctness, twitch targeting, failure punishment, or militarized tone.
 - A directional sweep is presentation/input context, not part of the pure resonance rule and not a hidden endpoint filter.
 - The same decisions and information must remain available through touch, keyboard, controller-compatible, reduced-motion, audio-reduced, and simplified representations; a literal free-aim frustum cannot be the only route.
-- The metaphor does not override accepted I-001 through I-013. Exact camera
+- The metaphor does not override accepted I-001 through I-014. Exact camera
   comfort, expressive input feel, microcopy legibility, weave transition, and
   overture behavior still require director-led personal testing.
 - The world remains the primary interface. Any supporting DOM surface mirrors the spatial act instead of replacing it with a conventional target list or weapons HUD.
@@ -112,8 +119,8 @@ Equivalent means the same decision, reversibility, information, and consequence�
 | Attend | primary click | tap | Enter/Space | primary action |
 | Inspect | dwell or explicit details control | long press or explicit details control | `I`/details control | secondary/details action |
 | Choose intention | world-anchored four-way control | four large touch targets | arrows/number shortcut + Enter | D-pad/stick + primary action |
-| Select candidate after arming | click second bead | tap second bead | focus candidate + Enter/Space | focus candidate + primary action |
-| Weave/confirm | drag path or deliberate confirm | drag path or deliberate confirm | hold/confirm sequence producing a neutral keyboard gesture profile | hold/confirm sequence producing a neutral controller profile |
+| Select candidate after arming | press the armed source or candidate, sweep, and latch; direct candidate press is the no-dexterity equivalent | touch the armed source or candidate, sweep, and latch; direct candidate touch is equivalent | focus candidate + Enter/Space | focus candidate + primary action |
+| Weave/confirm | release the same captured sweep on the latch | release the same captured sweep on the latch | hold/confirm sequence producing a neutral keyboard gesture profile | hold/confirm sequence producing a neutral controller profile |
 | Cancel/back | Escape, secondary click, or background action | explicit Back/Cancel target; background tap only if unambiguous | Escape | secondary/back action |
 
 ## Decision records
@@ -160,6 +167,10 @@ Director answers become binding only after reviewed merge. If an answer changes 
 
 - **Question:** After Attend, should selecting a candidate be a second click/tap, the start of a drag, or either?
 - **Recommended default:** A second activation selects the pair; drag may be a fluent shortcut that selects the endpoint when released, but both paths enter the same provisional pair state before commitment.
+- **I-014 resolution:** Pointer/touch/pen activation now begins the direct
+  source-to-target sweep and candidate latch; release performs selection and
+  Commit as one physical phrase. The separate provisional activation followed
+  by hold/confirm remains the coordinate-free semantic route.
 - **Director answer:** Accepted as a combined I-005/I-006 flow. After Attend and intention arming, activating another bead while still in the attended aiming posture selects it as the provisional candidate. “Firing” is a directional interaction metaphor only: it implies no weapon, damage, correctness lock, dexterity gate, or punishment.
 - **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 - **Clears:** Candidate selection may follow intention arming; concrete pointer/touch/keyboard/controller mapping remains subject to I-009 and human testing.
@@ -243,6 +254,35 @@ Director answers become binding only after reviewed merge. If an answer changes 
 - **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
 - **Clears:** Overture/onboarding work after its implementation dependencies are Done.
 
+### I-014 — Direct world manipulation and non-dominant accessibility mirror
+
+- **Question:** After the first M2 director playtest, should the persistent
+  bead-list/intention/Weave tray remain visible, or should the arena itself
+  carry the interaction?
+- **Recommended default:** Remove the persistent tray. Attend by activating a
+  bead; bloom four world-anchored intention sigils around it; arm by tapping a
+  sigil or sliding from the bead into one; then draw from the armed bead toward
+  another bead. Candidate resonance answers during the sweep, a candidate
+  latches provisionally before release, and release performs the atomic Commit.
+  Continued motion after latching enriches the gesture but is never required.
+  Keep a semantic DOM mirror for screen readers and keyboard operation without
+  making it the dominant visible interface.
+- **Director answer:** Accepted as recommended. The director explicitly rejects
+  the persistent “choose a bead to Attend” menu as redundant and distracting.
+  Borrow the directness, elastic resistance, spatial aiming, and release clarity
+  of a slingshot interaction without importing projectiles, combat, inverse
+  ballistics, correctness targets, or dexterity punishment. Empty-arena tap,
+  Escape/back, and pointer cancellation step back without durable mutation;
+  inspection remains independently accessible.
+- **Status:** Accepted by the game design director on 2026-07-15; effective
+  after reviewed merge of the revised M2 production cutover.
+- **Compatibility resolution:** Attend, arming, candidate latch, and gesture
+  capture remain ephemeral/canonical in the already accepted owners. The direct
+  gesture enters candidate-selected state before the same atomic three-event
+  Commit and changes no domain schema, resonance rule, or intellectual outcome.
+- **Clears:** Revision of the M2-011 primary input/presentation surface, subject
+  to the existing P-005 director device and comfort gate.
+
 ## Decision gate by task type
 
 | Work | Required decisions |
@@ -253,4 +293,4 @@ Director answers become binding only after reviewed merge. If an answer changes 
 | Pair selection and pre-weave cancellation | Accepted I-004, I-005, I-006, I-010, I-011 |
 | Relation declaration and weave transition | I-006 through I-008 and I-012; accepted |
 | Gesture/input equivalence | I-005, I-009, I-010, plus playtest device decision P-005 |
-| Overture | I-001 through I-013; accepted, subject to implementation dependencies |
+| Overture | I-001 through I-014; accepted, subject to implementation dependencies |

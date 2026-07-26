@@ -4,6 +4,10 @@ import { useFrame } from "@react-three/fiber";
 import { Billboard, Text } from "@react-three/drei";
 import interWoff from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
 import { useStore } from "@/state/store";
+import { useStore as useVanillaStore } from "zustand";
+import { domainSessionStore } from "@/state/domainSession";
+import { interpretationDraftStore } from "@/state/interactionDraft";
+import { interpretationPresentationStore } from "@/state/interpretationPresentation";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { hashString, smoothstep } from "@/lib/utils";
@@ -12,7 +16,6 @@ import { beadPointerHandlers } from "./threading";
 import { getHaloTexture, getGlyphTexture, getRingTexture } from "./textures";
 
 import { isCoarsePointer } from "@/lib/device";
-import { presentationNow } from "@/runtime/testMode";
 
 export const BEAD_RADIUS = 0.15;
 const SHELL_SCALE = 1.42;
@@ -47,22 +50,16 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
   const lensActive = useStore((s) => s.lensActive);
   const focusedBeadId = useStore((s) => s.focusedBeadId);
-  const degree = useStore(
-    (s) => s.session?.threads.filter((t) => t.a === id || t.b === id).length ?? 0
+  const degree = useVanillaStore(
+    domainSessionStore,
+    (s) => s.session?.threads.filter((t) => t.pair.some((conceptId) => String(conceptId) === id)).length ?? 0
   );
   const threaded = degree > 0;
-  // The bead's standing in the web: it evolves as the session deepens.
-  const standing = useStore((s) => {
-    const threads = s.session?.threads ?? [];
-    let luminous = false;
-    let consecrated = false;
-    for (const t of threads) {
-      if (t.a !== id && t.b !== id) continue;
-      if (t.kind === "curated") luminous = true;
-      else if (t.consecratedBy) consecrated = true;
-    }
-    return luminous ? "luminous" : consecrated ? "consecrated" : "plain";
-  });
+  const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
+  const resonanceBand = useVanillaStore(
+    interpretationPresentationStore,
+    (state) => state.candidateResonance.find((candidate) => String(candidate.candidateId) === id)?.band
+  );
 
   const {
     coreMaterial,
@@ -145,12 +142,14 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     frameState.rendered[i * 3 + 1] = g.position.y;
     frameState.rendered[i * 3 + 2] = g.position.z;
 
-    const interaction = useStore.getState().session?.interaction;
-    const selected = interaction?.fromId === id && interaction.mode !== "idle";
-    const snapped = frameState.snapId === id;
+    const selected = draft.stage !== "inactive" && String(draft.attendedConceptId) === id;
+    const snapped =
+      frameState.snapId === id ||
+      (draft.stage === "candidate-selected" &&
+        String(draft.candidateConceptId) === id);
     const hovered = frameState.hoveredId === id;
     const focused = focusedBeadId === id;
-    const targetScale = snapped ? 1.24 : focused ? 1.2 : selected ? 1.18 : hovered ? 1.12 : 1;
+    const targetScale = snapped ? 1.34 : focused ? 1.2 : selected ? 1.18 : hovered ? 1.12 : 1;
     scaleRef.current += (targetScale - scaleRef.current) * 0.12;
     const breath = reducedMotion ? 1 : 1 + Math.sin(frameState.clock * 0.9 + bobPhase) * 0.012;
     g.scale.setScalar(scaleRef.current * breath);
@@ -161,32 +160,20 @@ function Bead({ id, index, lensAnchor }: BeadProps) {
     const emphasis = snapped ? 0.2 : hovered || focused || selected ? 0.13 : 0;
     const breathGlow =
       0.05 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
-    const symp = frameState.sympathy;
-    const sympathyGlow =
-      symp && symp.id === id
-        ? symp.strength * 0.22 * (0.5 + 0.5 * Math.sin(frameState.clock * 7))
-        : 0;
-    // Woven beads run warmer; an Illumination flares both of its endpoints.
+    const sympathyGlow = resonanceBand === "high" ? 0.2 : resonanceBand === "medium" ? 0.12 : resonanceBand === "weak" ? 0.06 : 0;
     const warmth = Math.min(0.12, degree * 0.04);
-    const ill = frameState.illumination;
-    const illuminated =
-      ill && presentationNow() < ill.until && (ill.a === id || ill.b === id)
-        ? 0.28 * (0.6 + 0.4 * Math.sin(frameState.clock * 5))
-        : 0;
     haloMaterial.opacity +=
       (HALO_BASE_OPACITY +
         emphasis +
         breathGlow +
         sympathyGlow +
-        warmth +
-        illuminated -
+        warmth -
         haloMaterial.opacity) *
       0.1;
 
-    // Standing marks: a luminous ring settles in; a consecrated mote orbits.
-    const ringTarget = standing === "luminous" ? 0.42 : 0;
+    const ringTarget = snapped ? 0.72 : threaded ? 0.35 : 0;
     ringMaterial.opacity += (ringTarget - ringMaterial.opacity) * 0.06;
-    const moteTarget = standing !== "plain" ? 0.5 : 0;
+    const moteTarget = 0;
     moteMaterial.opacity += (moteTarget - moteMaterial.opacity) * 0.06;
     if (mote.current && moteMaterial.opacity > 0.01) {
       const t = frameState.clock * 0.9 + bobPhase * 2;

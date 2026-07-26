@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Review
 
 ## Milestone
 
@@ -11,7 +11,7 @@ M2 — New interaction loop
 ## Dependencies
 
 - M1-001 through M1-006 and M2-001 through M2-010 must be Done.
-- Director decisions CAV-001 through CAV-004, I-001 through I-013, and P-001
+- Director decisions CAV-001 through CAV-004, I-001 through I-014, and P-001
   through P-005 must remain accepted.
 - The canonical schema-version-1 event order, reducer/replay rules, one domain
   adapter, one reactive interpretation draft, provisional evidence policy,
@@ -24,7 +24,7 @@ Replace the active arena's hidden-pair weaving mutation path with one complete
 production interpretation path:
 
 ```text
-Focus → Attend → arm intention → select candidate → Weave → Commit
+Focus → Attend → arm intention → draw toward candidate → latch → release to Commit
 ```
 
 The production path must compose the accepted canonical domain store,
@@ -103,7 +103,7 @@ intellectually honest outcomes.
 - `docs/ROADMAP.md`, especially the M2 goal/gate and unsafe parallelism
 - `docs/VERTICAL-SLICE-SPEC.md`, especially attention through weaving,
   interface, accessibility, and the golden path
-- `docs/INTERACTION-DECISIONS.md`, including all accepted I-001 through I-013
+- `docs/INTERACTION-DECISIONS.md`, including all accepted I-001 through I-014
 - `docs/PLAYTEST-PLAN.md`, especially the M2 hypotheses and P-001 through P-005
 - `docs/CONTENT-AUDIOVISUAL-REFERENCE.md`, especially CAV-001 through CAV-004
 
@@ -229,8 +229,14 @@ canonical consequence.
 - In an inactive or attending draft, explicit primary activation of a different
   session bead invokes Attend. Activating the already actively attended bead is
   an acknowledged no-op rather than duplicate event spam.
-- In an armed draft, activating a different session bead invokes candidate
-  selection. The attended bead cannot select itself.
+- In an armed draft, pointer/touch/pen activation begins one directional Weave
+  from the attended bead. Drawing from the source is the expressive primary
+  path; directly pressing a candidate is the no-dexterity equivalent. A
+  candidate latches only within the bounded screen-space capture radius, and
+  release selects that candidate immediately before the same atomic Commit.
+  The attended bead cannot select itself. The semantic keyboard/screen-reader
+  mirror may still invoke the accepted provisional candidate transition before
+  its coordinate-free hold-and-confirm action.
 - In a candidate-selected draft, activating a different bead is an explicit
   re-Attend: it announces the new primary, discards provisional state through
   M2-007, and records only the accepted Attend event. It never silently swaps
@@ -242,7 +248,7 @@ canonical consequence.
   menu; it mirrors the visible arena and becomes legible on keyboard/screen-
   reader use.
 
-### Intention and Weave controls
+### Intention and direct Weave
 
 - Echo, Passage, Tension, and Ground appear as four world-anchored controls near
   the attended bead and as one accessible DOM radiogroup using the exact I-007
@@ -250,38 +256,43 @@ canonical consequence.
 - Each control has a stable label plus glyph/pattern. Color may reinforce but
   never carry relation identity alone. Arming/re-arming is explicit and changes
   the placeholder preview immediately.
-- Candidate selection reveals one world-related and accessible Weave/Commit
-  control. It is not a generic persistent HUD action and does not claim an
-  intellectual outcome.
-- Mouse/touch/pen press on that control begins one pointer capture with
-  game-relative start time and canvas/viewport-normalized samples; move adds
-  finite strictly increasing samples and release commits once with the actual
-  `mouse`, `touch`, or `pen` modality.
+- The four intention sigils are temporary bead-local controls with no enclosing
+  tray. Tapping one or sliding from the attended bead into one settles that
+  intention into the bead.
+- Mouse/touch/pen press while armed begins one directional pointer capture with
+  game-relative start time and canvas-relative normalized samples. Move adds
+  finite strictly increasing samples, a non-color-only provisional trace follows
+  the pointer, nearby candidates respond, and one candidate can visibly latch.
+  Release on a latch selects and commits once with the actual `mouse`, `touch`,
+  or `pen` modality. Release without a latch discards capture only and preserves
+  the armed draft.
 - Keyboard Enter/Space press begins a hold-and-confirm capture and release
   commits once with `keyboard` modality and no fabricated geometry. Repeated key
   events are ignored. A click-only assistive activation may produce an honest
   zero-duration coordinate-free profile; use `unknown` only when the browser
   does not expose a truthful source modality rather than guessing one.
 - Pointer cancel, Escape during capture, loss of the active session, unmount,
-  or focus loss discards capture only and returns to the same candidate-selected
-  draft with no event. Gesture capture is bounded and cleared on every terminal
-  path.
+  or focus loss discards capture only and returns to the same armed or
+  candidate-selected draft with no event. Gesture capture is bounded and
+  cleared on every terminal path.
 - Empty-space drag remains camera control. Empty-space activation cancels only
-  when distinguishable from a drag; touch always has a visible Cancel control.
-  No bead event may also reach camera/legacy handlers and double-act.
+  when distinguishable from a drag; touch has the same empty-arena step-back and
+  a semantic Cancel action without a persistent visible HUD. No bead event may
+  also reach camera/legacy handlers and double-act.
 
 ### Cancellation and inspection
 
-- Cancel during capture keeps the candidate-selected draft; candidate-selected
+- Cancel during direct capture keeps the armed draft; Cancel during the
+  coordinate-free hold keeps the candidate-selected draft; candidate-selected
   Cancel returns to armed aiming; armed Cancel returns to Attend; Attend Cancel
   clears active presentation while canonical last-attended history remains.
 - Re-Attend through an explicit new-primary action discards the provisional
   draft before the one accepted Attend event, exactly as M2-007 defines.
 - Cancel never removes a committed thread or appends a provisional/reset event.
-- Inspection remains independent of Attend and pair building. Pointer dwell or
-  touch long press may remain shortcuts, but one explicit Details control must
-  open/close inspection for pointer, touch, and keyboard without advancing the
-  draft or canonical log.
+- Inspection remains independent of Attend and pair building. Touch long press
+  and one explicit semantic Details action open/close inspection without
+  advancing the draft or canonical log. Ordinary focus/hover never auto-opens a
+  card over the direct interaction surface.
 
 ## Placeholder presentation contract
 
@@ -298,11 +309,12 @@ restrained placeholders; do not invent M4 semantic grammar.
   communicates the same posture without forced travel.
 - Armed intention: the selected labeled glyph/pattern visibly settles into the
   attended bead/control and changes the provisional pattern immediately.
-- Candidate selected: one provisional patterned line joins the ordered pair and
-  exposes both concept names and the armed intention accessibly.
-- Weave: pointer samples receive a bounded trace; coordinate-free holds receive
+- Directional Weave: one provisional intention-colored patterned line follows
+  the source-to-pointer sweep, and the nearest eligible bead gains an enlarged
+  ring/scale latch response. The semantic candidate-selected route exposes both
+  concept names and the armed intention accessibly. Coordinate-free holds receive
   an authored progress/status response without fake geometry. Reduced motion
-  communicates the same state without forced travel.
+  communicates the same decisions without forced travel.
 - Commit: the provisional trace resolves into one canonical placeholder thread,
   one coordinated visual/status acknowledgment occurs, and the draft returns to
   inactive. Do not show a documented reveal, Open Thread, correctness, points,
@@ -344,7 +356,8 @@ Add deterministic Playwright coverage that exercises the real active adapters,
 not a direct legacy commit shortcut:
 
 1. start `castalia-golden-001` and complete Fibonacci Sequence → Attend → Echo
-   → Counterpoint → Weave → Commit with mouse/pointer controls;
+   → Counterpoint → directional latch → release-to-Commit with real canvas
+   mouse/pointer controls;
 2. assert exactly `bead.attended`, `pair.selected`,
    `relation.hypothesized`, and `thread.committed` after `session.started`, the
    exact ordered pair/intention, deterministic M2-010 thread ID, honest mouse
@@ -420,8 +433,10 @@ pass as a mandatory human review item rather than claiming it passed.
 
 ## Acceptance criteria
 
-1. The live arena completes Attend → arm → candidate → Weave → Commit through
-   the accepted canonical M2 owners with one production draft and no copied rule.
+1. The live arena completes Attend → arm → directional candidate latch →
+   release-to-Commit through the accepted canonical M2 owners with one
+   production draft and no copied rule; keyboard/screen-reader operation retains
+   the coordinate-free candidate/hold equivalent.
 2. Mouse, touch/pen, and keyboard routes express the same decisions,
    cancellation hierarchy, and one atomic canonical result with honest modality
    and geometry availability.
@@ -462,8 +477,9 @@ pass as a mandatory human review item rather than claiming it passed.
   - exact resonance publication/clearing without duplicated draft/domain state;
   - arm, candidate, cancellation, re-Attend, and new-session reset semantics;
   - thread-ID derivation immediately before synchronous Commit;
-  - pointer/touch/pen sample normalization, strict time ordering, capture bounds,
-    and release/cancel/error cleanup;
+  - pointer/touch/pen sample normalization, direct candidate latching, missed
+    release preservation, strict time ordering, capture bounds, and
+    release/cancel/error cleanup;
   - keyboard hold/confirm and assistive click with no fabricated geometry;
   - expected failure atomicity across domain, draft, presentation, capture, and
     legacy state;
@@ -528,6 +544,67 @@ accepts only the M2 placeholder loop; it does not accept final camera, audio,
 content truth, persistence, M3 outcomes, or M4 artistic quality.
 
 ## Implementation notes
+
+- Director playtest correction accepted and implemented on 2026-07-15: the
+  persistent bead-list/intention/Weave tray is removed. Four bare intention
+  controls now appear as a temporary world-anchored constellation at the
+  attended bead; tap or slide-to-arm settles the selected sigil into that bead;
+  a bounded source-to-target mouse/touch/pen sweep provides live aim and latch
+  feedback before release-to-Commit. World-local Back and Details controls and
+  a non-dominant semantic DOM preserve cancellation, inspection, keyboard, and
+  assistive-technology access without restoring the overlay.
+- Implemented on `codex/M2-011-production-interpretation-loop`: one production
+  controller now composes the accepted Attend and Commit coordinators over the
+  singleton draft adapter and a presentation-only resonance/capture/status
+  store. World beads and accessible DOM controls share its stage-aware actions;
+  gesture capture is capped at 128 strictly ordered samples; session
+  replacement, cancellation, blur, pointer loss, and unmount clear transient
+  state. Rejected Commits restore the held draft and prior status while a
+  separate assertive live message explains the non-destructive failure.
+- The active arena now presents Attend, the four named intentions, direct
+  directional aiming/latching, staged Cancel, Details, complete non-numeric
+  resonance, an attended camera posture, provisional patterned threads, and
+  canonical committed placeholder threads. Empty-space misses keep an armed
+  intention available, capture loss never commits, and camera focus returns
+  home after Commit or full cancellation. Core thread rendering and endpoint
+  standing read only `SessionStateV1.threads`; no canonical commit mirrors into
+  legacy threads, discoveries, score, or reveal state.
+- Removed the live and test `resolveAttempt`/hidden-pair/pair-key commit route.
+  Browser coverage exercises the declared `castalia-golden-001` Mathematics +
+  Music + Art draw and exact Fibonacci → Counterpoint interpretation through
+  real mouse, touch-emulated, and keyboard paths. It also covers qualitative-
+  only complete resonance, non-color intention identity, honest modality and
+  geometry fields, input arbitration, every provisional cancellation level,
+  pointer loss, exact five-event ordering and deterministic thread identity,
+  canonical serialization byte stability and reload, fixed-seed repeatability,
+  and ordinary-mode adapter absence.
+- Verification: clean `npm ci` (0 vulnerabilities); typecheck and warning-free
+  lint passed; 312 unit tests and 7 deterministic browser tests passed; content
+  validation, production build, bundle ceiling, `git diff --check`, and focused
+  ownership, legacy, and dual-source scans passed. The bundle remains within the
+  accepted ceiling at 1,583,730 JavaScript raw bytes / 467,724 gzip bytes.
+- Targeted performance completed only on software SwiftShader: desktop-base
+  4.20 effective FPS (26 samples) and mobile-potato/reduced-motion 10.24
+  effective FPS (67 samples). These results record the constrained runner and do not
+  replace director review on physical desktop/touch devices and available
+  low-tier GPU, headphones and muted/textual use, or motion comfort.
+- No domain schema, intellectual outcome, content claim, persistence,
+  dependency, CI, deployment, PWA, or final audiovisual grammar changed.
+  M2 presentation remains deliberately placeholder-quality pending human
+  review and later M3/M4 work.
+- Selected on 2026-07-15 after PR #51 was reviewed and merged. Its exact
+  `main` merge commit `8685612` passed Quality Gates run `29444480534`; all 16
+  dependencies were Done, no PR remained open, and no active work owned the
+  production interpretation, arena input, scene-thread, or placeholder-control
+  boundaries.
+- Implementation plan: compose one production draft/presentation/controller
+  stack over the accepted M2 seams; replace the active legacy pair commit with
+  stage-aware bead, intention, cancellation, inspection, and bounded gesture
+  actions; render resonance, preview, camera posture, and committed threads from
+  accepted draft/domain state; update the guarded test adapter and real mouse,
+  touch-emulated, keyboard, cancellation, and replay-reload browser gates; then
+  run all repository, bundle, performance, ownership, accessibility, and
+  dual-source checks before human review.
 
 - Ready packet proposed on 2026-07-15 after M2-010 was reviewed and merged in
   PR #50. Its exact `main` merge commit `68d3c25` passed Quality Gates run

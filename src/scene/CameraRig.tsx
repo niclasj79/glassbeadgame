@@ -5,6 +5,8 @@ import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { easing } from "maath";
 import { useStore } from "@/state/store";
+import { useStore as useVanillaStore } from "zustand";
+import { interpretationDraftStore } from "@/state/interactionDraft";
 import { frameState } from "./frameState";
 import { presentationNow } from "@/runtime/testMode";
 
@@ -26,6 +28,15 @@ const POSES: Record<string, Pose> = {
 const IDLE_ORBIT_AFTER_MS = 10_000;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
+function arenaHomePose(aspect: number): Pose {
+  return aspect < 0.75
+    ? {
+        position: new THREE.Vector3(0, 0.6, 8.2),
+        target: new THREE.Vector3(0, 0, 0),
+      }
+    : POSES.arena;
+}
+
 /**
  * One camera, two authorities: the user's orbit, and scripted transits.
  * A transit damps both camera position and controls target toward a pose;
@@ -37,18 +48,61 @@ export function CameraRig() {
   const camera = useThree((s) => s.camera);
   const phase = useStore((s) => s.phase);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
+  const attendedId =
+    draft.stage === "inactive" ? null : String(draft.attendedConceptId);
+  const lensActive = useStore((s) => s.lensActive);
+  const lensView = useStore((s) => s.lensView);
 
   const aspect = useThree((s) => s.viewport.aspect);
+  const previousAttendedId = useRef<string | null>(null);
+
+  // M2 situated attention: lean toward the attended bead without losing the sphere.
+  useEffect(() => {
+    if (phase !== "arena" || lensActive) {
+      previousAttendedId.current = null;
+      return;
+    }
+    if (!attendedId) {
+      if (previousAttendedId.current) {
+        const home = arenaHomePose(aspect);
+        if (reducedMotion) {
+          camera.position.copy(home.position);
+          controls.current?.target.copy(home.target);
+        } else {
+          transit.current = home;
+        }
+      }
+      previousAttendedId.current = null;
+      return;
+    }
+    previousAttendedId.current = attendedId;
+    const index = frameState.beadIndex.get(attendedId);
+    if (index === undefined) return;
+    const rendered = frameState.rendered;
+    const bead = new THREE.Vector3(
+      rendered[index * 3],
+      rendered[index * 3 + 1],
+      rendered[index * 3 + 2]
+    );
+    const home = arenaHomePose(aspect);
+    const pose = {
+      position: home.position.clone().addScaledVector(bead, 0.08),
+      target: bead.multiplyScalar(0.28).add(new THREE.Vector3(0.45, 0.2, 0)),
+    };
+    if (reducedMotion) {
+      camera.position.copy(pose.position);
+      controls.current?.target.copy(pose.target);
+    } else {
+      transit.current = pose;
+    }
+  }, [attendedId, phase, lensActive, reducedMotion, camera, aspect]);
 
   useEffect(() => {
-    let pose = POSES[phase] ?? POSES.title;
-    // Portrait phones: pull in so the sphere fills the narrow frame.
-    if (phase === "arena" && aspect < 0.75) {
-      pose = {
-        position: new THREE.Vector3(0, 0.6, 8.2),
-        target: new THREE.Vector3(0, 0, 0),
-      };
-    }
+    const pose =
+      phase === "arena"
+        ? arenaHomePose(aspect)
+        : (POSES[phase] ?? POSES.title);
     if (reducedMotion) {
       camera.position.copy(pose.position);
       controls.current?.target.copy(pose.target);
@@ -60,8 +114,6 @@ export function CameraRig() {
 
   // The Lens: square up to whichever transcendental plane is showing, so
   // each view of the triptych reads as a true chart. Leaving returns home.
-  const lensActive = useStore((s) => s.lensActive);
-  const lensView = useStore((s) => s.lensView);
   const wasLensed = useRef(false);
   useEffect(() => {
     if (lensActive) {
@@ -78,10 +130,7 @@ export function CameraRig() {
       }
     } else if (wasLensed.current && phase === "arena") {
       wasLensed.current = false;
-      const pose =
-        aspect < 0.75
-          ? { position: new THREE.Vector3(0, 0.6, 8.2), target: new THREE.Vector3(0, 0, 0) }
-          : POSES.arena;
+      const pose = arenaHomePose(aspect);
       if (reducedMotion) {
         camera.position.copy(pose.position);
         controls.current?.target.copy(pose.target);
@@ -148,6 +197,13 @@ export function CameraRig() {
       const cam = state.camera as THREE.PerspectiveCamera;
       cam.fov = 42 * (1 - 0.045 * Math.sin(frameState.kick * Math.PI));
       cam.updateProjectionMatrix();
+    }
+
+    // Directional weaving owns the sightline until release. Suspending the
+    // transit here keeps a latched bead from drifting out from under a finger.
+    if (frameState.aim.active) {
+      ctl.autoRotate = false;
+      return;
     }
 
     if (transit.current) {

@@ -1,13 +1,9 @@
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { useStore } from "@/state/store";
+import { productionInterpretation } from "@/runtime/interpretation";
 import { GlassPanel } from "../components/GlassPanel";
-
-/** The card is contemplation, not chatter: it waits out a dwell before
- *  appearing, and never shows while a gesture or reveal is in flight. */
-const DWELL_MS = 2200;
 
 const AXES = [
   { label: "True", index: 0 },
@@ -20,35 +16,17 @@ function axisPercent(value: number): number {
 }
 
 export function BeadInspectCard() {
-  const explicitFocus = useStore((s) => s.focusedBeadId);
   const pinned = useStore((s) => s.pinnedInspectId);
-  const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
-  const setPinnedInspect = useStore((s) => s.setPinnedInspect);
 
-  // Only a settled focus counts: the pointer must rest on a bead, with no
-  // weave in progress, for the dwell period.
-  const candidate = mode === "idle" ? explicitFocus : null;
-  const [dwelled, setDwelled] = useState<string | null>(null);
-  useEffect(() => {
-    if (!candidate) {
-      setDwelled(null);
-      return;
-    }
-    if (candidate === dwelled) return;
-    setDwelled(null);
-    const t = setTimeout(() => setDwelled(candidate), DWELL_MS);
-    return () => clearTimeout(t);
-  }, [candidate, dwelled]);
-
-  // A pin (touch long-press) opens instantly and stays until dismissed;
-  // otherwise the desktop dwell rule applies.
-  const id = pinned ?? (candidate && candidate === dwelled ? candidate : null);
+  // Inspection is deliberate: long-press or the semantic Details action pins
+  // it. Ordinary hover/focus never places a card over the arena.
+  const id = pinned;
   const concept = id ? conceptById.get(id) : undefined;
   const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
   const close = () => {
-    setPinnedInspect(null);
+    productionInterpretation.closeInspection();
     setFocusedBead(null);
   };
 

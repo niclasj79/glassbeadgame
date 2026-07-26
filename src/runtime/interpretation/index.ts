@@ -21,3 +21,10 @@ export {
   createInterpretationThreadId,
   type CreateInterpretationThreadId,
 } from "./createInterpretationThreadId";
+export {
+  createProductionInterpretation,
+  type GesturePoint,
+  type ProductionInterpretation,
+  type ProductionInterpretationDependencies,
+} from "./createProductionInterpretation";
+export { productionInterpretation } from "./productionInterpretation";
