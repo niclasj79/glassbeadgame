@@ -31,6 +31,9 @@ Progress (codex, rank, settings) lives in your browser's localStorage.
 
 ```sh
 npm ci                    # install exactly from package-lock.json
+npm run steering:test     # deterministic steering-harness fixture tests
+npm run steering:check    # validate task index and active packets
+npm run steering:next -- --json  # report the next locally eligible task
 npm run typecheck         # tsc strict
 npm run lint
 npm test                  # deterministic Node characterization suite
@@ -67,7 +70,13 @@ src/
   audio/       engine, pitch theory, six timbre voices, generative ambient
   ui/          DOM screens + arena HUD over the persistent canvas
 legacy/        the archived v1 (Lovable-generated) app — reference only
+scripts/
+  steering/    read-only task validation, selection, and live preflight
 ```
+
+See `docs/STEERING-HARNESS.md` before using the selector. Repository-only
+selection does not verify GitHub state; autonomous starts require the explicit
+live preflight and must still stop after one reviewable pull request.
 
 ### For composers
 

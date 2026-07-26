@@ -5,6 +5,8 @@
 | Concern | Repository command | How it is wired |
 | --- | --- | --- |
 | Lockfile install | `npm ci` | `package-lock.json` lockfile v3; also used by Pages workflow |
+| Steering fixtures | `npm run steering:test` | Node's built-in test runner exercises the zero-dependency parser, validator, selector, live preflight, and read-only guarantees |
+| Steering state | `npm run steering:check`; `npm run steering:next -- --json` | Validates the task index and active packets, then reports the first locally eligible Ready task or an explicit no-Ready result |
 | Type checking | `npm run typecheck` | Strict application and Playwright TypeScript configurations |
 | Lint | `npm run lint` | ESLint over repository; `dist`, `legacy`, and `node_modules` ignored |
 | Unit/logic tests | `npm test` | Vitest 3.2.7 runs the deterministic Node-only characterization suite once; `npm run test:watch` is the local watch mode |
@@ -16,6 +18,25 @@
 
 The standalone content command exercises both the authored corpus and deliberately malformed fixture data. The production build remains independently gated by the same validator and prints coverage warnings through the Vite plugin.
 
+## Steering harness
+
+`npm run steering:check` is the offline, deterministic CI gate for repository
+task state. `npm run steering:next -- --json` reports repository-only evidence
+and never claims that GitHub or open work has been inspected. An autonomous
+task start additionally requires
+`npm run steering:next -- --json --live` from a clean, exact default branch.
+That explicit preflight uses read-only local Git and authenticated GitHub CLI
+metadata to prove the default branch, exact `origin` commit, empty open-PR
+queue, equality with GitHub's current default-branch SHA, and successful
+exact-commit Quality Gates. It never fetches, changes a branch, writes a task,
+opens or merges a pull request, dispatches a workflow, changes protection, or
+deploys.
+
+A valid no-Ready result is successful validation but authorizes no work.
+Malformed task state or unverifiable live state returns nonzero and fails
+closed. The complete contract and operator sequence are documented in
+`docs/STEERING-HARNESS.md`.
+
 ## Development-only browser seam
 
 `src/scene/ThreadingDriver.tsx` publishes the typed `window.__gbgTest` adapter only when Vite development mode and a valid `?testMode=1&seed=<stable-seed>` route are both active. It exposes sanitized session state, controlled clock advancement, rendered bead locations, and `weave(a,b)` routed through `threading.ts::devCommit` and the real private commit path. Ordinary development exposes neither this adapter nor the former broad `window.__gbg` state getter, and production builds cannot activate the test mode.
@@ -25,7 +46,8 @@ The standalone content command exercises both the authored corpus and deliberate
 `.github/workflows/ci.yml` runs on every pull request, every push to `main`, and manual dispatch. It exposes one stable branch-protection check context, `Quality Gates`, with read-only repository permissions (the Actions UI prefixes it with workflow/event information).
 
 ```text
-checkout -> Node 20/npm cache -> npm ci -> npm run typecheck
+checkout -> Node 20/npm cache -> npm ci -> npm run steering:test
+-> npm run steering:check -> npm run typecheck
 -> npm run lint -> npm test -> npm run validate:content -> npm run build
 -> install Playwright Chromium -> npm run test:browser
 -> npm run bundle:check

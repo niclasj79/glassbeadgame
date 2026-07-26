@@ -545,6 +545,14 @@ content truth, persistence, M3 outcomes, or M4 artistic quality.
 
 ## Implementation notes
 
+- PR #52 was merged by the director on 2026-07-26 at exact `main` commit
+  `6972ead76b60bc494260ab947d6ef272d538edad`. Exact-main Quality Gates run
+  `30183601376` and Pages run `30183731006` passed. The task remains in Review:
+  no repository record yet covers the complete P-005 physical desktop,
+  keyboard, modern touch, headphones, muted/textual, reduced-motion, and
+  available low-tier-GPU pass (or an explicitly recorded unavailable setup) or
+  its qualitative acceptance. Merge and automation evidence do not infer that
+  human result.
 - Director playtest correction accepted and implemented on 2026-07-15: the
   persistent bead-list/intention/Weave tray is removed. Four bare intention
   controls now appear as a temporary world-anchored constellation at the

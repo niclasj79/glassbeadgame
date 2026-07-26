@@ -109,6 +109,13 @@ An autonomous Codex run may select a task only when:
 - the task contains objective acceptance criteria and required checks;
 - the task does not require an unresolved product decision.
 
+Before selecting work, run `npm run steering:check` and then
+`npm run steering:next -- --json --live` from a clean, up-to-date default
+branch. Treat the emitted contract as evidence, not as authority: the reviewed
+Markdown task packet still governs. Stop without editing when validation fails,
+live evidence cannot be proved, no task is eligible, or the selected packet
+conflicts with an authoritative document.
+
 Create a branch named `codex/<task-id>-<short-name>` unless the repository workflow specifies otherwise. Produce a PR and stop.
 
 ## Conflict precedence
