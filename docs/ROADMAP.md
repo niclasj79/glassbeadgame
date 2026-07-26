@@ -227,7 +227,7 @@ Generally unsafe:
 
 ## Automation boundary
 
-A self-deploying Codex loop may select only tasks marked Ready whose dependencies are Done and whose declared file boundaries do not overlap active tasks. It must create one branch and one reviewable PR per task. It must never automatically select the next task in the same run.
+A self-deploying Codex loop may select only tasks marked Ready whose dependencies are Done and whose declared file boundaries do not overlap active tasks. It must first pass `npm run steering:check` and the read-only live preflight in `npm run steering:next -- --json --live` from a clean, exact default branch. The emitted contract is evidence rather than a replacement for the reviewed task packet. A validation refusal, unverifiable live state, or a valid no-Ready result stops the run without edits. It must create one branch and one reviewable PR per task. It must never automatically select the next task in the same run.
 
 Auto-merge is prohibited for:
 
