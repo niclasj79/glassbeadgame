@@ -158,7 +158,6 @@ export { SCORE, unitSecondsFor } from "./score";
 export { audio } from "./engine";
 export { ambient } from "./ambient";
 export {
-  LEGACY_TIMBRE,
   createVoiceBudget,
   noiseSource,
   playNote,

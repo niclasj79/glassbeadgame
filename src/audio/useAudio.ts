@@ -4,9 +4,8 @@ import { cueBus } from "@/runtime/cues";
 import { audio } from "./engine";
 import { ambient } from "./ambient";
 import { discoveryChord, faintDyad, setAimTension, conclusionCadence } from "./sfx";
-import { noteForConcept } from "./theory";
+import { beadVoice } from "./theory";
 import { attachAudioDirector, audioDirector, stopSemanticAudio } from "./productionAudio";
-import { conceptById } from "@/content/concepts";
 import { testMode } from "@/runtime/testMode";
 
 /**
@@ -180,7 +179,7 @@ export function sessionPitches(): number[] {
     ids.add(d.b);
   }
   return [...ids]
-    .map((id) => conceptById.get(id))
-    .filter((c): c is NonNullable<typeof c> => !!c)
-    .map((c) => noteForConcept(c));
+    .map((id) => beadVoice(id))
+    .filter((v): v is NonNullable<typeof v> => !!v)
+    .map((v) => v.freq);
 }

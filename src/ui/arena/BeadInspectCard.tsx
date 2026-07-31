@@ -1,20 +1,26 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
+import { castaliaConceptById } from "@/content/castalia";
+import { facetById } from "@/content/castalia/facets";
+import { facultyById } from "@/content/castalia/faculties";
 import { useStore } from "@/state/store";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { GlassPanel } from "../components/GlassPanel";
 
-const AXES = [
-  { label: "True", index: 0 },
-  { label: "Beautiful", index: 1 },
-  { label: "Good", index: 2 },
-] as const;
-
-function axisPercent(value: number): number {
-  return Math.max(0, Math.min(100, ((value + 1) / 2) * 100));
-}
-
+/**
+ * THE INSPECTION CARD — what a bead will say when it is asked directly.
+ *
+ * Every line here is authored content read verbatim: the caption, the
+ * description, the facets the concept genuinely carries, and where it sits in
+ * time. Nothing is computed, scored, or ranked.
+ *
+ * It used to read the prototype pack, which meant it also drew three meters —
+ * True, Beautiful, Good — from an authored coordinate triple. Those are gone
+ * with that pack, and they are not replaced: the Game has no standing to tell a
+ * player how good an idea is, and a bar chart saying so was the loudest place
+ * it claimed otherwise. The facets took their place because a facet is a
+ * structural property two concepts can actually be shown to share, which is
+ * what the player is about to do with this bead.
+ */
 export function BeadInspectCard() {
   const pinned = useStore((s) => s.pinnedInspectId);
   const lensActive = useStore((s) => s.lensActive);
@@ -22,9 +28,8 @@ export function BeadInspectCard() {
 
   // Inspection is deliberate: long-press or the semantic Details action pins
   // it. Ordinary hover/focus never places a card over the arena.
-  const id = pinned;
-  const concept = id ? conceptById.get(id) : undefined;
-  const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
+  const concept = pinned ? castaliaConceptById.get(pinned) : undefined;
+  const faculty = concept ? facultyById.get(concept.faculty) : undefined;
   const close = () => {
     productionInterpretation.closeInspection();
     setFocusedBead(null);
@@ -32,7 +37,7 @@ export function BeadInspectCard() {
 
   return (
     <AnimatePresence>
-      {concept && discipline && (
+      {concept && (
         <motion.div
           key={concept.id}
           className="pointer-events-auto absolute bottom-5 left-5 w-[min(350px,calc(100vw-2.5rem))]"
@@ -47,16 +52,14 @@ export function BeadInspectCard() {
                 <p className="font-ui text-[10px] uppercase tracking-[0.32em] text-dim">
                   {lensActive ? "Lens focus" : "Bead"}
                 </p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <span className="font-display text-2xl leading-none" style={{ color: discipline.color }}>
-                    {discipline.glyph}
-                  </span>
-                  <h3 className="truncate font-display text-2xl font-medium text-bright">
-                    {concept.name}
-                  </h3>
-                </div>
-                <p className="mt-0.5 font-ui text-[11px] uppercase tracking-[0.22em] text-dim/80">
-                  {discipline.name}
+                <h3 className="mt-1.5 truncate font-display text-2xl font-medium text-bright">
+                  {concept.name}
+                </h3>
+                <p
+                  className="mt-0.5 font-ui text-[11px] uppercase tracking-[0.22em]"
+                  style={{ color: faculty?.ink }}
+                >
+                  {faculty?.name ?? "Unattributed"} · {concept.kind}
                 </p>
               </div>
               <button
@@ -68,42 +71,30 @@ export function BeadInspectCard() {
               </button>
             </div>
 
-            <p className="mt-3 line-clamp-4 font-ui text-[12px] leading-relaxed text-dim">
+            <p className="mt-3 font-ui text-[12px] leading-relaxed text-vellum">
+              {concept.caption}
+            </p>
+            <p className="mt-2 line-clamp-4 font-ui text-[12px] leading-relaxed text-dim">
               {concept.description}
             </p>
 
+            {/* The facets, named as the pack names them. These are the handles
+                a connection can actually be built from, so they are the last
+                thing read before the player goes back to the arena. */}
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {concept.keywords.map((keyword) => (
+              {concept.facets.map((facetId) => (
                 <span
-                  key={keyword}
+                  key={String(facetId)}
                   className="rounded-full border border-line/40 bg-surface/45 px-2.5 py-1 font-ui text-[10px] text-dim"
                 >
-                  {keyword}
+                  {facetById.get(facetId)?.name ?? String(facetId)}
                 </span>
               ))}
             </div>
 
-            <div className="mt-4 space-y-2">
-              {AXES.map((axis) => {
-                const value = concept.tbg[axis.index];
-                return (
-                  <div key={axis.label} className="grid grid-cols-[5.8rem_1fr_2.2rem] items-center gap-2">
-                    <span className="font-ui text-[10px] uppercase tracking-[0.2em] text-dim/70">
-                      {axis.label}
-                    </span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-line/45">
-                      <span
-                        className="block h-full rounded-full bg-glow/70"
-                        style={{ width: `${axisPercent(value)}%` }}
-                      />
-                    </span>
-                    <span className="text-right font-ui text-[10px] tabular-nums text-dim/70">
-                      {value.toFixed(2)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="engraved mt-3 normal-case tracking-[0.12em] text-faint">
+              {concept.era}
+            </p>
           </GlassPanel>
         </motion.div>
       )}

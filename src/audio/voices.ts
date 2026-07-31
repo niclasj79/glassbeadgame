@@ -581,20 +581,3 @@ export function playNote(
     exactTuning: options.exactTuning,
   });
 }
-
-/**
- * The legacy prototype's six discipline timbres, mapped onto the six bodies.
- *
- * Kept only so the pre-Castalia ambient bed and sfx keep sounding while the
- * legacy content pack is retired. Nothing new should reach for these names.
- */
-export const LEGACY_TIMBRE: Readonly<
-  Record<"bell" | "pluck" | "pad" | "fm" | "breath" | "drone", TimbreId>
-> = Object.freeze({
-  bell: "glass",
-  pluck: "gut",
-  pad: "voice",
-  fm: "metal",
-  breath: "reed",
-  drone: "glass",
-});

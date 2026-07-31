@@ -1,8 +1,7 @@
 import { audio } from "./engine";
 import { playNote, noiseSource } from "./voices";
-import { modeFreq, noteForConcept, timbreForDiscipline } from "./theory";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
+import { beadVoice, modeFreq } from "./theory";
+import { castaliaConceptById } from "@/content/castalia";
 import { hashString, mulberry32 } from "@/lib/utils";
 import { frameState } from "@/scene/frameState";
 import { runtimeRandom } from "@/runtime/testMode";
@@ -185,21 +184,21 @@ class AmbientEngine {
     if (this.motifPatterns.some((p) => p.kind === kind)) return;
     let freqs: number[] = [];
     if (kind === "symposium") {
-      // The council chord: one tonic per discipline present, in its register.
+      // The council chord: one tonic per faculty present, sounded in the
+      // register the first bead of that faculty actually speaks in.
       const seen = new Set<string>();
       for (const id of beadIds) {
-        const disc = conceptById.get(id)?.discipline;
-        if (!disc || seen.has(disc)) continue;
-        seen.add(disc);
-        const d = disciplineById.get(disc);
-        if (d) freqs.push(modeFreq(0, d.register));
+        const concept = castaliaConceptById.get(id);
+        if (!concept || seen.has(concept.faculty)) continue;
+        seen.add(concept.faculty);
+        freqs.push(modeFreq(0, concept.motif.register));
         if (freqs.length >= 3) break;
       }
     } else {
       freqs = beadIds
-        .map((id) => conceptById.get(id))
-        .filter((c): c is NonNullable<typeof c> => !!c)
-        .map((c) => noteForConcept(c));
+        .map((id) => beadVoice(id))
+        .filter((v): v is NonNullable<typeof v> => !!v)
+        .map((v) => v.freq);
       if (kind === "triad") freqs = freqs.slice(0, 3);
     }
     if (freqs.length < 2) return;
@@ -211,17 +210,15 @@ class AmbientEngine {
   }
 
   addThreadVoice(threadId: string, aId: string, bId: string): void {
-    const a = conceptById.get(aId);
-    const b = conceptById.get(bId);
+    const a = beadVoice(aId);
+    const b = beadVoice(bId);
     if (!a || !b) return;
-    const da = disciplineById.get(a.discipline);
-    const db = disciplineById.get(b.discipline);
     this.motifs.push({
       threadId,
-      freqA: noteForConcept(a),
-      freqB: noteForConcept(b),
-      timbreA: timbreForDiscipline(da),
-      timbreB: timbreForDiscipline(db),
+      freqA: a.freq,
+      freqB: b.freq,
+      timbreA: a.timbre,
+      timbreB: b.timbre,
       rng: mulberry32(hashString(threadId)),
       flip: false,
     });

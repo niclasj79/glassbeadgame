@@ -1,56 +1,52 @@
 /**
- * THE LEGACY PITCH BRIDGE.
+ * ONE PITCH AND ONE BODY PER BEAD.
  *
- * The prototype's content pack (`src/content/concepts.ts`, `disciplines.ts`)
- * authors a pentatonic degree and one of six discipline timbres per concept. It
- * is being retired with the rest of the pre-Castalia loop, but it still plays,
- * and while it plays it must not keep its own private tuning system.
+ * The presentation layer — hover, selection, the thread choir, the discovery
+ * chord — needs a single note and a single instrument for a bead, not a whole
+ * rendered motif. Both are authored: `motif.degrees[0]` is the bead's identity
+ * note, `motif.register` places it, and `motif.timbre` names the body that
+ * plays it. This module is the only place those fields become frequencies.
  *
- * So every legacy pitch is resolved through the world mode (`mode.ts`) and every
- * legacy timbre through the six bodies (`voices.ts`). The audible result is
- * essentially the old bed, in just intonation. What is gone is the *claim* the
- * old comment made — that all pitches live in one gamut so every simultaneity is
- * guaranteed consonant. That guarantee is what `docs/CURRENT-STATE-AUDIT.md`
- * lists for removal, because a world in which nothing can clash cannot say
- * Tension.
+ * This file used to be the bridge to the prototype's content pack, which
+ * authored a pentatonic degree per concept and a timbre per discipline. That
+ * pack is gone, and with it the last private tuning system: every pitch here
+ * resolves through the world mode (`mode.ts`) and every body through the six in
+ * `voices.ts`.
  *
- * New code should use `mode.ts` and the Castalia concept motifs directly.
+ * Code that needs a bead's whole motif rather than its first note should use
+ * `renderMotif` in `motif.ts`.
  */
-import type { MotifRegister, TimbreId } from "@/content/castalia/schema";
-import type { Concept, Discipline } from "@/content/types";
-import { disciplineById } from "@/content/disciplines";
-import { conceptById } from "@/content/concepts";
-import { CASTALIA_MODE, degreeFrequency } from "./mode";
-import { LEGACY_TIMBRE } from "./voices";
-
-/** Semitone offsets of the legacy pentatonic degrees, in the world mode. */
-const PENTATONIC_SEMITONES: readonly number[] = Object.freeze([0, 2, 4, 7, 9]);
-
-const REGISTER_FOR: Readonly<Record<Discipline["register"], MotifRegister>> =
-  Object.freeze({ low: "low", mid: "mid", high: "high" });
+import { castaliaConceptById } from "@/content/castalia";
+import type {
+  CastaliaConcept,
+  MotifRegister,
+  TimbreId,
+} from "@/content/castalia/schema";
+import { CASTALIA_MODE, degreeFrequency, shiftRegister } from "./mode";
 
 /** Resolve a semitone degree in a register through the world mode. */
 export function modeFreq(degree: number, register: MotifRegister): number {
   return degreeFrequency(CASTALIA_MODE, degree, register);
 }
 
-/** A legacy pentatonic degree index, resolved in the world mode. */
-export function pentatonic(index: number, register: MotifRegister): number {
-  const semitone = PENTATONIC_SEMITONES[((Math.round(index) % 5) + 5) % 5];
-  return modeFreq(semitone, register);
+export interface BeadVoice {
+  readonly freq: number;
+  readonly timbre: TimbreId;
 }
 
-/** A legacy concept's identity note, in its discipline's register. */
-export function noteForConcept(concept: Concept): number {
-  const discipline = disciplineById.get(concept.discipline);
-  return pentatonic(
-    concept.pitchDegree,
-    discipline ? REGISTER_FOR[discipline.register] : "mid"
-  );
+function voiceOf(concept: CastaliaConcept): BeadVoice {
+  const { degrees, register, timbre } = concept.motif;
+  return { freq: modeFreq(degrees[0] ?? 0, register), timbre };
 }
 
-export function timbreForDiscipline(discipline: Discipline | undefined): TimbreId {
-  return discipline ? LEGACY_TIMBRE[discipline.timbre] : "gut";
+/**
+ * A bead's identity note and body, straight from its authored motif. `null` for
+ * an id the pack does not know — callers fall silent rather than substitute a
+ * pitch no one wrote.
+ */
+export function beadVoice(id: string): BeadVoice | null {
+  const concept = castaliaConceptById.get(id);
+  return concept ? voiceOf(concept) : null;
 }
 
 export interface ChordNote {
@@ -62,51 +58,43 @@ export interface ChordNote {
 }
 
 /**
- * The legacy discovery chord: both concepts' identity notes plus supporting
- * tones, voiced wider with tier and staggered like a harp strum.
+ * The second step of a bead's motif, lifted a register — the pair's own
+ * contour widening, rather than a supporting tone the audio layer picked.
+ */
+function secondStep(concept: CastaliaConcept, gain: number, delay: number): ChordNote {
+  const { degrees, register, timbre } = concept.motif;
+  return {
+    freq: modeFreq(degrees[1] ?? degrees[0] ?? 0, shiftRegister(register, 1)),
+    timbre,
+    gain,
+    delay,
+  };
+}
+
+/**
+ * The discovery chord: both beads' identity notes over the world's ground,
+ * voiced wider with tier and staggered like a harp strum.
  */
 export function chordForPair(
   aId: string,
   bId: string,
   tier: 0 | 1 | 2 | 3
 ): ChordNote[] {
-  const a = conceptById.get(aId);
-  const b = conceptById.get(bId);
+  const a = castaliaConceptById.get(aId);
+  const b = castaliaConceptById.get(bId);
   if (!a || !b) return [];
-  const da = disciplineById.get(a.discipline);
-  const db = disciplineById.get(b.discipline);
-  if (!da || !db) return [];
+  const va = voiceOf(a);
+  const vb = voiceOf(b);
 
   const notes: ChordNote[] = [
     { freq: modeFreq(0, "low"), timbre: "glass", gain: 0.16, delay: 0 },
     { freq: modeFreq(7, "low"), timbre: "glass", gain: 0.1, delay: 0.05 },
-    {
-      freq: noteForConcept(a),
-      timbre: timbreForDiscipline(da),
-      gain: 0.24,
-      delay: 0.09,
-    },
-    {
-      freq: noteForConcept(b),
-      timbre: timbreForDiscipline(db),
-      gain: 0.24,
-      delay: 0.16,
-    },
+    { freq: va.freq, timbre: va.timbre, gain: 0.24, delay: 0.09 },
+    { freq: vb.freq, timbre: vb.timbre, gain: 0.24, delay: 0.16 },
   ];
 
   if (tier >= 2) {
-    notes.push({
-      freq: pentatonic(da.degrees[1], REGISTER_FOR[da.register] === "low" ? "mid" : "high"),
-      timbre: timbreForDiscipline(da),
-      gain: 0.14,
-      delay: 0.24,
-    });
-    notes.push({
-      freq: pentatonic(db.degrees[1], REGISTER_FOR[db.register] === "low" ? "mid" : "high"),
-      timbre: timbreForDiscipline(db),
-      gain: 0.12,
-      delay: 0.32,
-    });
+    notes.push(secondStep(a, 0.14, 0.24), secondStep(b, 0.12, 0.32));
   }
   if (tier >= 3) {
     notes.push({ freq: modeFreq(2, "air"), timbre: "glass", gain: 0.1, delay: 0.44 });

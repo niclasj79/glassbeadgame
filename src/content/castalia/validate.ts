@@ -235,7 +235,7 @@ export function validateCastaliaPack(pack: CastaliaPack): CastaliaValidationResu
       facetUseCount.set(facetId, (facetUseCount.get(facetId) ?? 0) + 1);
     }
 
-    validateMotif(concept, errors, warnings);
+    validateMotif(concept, errors);
     validateSigil(concept, errors);
   }
 
@@ -522,11 +522,7 @@ export function validateCastaliaPack(pack: CastaliaPack): CastaliaValidationResu
   return { errors, warnings };
 }
 
-function validateMotif(
-  concept: CastaliaConcept,
-  errors: string[],
-  warnings: string[]
-): void {
+function validateMotif(concept: CastaliaConcept, errors: string[]): void {
   const where = `concept ${concept.id}`;
   const { degrees, rhythm, register, articulation, timbre } = concept.motif;
   const L = CASTALIA_LIMITS;

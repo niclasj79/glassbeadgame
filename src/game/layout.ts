@@ -1,8 +1,9 @@
-import type { Concept } from "@/content/types";
+import type { CastaliaConcept } from "@/content/castalia/schema";
+import { FACULTY_IDS, MOTIF_REGISTERS } from "@/content/castalia/schema";
 
 /** Radius of the arena sphere the beads rest on. */
 export const ARENA_RADIUS = 3;
-/** Half-extent of the True/Good/Beautiful axis space in lens mode. */
+/** Half-extent of the Lens plane the beads are laid out on. */
 export const LENS_EXTENT = 2.6;
 
 /**
@@ -24,53 +25,104 @@ export function fibonacciSpherePositions(n: number, radius = ARENA_RADIUS): Floa
 }
 
 /**
- * Lens-mode position: the transcendental axes.
- * Truth rises (y), Beauty spans (x), Good advances (z).
- */
-export function tbgPositions(concepts: readonly Concept[], extent = LENS_EXTENT): Float32Array {
-  const out = new Float32Array(concepts.length * 3);
-  for (let i = 0; i < concepts.length; i++) {
-    const [t, b, g] = concepts[i].tbg;
-    out[i * 3] = b * extent;
-    out[i * 3 + 1] = t * extent;
-    out[i * 3 + 2] = g * extent;
-  }
-  return out;
-}
-
-/**
- * The Lens triptych: three flat readings of the same beads, each pairing
- * two transcendentals and folding the third away. tbg = [true, beauty, good].
+ * THE LENS — a rearrangement the player can check.
+ *
+ * The Lens used to plot each bead at its `tbg` coordinate: an authored triple
+ * saying how True, Beautiful and Good the concept was. The Castalia pack does
+ * not carry that triple, and it should not: those coordinates were a fixed
+ * answer to a question the Game has no standing to settle, which is exactly
+ * what `docs/CURRENT-STATE-AUDIT.md` lists the Lens for evolving away from.
+ *
+ * So the axes now read fields the pack actually authors, chosen because each
+ * one is verifiable from the arena itself rather than taken on trust:
+ *
+ *   Faculty    which of the four a bead belongs to — visible in its collar
+ *              geometry and its ink, before any hue is read.
+ *   Register   where its motif sits in pitch — audible the moment it is
+ *              touched, since `motif.register` is what `playVoice` renders.
+ *   Density    how much of the glass its figure fills — visible in the bead.
+ *
+ * Three views pair them three ways, so the same three readings are seen from
+ * every side. Nothing here is derived, averaged, or invented: a bead's place on
+ * the plane is one authored field per axis, and a player who disagrees with a
+ * position can look at the bead and hear it.
  */
 export const LENS_VIEWS = [
-  { id: "good-true", xAxis: "Good", yAxis: "True", label: "Good × True" },
-  { id: "good-beautiful", xAxis: "Good", yAxis: "Beautiful", label: "Good × Beautiful" },
-  { id: "true-beautiful", xAxis: "True", yAxis: "Beautiful", label: "True × Beautiful" },
+  { id: "faculty-register", xAxis: "Faculty", yAxis: "Register", label: "Faculty × Register" },
+  { id: "faculty-density", xAxis: "Faculty", yAxis: "Density", label: "Faculty × Density" },
+  { id: "register-density", xAxis: "Register", yAxis: "Density", label: "Register × Density" },
 ] as const;
 
 export type LensView = 1 | 2 | 3;
+export type LensAxis = (typeof LENS_VIEWS)[number]["xAxis" | "yAxis"];
 
-/** Axis value pickers per view: [x, y] from a concept's tbg triple. */
-function planeComponents(tbg: readonly [number, number, number], view: LensView): [number, number] {
-  const [t, b, g] = tbg;
-  if (view === 1) return [g, t];
-  if (view === 2) return [g, b];
-  return [t, b];
+/** Centre of the i-th of n equal bands across [-1, 1]. */
+const band = (i: number, n: number): number => ((i + 0.5) / n) * 2 - 1;
+
+/** One authored field, normalised to [-1, 1]. No axis reads more than one. */
+export function lensAxisValue(concept: CastaliaConcept, axis: LensAxis): number {
+  switch (axis) {
+    case "Faculty":
+      return band(FACULTY_IDS.indexOf(concept.faculty), FACULTY_IDS.length);
+    case "Register":
+      return band(
+        MOTIF_REGISTERS.indexOf(concept.motif.register),
+        MOTIF_REGISTERS.length
+      );
+    case "Density":
+      return concept.sigil.density * 2 - 1;
+  }
 }
 
+/** Roughly a bead's diameter. Two beads closer than this read as one bead. */
+const MIN_SEPARATION = 0.5;
+
+/** A phase that leaves a pair neither level nor stacked, so it reads as two. */
+const FAN_PHASE = Math.PI / 3;
+
+/**
+ * Beads that read the same on both axes belong in the same place, so they are
+ * given the same place — a shared cell — and then arranged on the smallest ring
+ * inside it that keeps them a bead's width apart. Every member of a cell is
+ * displaced equally: none of them is the "real" one, because none of them is
+ * more true than the others.
+ *
+ * The ring is legibility, not data. Its radius is bounded by the cell it sits
+ * in, so a bead never wanders into the column or the band next door — a
+ * displaced bead still reads correctly on both axes.
+ */
 export function lensPlanePositions(
-  concepts: readonly Concept[],
+  concepts: readonly CastaliaConcept[],
   view: LensView,
   extent = LENS_EXTENT
 ): Float32Array {
+  const { xAxis, yAxis } = LENS_VIEWS[view - 1] ?? LENS_VIEWS[0];
   const out = new Float32Array(concepts.length * 3);
-  for (let i = 0; i < concepts.length; i++) {
-    const [x, y] = planeComponents(concepts[i].tbg, view);
-    out[i * 3] = x * extent;
-    out[i * 3 + 1] = y * extent;
-    // The third transcendental is folded away; a whisper of deterministic
-    // depth keeps coincident beads from z-fighting.
-    out[i * 3 + 2] = ((i % 7) - 3) * 0.045;
+
+  const cells = new Map<string, number[]>();
+  const reading: [number, number][] = concepts.map((concept) => [
+    lensAxisValue(concept, xAxis),
+    lensAxisValue(concept, yAxis),
+  ]);
+  reading.forEach(([x, y], i) => {
+    const key = `${x.toFixed(3)}:${y.toFixed(3)}`;
+    const bucket = cells.get(key);
+    if (bucket === undefined) cells.set(key, [i]);
+    else bucket.push(i);
+  });
+
+  for (const members of cells.values()) {
+    const n = members.length;
+    const radius = n < 2 ? 0 : MIN_SEPARATION / (2 * Math.sin(Math.PI / n));
+    members.forEach((i, k) => {
+      const angle = FAN_PHASE + (2 * Math.PI * k) / n;
+      const [x, y] = reading[i];
+      out[i * 3] = x * extent + Math.cos(angle) * radius;
+      out[i * 3 + 1] = y * extent + Math.sin(angle) * radius;
+      // The plane is flat; a whisper of deterministic depth keeps beads that
+      // share a cell from z-fighting.
+      out[i * 3 + 2] = ((i % 7) - 3) * 0.045;
+    });
   }
   return out;
 }

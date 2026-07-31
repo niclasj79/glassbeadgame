@@ -2,11 +2,9 @@ import { audio } from "./engine";
 import { ambient } from "./ambient";
 import { SCORE } from "./score";
 import { playNote, noiseSource } from "./voices";
-import { chordForPair, modeFreq, noteForConcept, pentatonic, timbreForDiscipline } from "./theory";
+import { beadVoice, chordForPair, modeFreq } from "./theory";
 import { clampBeatingHz } from "./comfort";
 import { centsForBeatingHz, transposeCents } from "./mode";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
 import type { Discovery } from "@/state/types";
 import { presentationNow } from "@/runtime/testMode";
 
@@ -19,9 +17,9 @@ export function hoverPing(conceptId: string): void {
   lastHoverAt = now;
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const concept = conceptById.get(conceptId);
-  if (!concept) return;
-  playNote(ctx, audio.sfxBus, "glass", noteForConcept(concept) * 2, {
+  const voice = beadVoice(conceptId);
+  if (!voice) return;
+  playNote(ctx, audio.sfxBus, "glass", voice.freq * 2, {
     gain: 0.045,
     release: 0.5,
   });
@@ -30,10 +28,9 @@ export function hoverPing(conceptId: string): void {
 export function selectTick(conceptId: string): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const concept = conceptById.get(conceptId);
-  if (!concept) return;
-  const disc = disciplineById.get(concept.discipline);
-  playNote(ctx, audio.sfxBus, timbreForDiscipline(disc), noteForConcept(concept), {
+  const voice = beadVoice(conceptId);
+  if (!voice) return;
+  playNote(ctx, audio.sfxBus, voice.timbre, voice.freq, {
     gain: 0.09,
     release: 0.45,
   });
@@ -55,7 +52,7 @@ export function selectTick(conceptId: string): void {
   env.connect(audio.sfxBus);
   noise.start(t0);
   noise.stop(t0 + 0.35);
-  playNote(ctx, audio.sfxBus, "glass", noteForConcept(concept) * 4, {
+  playNote(ctx, audio.sfxBus, "glass", voice.freq * 4, {
     gain: 0.012,
     release: 0.35,
   });
@@ -130,9 +127,9 @@ export function updateSympathy(
     return;
   }
 
-  const concept = conceptById.get(candidate.id);
-  if (!concept) return;
-  const freq = noteForConcept(concept);
+  const voice = beadVoice(candidate.id);
+  if (!voice) return;
+  const freq = voice.freq;
   const t = ctx.currentTime;
 
   if (!sympathyNodes) {
@@ -162,8 +159,14 @@ export function updateSympathy(
   sympathyNodes.panner.pan.setTargetAtTime(candidate.panX * 0.7, t, 0.1);
 }
 
-/** Consecration: faint threads rising to silver — climbing bells, one per
- *  thread elevated (capped), landing on the bright fifth. */
+/**
+ * Consecration: faint threads rising to silver — climbing bells, one per thread
+ * elevated (capped), landing on the tonic an octave above where it started.
+ * Second, major third, major sixth, tonic: all stable classes of the world
+ * mode, so the climb rings rather than beats.
+ */
+const CONSECRATION_DEGREES: readonly number[] = Object.freeze([2, 4, 9, 0]);
+
 export function consecrationChime(count: number): void {
   const ctx = audio.ensure();
   const bus = audio.sfxBus;
@@ -175,7 +178,7 @@ export function consecrationChime(count: number): void {
       ctx,
       bus,
       "glass",
-      pentatonic([1, 2, 4, 0][i % 4], i === 3 ? "air" : "high"),
+      modeFreq(CONSECRATION_DEGREES[i % 4], i === 3 ? "air" : "high"),
       {
         gain: SCORE.consecration.gain,
         at: t0 + i * SCORE.consecration.noteGapSeconds,
@@ -190,11 +193,11 @@ export function illuminationChime(aId: string, bId: string): void {
   const ctx = audio.ensure();
   const bus = audio.sfxBus;
   if (!ctx || !bus) return;
-  const a = conceptById.get(aId);
-  const b = conceptById.get(bId);
+  const a = beadVoice(aId);
+  const b = beadVoice(bId);
   if (!a || !b) return;
   const t0 = ctx.currentTime + 0.03;
-  const notes = [noteForConcept(a), noteForConcept(b), modeFreq(0, "air")];
+  const notes = [a.freq, b.freq, modeFreq(0, "air")];
   notes.forEach((freq, i) => {
     playNote(ctx, bus, "glass", freq, {
       gain: 0.05,
@@ -296,12 +299,12 @@ export function discoveryChord(discovery: Discovery): void {
 export function faintDyad(discovery: Discovery): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const a = conceptById.get(discovery.a);
-  const b = conceptById.get(discovery.b);
+  const a = beadVoice(discovery.a);
+  const b = beadVoice(discovery.b);
   if (!a || !b) return;
   const t0 = ambient.quantize();
-  playNote(ctx, audio.sfxBus, "gut", noteForConcept(a), { gain: 0.07, at: t0, release: 0.8 });
-  playNote(ctx, audio.sfxBus, "gut", noteForConcept(b) * 1.5, {
+  playNote(ctx, audio.sfxBus, "gut", a.freq, { gain: 0.07, at: t0, release: 0.8 });
+  playNote(ctx, audio.sfxBus, "gut", b.freq * 1.5, {
     gain: 0.055,
     at: t0 + 0.13,
     release: 0.8,
