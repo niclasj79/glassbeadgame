@@ -258,7 +258,7 @@ describe("buildPortrait — totality and replay stability", () => {
     });
     for (const dimension of buildPortrait(fixture.state, lookup).dimensions) {
       expect(dimension.phrase).not.toMatch(/none found nothing/i);
-      expect(dimension.phrase).not.toMatch(/none [a-z]+ nothing/i);
+      expect(dimension.phrase).not.toMatch(/\bnone \w+ nothing\b/i);
       expect(dimension.phrase).not.toMatch(/,\s*and\s*\./);
       expect(dimension.phrase.trim()).not.toBe("");
       expect(dimension.phrase.trim().endsWith(".")).toBe(true);
