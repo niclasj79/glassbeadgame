@@ -4,6 +4,29 @@
 
 Milestones are organized by playable capability, not by discipline or department. A milestone is complete only when its gate is satisfied. Codex must not infer that later work is authorized merely because it appears in this document.
 
+## Campaign status — 2026-07-31
+
+A director-assigned completion campaign is running on `director/castalia-completion`,
+which supersedes the one-task-one-PR restriction for that branch only. It carries
+M3 through M8 in one reviewable branch.
+
+Landed and verified: the Castalia content pack (24 concepts, 22 facets, 44
+sourced relations, 43 Open Thread prompts, a validator); domain semantics
+(outcome resolution, topology, semantic motifs, portrait, annotation, conclusion
+compiler); the presentation cue boundary; facet-based candidate resonance;
+session progression wiring commits to consequences; deterministic Castalia
+session generation; IndexedDB and PWA; captions; the manuscript design
+substrate. The golden path is proven end to end in unit tests with no browser.
+
+In flight: the semantic audio grammar and Castalia's visual identity.
+
+Not yet done: the cutover from the legacy ninety-concept pack to Castalia, which
+is deliberately held as one coherent change until the arena can draw Castalia
+beads. Every gate below whose milestone is marked complete still requires the
+human review recorded in `DIRECTOR-SIGNOFF.md` — no automated check in this
+repository establishes beauty, comfort, pacing, intellectual honesty, or musical
+quality, and none may be read as having done so.
+
 ## Status vocabulary
 
 - **Draft** — not sufficiently specified;
