@@ -1,0 +1,499 @@
+import { describe, expect, it } from "vitest";
+
+import { RELATION_INTENTIONS, type RelationIntention } from "@/domain/events";
+import { toConceptId } from "@/domain/ids";
+import type { RelationLookup } from "@/domain/outcomes/lookup";
+
+import {
+  CASTALIA_LOOKUP,
+  CASTALIA_PACK,
+  CONTENT_PACK_VERSION,
+  findRelation,
+  openThreadPromptFor,
+  openThreadsByIntention,
+  relationByKey,
+  relationsByConcept,
+} from "./index";
+import {
+  relationKey,
+  toFacetId,
+  type CastaliaPack,
+  type DocumentedRelation,
+} from "./schema";
+import { validateCastaliaPack } from "./validate";
+
+const relationFor = (a: string, b: string): DocumentedRelation => {
+  const relation = findRelation(a, b);
+  expect(relation, `expected a documented relation for ${a} ~ ${b}`).toBeDefined();
+  return relation as DocumentedRelation;
+};
+
+/** The relations the golden path and the reference set are built on. */
+const MANDATED: ReadonlyArray<{
+  readonly a: string;
+  readonly b: string;
+  readonly primary: RelationIntention;
+}> = [
+  { a: "measure.fibonacci-sequence", b: "sound.counterpoint", primary: "echo" },
+  { a: "measure.prime-numbers", b: "sound.polyrhythm", primary: "echo" },
+  {
+    a: "measure.continuous-symmetry",
+    b: "matter.conservation-of-energy",
+    primary: "ground",
+  },
+  { a: "sound.just-intonation", b: "sound.equal-temperament", primary: "tension" },
+  { a: "image.linear-perspective", b: "image.anamorphosis", primary: "tension" },
+  { a: "measure.fourier-series", b: "sound.overtone-series", primary: "ground" },
+  { a: "image.camera-obscura", b: "image.linear-perspective", primary: "passage" },
+  { a: "image.girih-tiling", b: "matter.crystal-lattice", primary: "echo" },
+];
+
+describe("Castalia content pack", () => {
+  it("validates with zero errors", () => {
+    const { errors } = validateCastaliaPack(CASTALIA_PACK);
+    expect(errors).toEqual([]);
+  });
+
+  it("reports only the warnings the pack knowingly accepts", () => {
+    const { warnings } = validateCastaliaPack(CASTALIA_PACK);
+    // The only accepted drift is four six-step concept motifs authored in
+    // concepts.ts, which exceed the schema's "2–5 entries" target. Nothing in
+    // this pack may quietly accumulate warnings beyond that.
+    for (const warning of warnings) {
+      expect(warning).toMatch(/authored target is 2–5/);
+    }
+  });
+
+  it("gives every relation at least one genuinely shared facet", () => {
+    for (const relation of CASTALIA_PACK.relations) {
+      expect(relation.sharedFacets.length, relation.id).toBeGreaterThan(0);
+    }
+  });
+
+  it("declares the content pack version used by session events", () => {
+    expect(CONTENT_PACK_VERSION).toBe("castalia.v1");
+    expect(CASTALIA_PACK.version).toBe(CONTENT_PACK_VERSION);
+  });
+
+  it("holds 24 concepts, six per faculty", () => {
+    expect(CASTALIA_PACK.concepts).toHaveLength(24);
+    for (const faculty of CASTALIA_PACK.faculties) {
+      const count = CASTALIA_PACK.concepts.filter(
+        (concept) => concept.faculty === faculty.id
+      ).length;
+      expect(count, faculty.id).toBe(6);
+    }
+  });
+
+  it("holds a relation count inside the slice target", () => {
+    expect(CASTALIA_PACK.relations.length).toBeGreaterThanOrEqual(35);
+    expect(CASTALIA_PACK.relations.length).toBeLessThanOrEqual(45);
+  });
+});
+
+describe("mandated relations", () => {
+  it.each(MANDATED)("$a ~ $b exists with primary $primary", ({ a, b, primary }) => {
+    const relation = relationFor(a, b);
+    expect(relation.fit[primary]).toBe("primary");
+    const primaries = RELATION_INTENTIONS.filter(
+      (intention) => relation.fit[intention] === "primary"
+    );
+    expect(primaries).toEqual([primary]);
+  });
+
+  it("states the Bartók proportional claim as contested, with the disagreement", () => {
+    const relation = relationFor("measure.fibonacci-sequence", "sound.counterpoint");
+    expect(relation.evidence).toBe("contested");
+    expect(relation.relationType).not.toBe("historical-transmission");
+    expect(relation.counterpoint).toBeDefined();
+    expect(relation.sources).toContain("src.howat-1983");
+    expect(relation.sources).toContain("src.lendvai-1971");
+  });
+
+  it("states the Hockney–Falco reading as contested rather than as transmission", () => {
+    const relation = relationFor("image.camera-obscura", "image.linear-perspective");
+    expect(relation.evidence).toBe("contested");
+    expect(relation.relationType).not.toBe("historical-transmission");
+    expect(relation.counterpoint).toBeDefined();
+    expect(relation.sources).toContain("src.stork-2004");
+  });
+
+  it("states the girih quasicrystal reading as contested and cites both sides", () => {
+    const relation = relationFor("image.girih-tiling", "matter.crystal-lattice");
+    expect(relation.evidence).toBe("contested");
+    expect(relation.sources).toContain("src.lu-steinhardt-2007");
+    expect(relation.sources).toContain("src.makovicky-2007");
+    expect(relation.counterpoint).toBeDefined();
+  });
+
+  it("grounds conservation of energy in Noether 1918", () => {
+    const relation = relationFor(
+      "measure.continuous-symmetry",
+      "matter.conservation-of-energy"
+    );
+    expect(relation.relationType).toBe("formal-ground");
+    expect(relation.evidence).toBe("established");
+    expect(relation.sources).toContain("src.noether-1918");
+  });
+});
+
+describe("evidential discipline", () => {
+  it("gives every historical-transmission a source, a direction, and non-interpretive evidence", () => {
+    const transmissions = CASTALIA_PACK.relations.filter(
+      (relation) => relation.relationType === "historical-transmission"
+    );
+    expect(transmissions.length).toBeGreaterThan(0);
+    for (const relation of transmissions) {
+      expect(relation.sources.length, relation.id).toBeGreaterThan(0);
+      expect(relation.direction, relation.id).toBeDefined();
+      expect(relation.evidence, relation.id).not.toBe("interpretive");
+    }
+  });
+
+  it("uses historical-transmission sparingly", () => {
+    const transmissions = CASTALIA_PACK.relations.filter(
+      (relation) => relation.relationType === "historical-transmission"
+    );
+    expect(transmissions.length).toBeLessThanOrEqual(3);
+  });
+
+  it("gives every non-interpretive relation at least one resolvable source", () => {
+    const sourceIds = new Set(CASTALIA_PACK.sources.map((source) => source.id));
+    for (const relation of CASTALIA_PACK.relations) {
+      for (const sourceId of relation.sources) {
+        expect(sourceIds.has(sourceId), `${relation.id} → ${sourceId}`).toBe(true);
+      }
+      if (relation.evidence !== "interpretive") {
+        expect(relation.sources.length, relation.id).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("requires a counterpoint wherever evidence is contested", () => {
+    for (const relation of CASTALIA_PACK.relations) {
+      if (relation.evidence === "contested") {
+        expect(relation.counterpoint, relation.id).toBeTruthy();
+      }
+    }
+  });
+
+  it("only ever claims facets both concepts actually carry", () => {
+    const facets = new Map(
+      CASTALIA_PACK.concepts.map((concept) => [concept.id, concept.facets])
+    );
+    for (const relation of CASTALIA_PACK.relations) {
+      const [a, b] = relation.pair;
+      for (const facetId of relation.sharedFacets) {
+        expect(facets.get(a), `${relation.id}/${a}`).toContain(facetId);
+        expect(facets.get(b), `${relation.id}/${b}`).toContain(facetId);
+      }
+    }
+  });
+
+  it("leans cross-faculty", () => {
+    const facultyOf = new Map(
+      CASTALIA_PACK.concepts.map((concept) => [concept.id, concept.faculty])
+    );
+    let cross = 0;
+    let within = 0;
+    for (const relation of CASTALIA_PACK.relations) {
+      const [a, b] = relation.pair;
+      if (facultyOf.get(a) === facultyOf.get(b)) within += 1;
+      else cross += 1;
+    }
+    expect(cross).toBeGreaterThan(within);
+  });
+
+  it("gives every concept at least two ways into the web", () => {
+    for (const concept of CASTALIA_PACK.concepts) {
+      expect(
+        relationsByConcept.get(concept.id)?.length ?? 0,
+        concept.id
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("offers a primary example of each intention", () => {
+    for (const intention of RELATION_INTENTIONS) {
+      const count = CASTALIA_PACK.relations.filter(
+        (relation) => relation.fit[intention] === "primary"
+      ).length;
+      expect(count, intention).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("deterministic lookups", () => {
+  it("keys relations by a sorted pair, resolvable in either order", () => {
+    for (const relation of CASTALIA_PACK.relations) {
+      const [a, b] = relation.pair;
+      expect(a < b, relation.id).toBe(true);
+      expect(relationByKey.get(relationKey(a, b))).toBe(relation);
+      expect(findRelation(b, a)).toBe(relation);
+    }
+    expect(relationByKey.size).toBe(CASTALIA_PACK.relations.length);
+  });
+
+  it("orders relationsByConcept identically on repeated construction", () => {
+    const first = [...relationsByConcept.entries()].map(
+      ([id, relations]) => `${id}:${relations.map((r) => r.id).join(",")}`
+    );
+    const rebuilt = CASTALIA_PACK.concepts.map((concept) => {
+      const ids = CASTALIA_PACK.relations
+        .filter((relation) => relation.pair.includes(concept.id))
+        .map((relation) => relation.id)
+        .sort();
+      return `${concept.id}:${ids.join(",")}`;
+    });
+    expect(first.slice().sort()).toEqual(rebuilt.slice().sort());
+    for (const [, relations] of relationsByConcept) {
+      const ids = relations.map((relation) => relation.id);
+      expect(ids).toEqual([...ids].sort());
+    }
+  });
+
+  it("orders open thread prompts facet-specific first, then by id", () => {
+    for (const intention of RELATION_INTENTIONS) {
+      const prompts = openThreadsByIntention.get(intention) ?? [];
+      expect(prompts.length, intention).toBeGreaterThan(0);
+      const fallbackIndex = prompts.findIndex((prompt) => prompt.facet === undefined);
+      expect(fallbackIndex, intention).toBeGreaterThanOrEqual(0);
+      expect(
+        prompts.slice(fallbackIndex).every((prompt) => prompt.facet === undefined),
+        intention
+      ).toBe(true);
+      const specificIds = prompts
+        .slice(0, fallbackIndex)
+        .map((prompt) => prompt.id);
+      expect(specificIds).toEqual([...specificIds].sort());
+    }
+  });
+
+  it("resolves an open thread prompt for every intention, with or without a facet", () => {
+    for (const intention of RELATION_INTENTIONS) {
+      const fallback = openThreadPromptFor(intention);
+      expect(fallback, intention).toBeDefined();
+      expect(fallback?.facet).toBeUndefined();
+      expect(fallback?.question).not.toContain("{facet}");
+    }
+    const relation = relationFor("measure.prime-numbers", "sound.polyrhythm");
+    const specific = openThreadPromptFor("tension", relation.sharedFacets);
+    expect(specific?.facet).toBe("incommensurability");
+  });
+});
+
+describe("the domain content seam", () => {
+  it("is satisfied by CASTALIA_LOOKUP without an adapter", () => {
+    // Compile-time assertion: if `RelationLookup` in the domain changes shape,
+    // this line fails typecheck rather than failing silently at integration.
+    const lookup: RelationLookup = CASTALIA_LOOKUP;
+    expect(lookup.conceptName(toConceptId("measure.fibonacci-sequence"))).toBe(
+      "Fibonacci Sequence"
+    );
+    expect(lookup.conceptFaculty(toConceptId("sound.counterpoint"))).toBe("sound");
+    expect(lookup.facetName(toFacetId("recursion"))).toBe("Recursion");
+  });
+
+  it("returns null rather than throwing when nothing is authored", () => {
+    const lookup: RelationLookup = CASTALIA_LOOKUP;
+    expect(
+      lookup.findRelation(
+        toConceptId("measure.mobius-band"),
+        toConceptId("matter.entropy")
+      )
+    ).toBeNull();
+    expect(lookup.openThreadPrompt("echo", [])).not.toBeNull();
+  });
+
+  it("resolves the golden-path relation through the seam in either order", () => {
+    const lookup: RelationLookup = CASTALIA_LOOKUP;
+    const forward = lookup.findRelation(
+      toConceptId("measure.fibonacci-sequence"),
+      toConceptId("sound.counterpoint")
+    );
+    const reverse = lookup.findRelation(
+      toConceptId("sound.counterpoint"),
+      toConceptId("measure.fibonacci-sequence")
+    );
+    expect(forward).not.toBeNull();
+    expect(reverse).toBe(forward);
+    expect(forward?.fit.echo).toBe("primary");
+  });
+});
+
+describe("validator rules", () => {
+  const mutate = (
+    change: (draft: {
+      relations: DocumentedRelation[];
+      openThreads: CastaliaPack["openThreads"];
+    }) => void
+  ): CastaliaValidation => {
+    const draft = {
+      relations: [...CASTALIA_PACK.relations],
+      openThreads: [...CASTALIA_PACK.openThreads],
+    };
+    change(draft);
+    return validateCastaliaPack({
+      ...CASTALIA_PACK,
+      relations: draft.relations,
+      openThreads: draft.openThreads,
+    });
+  };
+
+  type CastaliaValidation = ReturnType<typeof validateCastaliaPack>;
+
+  it("rejects a historical-transmission with no source", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[0] = {
+        ...draft.relations[0],
+        relationType: "historical-transmission",
+        direction: [draft.relations[0].pair[0], draft.relations[0].pair[1]],
+        evidence: "attested",
+        sources: [],
+      };
+    });
+    expect(errors.some((e) => e.includes("requires at least one source"))).toBe(true);
+  });
+
+  it("rejects a historical-transmission resting on interpretive evidence", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[0] = {
+        ...draft.relations[0],
+        relationType: "historical-transmission",
+        direction: [draft.relations[0].pair[0], draft.relations[0].pair[1]],
+        evidence: "interpretive",
+        sources: ["src.howat-1983"],
+      };
+    });
+    expect(errors.some((e) => e.includes("asserts influence"))).toBe(true);
+  });
+
+  it("rejects a direction on a relation that is not a transmission", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[1] = {
+        ...draft.relations[1],
+        direction: [draft.relations[1].pair[0], draft.relations[1].pair[1]],
+      };
+    });
+    expect(errors.some((e) => e.includes("direction is only permitted"))).toBe(true);
+  });
+
+  it("rejects contested evidence with no counterpoint", () => {
+    const { errors } = mutate((draft) => {
+      const index = draft.relations.findIndex((r) => r.evidence === "contested");
+      const { counterpoint: _dropped, ...rest } = draft.relations[index];
+      draft.relations[index] = rest;
+    });
+    expect(errors.some((e) => e.includes("requires a counterpoint"))).toBe(true);
+  });
+
+  it("rejects a sharedFacet neither concept carries", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[2] = {
+        ...draft.relations[2],
+        sharedFacets: [...draft.relations[2].sharedFacets, "orientation" as never],
+      };
+    });
+    expect(errors.some((e) => e.includes("is not carried by"))).toBe(true);
+  });
+
+  it("rejects a fit without exactly one primary", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[3] = {
+        ...draft.relations[3],
+        fit: { echo: "primary", passage: "primary", tension: "partial", ground: "partial" },
+      };
+    });
+    expect(errors.some((e) => e.includes("exactly one primary"))).toBe(true);
+  });
+
+  it("rejects an unsorted pair", () => {
+    const { errors } = mutate((draft) => {
+      const [a, b] = draft.relations[4].pair;
+      draft.relations[4] = { ...draft.relations[4], pair: [b, a] };
+    });
+    expect(errors.some((e) => e.includes("pair must be sorted"))).toBe(true);
+  });
+
+  it("rejects a duplicate relation for one pair", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations.push({ ...draft.relations[5], id: "rel.duplicate" });
+    });
+    expect(errors.some((e) => e.includes("duplicate relation for pair"))).toBe(true);
+  });
+
+  it("rejects an unresolvable source id", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[6] = { ...draft.relations[6], sources: ["src.does-not-exist"] };
+    });
+    expect(errors.some((e) => e.includes("unknown source"))).toBe(true);
+  });
+
+  it("rejects a fallback prompt that needs a facet it may not have", () => {
+    const { errors } = mutate((draft) => {
+      draft.openThreads = draft.openThreads.map((thread) =>
+        thread.id === "thread.fallback.echo"
+          ? { ...thread, question: "Do {a} and {b} share {facet}?" }
+          : thread
+      );
+    });
+    expect(errors.some((e) => e.includes("cannot use {facet}"))).toBe(true);
+  });
+
+  it("rejects a question that is not a question", () => {
+    const { errors } = mutate((draft) => {
+      draft.openThreads = draft.openThreads.map((thread) =>
+        thread.id === "thread.fallback.ground"
+          ? {
+              ...thread,
+              question:
+                "Consider carefully which claim in {b} would fail if {a} turned out to be false.",
+            }
+          : thread
+      );
+    });
+    expect(errors.some((e) => e.includes("must end with '?'"))).toBe(true);
+  });
+
+  it("rejects a missing intention fallback", () => {
+    const { errors } = mutate((draft) => {
+      draft.openThreads = draft.openThreads.filter(
+        (thread) => thread.id !== "thread.fallback.passage"
+      );
+    });
+    expect(errors.some((e) => e.includes('"passage" has no facet-independent'))).toBe(
+      true
+    );
+  });
+
+  it("rejects a concept dropping below two relations", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations = draft.relations.filter(
+        (relation) => !relation.pair.includes("matter.coupled-pendulums")
+      );
+    });
+    expect(
+      errors.some((e) => e.includes("matter.coupled-pendulums") && e.includes("minimum"))
+    ).toBe(true);
+  });
+
+  it("rejects praise and pseudo-profundity in authored copy", () => {
+    const { errors } = mutate((draft) => {
+      draft.relations[7] = {
+        ...draft.relations[7],
+        insight: `You have discovered that everything is connected. ${draft.relations[7].insight}`.slice(
+          0,
+          600
+        ),
+      };
+    });
+    expect(errors.some((e) => e.includes("forbidden copy"))).toBe(true);
+  });
+
+  it("warns when the relation count drifts from the slice target", () => {
+    const { warnings } = mutate((draft) => {
+      draft.relations = draft.relations.slice(0, 10);
+    });
+    expect(warnings.some((w) => w.includes("slice target"))).toBe(true);
+  });
+});
