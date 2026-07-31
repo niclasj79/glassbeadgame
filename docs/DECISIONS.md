@@ -132,21 +132,28 @@ becomes a deliberate versioned migration rather than an emergency.
 
 **Status:** Accepted
 
-`bead.attended` is emitted on every explicit Attend. In a 12–18 minute session
-that grows without bound, and `appendEvents` re-decodes and re-replays the
-entire log on every write — so attention traffic makes the whole loop
-quadratic, in the one system that also has to stay responsive under visual load.
+`bead.attended` is emitted on every explicit Attend and grows without bound.
+Attention is retained only as *the latest* attended concept: appending an
+attention event when the previous event is also an attention event replaces it
+rather than extending the log.
 
-Attention is retained only as *the latest* attended concept. Consecutive
-`bead.attended` events collapse: appending an attention event when the previous
-event is also an attention event replaces it rather than extending the log.
+The reason is semantic, not performance. The log is the session's durable
+record, and it should say what the player *interpreted*, not where they looked
+on the way there. Everything downstream — the portrait, the annotation, the
+conclusion performance — is defined over threads; nothing is defined over the
+history of glances. I-002 already accepts that clearing presentation attention
+does not erase the latest canonical attended concept, so collapsing costs
+nothing the specification asks for.
 
-This preserves everything the specification actually requires. I-002 already
-accepts that clearing presentation attention does not erase the latest canonical
-attended concept, and nothing downstream — not the portrait, not the annotation,
-not the conclusion — is defined over the history of glances. The composition is
-made of threads, not of looking.
+To be accurate about the secondary effect: `appendEvents` currently re-decodes
+and re-replays the whole log on every write, and `decodeSessionEventLogV1`
+already replays internally, so each append replays twice. That is quadratic in
+principle, but at a realistic session size of a few dozen events it is not
+close to a real cost, and collapsing attention is not a meaningful optimisation.
+It is worth stating plainly rather than dressing the semantic argument in a
+performance one. The redundant second replay is a genuine (small) waste and is
+noted separately.
 
-**Consequences:** log growth becomes proportional to committed interpretation
-rather than to browsing; replay cost stays bounded; and the event log reads as a
-record of what the player *did* rather than of where their cursor went.
+**Consequences:** log growth tracks committed interpretation; persisted sessions
+stay small for reasons that will matter more as sessions are archived; and the
+log reads as a record of what the player did.

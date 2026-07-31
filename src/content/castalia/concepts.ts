@@ -151,7 +151,11 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     caption: "Independent voices that remain independent",
     description:
       "Two or more melodic lines sound together, each keeping its own shape and direction, while the intervals between them stay governed. The difficulty is precisely that neither line may become accompaniment — the writing has to be correct read horizontally and vertically at once.",
-    facets: f("imitation", "superposition", "invariance"),
+    // Recursion is not decoration here: in canon the answer is *derived* from
+    // the subject by rule, and in fugue the subject reappears inside the texture
+    // it generated. That is what lets Counterpoint rhyme with Fibonacci, and it
+    // is the shared facet the golden path's opening relation rests on.
+    facets: f("imitation", "superposition", "recursion"),
     era: "codified in Europe c. 1300–1750",
     motif: {
       degrees: [0, 2, 4, 2, 7],
@@ -227,7 +231,12 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     caption: "The octave cut into twelve identical steps",
     description:
       "Every semitone is the same ratio, the twelfth root of two. No interval except the octave is exactly in tune, and the fifth is narrowed by about two cents — but the error is spread evenly, so every key is equally usable and modulation anywhere becomes free.",
-    facets: f("quantisation", "compromise", "discreteness"),
+    // Shares `proportion` with Just Intonation on purpose. The two are not
+    // opposed because one uses ratio and the other does not — both are built
+    // from ratio. They are opposed in what they are willing to sacrifice, and
+    // an opposition between two treatments of the same thing is far sharper
+    // than an opposition between unrelated things.
+    facets: f("quantisation", "compromise", "proportion"),
     era: "described in China and Europe c. 1580s; standard by the 19th century",
     motif: {
       degrees: [0, 2, 4, 6, 8, 10],
