@@ -9,17 +9,25 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    // Point at an already-running dev server with GBG_BASE_URL. Useful locally:
+    // starting a second Vite server while one is already up doubles the content
+    // gate and the module graph, and on a loaded machine that is enough to push
+    // first paint past the per-test timeout.
+    baseURL: process.env.GBG_BASE_URL ?? "http://127.0.0.1:4173",
     browserName: "chromium",
     viewport: { width: 1280, height: 720 },
     deviceScaleFactor: 1,
     colorScheme: "dark",
     trace: "retain-on-failure",
   },
-  webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  ...(process.env.GBG_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          command: "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
+          url: "http://127.0.0.1:4173",
+          reuseExistingServer: !process.env.CI,
+          timeout: 180_000,
+        },
+      }),
 });
