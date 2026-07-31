@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useStore as useVanillaStore } from "zustand";
@@ -10,6 +10,7 @@ import { frameState } from "./frameState";
 import { GLSL_COMMON } from "./glsl";
 import { armillaryOrder, beadIdentity } from "./identity";
 import { presentationProfile } from "./quality";
+import { MAX_STATIONS, stationAnchors, type StationAnchor } from "./stations";
 
 /**
  * THE ARMILLARY
@@ -23,10 +24,12 @@ import { presentationProfile } from "./quality";
  *
  * Committed threads leave stations on the prime circle at the longitudes their
  * endpoints occupy. That is topology, not a completion percentage: two threads
- * on one side of the arena look different from two threads across it.
+ * on one side of the arena look different from two threads across it. Which
+ * beads are anchored is domain state (see scene/stations.ts); *where* they are
+ * is per-frame state, and is resolved in the frame loop every frame so the
+ * gold follows the arena through a Lens morph instead of being stamped where
+ * the beads happened to be when the thread was committed.
  */
-
-const MAX_STATIONS = 12;
 
 const VERTEX = /* glsl */ `
 varying vec2 vLocal;
@@ -159,11 +162,9 @@ function ringSpecs(parallels: readonly number[], graduations: number): RingSpec[
 function Ring({
   spec,
   stations,
-  stationCount,
 }: {
   spec: RingSpec;
-  stations: Float32Array;
-  stationCount: number;
+  stations: readonly StationAnchor[];
 }) {
   const theme = useCurrentTheme();
   const material = useMemo(() => {
@@ -196,18 +197,37 @@ function Ring({
 
   useEffect(() => () => material.dispose(), [material]);
 
-  useEffect(() => {
-    if (!spec.stations) return;
-    const values = material.uniforms.uStations.value as THREE.Vector2[];
-    for (let i = 0; i < MAX_STATIONS; i++) {
-      values[i].set(stations[i * 2] ?? 0, stations[i * 2 + 1] ?? 0);
-    }
-    (material.uniforms.uStationCount as { value: number }).value = stationCount;
-  }, [material, spec.stations, stations, stationCount]);
-
+  /**
+   * Both the breath and the stations are written here, in the frame loop.
+   *
+   * The stations used to be written by an effect whose dependency list named
+   * the `Float32Array` they were staged in — a buffer that was refilled in
+   * place, so React saw the same array identity and never re-ran the effect
+   * when its contents changed. The gold went stale. There is no effect to key
+   * now: the longitudes are per-frame data, and per-frame data is written by
+   * the frame loop. Nothing here allocates — the `Vector2`s are the pooled
+   * uniform values, and `stations` is at most `MAX_STATIONS` long.
+   */
   useFrame(() => {
     (material.uniforms.uBreath as { value: number }).value =
       Math.sin(frameState.breathPhase) * frameState.breathDepth;
+
+    if (!spec.stations) return;
+    const values = material.uniforms.uStations.value as THREE.Vector2[];
+    const positions = frameState.positions;
+    let live = 0;
+    for (let i = 0; i < stations.length && live < MAX_STATIONS; i++) {
+      const station = stations[i];
+      const index = frameState.beadIndex.get(station.id);
+      if (index === undefined || positions.length < (index + 1) * 3) continue;
+      const x = positions[index * 3];
+      const z = positions[index * 3 + 2];
+      // The prime circle lies in world XZ and its material works in the ring's
+      // own XY, where the longitude runs the other way — hence the negation.
+      values[live].set(-Math.atan2(z, x), station.weight);
+      live++;
+    }
+    (material.uniforms.uStationCount as { value: number }).value = live;
   });
 
   return (
@@ -258,51 +278,18 @@ export function Armillary() {
   );
 
   /**
-   * Stations: the longitudes on the prime circle where the web is anchored,
-   * weighted by how many threads meet there. The prime circle lies in world
-   * XZ and its material works in the ring's own XY, where the longitude runs
-   * the other way — hence the negated angle.
+   * Which beads the web is anchored to, and how heavily. Pure domain state:
+   * no position is read here, because a position is not something render is
+   * allowed to know.
    */
-  const stationBuffer = useRef(new Float32Array(MAX_STATIONS * 2));
-  const stationCount = useMemo(() => {
-    const buffer = stationBuffer.current;
-    buffer.fill(0);
-    if (!threads || threads.length === 0) return 0;
-    const degree = new Map<string, number>();
-    for (const thread of threads) {
-      for (const conceptId of thread.pair) {
-        const key = String(conceptId);
-        degree.set(key, (degree.get(key) ?? 0) + 1);
-      }
-    }
-    const entries = [...degree.entries()].sort((a, b) =>
-      b[1] !== a[1] ? b[1] - a[1] : a[0] < b[0] ? -1 : 1
-    );
-    let n = 0;
-    for (const [id, count] of entries) {
-      if (n >= MAX_STATIONS) break;
-      const index = frameState.beadIndex.get(id);
-      if (index === undefined) continue;
-      const x = frameState.positions[index * 3];
-      const z = frameState.positions[index * 3 + 2];
-      buffer[n * 2] = -Math.atan2(z, x);
-      buffer[n * 2 + 1] = Math.min(1, 0.4 + count * 0.28);
-      n++;
-    }
-    return n;
-  }, [threads]);
+  const stations = useMemo(() => stationAnchors(threads), [threads]);
 
   if (!beadIds || beadIds.length === 0) return null;
 
   return (
     <group>
       {specs.map((spec) => (
-        <Ring
-          key={spec.key}
-          spec={spec}
-          stations={stationBuffer.current}
-          stationCount={spec.stations ? stationCount : 0}
-        />
+        <Ring key={spec.key} spec={spec} stations={stations} />
       ))}
     </group>
   );

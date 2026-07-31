@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
 import { facultyById } from "@/content/castalia/faculties";
@@ -81,6 +82,54 @@ describe("beads from a pack that predates the sigil schema", () => {
     expect(bearing).toBeGreaterThanOrEqual(0);
     expect(bearing).toBeLessThan(1);
     expect(resolveBeadIdentity(philosophy.id).bearing).toBe(bearing);
+  });
+});
+
+/**
+ * The module's docblock used to state a rule the module has never implemented:
+ * that "gold leaf and faculty attribution are reserved for authored content",
+ * and that a derived identity "never claims a faculty". The legacy branch has
+ * always attributed a faculty — with its ink and its collar — wherever a
+ * discipline has an exact counterpart, and the test above has always asserted
+ * exactly that. The comment was the version a reader would believe.
+ *
+ * These tests pin the rule the code actually implements, in both directions,
+ * so the sentence and the behaviour cannot drift apart again.
+ */
+describe("the honesty rule, as implemented", () => {
+  const source = readFileSync(new URL("./identity.ts", import.meta.url), "utf8");
+
+  it("withholds gold leaf from every derived bead", () => {
+    for (const concept of legacyConcepts) {
+      const identity = resolveBeadIdentity(concept.id);
+      expect(identity.authored).toBe(false);
+      expect(identity.sigil.gilded).toBe(false);
+    }
+  });
+
+  it("attributes a faculty only from the table, never by invention", () => {
+    for (const concept of legacyConcepts) {
+      const identity = resolveBeadIdentity(concept.id);
+      if (identity.faculty === null) {
+        expect(identity.ink).toBe(NEUTRAL_INK);
+        expect(identity.setting).toBe("arc");
+        continue;
+      }
+      // A faculty on a derived bead means the discipline had an exact
+      // counterpart — and the ink and collar that come with it are the
+      // faculty's own, not a guess.
+      const faculty = facultyById.get(identity.faculty);
+      expect(faculty).toBeDefined();
+      expect(identity.ink).toBe(faculty?.ink);
+      expect(identity.setting).toBe(faculty?.geometry);
+    }
+  });
+
+  it("no longer documents a rule it does not implement", () => {
+    expect(source).not.toContain("never claims a faculty");
+    expect(source).not.toContain(
+      "Gold leaf and faculty attribution are reserved"
+    );
   });
 });
 

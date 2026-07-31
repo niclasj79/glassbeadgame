@@ -21,6 +21,19 @@ import {
  *    real illuminated diagram gets denser without turning into a blot.
  *  - `turbulence` becomes a bounded warp amplitude. Ink misbehaves; it does
  *    not leave the bead.
+ *
+ * ONE DESCRIPTION OF THE FIGURE, NOT TWO
+ *
+ * That contract used to be a promise. `glsl.ts` re-typed the radius, the line
+ * width, the warp amplitude and the ten-way family switch as its own literals,
+ * so the tests below measured a TypeScript description of the sigil while the
+ * GPU drew a second, independent one. Either could be edited without the other
+ * failing, which means the tests proved nothing about what appeared on screen.
+ *
+ * The shader now *derives* from this file: `GLSL_FIGURE_GEOMETRY` and
+ * `GLSL_FIGURE_DISPATCH` are generated from the same constants and the same
+ * `SIGIL_FAMILIES` array the exported functions use, and `sigil.test.ts` reads
+ * the emitted GLSL back and checks it computes what the functions compute.
  */
 
 /** GLSL switch index for a sigil family. Order is a shader ABI — never resort. */
@@ -95,12 +108,32 @@ export function settingCode(family: SigilFamily): number {
 }
 
 /**
+ * The figure's geometry, as shared numbers. Both the functions below and the
+ * GLSL emitted at the end of this file read these, so there is exactly one
+ * place where the size of a figure is decided.
+ */
+export const FIGURE_GEOMETRY = Object.freeze({
+  /** Extent inside the unit bead at density 0 … */
+  radiusMin: 0.34,
+  /** … and how much further a fully dense figure reaches. */
+  radiusSpan: 0.56,
+  /** Line half-width at density 0 … */
+  lineWidthMax: 0.055,
+  /** … and how much finer a fully dense figure draws. */
+  lineWidthSpan: 0.03,
+  /** Warp amplitude at full turbulence. */
+  warpMax: 0.19,
+});
+
+/**
  * Figure extent inside the unit bead, 0.34–0.9. Even a sparse figure must be
  * large enough to be recognised in a bead 15 px across; even a dense one must
  * leave a glass margin, or the bead stops looking like a lens.
  */
 export function figureRadius(density: number): number {
-  return 0.34 + 0.56 * clamp(density, 0, 1);
+  return (
+    FIGURE_GEOMETRY.radiusMin + FIGURE_GEOMETRY.radiusSpan * clamp(density, 0, 1)
+  );
 }
 
 /**
@@ -108,10 +141,53 @@ export function figureRadius(density: number): number {
  * material adds *information* rather than adding blackness.
  */
 export function figureLineWidth(density: number): number {
-  return 0.055 - 0.03 * clamp(density, 0, 1);
+  return (
+    FIGURE_GEOMETRY.lineWidthMax -
+    FIGURE_GEOMETRY.lineWidthSpan * clamp(density, 0, 1)
+  );
 }
 
 /** Warp amplitude. Bounded so the figure never leaves the glass. */
 export function figureWarp(turbulence: number): number {
-  return 0.19 * clamp(turbulence, 0, 1);
+  return FIGURE_GEOMETRY.warpMax * clamp(turbulence, 0, 1);
 }
+
+/** GLSL literal: a shader rejects an integer where a float belongs. */
+const glslFloat = (value: number): string => value.toFixed(6);
+
+/**
+ * The three figure-geometry mappings, as GLSL, generated from the constants
+ * above. `glsl.ts` calls these instead of restating the arithmetic.
+ */
+export const GLSL_FIGURE_GEOMETRY = /* glsl */ `
+float gbgFigureRadius(float density) {
+  return ${glslFloat(FIGURE_GEOMETRY.radiusMin)} + ${glslFloat(
+    FIGURE_GEOMETRY.radiusSpan
+  )} * clamp(density, 0.0, 1.0);
+}
+
+float gbgFigureLineWidth(float density) {
+  return ${glslFloat(FIGURE_GEOMETRY.lineWidthMax)} - ${glslFloat(
+    FIGURE_GEOMETRY.lineWidthSpan
+  )} * clamp(density, 0.0, 1.0);
+}
+
+float gbgFigureWarp(float turbulence) {
+  return ${glslFloat(FIGURE_GEOMETRY.warpMax)} * clamp(turbulence, 0.0, 1.0);
+}
+`;
+
+/** The GLSL construction function that draws one family. */
+export function figureFunctionName(family: SigilFamily): string {
+  return `gbgFigure${family.charAt(0).toUpperCase()}${family.slice(1)}`;
+}
+
+/**
+ * The family switch, generated from `SIGIL_FAMILIES` itself. Reordering the
+ * schema now reorders the shader's branches with it, instead of silently
+ * drawing every bead as the wrong construction.
+ */
+export const GLSL_FIGURE_DISPATCH = SIGIL_FAMILIES.map(
+  (family, index) =>
+    `  if (fam == ${index}) return ${figureFunctionName(family)}(p, k, w);`
+).join("\n");

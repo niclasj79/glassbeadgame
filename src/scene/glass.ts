@@ -15,8 +15,15 @@ import type { SceneBudget } from "./quality";
  * Three channels carry meaning, and only the fourth is hue:
  *   figure   the concept's authored construction, drawn as line
  *   collar   the faculty's construction geometry, cut into the setting
- *   marks    countable graduations (resonance) and gold pips (degree)
+ *   marks    the resonance band, as graduations on the collar
  *   ink      the faculty's colour, at the world's `inkSaturation`
+ *
+ * There was a fifth: a row of gold pips, one per committed thread, up to four.
+ * That is a per-bead score readout — a persistent counter of connections in the
+ * middle of the world, which VERTICAL-SLICE-SPEC §19 excludes from core play
+ * and product law 7 forbids outright. Being woven is now a change in the
+ * *material*: the glass gathers more light and holds its figure more strongly,
+ * continuously and with diminishing returns, so there is nothing to count.
  *
  * Instanced: one draw call for every bead in the draw. Per-instance data is
  * written into pre-allocated Float32Arrays; nothing here allocates per frame.
@@ -30,9 +37,30 @@ export const GLASS_ATTRIBUTES = Object.freeze({
   ink: "aInk",
   /** (settingCode, gilded, phase, authored). */
   set: "aSet",
-  /** (emphasis, resonance 0–1, degree, attended) — rewritten every frame. */
+  /** (emphasis, resonance 0–1, woven 0–1, attended) — rewritten every frame. */
   state: "aState",
 });
+
+/**
+ * How much light a bead's glass has gathered, given how many threads meet at
+ * it. Deliberately not a count:
+ *
+ *  - it saturates, so the first thread changes the material most and the tenth
+ *    changes it barely at all;
+ *  - it is continuous, and the frame loop eases toward it over about a second,
+ *    so the value on screen at any instant is usually between two degrees;
+ *  - it drives transmission and ink depth, which no player can read backwards
+ *    into an integer the way they could read four gold pips.
+ *
+ * A bead that is carried into the composition looks like it has been carried
+ * into the composition. It does not display a score.
+ */
+export const WOVEN_SCALE = 2.4;
+
+export function wovenLight(degree: number): number {
+  if (!(degree > 0)) return 0;
+  return 1 - Math.exp(-degree / WOVEN_SCALE);
+}
 
 const VERTEX = /* glsl */ `
 attribute vec4 aSigil;
@@ -73,6 +101,7 @@ const FRAGMENT = /* glsl */ `
 precision highp float;
 
 uniform float uTime;
+uniform float uMotion;
 uniform float uIor;
 uniform float uInkSaturation;
 uniform vec3 uGold;
@@ -91,6 +120,11 @@ ${GLSL_FIGURE}
 ${GLSL_SETTING}
 
 void main() {
+  // The only clock the figure is allowed to read, and reduced motion stops it.
+  // The ink still departs from its ideal construction by exactly as much as
+  // its turbulence says — it simply stops crawling (VERTICAL-SLICE-SPEC §22).
+  float aTime = uTime * uMotion;
+
   vec3 n = normalize(vLocal);
   vec3 camDir = normalize(vLocalCam - vLocal);
   float ndv = max(dot(n, camDir), 0.0);
@@ -111,6 +145,10 @@ void main() {
   float gilded = vSet.y;
   float widthBias = 1.0 + emphasis * 0.55;
 
+  // How far this bead has been woven into the composition — a saturating,
+  // continuously eased quantity, never a count. See wovenLight below.
+  float woven = clamp(vState.z, 0.0, 1.0);
+
   vec3 inkCol = mix(uEngraving, vInk, uInkSaturation);
   inkCol = mix(inkCol, uGold, gilded);
 
@@ -121,10 +159,11 @@ void main() {
   // The engraved tier: the figure is cut into a plate rather than suspended
   // in glass. A different picture of the same bead, not a broken one.
   vec3 q = vec3(dot(n, rx), dot(n, ry), 0.0);
-  ink = gbgFigure(q, vSigil, uTime, widthBias * 1.25);
+  ink = gbgFigure(q, vSigil, aTime, widthBias * 1.25);
   vec3 plate = mix(uDepth, uPatina, 0.5) + uHorizon * 0.5;
-  col = plate * (0.55 + 0.7 * ndv);
-  col = mix(col, inkCol * 1.5, clamp(ink * 1.6, 0.0, 1.0));
+  col = plate * (0.55 + 0.7 * ndv + 0.12 * woven);
+  // Woven: the line is bitten deeper into the plate.
+  col = mix(col, inkCol * 1.5, clamp(ink * (1.6 + 0.5 * woven), 0.0, 1.0));
   col += mix(uEngraving, uGold, gilded) * smoothstep(0.5, 1.0, fres) * 0.6;
 #else
   vec3 rd = refract(-camDir, n, 1.0 / uIor);
@@ -133,10 +172,12 @@ void main() {
     float f = (float(i) + 0.5) / float(GBG_STEPS);
     vec3 p = vLocal + rd * tExit * f;
     vec3 q = vec3(dot(p, rx), dot(p, ry), dot(p, fz));
-    float d = gbgFigure(q, vSigil, uTime, widthBias);
+    float d = gbgFigure(q, vSigil, aTime, widthBias);
     ink += d * (1.0 - ink);
   }
-  ink = clamp(ink * 1.3, 0.0, 1.0);
+  // Woven: the figure reads more strongly through the thickness — the glass
+  // holds it rather than merely containing it.
+  ink = clamp(ink * (1.3 + 0.45 * woven), 0.0, 1.0);
 
   vec3 body = gbgEnvironment(rd);
 #if GBG_DISPERSION
@@ -149,7 +190,10 @@ void main() {
 
   // Glass gathers light. Without a transmission floor a lens in a dark room
   // is just a black ball, and the figure inside it has nothing to sit on.
-  col = body * 0.85 + uHorizon * 0.55 + uVellum * 0.035;
+  // A woven bead gathers more of it — the material answers the composition.
+  col = body * (0.85 + 0.10 * woven)
+      + uHorizon * (0.55 + 0.13 * woven)
+      + uVellum * (0.035 + 0.03 * woven);
   col = mix(col, inkCol * 1.5, ink);
   col = mix(col, rimCol + uHorizon * 0.35, fres * 0.5);
 
@@ -167,19 +211,6 @@ void main() {
   vec3 collarCol = mix(uPatina, uBrass, 0.25 + 0.75 * ndv) * 1.25;
   col = mix(col, collarCol, collar * (0.82 + 0.18 * emphasis));
 
-  // Degree: one gold pip per committed thread, up to four. Countable.
-  float degree = vState.z;
-  float pips = 0.0;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    if (fi < degree) {
-      float a0 = 1.5707963 + (fi - (min(degree, 4.0) - 1.0) * 0.5) * 0.24;
-      vec2 pp = uv - 0.905 * vec2(cos(a0), sin(a0));
-      pips = max(pips, 1.0 - smoothstep(0.0, 0.03, length(pp)));
-    }
-  }
-  col = mix(col, uGold, pips * 0.92);
-
   // Attended: a full gold rule around the setting. One bead wears it.
   float rule = gbgLine(length(uv) - 0.993, 0.009);
   col = mix(col, uGold, rule * clamp(vState.w, 0.0, 1.0) * 0.95);
@@ -195,6 +226,12 @@ void main() {
 export interface BeadGlassOptions {
   readonly theme: WorldTheme;
   readonly budget: SceneBudget;
+  /**
+   * Reduced motion stops the figure's clock and nothing else: the turbulence
+   * a concept was authored with is still drawn at full amplitude, it simply
+   * holds still (VERTICAL-SLICE-SPEC §22).
+   */
+  readonly reducedMotion: boolean;
 }
 
 /**
@@ -221,6 +258,7 @@ export function createBeadGlassMaterial(
     defines: beadGlassDefines(budget),
     uniforms: {
       uTime: { value: 0 },
+      uMotion: { value: options.reducedMotion ? 0 : 1 },
       uIor: { value: theme.refraction },
       uInkSaturation: { value: theme.inkSaturation },
       uGround: { value: new THREE.Color(p.ground) },

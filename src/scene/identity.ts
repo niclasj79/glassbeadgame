@@ -19,12 +19,29 @@ import { hashString } from "@/lib/utils";
  * reach into another agent's migration, the scene resolves both through one
  * narrow, pure function and records **which of the two it got**.
  *
- * The honesty rule that makes this safe: a derived identity is never gilded
- * and never claims a faculty. Gold leaf and faculty attribution are reserved
- * for authored content, so no placeholder can be mistaken for a statement the
- * Game is making. When the Castalia pack becomes the session source, every
- * bead resolves through the authored branch and `derived` disappears on its
- * own — there is nothing to remove.
+ * The honesty rule that makes this safe, stated as the code actually
+ * implements it:
+ *
+ *  1. **Gold leaf is authored-only.** A derived identity is never gilded, so
+ *     no placeholder can wear the mark the Game reserves for a claim it is
+ *     making. `derivedSigil` hard-codes `gilded: false`.
+ *  2. **A faculty is never invented.** It is either authored by the pack, or
+ *     read from `DISCIPLINE_FACULTY` — a small, explicit table of exact
+ *     counterparts. A discipline with no counterpart resolves to `null` and
+ *     renders unattributed: neutral ink, a plain graduated collar, no claim.
+ *
+ * Note the difference between the two: gilding is withheld from every derived
+ * bead, while faculty *is* attributed to a derived bead when the table has an
+ * exact counterpart for its discipline (and its ink and collar follow). This
+ * docblock used to say that faculty attribution, like gold leaf, was "reserved
+ * for authored content" — which the legacy branch below has never done, and
+ * `identity.test.ts` has always asserted the opposite. A comment that
+ * contradicts the code is worse than no comment: it is the version a reader
+ * believes. The table, not the sentence, is the rule.
+ *
+ * When the Castalia pack becomes the session source, every bead resolves
+ * through the authored branch and the derived branch disappears on its own —
+ * there is nothing to remove.
  */
 export interface BeadIdentity {
   readonly id: string;

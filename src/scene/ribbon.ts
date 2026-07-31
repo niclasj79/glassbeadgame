@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { WorldTheme } from "@/themes/types";
 import { GLSL_COMMON } from "./glsl";
 import { beadIdentity } from "./identity";
+import { GLSL_RESOLUTION } from "./resolution";
 import { COMFORT, type ThreadForm } from "./threadGrammar";
 
 /**
@@ -25,6 +26,20 @@ import { COMFORT, type ThreadForm } from "./threadGrammar";
  *
  * The curve is evaluated in the vertex shader from three endpoint uniforms, so
  * moving beads cost no CPU geometry work and nothing allocates per frame.
+ *
+ * Two cross-cutting rules run through every branch of both shaders:
+ *
+ *   uResolved  reaches the picture only through `gbgThreadInk` in scene/
+ *              resolution.ts, which is the accepted CAV-006 model: a documented
+ *              relation and an Open Thread carry the same ink at the same
+ *              strength and differ only in whether the figure closes.
+ *   uMotion    is 0 for a player who has asked for reduced motion. Every
+ *              time-dependent expression is written against `aTime = uTime *
+ *              uMotion`, so travel and oscillation stop while the *pattern*
+ *              they were carrying stays exactly where it is: a Tension thread
+ *              still counter-rotates to CAV-007's bound and still hatches in
+ *              opposing directions, it simply holds the pose (CAV-007's
+ *              reduced-motion clause, VERTICAL-SLICE-SPEC §22).
  */
 
 export interface RibbonGeometry {
@@ -84,6 +99,7 @@ uniform vec3 uA;
 uniform vec3 uB;
 uniform vec3 uM;
 uniform float uTime;
+uniform float uMotion;
 uniform float uWidth;
 uniform float uForm;
 uniform float uStrands;
@@ -106,6 +122,10 @@ vec3 gbgBezier(float t) {
 }
 
 void main() {
+  // Animated time. Reduced motion sets uMotion to 0, which freezes travel and
+  // oscillation without touching amplitude, construction or bound.
+  float aTime = uTime * uMotion;
+
   float t = clamp(aU, 0.0, 1.0);
   vU = t;
   vV = aV;
@@ -147,7 +167,11 @@ void main() {
     // motion — eight times the envelope. The grammar test asserted the value
     // going *into* this uniform, so it passed while the render broke the bound.
     // A bound that a shader is free to scale is not a bound.
-    float sway = uTorsion * uUnrest * sin(GBG_TAU * uBeat * uTime + t * 2.1) * aStrand;
+    //
+    // Under reduced motion aTime is 0 and this becomes sin(t * 2.1) — a
+    // *static* counter-rotation that still varies along the arc and still
+    // opposes between the strands. The Tension is held, not removed (CAV-007).
+    float sway = uTorsion * uUnrest * sin(GBG_TAU * uBeat * aTime + t * 2.1) * aStrand;
     float angle = wind + sway;
     float sep = uWidth * (1.25 + 0.35 * uUnrest);
     offset = (side * cos(angle) + up * sin(angle)) * sep;
@@ -178,6 +202,7 @@ precision highp float;
 uniform vec3 uInk;
 uniform vec3 uMarkColor;
 uniform float uTime;
+uniform float uMotion;
 uniform float uForm;
 uniform float uTravel;
 uniform float uOpacity;
@@ -193,49 +218,59 @@ varying float vStrand;
 varying float vTaper;
 
 ${GLSL_COMMON}
+${GLSL_RESOLUTION}
 
 void main() {
+  float aTime = uTime * uMotion;
+
   int form = int(uForm + 0.5);
   float across = abs(vV);
-  float body = 1.0 - smoothstep(0.55, 1.0, across);
+
+  // The thread's own growth coordinate: 0 at the ends it grew from, 1 where
+  // the figure closes. Echo and Tension arrive from both beads and close in
+  // the middle; Passage and Ground close at the destination. Both the reveal
+  // and CAV-006's terminal read this one coordinate, so "where it closes" is
+  // stated once per form instead of twice.
+  float mirrored = (form == 0 || form == 2) ? 1.0 : 0.0;
+  float closure = mix(vU, min(vU, 1.0 - vU) * 2.0, mirrored);
+
+  // CAV-006, in one call. Documented ink is dry and closes; open ink has
+  // spread to the full width of the nib and stops short. Same quantity of ink,
+  // same peak strength — see scene/resolution.ts, where the spread is solved
+  // rather than tuned, and measured by test.
+  float body = gbgThreadInk(across, closure, uResolved);
+
   float mark = 0.0;
   float reveal = 1.0;
 
   if (form == 0) {
     // Echo — growth arrives from both ends at once, and the ticks it leaves
     // sit at mirrored stations.
-    float fromEnd = min(vU, 1.0 - vU) * 2.0;
-    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, fromEnd);
-    float station = fract(fromEnd * 5.0 - uTime * uTravel);
+    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, closure);
+    float station = fract(closure * 5.0 - aTime * uTravel);
     mark = (1.0 - smoothstep(0.0, 0.18, station)) * body;
   } else if (form == 1) {
     // Passage — chevrons that only ever travel one way, over a mark period
     // that transforms from the source's rhythm into the destination's.
-    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.14, vU);
+    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.14, closure);
     float period = mix(uRhythmA, uRhythmB, vU);
-    float phase = fract(vU * period - uTime * uTravel * 3.0);
+    float phase = fract(vU * period - aTime * uTravel * 3.0);
     mark = step(phase, 0.5 - 0.42 * across) * body;
   } else if (form == 2) {
     // Tension — the two strands hatch in opposing directions and never agree.
-    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, min(vU, 1.0 - vU) * 2.0);
+    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, closure);
     float slope = vStrand;
-    float hatch = fract(vU * 22.0 + vV * slope * 2.2 + uTime * 0.16 * slope);
+    float hatch = fract(vU * 22.0 + vV * slope * 2.2 + aTime * 0.16 * slope);
     mark = step(hatch, 0.34) * body;
   } else {
     // Ground — a heavy strand with its weight declared along the lower edge.
-    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.16, vU);
+    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.16, closure);
     mark = smoothstep(0.55, 0.95, -vV) * body;
     mark = max(mark, gbgLine(vV, 0.12) * 0.35 * body);
   }
 
-  // An unresolved thread keeps its terminal open and its ink wet: the last
-  // tenth stays unclosed and shimmers very slowly (CAV-006). Luminance never
-  // oscillates above 3 Hz (CAV-007) — this runs at a quarter of that.
-  float wet = mix(0.82 + 0.18 * sin(uTime * 1.6 + vU * 3.0), 1.0, uResolved);
-  float terminal = mix(1.0 - smoothstep(0.86, 1.0, vU), 1.0, uResolved);
-
   vec3 col = mix(uInk, uMarkColor, mark * 0.85);
-  float alpha = body * uOpacity * reveal * terminal * wet;
+  float alpha = body * uOpacity * reveal;
   alpha *= mix(0.72, 1.0, uUnrest);
   if (alpha < 0.004) discard;
   gl_FragColor = vec4(col, alpha);
@@ -248,6 +283,13 @@ export interface RibbonUniformSeed {
   readonly ink: THREE.Color;
   readonly width: number;
   readonly opacity: number;
+  /**
+   * The player's reduced-motion preference. It sets exactly one uniform, and
+   * that uniform scales time — never amplitude, opacity, construction or
+   * bound. Reduced motion may take away the travel; it may not take away the
+   * relation (VERTICAL-SLICE-SPEC §22, CAV-007).
+   */
+  readonly reducedMotion: boolean;
 }
 
 export function createRibbonMaterial(seed: RibbonUniformSeed): THREE.ShaderMaterial {
@@ -264,6 +306,7 @@ export function createRibbonMaterial(seed: RibbonUniformSeed): THREE.ShaderMater
       uB: { value: new THREE.Vector3(0, 0, 0.001) },
       uM: { value: new THREE.Vector3() },
       uTime: { value: 0 },
+      uMotion: { value: seed.reducedMotion ? 0 : 1 },
       uWidth: { value: seed.width },
       uForm: { value: form.code },
       uStrands: { value: form.strands },

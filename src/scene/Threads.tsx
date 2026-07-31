@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useStore as useVanillaStore } from "zustand";
 import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
-import type { CommittedThreadV1 } from "@/domain/model";
+import type { CommittedThreadV1, ThreadOutcomeV1 } from "@/domain/model";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 import { intentionArcMid } from "./curves";
@@ -13,6 +13,7 @@ import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./rib
 import { threadForm, unrestAmplitude } from "./threadGrammar";
 
 const EMPTY_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
+const EMPTY_OUTCOMES: readonly ThreadOutcomeV1[] = Object.freeze([]);
 
 const vStart = new THREE.Vector3();
 const vEnd = new THREE.Vector3();
@@ -23,6 +24,11 @@ interface RibbonProps {
   readonly targetId: string | null;
   readonly intention: CommittedThreadV1["intention"];
   readonly opacity: number;
+  /**
+   * Whether this thread's figure has closed. A documented relation closes; an
+   * Open Thread stays open. The two are drawn at the same strength and with
+   * the same quantity of ink — see scene/resolution.ts (CAV-006).
+   */
   readonly resolved: boolean;
   /** Committed threads grow once and stay; a preview is always fully drawn. */
   readonly animateGrowth: boolean;
@@ -62,8 +68,9 @@ function Ribbon({
         ink: threadInk(theme, sourceId, targetId ?? sourceId),
         width: 0.022,
         opacity,
+        reducedMotion: profile.reducedMotion,
       }),
-    [theme, form, sourceId, targetId, opacity]
+    [theme, form, sourceId, targetId, opacity, profile.reducedMotion]
   );
   useEffect(() => () => material.dispose(), [material]);
 
@@ -143,6 +150,26 @@ export function Threads() {
     domainSessionStore,
     (state) => state.session?.threads ?? EMPTY_THREADS
   );
+  const outcomes = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.outcomes ?? EMPTY_OUTCOMES
+  );
+
+  /**
+   * Which threads have closed. Every committed thread used to be drawn as a
+   * documented relation, which made CAV-006's distinction unreachable from the
+   * arena. A thread closes when a documented relation is revealed for it; an
+   * Open Thread, and a thread whose outcome has not landed yet, stay open —
+   * at the same brightness and the same weight.
+   */
+  const closed = useMemo(() => {
+    const ids = new Set<string>();
+    for (const outcome of outcomes) {
+      if (outcome.type === "documented-relation") ids.add(String(outcome.threadId));
+    }
+    return ids;
+  }, [outcomes]);
+
   if (threads.length === 0) return null;
   return (
     <group>
@@ -153,7 +180,7 @@ export function Threads() {
           targetId={String(thread.pair[1])}
           intention={thread.intention}
           opacity={0.9}
-          resolved
+          resolved={closed.has(String(thread.id))}
           animateGrowth
         />
       ))}

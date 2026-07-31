@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
 import { FACULTIES } from "@/content/castalia/faculties";
 import { SIGIL_FAMILIES } from "@/content/castalia/schema";
+import { GLSL_FIGURE } from "./glsl";
 import {
   SIGIL_FAMILY_CODE,
+  figureFunctionName,
   figureLineWidth,
   figureRadius,
   figureWarp,
@@ -101,6 +104,70 @@ describe("figure geometry", () => {
 
   it("gives larger figures to denser sigils", () => {
     expect(figureRadius(0.9)).toBeGreaterThan(figureRadius(0.4));
+  });
+});
+
+/**
+ * These tests used to describe a figure the GPU never consulted. `glsl.ts` had
+ * its own copy of the radius, the line width, the warp amplitude and the
+ * ten-way family switch, so every assertion above could pass while the shader
+ * drew something else entirely — the tested source was not the rendering one.
+ *
+ * The shader is now generated from this module. What follows reads the emitted
+ * GLSL back and checks it computes what the exported functions compute, in the
+ * spirit of `threadGrammar.test.ts`, which reads `ribbon.ts` to guard the
+ * torsion bound.
+ */
+describe("the figure the shader actually draws", () => {
+  const glslSource = readFileSync(
+    new URL("./glsl.ts", import.meta.url),
+    "utf8"
+  );
+
+  /** Pull `[a ±] b * clamp(x, 0.0, 1.0)` out of an emitted GLSL function. */
+  const emittedMapping = (name: string): ((x: number) => number) => {
+    const body = new RegExp(
+      `float ${name}\\(float \\w+\\) \\{\\s*return (?:([\\d.]+) ([-+]) )?([\\d.]+) \\* clamp\\(\\w+, 0\\.0, 1\\.0\\);`
+    ).exec(GLSL_FIGURE);
+    expect(body, `${name} is not emitted into the shader`).not.toBeNull();
+    const base = body![1] === undefined ? 0 : Number(body![1]);
+    const sign = body![2] === "-" ? -1 : 1;
+    const span = Number(body![3]);
+    return (x: number) => base + sign * span * Math.min(1, Math.max(0, x));
+  };
+
+  it("sizes the figure with the same numbers the tested functions do", () => {
+    const radius = emittedMapping("gbgFigureRadius");
+    const lineWidth = emittedMapping("gbgFigureLineWidth");
+    const warp = emittedMapping("gbgFigureWarp");
+    for (let x = 0; x <= 1.0001; x += 0.05) {
+      expect(radius(x)).toBeCloseTo(figureRadius(x), 6);
+      expect(lineWidth(x)).toBeCloseTo(figureLineWidth(x), 6);
+      expect(warp(x)).toBeCloseTo(figureWarp(x), 6);
+    }
+  });
+
+  it("states those numbers once — glsl.ts no longer keeps its own copy", () => {
+    expect(glslSource).toContain("float radius = gbgFigureRadius(density);");
+    expect(glslSource).toContain("float warp = gbgFigureWarp(turbulence);");
+    expect(glslSource).not.toMatch(/0\.34\s*\+\s*0\.56/);
+    expect(glslSource).not.toMatch(/0\.055\s*-\s*0\.03/);
+    expect(glslSource).not.toMatch(/0\.19\s*\*\s*turbulence/);
+  });
+
+  it("dispatches every family, in the schema's order, from the schema itself", () => {
+    SIGIL_FAMILIES.forEach((family, index) => {
+      // The branch the shader takes for a family is generated from the same
+      // array `sigilFamilyCode` indexes, so a reordered schema can no longer
+      // leave every bead drawn as the wrong construction.
+      expect(GLSL_FIGURE).toContain(
+        `if (fam == ${index}) return ${figureFunctionName(family)}(p, k, w);`
+      );
+      // …and that construction exists.
+      expect(glslSource).toContain(`float ${figureFunctionName(family)}(`);
+    });
+    const branches = GLSL_FIGURE.match(/if \(fam == \d+\)/g) ?? [];
+    expect(branches).toHaveLength(SIGIL_FAMILIES.length);
   });
 });
 

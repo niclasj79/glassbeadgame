@@ -15,7 +15,7 @@ import { frameState } from "./frameState";
 import { beadPointerHandlers } from "./threading";
 import { beadIdentity } from "./identity";
 import { sigilUniform, settingCode } from "./sigil";
-import { createBeadGlassMaterial } from "./glass";
+import { createBeadGlassMaterial, wovenLight } from "./glass";
 import { presentationProfile } from "./quality";
 import { ARENA_FOV } from "./framing";
 
@@ -90,8 +90,13 @@ export function Beads() {
   );
 
   const material = useMemo(
-    () => createBeadGlassMaterial({ theme, budget: profile.budget }),
-    [theme, profile.budget]
+    () =>
+      createBeadGlassMaterial({
+        theme,
+        budget: profile.budget,
+        reducedMotion: profile.reducedMotion,
+      }),
+    [theme, profile.budget, profile.reducedMotion]
   );
   useEffect(() => () => material.dispose(), [material]);
 
@@ -134,7 +139,7 @@ export function Beads() {
 
   /** Rare-change lookups, read by the frame loop through a ref. */
   const live = useRef({
-    degree: new Map<string, number>(),
+    woven: new Map<string, number>(),
     resonance: new Map<string, number>(),
     attendedId: null as string | null,
     candidateId: null as string | null,
@@ -147,6 +152,13 @@ export function Beads() {
   live.current.candidateId =
     draft.stage === "candidate-selected" ? String(draft.candidateConceptId) : null;
 
+  /**
+   * How woven each bead is. The count of threads at a bead is a working
+   * number here and never reaches the screen as one: it is turned into a
+   * saturating material target, and the frame loop then eases toward that
+   * target over about a second, so what is drawn is a property of the glass
+   * rather than a readout of a score (VERTICAL-SLICE-SPEC §19).
+   */
   useEffect(() => {
     const degree = new Map<string, number>();
     for (const thread of threads ?? []) {
@@ -155,7 +167,9 @@ export function Beads() {
         degree.set(key, (degree.get(key) ?? 0) + 1);
       }
     }
-    live.current.degree = degree;
+    const woven = new Map<string, number>();
+    for (const [id, count] of degree) woven.set(id, wovenLight(count));
+    live.current.woven = woven;
   }, [threads]);
 
   useEffect(() => {
@@ -286,7 +300,10 @@ export function Beads() {
       const resonance = now.resonance.get(id) ?? 0;
       state[i * 4] += (emphasis - state[i * 4]) * Math.min(1, dt * 9);
       state[i * 4 + 1] += (resonance - state[i * 4 + 1]) * Math.min(1, dt * 4);
-      state[i * 4 + 2] = now.degree.get(id) ?? 0;
+      // Woven eases rather than steps: a bead takes on light as it is carried
+      // into the composition, and never arrives at a countable rung.
+      state[i * 4 + 2] +=
+        ((now.woven.get(id) ?? 0) - state[i * 4 + 2]) * Math.min(1, dt * 1.6);
       state[i * 4 + 3] += ((attended ? 1 : 0) - state[i * 4 + 3]) * Math.min(1, dt * 8);
 
       const hit = hits.current[i];
