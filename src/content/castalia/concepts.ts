@@ -155,7 +155,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     // the subject by rule, and in fugue the subject reappears inside the texture
     // it generated. That is what lets Counterpoint rhyme with Fibonacci, and it
     // is the shared facet the golden path's opening relation rests on.
-    facets: f("imitation", "superposition", "recursion"),
+    facets: f("imitation", "superposition", "recursion", "invariance"),
     era: "codified in Europe c. 1300–1750",
     motif: {
       degrees: [0, 2, 4, 2, 7],
@@ -177,8 +177,8 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     facets: f("periodicity", "incommensurability", "interference"),
     era: "widespread; central to West African drumming traditions",
     motif: {
-      degrees: [0, 0, 5, 0, 5, 5],
-      rhythm: [3, 3, 3, 2, 2, 2],
+      degrees: [0, 0, 5, 0, 5],
+      rhythm: [3, 3, 3, 2, 2],
       register: "low",
       articulation: "struck",
       timbre: "wood",
@@ -236,11 +236,11 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     // from ratio. They are opposed in what they are willing to sacrifice, and
     // an opposition between two treatments of the same thing is far sharper
     // than an opposition between unrelated things.
-    facets: f("quantisation", "compromise", "proportion"),
+    facets: f("quantisation", "compromise", "proportion", "discreteness"),
     era: "described in China and Europe c. 1580s; standard by the 19th century",
     motif: {
-      degrees: [0, 2, 4, 6, 8, 10],
-      rhythm: [2, 2, 2, 2, 2, 2],
+      degrees: [0, 2, 4, 6, 8],
+      rhythm: [2, 2, 2, 2, 2],
       register: "mid",
       articulation: "struck",
       timbre: "metal",
@@ -355,8 +355,8 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     facets: f("irreversibility", "threshold", "decomposition"),
     era: "Clausius 1865; statistical account Boltzmann, 1870s",
     motif: {
-      degrees: [7, 5, 4, 2, 0, -1],
-      rhythm: [2, 2, 3, 3, 5, 8],
+      degrees: [7, 4, 2, 0, -1],
+      rhythm: [2, 3, 3, 5, 8],
       register: "low",
       articulation: "breathed",
       timbre: "voice",
@@ -471,8 +471,8 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     facets: f("optical-mixture", "discreteness", "decomposition"),
     era: "Seurat and Signac, from 1884",
     motif: {
-      degrees: [0, 2, 4, 5, 7, 9],
-      rhythm: [1, 1, 1, 1, 1, 1],
+      degrees: [0, 2, 4, 7, 9],
+      rhythm: [1, 1, 1, 1, 1],
       register: "high",
       articulation: "plucked",
       timbre: "wood",
