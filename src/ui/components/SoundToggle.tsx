@@ -122,7 +122,7 @@ export function SoundToggle() {
   // Before the Game, never during it. Retires itself once the player has opened
   // the panel, because at that point they have met the setting properly.
   const showHeadphoneNote =
-    (phase === "title" || phase === "setup") &&
+    phase === "title" &&
     binaural &&
     !muted &&
     !hintsSeen.headphones &&

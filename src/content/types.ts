@@ -37,28 +37,3 @@ export interface Concept {
   bridge?: boolean;
 }
 
-export interface CuratedConnection {
-  /** Canonical id — always the sorted pairKey of the two concept ids. */
-  id: string;
-  pair: [string, string];
-  /** Evocative name shown as the discovery's title. */
-  title: string;
-  /** 2–3 sentences of genuine intellectual content. */
-  insight: string;
-  /** 1 = solid, 2 = strong, 3 = profound. Drives score, thread brightness, chord voicing. */
-  tier: 1 | 2 | 3;
-  quote?: { text: string; source: string };
-}
-
-export type MotifId = "triad" | "symposium" | "fugue";
-
-export interface MotifDef {
-  id: MotifId;
-  name: string;
-  blurb: string;
-  points: number;
-}
-
-/** Canonical unordered-pair key: sorted ids joined with '+'. */
-export const pairKey = (a: string, b: string): string =>
-  a < b ? `${a}+${b}` : `${b}+${a}`;

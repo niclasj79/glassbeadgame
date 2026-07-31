@@ -1,8 +1,29 @@
 import type { DisciplineId } from "@/content/types";
 
+/**
+ * `setup` is unreachable: the pre-game discipline picker left with the legacy
+ * draw and the title now opens straight into the arena. The member stays in the
+ * union only because `src/audio/useAudio.ts` and `src/scene/CameraRig.tsx`
+ * still branch on it, and neither may be edited from here.
+ */
 export type Phase = "title" | "setup" | "arena" | "conclusion";
 
 export type ArenaMode = "idle" | "pressed" | "threading" | "reveal" | "concluding";
+
+/**
+ * THE LEGACY PRESENTATION PROJECTION
+ *
+ * Everything below `Settings` is a *view*, not a source of truth. The canonical
+ * session is the replayed event log in `state/domainSession`; these shapes exist
+ * only because the scene and the audio engine still read
+ * `useStore().session` for bead ids, quality, framing and the ambient bed.
+ *
+ * Nothing writes to `threads`, `discoveries`, `motifs` or `score` any more —
+ * the actions that did (`addThread`, `addDiscovery`, `consecrateThreads`,
+ * `spendInsight`) left with the legacy scoring model. They stay declared, and
+ * are published empty by `applySessionStart`, because `src/scene/**` and
+ * `src/audio/**` still read them defensively and cannot be edited here.
+ */
 
 export interface Thread {
   /** pairKey of the two concept ids. */
@@ -13,33 +34,22 @@ export interface Thread {
   /** 0 = faint, 1–3 = curated tier. */
   tier: 0 | 1 | 2 | 3;
   createdAt: number;
-  /** A completed motif consecrates the faint threads of its web — a state
-   *  between faint resonance and luminous connection. Holds the motif id. */
-  consecratedBy?: "triad" | "symposium" | "fugue";
 }
 
 export interface Discovery {
-  /** pairKey; equals the curated connection id when kind is curated. */
+  /** pairKey of the two concept ids. */
   id: string;
   a: string;
   b: string;
   kind: "curated" | "faint";
   tier: 0 | 1 | 2 | 3;
-  title: string;
-  insight: string;
-  quote?: { text: string; source: string };
-  /** First time this curated connection was ever found (across all sessions). */
-  newToCodex: boolean;
   points: number;
 }
 
 export interface MotifAward {
   motifId: "triad" | "symposium" | "fugue";
-  name: string;
-  points: number;
   at: number;
-  /** The beads that formed the motif — its persistent mark lives on them
-   *  (triangle corners, symposium members, the fugue's ordered path). */
+  /** The beads that formed the motif — its persistent mark lives on them. */
   beads?: string[];
 }
 
@@ -63,14 +73,11 @@ export interface SessionState {
   score: number;
   startedAt: number;
   interaction: Interaction;
-  /** Curated connections hidden among this draw's beads — the session's arc. */
+  /** Legacy counters. Published as zero and never incremented. */
   curatedAvailable: number;
-  /** Insight — the currency of illumination. Earned by luminous discoveries
-   *  and motifs; spent to have the Game briefly show where light hides. */
   insight: number;
-  /** How many illuminations this session has already spent (seeds the pick). */
   illuminationsUsed: number;
-  /** Set when this session is the shared daily draw. */
+  /** Set when this session was started as the shared daily draw. */
   daily?: boolean;
   /** The world this session opens into (themes registry id). */
   themeId: string;
@@ -94,18 +101,6 @@ export interface SessionStartProjection {
   readonly themeId: string;
 }
 
-export interface SessionMemory {
-  id: string;
-  seed: number;
-  endedAt: number;
-  disciplines: DisciplineId[];
-  beadIds: string[];
-  threads: Thread[];
-  discoveries: Discovery[];
-  motifs: MotifAward[];
-  score: number;
-}
-
 export interface Settings {
   muted: boolean;
   /** The theta-band binaural bed — headphone magic, honest off-switch. */
@@ -113,9 +108,4 @@ export interface Settings {
   qualityTier: "high" | "base" | "potato";
   reducedMotion: boolean;
   hintsSeen: Record<string, boolean>;
-}
-
-export interface CodexEntry {
-  firstFoundAt: number;
-  count: number;
 }

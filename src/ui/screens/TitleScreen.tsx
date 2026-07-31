@@ -1,13 +1,6 @@
-import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { startSession } from "@/runtime/session";
-import { useStore } from "@/state/store";
-import { rankFor, totalConnections } from "@/game/ranks";
-import { dailyPicks, dailySeed, utcDateKey } from "@/lib/daily";
-import { disciplineById } from "@/content/disciplines";
-import { epigraphForToday } from "@/content/epigraphs";
 import { Button } from "../components/Button";
-import { TitleMenu } from "../components/TitleMenu";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -15,27 +8,17 @@ const fadeUp = {
   exit: { opacity: 0, y: -10 },
 };
 
+/**
+ * One door.
+ *
+ * The prototype's title offered four: Begin, Today's Draw, the Codex, and a
+ * progress menu carrying a rank. Three of them were entrances to systems that
+ * no longer exist — the daily draw seeded a discipline pick the slice does not
+ * make, and the Codex and rank both counted curated connections against a
+ * corpus that has been deleted. What is left is the only choice the Game ever
+ * needed the player to make: start.
+ */
 export function TitleScreen() {
-  const goToSetup = useStore((s) => s.goToSetup);
-  const setCodexOpen = useStore((s) => s.setCodexOpen);
-  const codexCount = useStore((s) => Object.keys(s.codex).length);
-  const lifetimeStats = useStore((s) => s.lifetimeStats);
-  const lastDaily = useStore((s) => s.lastDaily);
-  const unlocks = useStore((s) => s.unlocks);
-  const hasProgress =
-    codexCount > 0 || lifetimeStats.sessions > 0 || lifetimeStats.totalScore > 0;
-
-  const epigraph = useMemo(() => epigraphForToday(unlocks), [unlocks]);
-  const todayPicks = useMemo(dailyPicks, []);
-  const playedToday = lastDaily?.date === utcDateKey();
-  const dailyGlyphs = todayPicks
-    .map((d) => disciplineById.get(d)?.glyph ?? "?")
-    .join(" × ");
-  const isMagister = rankFor(codexCount).name === "Magister Ludi";
-
-  const startDaily = () =>
-    startSession(todayPicks, { seed: dailySeed(), daily: true });
-
   return (
     <motion.div
       className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6"
@@ -62,10 +45,7 @@ export function TitleScreen() {
       <motion.div
         {...fadeUp}
         transition={{ duration: 0.9, delay: 0.45 }}
-        className={
-          "mt-7 h-px w-24 bg-gradient-to-r from-transparent to-transparent " +
-          (isMagister ? "via-resonance/70" : "via-glow/60")
-        }
+        className="mt-7 h-px w-24 bg-gradient-to-r from-transparent via-glow/60 to-transparent"
       />
 
       <motion.blockquote
@@ -73,45 +53,19 @@ export function TitleScreen() {
         transition={{ duration: 0.9, delay: 0.55 }}
         className="mt-7 max-w-xl text-center font-display text-lg italic leading-relaxed text-dim text-balance"
       >
-        "{epigraph.text}"
+        "The hidden harmony is better than the obvious."
         <footer className="mt-3 font-ui text-[10px] uppercase not-italic tracking-[0.35em] text-dim/60">
-          {epigraph.source}
+          Heraclitus
         </footer>
       </motion.blockquote>
 
       <motion.div
         {...fadeUp}
         transition={{ duration: 0.9, delay: 0.75 }}
-        className="mt-12 flex flex-wrap items-center justify-center gap-4"
+        className="mt-12"
       >
-        <Button onClick={goToSetup}>Begin the Game</Button>
-        <button
-          onClick={startDaily}
-          className="rounded-full border border-glow-3/40 bg-glow-3/5 px-7 py-3.5 font-ui text-xs uppercase tracking-[0.28em] text-bright transition-all duration-300 hover:border-glow-3/70 hover:bg-glow-3/15"
-          title="One shared draw for the whole world today"
-        >
-          {playedToday
-            ? `Today's Draw ✓ ${lastDaily?.score} · replay`
-            : `Today's Draw · ${dailyGlyphs}`}
-        </button>
-        {codexCount > 0 && (
-          <Button variant="ghost" onClick={() => setCodexOpen(true)}>
-            Codex · {codexCount}/{totalConnections()}
-          </Button>
-        )}
+        <Button onClick={() => startSession()}>Begin</Button>
       </motion.div>
-
-      {codexCount > 0 && (
-        <motion.p
-          {...fadeUp}
-          transition={{ duration: 0.9, delay: 0.9 }}
-          className="mt-6 font-ui text-[10px] uppercase tracking-[0.4em] text-dim/60"
-        >
-          {rankFor(codexCount).name} of the Order
-        </motion.p>
-      )}
-
-      {hasProgress && <TitleMenu />}
     </motion.div>
   );
 }
