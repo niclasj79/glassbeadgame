@@ -65,7 +65,7 @@ export function createCueBus(options: CueBusOptions): CueBus {
     }
   };
 
-  return Object.freeze({
+  const bus: CueBus = {
     subscribe: (channel, listener) => {
       let set = listeners.get(channel);
       if (!set) {
@@ -110,5 +110,6 @@ export function createCueBus(options: CueBusOptions): CueBus {
     },
 
     pending: () => queue.length,
-  });
+  };
+  return Object.freeze(bus);
 }
