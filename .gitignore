@@ -25,3 +25,6 @@ artifacts/performance
 *.njsproj
 *.sln
 *.sw?
+
+# Director capture frames (regenerate: node scripts/capture-frames.mjs)
+artifacts/capture
