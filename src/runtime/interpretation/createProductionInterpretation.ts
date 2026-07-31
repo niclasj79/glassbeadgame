@@ -1,5 +1,5 @@
 import type { InputModality, RelationIntention } from "../../domain/events";
-import type { ConceptId } from "../../domain/ids";
+import type { ConceptId, ThreadId } from "../../domain/ids";
 import type { DomainSessionStore } from "../../state/domainSession";
 import type { InterpretationDraftStore } from "../../state/interactionDraft";
 import type { InterpretationPresentationStore } from "../../state/interpretationPresentation";
@@ -32,6 +32,15 @@ export interface ProductionInterpretationDependencies {
   readonly now: () => number;
   readonly resolveCandidateEvidence: ResolveProvisionalCandidateEvidence;
   readonly setInspection: (conceptId: ConceptId | null) => void;
+  /**
+   * Runs immediately after a commit has been published, in the same turn.
+   *
+   * Deliberately a dependency rather than a store subscription. Resolving a
+   * thread's outcome is part of the commit moment, not a reaction to it — and
+   * a subscription would put the outcome one microtask behind the thread,
+   * which is exactly the drift the cue boundary exists to prevent (ADR-009).
+   */
+  readonly onCommitted?: (threadId: ThreadId) => void;
 }
 
 export interface ProductionInterpretation {
@@ -146,6 +155,7 @@ export function createProductionInterpretation(
       });
       dependencies.setInspection(null);
       dependencies.presentationStore.getState().publishCommit(threadId);
+      dependencies.onCommitted?.(threadId);
     } catch (error) {
       dependencies.presentationStore.getState().setWeaving(false);
       dependencies.presentationStore
@@ -315,6 +325,7 @@ export function createProductionInterpretation(
       capture = null;
       dependencies.setInspection(null);
       dependencies.presentationStore.getState().publishCommit(threadId);
+      dependencies.onCommitted?.(threadId);
     },
 
     cancelWeave: () => {
