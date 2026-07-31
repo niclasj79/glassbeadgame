@@ -2,21 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * CASTALIA — DESIGN SUBSTRATE
+ *
+ * The previous palette was cosmic violet, cyan, and gold: legible, but the
+ * visual language of a space game. Castalia is a manuscript, an instrument
+ * cabinet, and a cathedral — so the colours here are named after *pigments and
+ * materials*, and every one of them is something you could physically hold.
+ * Lapis, verdigris, orpiment and madder are the four inks an illuminator
+ * actually had; brass is what the astrolabe is made of; vellum is what the
+ * page is.
+ *
+ * Two rules govern this file.
+ *
+ * 1. Darkness has material depth. The void is never pure black and never a flat
+ *    blue-black — it carries a faint warm violet, the colour of an unlit room
+ *    with paper in it. Pure #000 reads as "nothing rendered"; this reads as
+ *    "something present but unlit".
+ *
+ * 2. Type scales with the reader. Every size below is in `rem` against an
+ *    unmodified root, so browser zoom and OS text-size settings work normally.
+ *    Nothing here pins a pixel size, because scalable text is a required
+ *    accessibility path (VERTICAL-SLICE-SPEC §22) and not a preference.
+ */
+
 @layer base {
   :root {
-    /* The void — a deep blue-black, never pure black (#06090f) */
-    --void: 220 43% 4%;
-    --surface: 233 32% 9%;
-    --elevated: 235 27% 13%;
-    --line: 248 24% 22%;
+    /* ── Ground ──────────────────────────────────────────────────────────
+       Warm-violet ink black. Never #000: darkness must feel like a material. */
+    --void: 258 26% 5%;
+    /* One step up — the inside of a case, the shadowed side of a page. */
+    --surface: 252 20% 9%;
+    --elevated: 250 17% 14%;
+    /* Engraved rule lines, hairline borders, graduation marks. */
+    --line: 250 14% 26%;
 
-    --bright: 40 30% 96%;
-    --dim: 226 18% 68%;
+    /* ── Ink on the page ─────────────────────────────────────────────────
+       Warm, never blue-white: this is pigment on vellum, not a backlit pixel. */
+    --vellum: 40 38% 93%;
+    --bright: 40 38% 93%;
+    /* Faded ink — secondary text, marginalia. */
+    --dim: 42 12% 68%;
+    /* Nearly rubbed away — captions, era marks, quiet metadata. */
+    --faint: 44 9% 48%;
 
-    --glow: 259 84% 66%; /* violet — the game's primary light */
-    --glow-2: 217 88% 64%; /* deep blue */
-    --glow-3: 180 70% 52%; /* cyan */
-    --resonance: 42 92% 60%; /* gold — the color of discovery */
+    /* ── Materials ───────────────────────────────────────────────────────
+       Gold leaf is the only thing in Castalia allowed to be truly luminous,
+       so it is reserved for what is genuinely settled: documented relations
+       and gilded figures. Spending it elsewhere would make it mean nothing. */
+    --gold: 43 68% 62%;
+    /* Oxidised instrument metal — rings, arcs, armature. */
+    --brass: 36 26% 54%;
+    /* The glass itself, edge-lit. */
+    --glass: 206 34% 74%;
+
+    /* ── The four illuminator's pigments ─────────────────────────────────
+       These carry faculty identity, but never alone: each faculty also owns a
+       construction geometry, so the arena stays legible in monochrome. */
+    --lapis: 224 48% 66%; /* Measure  — ultramarine */
+    --verdigris: 166 32% 58%; /* Sound  — oxidised copper */
+    --orpiment: 40 58% 62%; /* Matter  — gold ochre */
+    --madder: 352 42% 66%; /* Image   — madder lake */
+
+    /* Kept as an alias so existing components keep compiling during the art
+       pass; new work should reach for a material name instead. */
+    --glow: 43 68% 62%;
+    --glow-2: 224 48% 66%;
+    --glow-3: 166 32% 58%;
+    --resonance: 43 68% 62%;
+
+    /* ── Type ────────────────────────────────────────────────────────────
+       A small scale, because an interface that must recede does not need nine
+       sizes. Ratio is a major third; the display face carries the contrast. */
+    --text-caption: 0.6875rem;
+    --text-body: 0.875rem;
+    --text-lead: 1.0625rem;
+    --text-title: 1.5rem;
+    --text-display: 2.75rem;
+
+    /* Small-caps labels are the only place wide tracking is used, and it is
+       what makes them read as engraving rather than as a UI chip. */
+    --tracking-engraved: 0.28em;
+
+    /* ── Motion ──────────────────────────────────────────────────────────
+       One easing for entry, one for exit. Consistency in easing does more for
+       perceived quality than any single animation. */
+    --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
   }
 
   html,
@@ -30,17 +102,30 @@
     background: hsl(var(--void));
     color: hsl(var(--bright));
     font-family: Inter, system-ui, -apple-system, sans-serif;
+    /* Optical sizing and old-style figures where the face offers them: dates
+       and bar numbers appear constantly in this game's copy, and lining
+       figures in running text read as tabular data rather than as prose. */
+    font-variant-numeric: oldstyle-nums proportional-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    /* iOS: keep the world edge-to-edge under the notch. */
+    overscroll-behavior: none;
   }
 
   ::selection {
-    background: hsl(var(--glow) / 0.35);
+    background: hsl(var(--gold) / 0.28);
     color: hsl(var(--bright));
   }
 
-  /* Thin, unobtrusive scrollbars for the journal/codex panels */
+  /* Focus is an accessibility surface, not decoration. One visible, consistent
+     ring everywhere, in gold so it never collides with a faculty pigment. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--gold) / 0.85);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--line)) transparent;
@@ -56,10 +141,73 @@
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  /**
+   * The reduced-motion path is a first-class experience, not a fallback
+   * (VERTICAL-SLICE-SPEC §22). Transitions are shortened rather than removed,
+   * because a state change with *no* transition reads as a glitch — the point
+   * is to remove travel and parallax, not to remove continuity.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 120ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /**
+   * An engraved label: the small-caps, wide-tracked mark used on instrument
+   * rings and manuscript margins. This is the game's only chrome typography,
+   * and giving it one definition keeps every surface consistent.
+   */
+  .engraved {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: var(--text-caption);
+    font-weight: 500;
+    letter-spacing: var(--tracking-engraved);
+    text-transform: uppercase;
+    color: hsl(var(--faint));
+  }
+
+  /** Running prose — insights, questions, annotation. Set for reading. */
+  .prose-castalia {
+    font-family: "Cormorant Variable", Cormorant, Georgia, serif;
+    font-size: var(--text-lead);
+    line-height: 1.62;
+    color: hsl(var(--bright) / 0.92);
+    max-width: 34ch;
+    text-wrap: pretty;
+  }
+
+  /**
+   * A rule that reads as an engraved graduation rather than a CSS border:
+   * it fades at both ends, the way a scribed line lifts off the metal.
+   */
+  .rule-engraved {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--line)) 18%,
+      hsl(var(--line)) 82%,
+      transparent
+    );
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /** Old-style figures off, for anything that must align in a column. */
+  .nums-lining {
+    font-variant-numeric: lining-nums tabular-nums;
   }
 }
