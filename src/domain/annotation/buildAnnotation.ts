@@ -207,7 +207,8 @@ function tensionFragment(inputs: AnnotationInputs): Fragment | null {
   if (tension === undefined) return null;
 
   const dialectic = inputs.motifs.find(
-    (motif) => motif.kind === "dialectic" && motif.threadIds.includes(tension.threadId)
+    // See buildPortrait: focusThreadId, or a pole holds its own opposition.
+    (motif) => motif.kind === "dialectic" && motif.focusThreadId === tension.threadId
   );
   const aName = inputs.lookup.conceptName(tension.pair[0]);
   const bName = inputs.lookup.conceptName(tension.pair[1]);

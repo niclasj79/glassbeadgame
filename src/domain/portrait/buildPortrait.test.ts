@@ -225,4 +225,24 @@ describe("buildPortrait — totality and replay stability", () => {
       expect(JSON.stringify(buildPortrait(wide.state, lookup))).toBe(first);
     }
   });
+
+  it("never lets a pole take hold of its own opposition", () => {
+    // Reported by adversarial review. Matching a Dialectic on threadIds meant a
+    // Tension that merely acted as a *support* in someone else's Dialectic was
+    // reported as held by that Dialectic's focus — so a concept could be named
+    // as taking hold of the very opposition it is one half of.
+    const fixture = buildSessionFixture({
+      conceptIds: [C.just, C.equal, C.overtones],
+      threads: [
+        { a: C.just, b: C.equal, intention: "tension" },
+        { a: C.just, b: C.overtones, intention: "ground" },
+        { a: C.equal, b: C.overtones, intention: "tension" },
+      ],
+    });
+    const phrase = buildPortrait(fixture.state, lookup).byId.tension.phrase;
+    expect(phrase).not.toMatch(
+      /Just Intonation set against Equal Temperament[^.]*Just Intonation took hold/
+    );
+    expect(phrase).not.toContain("Just Intonation took hold of it");
+  });
 });

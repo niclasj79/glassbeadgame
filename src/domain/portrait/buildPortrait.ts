@@ -178,7 +178,12 @@ function buildTension(inputs: PortraitInputs): PortraitDimension {
   const holdingDialectic =
     first === undefined
       ? undefined
-      : dialectics.find((motif) => motif.threadIds.includes(first.threadId));
+      // Must match the Dialectic's *focus* thread, not any thread it contains:
+      // threadIds also holds the support threads, so a Tension that merely
+      // participates in someone else's Dialectic would be reported as held by
+      // that Dialectic's focus — which lets a pole take hold of its own
+      // opposition. compileConclusion already matches on focusThreadId.
+      : dialectics.find((motif) => motif.focusThreadId === first.threadId);
 
   let phrase = `You set ${lookup.conceptName(first?.pair[0] as ConceptId)} against ${lookup.conceptName(
     first?.pair[1] as ConceptId
