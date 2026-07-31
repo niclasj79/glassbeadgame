@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { WorldTheme } from "@/themes/types";
 import { GLSL_COMMON, GLSL_ENVIRONMENT, GLSL_FIGURE, GLSL_SETTING } from "./glsl";
 import type { SceneBudget } from "./quality";
+import { tierWeights } from "./salience";
 
 /**
  * THE BEAD IS A LENS
@@ -41,6 +42,15 @@ export const GLASS_ATTRIBUTES = Object.freeze({
   set: "aSet",
   /** (emphasis, resonance 0–1, woven 0–1, attended) — rewritten every frame. */
   state: "aState",
+  /**
+   * (salience tier 0–1, kindling 0–1) — rewritten every frame.
+   *
+   * The tier is where this bead stands in the frame's focal hierarchy, and it
+   * is decided by depth and by the player's attention — never by what the bead
+   * contains (see `scene/salience.ts`). The kindling is the idle score's
+   * unprompted light (`scene/idle.ts`).
+   */
+  tier: "aTier",
 });
 
 /**
@@ -288,11 +298,46 @@ float gbgAngleAA(vec2 uv) {
 }
 `;
 
+/**
+ * THE FOCAL HIERARCHY, AS GLSL
+ *
+ * Emitted from `scene/salience.tierWeights` so the GPU spends a tier the way
+ * the tests measure it being spent, rather than in a second model that happens
+ * to resemble the first. Every channel here is value, contrast or sharpness —
+ * all of which survive a monochrome print — so the hierarchy can never become
+ * a second, colour-only meaning laid over the faculty ink.
+ */
+const GLSL_SALIENCE = (() => {
+  const near = tierWeights(1);
+  const far = tierWeights(0);
+  const f = (value: number): string => value.toFixed(6);
+  return /* glsl */ `
+struct GbgTier {
+  float rim;
+  float specular;
+  float haze;
+  float contact;
+};
+
+GbgTier gbgTier(float t) {
+  float k = clamp(t, 0.0, 1.0);
+  GbgTier w;
+  w.rim = mix(${f(far.rim)}, ${f(near.rim)}, k);
+  w.specular = mix(${f(far.specular)}, ${f(near.specular)},
+                   clamp((k - 0.25) / 0.75, 0.0, 1.0));
+  w.haze = mix(${f(far.haze)}, ${f(near.haze)}, k);
+  w.contact = mix(${f(far.contact)}, ${f(near.contact)}, k);
+  return w;
+}
+`;
+})();
+
 const VERTEX = /* glsl */ `
 attribute vec4 aSigil;
 attribute vec3 aInk;
 attribute vec4 aSet;
 attribute vec4 aState;
+attribute vec2 aTier;
 
 varying vec3 vLocal;
 varying vec3 vLocalCam;
@@ -301,12 +346,14 @@ varying vec4 vSigil;
 varying vec3 vInk;
 varying vec4 vSet;
 varying vec4 vState;
+varying vec2 vTier;
 
 void main() {
   vSigil = aSigil;
   vInk = aInk;
   vSet = aSet;
   vState = aState;
+  vTier = aTier;
   vLocal = position;
 
   #ifdef USE_INSTANCING
@@ -346,10 +393,12 @@ varying vec4 vSigil;
 varying vec3 vInk;
 varying vec4 vSet;
 varying vec4 vState;
+varying vec2 vTier;
 
 ${GLSL_COMMON}
 ${GLSL_ENVIRONMENT}
 ${GLSL_OPTICS}
+${GLSL_SALIENCE}
 ${GLSL_FIGURE}
 ${GLSL_SETTING}
 
@@ -425,6 +474,9 @@ void main() {
   vec3 ry = fx * sin(ph) + fy * cos(ph);
 
   float emphasis = clamp(vState.x, 0.0, 1.0);
+  // The frame's hierarchy, and the idle score's light. See scene/salience.ts.
+  GbgTier tier = gbgTier(vTier.x);
+  float kindle = clamp(vTier.y, 0.0, 1.0);
   float gilded = vSet.y;
   // How a faculty draws is the faculty's own construction geometry's business
   // (see settingInkWeight in scene/sigil.ts) — it is not gold leaf's.
@@ -488,7 +540,9 @@ void main() {
   col = plate * (0.55 + 0.7 * ndv + 0.12 * woven);
   // Woven: the line is bitten deeper into the plate.
   col = mix(col, inkCol * 1.5, clamp(ink * (1.6 + 0.5 * woven), 0.0, 1.0));
-  col += mix(uEngraving, uGold, gilded) * smoothstep(0.45, 1.0, rim) * 0.6;
+  // The engraved tier keeps the hierarchy: a nearer plate, a brighter arris.
+  col += mix(uEngraving, uGold, gilded) * smoothstep(0.45, 1.0, rim) * 0.6
+       * tier.rim;
 #else
   // The march takes the strongest hit along the chord rather than compositing
   // every sample over the last. Alpha-over treats fourteen samples of one line
@@ -546,15 +600,17 @@ void main() {
                 + gbgCoverage(focus - 0.58, 0.055, 0.02) * 0.45;
   col += uVellum * caustic * (1.0 - rim) * 0.30;
 
-  // The rim gathers: at grazing incidence a glass surface transmits almost
-  // nothing and reflects almost everything, so the edge of a bead is the
-  // brightest part of it. The bead used to be drawn darker there.
-  col = mix(col, rimCol + uHorizon * 0.42, rim * 0.72);
+  // The rim gathers: at grazing incidence glass reflects almost everything, so
+  // the edge of a bead is the brightest part of it. How much of that gather
+  // this bead gets is the frame's decision (tier.rim), not the bead's.
+  col = mix(col, rimCol + uHorizon * 0.42, rim * 0.72 * tier.rim);
   col += (uVellum * 0.5 + uHorizon) * smoothstep(0.90, 1.0, rho)
-       * (0.20 + 0.55 * rim);
+       * (0.20 + 0.55 * rim) * tier.rim;
 
+  // A far bead loses its highlight outright: the only near-white on the glass,
+  // and therefore the strongest first-read cue in the frame.
   float spec = pow(max(dot(reflect(-camDir, n), key), 0.0), 90.0);
-  col += uVellum * spec * 1.1;
+  col += uVellum * spec * 1.1 * tier.specular;
   col += mix(uEngraving, uGold, gilded) * smoothstep(0.45, 1.0, rim) * 0.42;
 #endif
 
@@ -579,9 +635,17 @@ void main() {
   float rule = gbgCoverage(rho - 0.993, 0.009, aaR);
   col = mix(col, uGold, rule * clamp(vState.w, 0.0, 1.0) * 0.95);
 
-  // Weight: the underside of a bead is not as lit as its top.
-  col *= 0.84 + 0.16 * smoothstep(-1.0, 1.0, dot(n, normalize(uKey)));
+  // Weight and contact: a near bead's shadow side is taken down harder, which
+  // is what stops the frame's first read from floating.
+  float lit = smoothstep(-1.0, 1.0, dot(n, normalize(uKey)));
+  col *= (1.0 - tier.contact) + tier.contact * lit;
   col *= 1.0 + emphasis * 0.24;
+
+  // Haze: the room stands in front of a far bead. Legible, not competing.
+  col = mix(col, uHorizon * 0.85 + uDepth * 0.4, tier.haze);
+
+  // The idle score's unprompted light (scene/idle.ts).
+  col += mix(uVellum, uHorizon, 0.35) * kindle * (0.10 + 0.34 * rim);
 
   // The silhouette is antialiased against the room the bead is standing in
   // rather than by blending, so the bead stays opaque and the depth buffer

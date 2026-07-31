@@ -5,6 +5,7 @@ import { SESSION_EVENT_LOG_FORMAT, SESSION_EVENT_LOG_SCHEMA_VERSION } from "../.
 import { createDomainSessionStore } from "../../state/domainSession";
 import { createInterpretationDraftStore } from "../../state/interactionDraft";
 import { createInterpretationPresentationStore } from "../../state/interpretationPresentation";
+import type { CuePlan } from "../cues";
 import { createProductionInterpretation } from ".";
 
 const sessionId = toSessionId("session.production-interpretation");
@@ -33,11 +34,13 @@ function harness() {
     })],
   });
   const setInspection = vi.fn();
+  const published: CuePlan[] = [];
   const interpretation = createProductionInterpretation({
     domainStore,
     draftStore,
     presentationStore,
     now: () => now,
+    publishCuePlan: (plan) => published.push(plan),
     resolveCandidateEvidence: (request) => request.session.conceptIds
       .filter((candidateId) => candidateId !== request.attendedConceptId)
       .map((candidateId) => ({
@@ -49,7 +52,15 @@ function harness() {
       })),
     setInspection,
   });
-  return { domainStore, draftStore, presentationStore, interpretation, setNow: (value: number) => { now = value; } };
+  return {
+    domainStore,
+    draftStore,
+    presentationStore,
+    interpretation,
+    published,
+    cueTypes: () => published.flatMap((plan) => plan.cues.map((cue) => cue.type)),
+    setNow: (value: number) => { now = value; },
+  };
 }
 
 describe("createProductionInterpretation", () => {
@@ -123,6 +134,78 @@ describe("createProductionInterpretation", () => {
     expect(h.interpretation.cancel().stage).toBe("attending");
     expect(h.interpretation.cancel().stage).toBe("inactive");
     expect(h.domainStore.getState().eventLog?.events.length).toBe(count);
+  });
+
+  /**
+   * GAP-B2. `planAttention`, `planAttentionCleared` and `planIntentionArmed`
+   * were exported, unit-tested and never published by anything: three of the
+   * four loop moments reached a store field and an aria string and stopped
+   * there, so the scene, the camera and the haptics channel could not know the
+   * player had done anything until a thread was committed.
+   */
+  describe("stages every draft transition on the cue bus", () => {
+    it("publishes attention with relation-neutral bands only", () => {
+      const h = harness();
+      h.interpretation.activateConcept(fibonacci);
+
+      expect(h.cueTypes()).toEqual(["attention.enter"]);
+      const cue = h.published[0].cues[0];
+      expect(cue.type).toBe("attention.enter");
+      if (cue.type !== "attention.enter") throw new Error("unreachable");
+      expect(cue.payload.conceptId).toBe(fibonacci);
+      expect(cue.payload.candidates).toEqual([
+        { conceptId: counterpoint, band: "weak" },
+      ]);
+      // A preview may suggest possibility, never correctness (CAV-004).
+      expect(JSON.stringify(cue.payload)).not.toMatch(
+        /documented|strength|support|score/i
+      );
+      // Ephemeral: no durable mutation is implied by a draft transition.
+      expect(cue.sourceEventId).toBeNull();
+    });
+
+    it("publishes arming immediately, naming the attended bead", () => {
+      const h = harness();
+      h.interpretation.activateConcept(fibonacci);
+      h.interpretation.armIntention("tension");
+
+      expect(h.cueTypes()).toEqual(["attention.enter", "intention.armed"]);
+      const cue = h.published[1].cues[0];
+      if (cue.type !== "intention.armed") throw new Error("unreachable");
+      expect(cue.payload).toEqual({
+        conceptId: fibonacci,
+        intention: "tension",
+      });
+      // Spec §8 — the preview changes now, not after the next frame of state.
+      expect(cue.startAt).toBe(0);
+    });
+
+    it("publishes attention cleared only when attention is actually released", () => {
+      const h = harness();
+      h.interpretation.activateConcept(fibonacci);
+      h.interpretation.armIntention("echo");
+      h.interpretation.cancel();
+
+      // Stepping back from armed to attending is not a release.
+      expect(h.cueTypes()).toEqual(["attention.enter", "intention.armed"]);
+
+      h.interpretation.cancel();
+      expect(h.cueTypes()).toEqual([
+        "attention.enter",
+        "intention.armed",
+        "attention.clear",
+      ]);
+    });
+
+    it("stages nothing extra for an abandoned weave", () => {
+      const h = harness();
+      h.interpretation.activateConcept(fibonacci);
+      h.interpretation.armIntention("passage");
+      const before = h.cueTypes().length;
+      h.interpretation.beginDirectionalWeave("touch", { xViewport: 0.2, yViewport: 0.4 });
+      h.interpretation.cancelWeave();
+      expect(h.cueTypes()).toHaveLength(before);
+    });
   });
 
   it("bounds capture and clears it on reset", () => {

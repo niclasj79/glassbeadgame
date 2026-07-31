@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildAnnotation } from "@/domain/annotation";
 import { toConceptId } from "@/domain/ids";
+import { resolveSessionOutcomes } from "@/domain/outcomes";
 import { buildSessionFixture } from "@/domain/outcomes/testing/buildSessionFixture";
 import { buildPortrait } from "@/domain/portrait";
 import { castaliaLookup } from "@/runtime/content/castaliaLookup";
 import { installMotionDomStubs } from "../testing/domStubs";
 import { ConclusionReading } from "./ConclusionScreen";
+import { threadRegister } from "./threadRegister";
 
 /**
  * THE LAST IMAGE THE GAME LEAVES.
@@ -61,6 +63,9 @@ describe("the conclusion", () => {
         portrait: buildPortrait(FIXTURE.state, castaliaLookup),
         annotation: buildAnnotation(FIXTURE.state, castaliaLookup),
         threadCount: FIXTURE.state.threads.length,
+        threads: threadRegister(
+          resolveSessionOutcomes(FIXTURE.state, castaliaLookup)
+        ),
         onAnother: () => undefined,
         onLeave: () => undefined,
       })
@@ -102,5 +107,44 @@ describe("the conclusion", () => {
     expect(html).toContain("The Game concludes");
     expect(html).toContain("six readings, no total");
     expect(html).toContain("Coherence");
+  });
+
+  /**
+   * GAP. Six readings and a five-sentence annotation described the shape of the
+   * session without naming one thing in it. With the margin's note gone the
+   * moment play resumed, a player had nowhere left to re-read what they said.
+   */
+  it("lists the threads the player actually made (GAP)", () => {
+    expect(html).toContain('data-testid="thread-register"');
+    expect(html).toContain("The threads, in the order you wove them");
+    expect(html).toContain("Fibonacci Sequence · Echo · Counterpoint");
+    expect(html).toContain("Prime Numbers · Tension · Polyrhythm");
+  });
+
+  /**
+   * GAP-B4(2). `sources.ts` says the citation "is shown verbatim in the Codex
+   * so the player can go and check it". There is no Codex, and until this pass
+   * no file in the application rendered `source.citation` at all.
+   */
+  it("shows the citations, and points at no Codex (GAP-B4)", () => {
+    expect(html).toContain('data-testid="citations"');
+    expect(html).toMatch(/\d sources? for this claim/);
+    expect(html).toContain("Music Analysis 2/1 (March 1983)");
+    expect(html).not.toMatch(/codex/i);
+  });
+
+  /**
+   * A list of what you said is a record, not a reward — but only if every entry
+   * is set the same way. The instant one thread is given a mark another is not,
+   * the register becomes something to do better at next time (ADR-010).
+   */
+  it("sets every thread at the same weight (CAV-006)", () => {
+    const entries = [
+      ...html.matchAll(/<li [^>]*data-testid="thread-reading"[^>]*>/g),
+    ].map((match) => /class="([^"]*)"/.exec(match[0])![1]);
+    expect(entries).toHaveLength(2);
+    expect(new Set(entries).size).toBe(1);
+    // No ordinal, no total, no per-thread number of any kind.
+    expect(html).not.toMatch(/thread-reading[^>]*>\s*<[^>]*>\s*\d+\s*\./);
   });
 });

@@ -6,6 +6,7 @@ import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 import { GLSL_COMMON, GLSL_ENVIRONMENT } from "./glsl";
 import { buildSky } from "./constellations";
+import { idleClock, travellingLight } from "./idle";
 import { presentationProfile } from "./quality";
 import { getHaloTexture } from "./textures";
 
@@ -37,6 +38,9 @@ precision highp float;
 
 uniform vec3 uGold;
 uniform float uAwakening;
+uniform float uSweepLon;
+uniform float uSweepColat;
+uniform float uSweepGain;
 
 varying vec3 vDir;
 
@@ -47,9 +51,12 @@ void main() {
   vec3 dir = normalize(vDir);
   vec3 col = gbgEnvironment(dir);
 
+  float skyLon = atan(dir.z, dir.x);
+  float skyColat = acos(clamp(dir.y, -1.0, 1.0));
+
 #if GBG_TRACERY
-  float lon = atan(dir.z, dir.x);
-  float colat = acos(clamp(dir.y, -1.0, 1.0));
+  float lon = skyLon;
+  float colat = skyColat;
 #endif
 
 #if GBG_TRACERY
@@ -93,6 +100,17 @@ void main() {
   // The room brightens a little as the web fills; never a percentage bar.
   col *= 1.0 + 0.18 * uAwakening;
 
+  // THE TRAVELLING LIGHT (scene/idle.ts): a shaft crosses the room on a
+  // fifteen-second cycle, leaning as it goes. Luminance, not travel, so
+  // reduced motion keeps it.
+  // Narrow. A wide one is not a shaft, it is an exposure change: at sigma 0.62
+  // in longitude this lifted the whole visible sky and read as the lights being
+  // turned up, which is a worse defect than the stillness it was fixing.
+  float dLon = abs(atan(sin(skyLon - uSweepLon), cos(skyLon - uSweepLon)));
+  float dColat = abs(skyColat - uSweepColat);
+  float shaft = exp(-pow(dLon / 0.17, 2.0)) * exp(-pow(dColat / 0.44, 2.0));
+  col += mix(uHorizon, uVellum, 0.5) * shaft * uSweepGain * 0.115;
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -127,6 +145,9 @@ function Vault() {
         uGold: { value: new THREE.Color(p.gold) },
         uKey: { value: new THREE.Vector3(...theme.keyLight).normalize() },
         uAwakening: { value: 0 },
+        uSweepLon: { value: 0 },
+        uSweepColat: { value: Math.PI / 2 },
+        uSweepGain: { value: 0 },
       },
     });
   }, [theme, profile.budget.vaultTracery]);
@@ -135,6 +156,10 @@ function Vault() {
 
   useFrame(() => {
     (material.uniforms.uAwakening as { value: number }).value = frameState.awakening;
+    const light = travellingLight(idleClock(), profile.reducedMotion);
+    (material.uniforms.uSweepLon as { value: number }).value = light.longitude;
+    (material.uniforms.uSweepColat as { value: number }).value = light.colatitude;
+    (material.uniforms.uSweepGain as { value: number }).value = light.gain;
   });
 
   return (

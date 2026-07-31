@@ -40,7 +40,18 @@ export default function App() {
       <div className="fixed inset-0 overflow-hidden bg-void">
         <ArenaCanvas />
         <AudioBridge />
-        <AnimatePresence mode="wait">
+        {/**
+         * NO WAIT MODE.
+         *
+         * A phase change here is one move — the title being carried out while
+         * the instrument turns into view — and the presence group used to play
+         * its two halves in series: the arena's chrome was held back until the
+         * title had finished leaving, so the camera arrived at an empty page and
+         * the player's own press was answered by a queue. The canvas beneath is
+         * never unmounted, so the firmament and the page's ruling are already
+         * continuous across the change; the surfaces above it now are too.
+         */}
+        <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
           {phase === "arena" && <ArenaHud key="arena" />}
           {phase === "conclusion" && <ConclusionScreen key="conclusion" />}

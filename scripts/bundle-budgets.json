@@ -1,7 +1,8 @@
 {
-  "totalRawBytes": 2550000,
-  "totalGzipBytes": 1350000,
-  "javascriptRawBytes": 1700000,
-  "javascriptGzipBytes": 500000,
+  "_note": "Re-baselined 2026-07-31 at the close of the Castalia completion campaign. These are regression ceilings, not targets: they exist to catch growth nobody decided on. The previous numbers were set against the pre-campaign app, which had no refraction pass, no scene cue director, no Attunement, no reading surfaces and no citations. Attempted and rejected before raising them: drei deep imports saved 92 bytes, so Rollup was already tree-shaking the barrel, and code splitting does not help because these metrics measure total JavaScript rather than the initial chunk. Raising a ceiling to fit deliberate, reviewed work is legitimate; raising one to fit an accident is not, so any future increase should carry the same kind of note.",
+  "totalRawBytes": 2620000,
+  "totalGzipBytes": 1380000,
+  "javascriptRawBytes": 1760000,
+  "javascriptGzipBytes": 520000,
   "largestAssetRawBytes": 720000
 }

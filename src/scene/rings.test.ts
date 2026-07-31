@@ -91,3 +91,50 @@ describe("the armillary as an instrument", () => {
     ).toHaveLength(2);
   });
 });
+
+/**
+ * A3 — THE ARMILLARY IS AN INSTRUMENT, AND AN INSTRUMENT MOVES
+ *
+ * Frame-diffing a 30-second idle screencast of the shipped build: the rings did
+ * not rotate. Not slowly — not at all. Every ring's turn was hard zero, so the
+ * lattice was a fixed wireframe that could only be distinguished from a still
+ * image by the star field twinkling behind it.
+ */
+describe("the armillary's idle turn", () => {
+  it("turns its rings, and turns them at rates that differ", () => {
+    const turning = rings().filter((spec) => spec.precession !== 0);
+    expect(turning.length).toBeGreaterThanOrEqual(3);
+    const rates = new Set(turning.map((spec) => spec.precession));
+    expect(rates.size).toBe(turning.length);
+    // Both senses. Rings that all turn the same way read as one turning object.
+    expect(turning.some((spec) => spec.precession > 0)).toBe(true);
+    expect(turning.some((spec) => spec.precession < 0)).toBe(true);
+  });
+
+  it("holds the station-bearing ring still so the gold cannot drift", () => {
+    // A committed thread leaves gold at the longitude its endpoints occupy.
+    // Turning the ring the gold is struck on would slide the record of the
+    // player's own composition away from the beads it belongs to.
+    for (const spec of rings()) {
+      if (spec.stations) expect(spec.precession).toBe(0);
+    }
+  });
+
+  it("gives a ring that cannot show rotation a creeping engraving instead", () => {
+    // The prime circle and the parallels are circles about the world's axis:
+    // they map onto themselves when they turn, so rotation is invisible on
+    // them. Every ring is alive in the channel it actually has.
+    for (const spec of rings()) {
+      expect(Math.abs(spec.precession) + Math.abs(spec.creep)).toBeGreaterThan(0);
+    }
+  });
+
+  it("never lets a turning ring reach the beads it is turning around", () => {
+    // Precession is about the world's axis, which every ring's own reach is
+    // already measured against — but say it out loud, because a turn that
+    // swept a ring through the arena would be a new way to slice the beads.
+    for (const spec of rings()) {
+      expect(ringInnerReach(spec)).toBeGreaterThan(MAX_BEAD_EXTENT);
+    }
+  });
+});

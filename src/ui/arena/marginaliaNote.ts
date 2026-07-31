@@ -2,6 +2,13 @@ import type { PresentationCue } from "@/runtime/cues";
 import { castaliaConceptById } from "@/content/castalia/concepts";
 import { facetById } from "@/content/castalia/facets";
 import { toFacetId } from "@/content/castalia/schema";
+import {
+  documentedReading,
+  motifReading,
+  openThreadReading,
+  unresolvedReading,
+  type Reading,
+} from "../reading";
 
 /**
  * WHAT THE MARGIN SAYS — the copy rules, with no DOM attached.
@@ -10,135 +17,45 @@ import { toFacetId } from "@/content/castalia/schema";
  * asserted directly: an interpretive relation must never be presented as a
  * record. Twelve of the forty-four authored relations are readings the Game
  * offers, and the difference between "this is documented" and "this is our
- * reading" is the whole content model.
+ * reading" is the whole content model. The sentences that carry that difference
+ * live in `src/ui/reading.ts` now, because the conclusion's register presents
+ * the same outcomes and the two surfaces may not drift apart. What is left here
+ * is only what is specific to a cue: which payload becomes a reading, and how
+ * long that reading takes to arrive.
  */
 
-export interface Note {
+export interface Note extends Reading {
   readonly id: string;
-  readonly kind: "documented" | "open" | "unresolved" | "motif";
-  readonly title: string;
-  readonly body: string;
-  /** The honest complication, set apart so it reads as a caveat, not a clause. */
-  readonly aside: string | null;
-  /** The honest label for how firmly the Game stands behind this. */
-  readonly standing: string;
-  /** True when the Game is offering a reading, not reporting a record. */
-  readonly interpretive: boolean;
-  /** Already says what the sources are evidence *for*. */
-  readonly sourceLine: string | null;
   readonly seconds: number;
 }
 
-const EVIDENCE_STANDING: Record<string, string> = {
-  established: "Documented · standard in the field",
-  attested: "Documented · a specific recorded instance",
-  contested: "Documented · specialists disagree",
-  interpretive: "A reading the Game offers · not a claim of influence",
-};
-
-const RECEPTION_NOTE: Record<string, string> = {
-  confirmed: "Your reading runs with the record.",
-  refined: "The record narrows your reading.",
-  complicated: "The record runs across your reading. It still stands.",
-};
-
-/**
- * An interpretive relation has no record to run with, so it gets the Game's own
- * voice and never a sentence that lends it an authority the pack does not carry.
- */
-const READING_NOTE: Record<string, string> = {
-  confirmed: "The Game reads it the same way.",
-  refined: "The Game reads it slightly differently.",
-  complicated: "The Game reads it across yours. Both are readings.",
-};
-
 /** Only these classes may be spoken of as a record. */
-export const SPEAKS_FOR_RECORD: ReadonlySet<string> = new Set([
-  "established",
-  "attested",
-  "contested",
-]);
-
-/**
- * A citation count under an interpretive relation reads as a citation *of* it.
- * The pack's validator only ever requires sources for claims that assert
- * influence; on an interpretive relation the entries are evidence for the two
- * structures being compared — Douady and Couder for the phyllotaxis, Barbour
- * for the tuning — and never for the comparison, which is the Game's own. So
- * the line says which.
- */
-function sourceLine(
-  count: number,
-  interpretive: boolean
-): string | null {
-  if (count === 0) return null;
-  const noun = count === 1 ? "source" : "sources";
-  return interpretive
-    ? `${count} ${noun} for the material compared`
-    : `${count} ${noun} in the Codex`;
-}
+export { SPEAKS_FOR_RECORD } from "../reading";
 
 export function noteFor(cue: PresentationCue): Note | null {
+  const at = { id: cue.id, seconds: cue.duration };
   switch (cue.type) {
     case "outcome.documented": {
       const { relation, evidence, reception } = cue.payload;
-      const interpretive = !SPEAKS_FOR_RECORD.has(evidence);
-      return {
-        id: cue.id,
-        kind: "documented",
-        title: relation.title,
-        body: relation.insight,
-        aside: relation.counterpoint ?? null,
-        interpretive,
-        standing: `${EVIDENCE_STANDING[evidence] ?? evidence} · ${
-          (interpretive ? READING_NOTE[reception] : RECEPTION_NOTE[reception]) ??
-          ""
-        }`,
-        sourceLine: sourceLine(relation.sources.length, interpretive),
-        seconds: cue.duration,
-      };
+      return { ...documentedReading(relation, evidence, reception), ...at };
     }
     case "outcome.open-thread": {
-      const facet =
-        facetById.get(toFacetId(String(cue.payload.sharedFacet)))?.name ??
-        String(cue.payload.sharedFacet);
-      return {
-        id: cue.id,
-        kind: "open",
-        title: "An open thread",
-        body: cue.payload.question,
-        aside: null,
-        interpretive: false,
-        standing: `No documented relation here · both carry ${facet}`,
-        sourceLine: null,
-        seconds: cue.duration,
-      };
+      const id = String(cue.payload.sharedFacet);
+      const facet = facetById.get(toFacetId(id))?.name ?? id;
+      return { ...openThreadReading(cue.payload.question, facet), ...at };
     }
     case "outcome.unresolved":
-      return {
-        id: cue.id,
-        kind: "unresolved",
-        title: "Nothing grounded yet",
-        body: cue.payload.statement,
-        aside: null,
-        interpretive: false,
-        standing: "The Game is not asserting anything here",
-        sourceLine: null,
-        seconds: cue.duration,
-      };
+      return { ...unresolvedReading(cue.payload.statement), ...at };
     case "motif.completed":
       return {
-        id: cue.id,
-        kind: "motif",
-        title: `${String(cue.payload.motifKindId)} has formed`,
-        body: cue.payload.reason,
-        aside: null,
-        interpretive: false,
-        standing: cue.payload.conceptIds
-          .map((id) => castaliaConceptById.get(String(id))?.name ?? String(id))
-          .join(" · "),
-        sourceLine: null,
-        seconds: cue.duration,
+        ...motifReading(
+          `${String(cue.payload.motifKindId)} has formed`,
+          cue.payload.reason,
+          cue.payload.conceptIds
+            .map((id) => castaliaConceptById.get(String(id))?.name ?? String(id))
+            .join(" · ")
+        ),
+        ...at,
       };
     default:
       return null;
@@ -146,11 +63,24 @@ export function noteFor(cue: PresentationCue): Note | null {
 }
 
 /**
- * How long the note stays on the page. Identical for every kind: an Open Thread
- * dwells exactly as long as a documented relation (CAV-006). Held a little past
- * the cue so the last words are readable after the world has finished
- * responding, then released without asking.
+ * ENTRANCE, NEVER EXIT.
+ *
+ * This function used to be `dwellMs`, and it *removed* the note:
+ * `max(4200, seconds * 1000 + 3400)`, so a plate was on screen for 5.1–7.4 s.
+ * Measured against the authored content it was carrying — insight 49–85 words,
+ * plus counterpoint, standing, title and source line, 88–139 words in all —
+ * that demanded between 710 and 1630 words per minute. The surface was
+ * `pointer-events-none` with no pin, no hover-hold, no history and no re-open
+ * path anywhere in the game, so text a player had begun reading was taken away
+ * and could never be recovered.
+ *
+ * Nothing removes a note now but the player, or the player beginning another
+ * interpretation (`marginState.ts`). What is left here is the *entrance*: the
+ * cue's own span, scaled down and capped, so a slow deliberate weave writes its
+ * note in a little more slowly than a quick one. It is identical for every kind
+ * of outcome, because an Open Thread differs from a documented relation in
+ * resolution and never in reward (CAV-006).
  */
-export function dwellMs(note: Note): number {
-  return Math.max(4200, note.seconds * 1000 + 3400);
+export function entranceMs(note: Note): number {
+  return Math.min(900, Math.max(320, Math.round(note.seconds * 240)));
 }

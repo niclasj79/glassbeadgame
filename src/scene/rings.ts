@@ -1,4 +1,5 @@
 import { ARENA_RADIUS } from "@/game/layout";
+import { CREEP_RATES, PRECESSION_RATES } from "./idle";
 
 /**
  * THE ARMILLARY'S RINGS, AS GEOMETRY
@@ -54,6 +55,23 @@ export interface RingSpec {
   readonly stations: boolean;
   /** Sort order inside the transparent pass. The prime circle reads on top. */
   readonly order: number;
+  /**
+   * How fast this ring turns about the world's axis, in radians per second.
+   *
+   * An armillary that does not move is a wireframe sphere with a caption. The
+   * colures and the index ring precess at three unrelated rates so the lattice
+   * *reconfigures* — intersections migrate, the cage opens and closes — inside
+   * the twenty seconds a stranger gives a screen before deciding it has
+   * stalled. See `scene/idle.ts` for why these three numbers and not others.
+   */
+  readonly precession: number;
+  /**
+   * How fast the engraving slides along a ring that cannot show rotation.
+   * A circle about the world's axis maps onto itself when it turns, so the
+   * prime circle and the parallels would move without moving; their graduations
+   * creep instead, which is the same life in the channel that can carry it.
+   */
+  readonly creep: number;
 }
 
 export function armillaryRings(
@@ -72,6 +90,8 @@ export function armillaryRings(
       position: [0, 0, 0],
       stations: true,
       order: -1,
+      precession: PRECESSION_RATES.prime,
+      creep: CREEP_RATES.prime,
     },
     {
       key: "colure-a",
@@ -84,6 +104,8 @@ export function armillaryRings(
       position: [0, 0, 0],
       stations: false,
       order: -2,
+      precession: PRECESSION_RATES.colureA,
+      creep: 0,
     },
     {
       key: "colure-b",
@@ -96,6 +118,8 @@ export function armillaryRings(
       position: [0, 0, 0],
       stations: false,
       order: -2,
+      precession: PRECESSION_RATES.colureB,
+      creep: 0,
     },
     {
       key: "index",
@@ -108,6 +132,8 @@ export function armillaryRings(
       position: [0, 0, 0],
       stations: false,
       order: -3,
+      precession: PRECESSION_RATES.index,
+      creep: 0,
     },
   ];
 
@@ -126,6 +152,8 @@ export function armillaryRings(
       position: [0, y, 0],
       stations: false,
       order: -4,
+      precession: PRECESSION_RATES.parallel,
+      creep: CREEP_RATES.parallel,
     });
   });
 

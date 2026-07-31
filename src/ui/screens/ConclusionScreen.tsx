@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { buildAnnotation, type Annotation } from "@/domain/annotation";
+import { resolveSessionOutcomes } from "@/domain/outcomes";
 import { buildPortrait, type Portrait } from "@/domain/portrait";
 import { castaliaLookup } from "@/runtime/content/castaliaLookup";
 import { startSession } from "@/runtime/session";
@@ -9,6 +10,7 @@ import { useStore } from "@/state/store";
 import { useStore as useVanillaStore } from "zustand";
 import { PortraitPlate } from "./PortraitPlate";
 import { ReadingScroller } from "./ReadingScroller";
+import { threadRegister, type ThreadReading } from "./threadRegister";
 
 /**
  * THE CONCLUSION
@@ -27,6 +29,7 @@ export interface ConclusionReadingProps {
   readonly portrait: Portrait;
   readonly annotation: Annotation;
   readonly threadCount: number;
+  readonly threads: readonly ThreadReading[];
   readonly onAnother: () => void;
   readonly onLeave: () => void;
 }
@@ -40,6 +43,7 @@ export function ConclusionReading({
   portrait,
   annotation,
   threadCount,
+  threads,
   onAnother,
   onLeave,
 }: ConclusionReadingProps) {
@@ -86,6 +90,7 @@ export function ConclusionReading({
           portrait={portrait}
           annotation={annotation}
           threadCount={threadCount}
+          threads={threads}
           onAnother={onAnother}
           onLeave={onLeave}
         />
@@ -104,6 +109,9 @@ export function ConclusionScreen() {
       portrait: buildPortrait(domainSession, castaliaLookup),
       annotation: buildAnnotation(domainSession, castaliaLookup),
       threadCount: domainSession.threads.length,
+      threads: threadRegister(
+        resolveSessionOutcomes(domainSession, castaliaLookup)
+      ),
     };
   }, [domainSession]);
 
@@ -120,6 +128,7 @@ export function ConclusionScreen() {
         portrait={reading.portrait}
         annotation={reading.annotation}
         threadCount={reading.threadCount}
+        threads={reading.threads}
         onAnother={() => startSession()}
         onLeave={returnToTitle}
       />

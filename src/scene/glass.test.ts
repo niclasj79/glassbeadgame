@@ -18,6 +18,7 @@ import {
   sphereDeviation,
   wovenLight,
 } from "./glass";
+import { tierWeights } from "./salience";
 import { figureBound } from "./sigil";
 import { sceneBudget } from "./quality";
 
@@ -605,5 +606,86 @@ describe("every faculty's ink is drawn at one value", () => {
 
   it("distinguishes faculties by how the ink is laid down, not by brightness", () => {
     expect(fragment("high")).toContain("gbgSettingInkWeight(vSet.x)");
+  });
+});
+
+/**
+ * A2 — SALIENCE IS A RENDERING DECISION, NOT A CONTENT ONE
+ *
+ * The three brightest objects in an arena frame used to be whichever beads
+ * carried gold sigils, so the first-read target changed at random from seed to
+ * seed and the frame could not be authored. Worse, it meant the four gilded
+ * concepts were quietly the loudest things on the screen — the Game nominating
+ * ideas on the player's behalf, in a game whose whole subject is the player
+ * composing their own interpretation.
+ *
+ * The material now spends a *tier*, and the tier arrives on an instance
+ * attribute that `scene/salience.ts` fills from depth and from the player's own
+ * attention. Nothing in the tier path reads a sigil.
+ */
+describe("the focal hierarchy in the glass", () => {
+  it("carries a tier per bead, rewritten every frame", () => {
+    expect(GLASS_ATTRIBUTES.tier).toBe("aTier");
+    const source = glassSource();
+    expect(source).toContain("attribute vec2 aTier;");
+    expect(source).toContain("varying vec2 vTier;");
+    expect(source).toContain("GbgTier tier = gbgTier(vTier.x);");
+    expect(beadsSource()).toContain('"aTier"');
+  });
+
+  it("spends the tier on the rim, the highlight, the haze and the shadow", () => {
+    const source = fragment();
+    expect(source).toContain("rim * 0.72 * tier.rim");
+    expect(source).toContain("uVellum * spec * 1.1 * tier.specular");
+    expect(source).toContain("tier.haze");
+    expect(source).toContain("tier.contact");
+  });
+
+  it("emits the weights from the module the tests measure", () => {
+    // Not a second model that happens to resemble the first: the numbers in the
+    // shader are printed from `salience.tierWeights` at build time.
+    const near = tierWeights(1);
+    const far = tierWeights(0);
+    const source = fragment();
+    expect(source).toContain(
+      `w.rim = mix(${far.rim.toFixed(6)}, ${near.rim.toFixed(6)}, k);`
+    );
+    expect(source).toContain(far.haze.toFixed(6));
+    expect(source).toContain(near.contact.toFixed(6));
+  });
+
+  it("puts the highlight out entirely on a far bead", () => {
+    // The specular is the only point of near-white on the glass, so it is the
+    // single strongest first-read cue in the frame. A far bead does not get it.
+    expect(tierWeights(0).specular).toBe(0);
+    expect(fragment()).toMatch(
+      /w\.specular = mix\(0\.000000, 1\.000000,\s*clamp\(\(k - 0\.25\) \/ 0\.75, 0\.0, 1\.0\)\);/
+    );
+  });
+
+  it("never lets gilding buy salience", () => {
+    // `gilded` may tint a rim and it may not scale one. The two must not meet:
+    // if the gold leaf could reach the tier, an authored flourish would be
+    // brightness again, which is the defect INK_VALUE already exists to stop.
+    const source = fragment();
+    for (const line of source.split("\n")) {
+      if (line.includes("gilded") && line.includes("tier.")) {
+        expect(line).toBe("");
+      }
+    }
+    // And the tier is not derived from anything the instance carries about
+    // meaning: it arrives on its own attribute, written by the frame loop.
+    expect(source).not.toMatch(/gbgTier\((vSigil|vSet|vInk)/);
+  });
+
+  it("keeps the tier out of hue, so a monochrome print still reads", () => {
+    // Every channel the tier touches is value, contrast or sharpness. None of
+    // them is `vInk`, which is the only thing on a bead that is a colour.
+    const source = fragment();
+    const tierLines = source
+      .split("\n")
+      .filter((line) => line.includes("tier."));
+    expect(tierLines.length).toBeGreaterThan(3);
+    for (const line of tierLines) expect(line).not.toContain("vInk");
   });
 });

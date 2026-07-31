@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import type { Annotation } from "@/domain/annotation";
 import type { Portrait, PortraitDimension } from "@/domain/portrait";
 import { useStore } from "@/state/store";
+import { ReadingBody } from "../components/ReadingBody";
+import type { ThreadReading } from "./threadRegister";
 
 /**
  * THE PORTRAIT PLATE — what a Game leaves behind.
@@ -78,10 +80,39 @@ function Reading({ dimension }: { dimension: PortraitDimension }) {
   );
 }
 
+/**
+ * ONE THREAD, READ BACK.
+ *
+ * The margin says this while the Game is being played and it is gone the moment
+ * the player picks the arena back up; this is where it can be found afterwards.
+ * Same words, same order, same epistemic label — and the citations, which no
+ * surface in the game printed at all before this pass, so a documented claim
+ * could be checked by nobody.
+ *
+ * Every entry is set identically. There is no mark that says one thread went
+ * better than another, because none did.
+ */
+function ThreadEntry({ entry }: { entry: ThreadReading }) {
+  return (
+    <li data-testid="thread-reading" className="max-w-[46ch]">
+      <p className="engraved mb-2 normal-case tracking-[0.12em] text-dim">
+        {entry.reading}
+      </p>
+      <ReadingBody
+        reading={entry}
+        titleTag="h3"
+        titleClassName="font-display text-lead font-medium leading-tight text-vellum"
+      />
+    </li>
+  );
+}
+
 export interface PortraitPlateProps {
   readonly portrait: Portrait;
   readonly annotation: Annotation;
   readonly threadCount: number;
+  /** Every thread the player wove, in the order they wove it. */
+  readonly threads: readonly ThreadReading[];
   readonly onAnother: () => void;
   readonly onLeave: () => void;
 }
@@ -90,6 +121,7 @@ export function PortraitPlate({
   portrait,
   annotation,
   threadCount,
+  threads,
   onAnother,
   onLeave,
 }: PortraitPlateProps) {
@@ -149,6 +181,21 @@ export function PortraitPlate({
           </motion.div>
         ))}
       </div>
+
+      {threads.length > 0 && (
+        <>
+          <div className="rule-engraved my-8" />
+          {/* Named for what it is. Not "your best connections", not "what you
+              discovered" — the threads, in order, with what the Game answered
+              and where that answer can be checked. */}
+          <p className="engraved mb-5">The threads, in the order you wove them</p>
+          <ol data-testid="thread-register" className="space-y-8">
+            {threads.map((entry) => (
+              <ThreadEntry key={entry.threadId} entry={entry} />
+            ))}
+          </ol>
+        </>
+      )}
 
       <div className="rule-engraved my-8" />
 

@@ -7,6 +7,7 @@ import { castaliaConceptById } from "@/content/castalia";
 import type { CastaliaConcept } from "@/content/castalia/schema";
 import { fibonacciSpherePositions, lensPlanePositions } from "@/game/layout";
 import { frameState, initFramePositions, setMorphTargets } from "./frameState";
+import { advanceIdleClock } from "./idle";
 import { armillaryOrder } from "./identity";
 import { Firmament } from "./Firmament";
 import { Armillary } from "./Armillary";
@@ -79,6 +80,9 @@ export function Cosmos() {
     const k = 1 - Math.exp(-dt / 0.35);
     frameState.timeScale += (frameState.timeScaleTarget - frameState.timeScale) * k;
     frameState.clock += dt * frameState.timeScale;
+    // The idle score runs on the same dilated seconds, on a clock that a new
+    // draw does not reset — see `scene/idle.ts`.
+    advanceIdleClock(dt * frameState.timeScale);
 
     // The Breath: phase integrates dilated time, so it slows with reveals
     // and stays phase-continuous. Depth eases toward its context target.

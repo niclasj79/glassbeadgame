@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ARENA_RADIUS, fibonacciSpherePositions } from "@/game/layout";
 import {
+  ARENA_FOV,
   CAMERA_BEAT_SECONDS,
   CAMERA_PHRASES,
   CONTROL_CLEARANCE,
+  FRAME_RULE_INSET,
   INSTRUMENT_HALF_SPAN,
   MAX_ELEVATION,
   MAX_HORIZON_NDC,
   MIN_RING_RADIUS,
+  PORTRAIT_ASPECT,
   attendedFraming,
   boxGap,
   clampToSafeArea,
@@ -18,6 +21,11 @@ import {
   dampAngle,
   dampOrbitToward,
   dampScalar,
+  MARGIN_RESERVE,
+  WORLD_SAFE_CLEARANCE,
+  compositionBox,
+  frameRuleNdc,
+  homeComposition,
   horizonNdcY,
   maxTargetOffset,
   orbitFromPosition,
@@ -27,10 +35,14 @@ import {
   plateSafeArea,
   positionFromOrbit,
   projectFromPose,
+  shiftNdc,
+  unshiftNdc,
   withinSafeArea,
+  worldSafeArea,
   wrapAngle,
   type PlateBox,
   type SafeArea,
+  type Viewport,
 } from "./framing";
 
 const ORIGIN = new THREE.Vector3(0, 0, 0);
@@ -498,6 +510,218 @@ describe("the camera's motion language", () => {
       const level = horizonNdcY(Math.asin(camera.y / camera.length()));
       expect(level).toBeLessThanOrEqual(previous + 1e-6);
       previous = level;
+    }
+  });
+});
+
+/**
+ * A1 / A5 — THE ARENA IS COMPOSED, NOT CENTRED
+ *
+ * Measured on the shipped build: the opening arena frame's centre of visual
+ * mass sat at (1469, 812) against a frame centre of (1440, 810) — off by 1.0%
+ * horizontally and 0.1% vertically, with column-thirds mass 20/63/17 and
+ * row-thirds 31/37/32. The same signature reproduced on a second seed, because
+ * nothing about the framing depended on the content: a round object dropped in
+ * the middle of a rectangle.
+ *
+ * And on 414x896 the same non-decision put the sphere off the left edge with
+ * 118 px of margin unused on the right, the world overrunning its own ruling.
+ *
+ * These are the laws that replaced it. Every one of them is a property of
+ * `homeComposition`, so a future tuning pass cannot quietly re-centre the arena
+ * without a red test.
+ */
+describe("the composed home frame", () => {
+  const VIEWPORTS: readonly (Viewport & { readonly name: string })[] = [
+    { name: "desktop 1440x810", width: 1440, height: 810 },
+    { name: "desktop 1920x1080", width: 1920, height: 1080 },
+    { name: "laptop 1280x800", width: 1280, height: 800 },
+    { name: "ultrawide 2560x1080", width: 2560, height: 1080 },
+    { name: "tablet landscape 1024x768", width: 1024, height: 768 },
+    { name: "tablet portrait 768x1024", width: 768, height: 1024 },
+    { name: "phone 414x896", width: 414, height: 896 },
+    { name: "phone 390x844", width: 390, height: 844 },
+    { name: "phone 360x740", width: 360, height: 740 },
+  ];
+
+  /** The box the old build's centre of mass sat inside on every seed. */
+  const CENTRAL_BOX = 0.2;
+
+  it("never puts the instrument's centre in the middle of the frame", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const centred =
+        Math.abs(home.centre.x) <= CENTRAL_BOX &&
+        Math.abs(home.centre.y) <= CENTRAL_BOX;
+      expect(`${viewport.name}: ${centred ? "centred" : "composed"}`).toBe(
+        `${viewport.name}: composed`
+      );
+    }
+  });
+
+  it("keeps every bead inside the page's ruling on every viewport", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const aspect = viewport.width / viewport.height;
+      const rule = frameRuleNdc(aspect);
+      // The widest a bead ever reaches, carried to the composed anchor.
+      expect(Math.abs(home.centre.x) + home.beads.x).toBeLessThanOrEqual(rule.x);
+      expect(Math.abs(home.centre.y) + home.beads.y).toBeLessThanOrEqual(rule.y);
+    }
+  });
+
+  it("breaks the ruling with the silhouette instead of floating clear of it", () => {
+    for (const viewport of VIEWPORTS) {
+      const aspect = viewport.width / viewport.height;
+      // Every page a player actually holds: a wide screen, or a phone.
+      if (aspect < 1.55 && aspect > 0.6) continue;
+      const home = homeComposition(viewport);
+      expect(`${viewport.name} ${home.broken.length}`).not.toBe(
+        `${viewport.name} 0`
+      );
+      // Never all four: an instrument that overruns the page on every side is
+      // not composed either, it is merely too close.
+      expect(home.broken.length).toBeLessThan(4);
+    }
+  });
+
+  it("always overhangs the side it was fitted to", () => {
+    // The silhouette is 11% wider than the shell the fit is solved against, so
+    // whichever boundary is tight, brass crosses it. That is the composition's
+    // one guarantee that the instrument sits *on* the page rather than in a box
+    // drawn on it — and it holds at every aspect, ruled edge or margin.
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const overhang =
+        home.tight === "bottom" || home.tight === "top"
+          ? home.instrument.y - home.beads.y
+          : home.instrument.x - home.beads.x;
+      expect(overhang).toBeGreaterThan(WORLD_SAFE_CLEARANCE);
+    }
+  });
+
+  it("crosses the bottom rule, and only that one, on a wide page", () => {
+    for (const viewport of VIEWPORTS) {
+      const aspect = viewport.width / viewport.height;
+      if (aspect < 1.55) continue;
+      expect(`${viewport.name} ${homeComposition(viewport).broken}`).toBe(
+        `${viewport.name} bottom`
+      );
+    }
+  });
+
+  it("never overruns the margin it reserved", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      expect(home.broken).not.toContain(home.margin);
+      // `ui/arena/Marginalia` takes min(27rem, 32vw) of the width in landscape
+      // and the foot of the page in portrait. The composition reserves it
+      // whether or not anything is written there.
+      expect(home.reserve).toBeGreaterThanOrEqual(MARGIN_RESERVE - 1e-9);
+    }
+  });
+
+  it("rules a phone's page with a margin and not with a quarter of its width", () => {
+    // The rule used to be struck at FRAME_RULE_INSET half-heights on both
+    // axes, which on 414x896 stands the side rules at NDC ±0.75.
+    const phone = 414 / 896;
+    expect(1 - FRAME_RULE_INSET / phone).toBeLessThan(0.76);
+    expect(frameRuleNdc(phone).x).toBeGreaterThan(0.86);
+    // A landscape page is untouched: one number, two readings of it.
+    const desktop = 1440 / 810;
+    expect(frameRuleNdc(desktop).x).toBeCloseTo(1 - FRAME_RULE_INSET / desktop, 9);
+    expect(frameRuleNdc(desktop).y).toBeCloseTo(1 - FRAME_RULE_INSET, 9);
+  });
+
+  it("shows the defect: the pose it replaced put the arena in the bullseye", () => {
+    // The old rest pose was the literal (0, 0.85, 10.4) aimed at the origin in
+    // landscape, and a width fit aimed at the origin in portrait. Aiming at the
+    // arena's centre lands the arena's centre at NDC (0, 0) by definition — on
+    // every viewport, every seed, and every session. There was no composition
+    // to regress; there was an object in the middle of a rectangle.
+    for (const viewport of VIEWPORTS) {
+      const aspect = viewport.width / viewport.height;
+      const camera = new THREE.Vector3(0, 0.85, aspect < 0.75 ? 21 : 10.4);
+      const landed = projectFromPose(ORIGIN, camera, ORIGIN, aspect);
+      expect(Math.hypot(landed.x, landed.y)).toBeLessThan(1e-9);
+
+      // And the instrument then sat clear of the top and bottom rules by the
+      // same margin on both, which is the visual signature the critic measured.
+      const halfH = camera.length() * Math.tan((ARENA_FOV * Math.PI) / 360);
+      const above = 1 - INSTRUMENT_HALF_SPAN / halfH;
+      const below = 1 - INSTRUMENT_HALF_SPAN / halfH;
+      expect(above).toBeCloseTo(below, 12);
+
+      // The composed pose is asymmetric on every axis by construction.
+      const home = homeComposition(viewport);
+      expect(
+        Math.abs(
+          home.centre.y + home.instrument.y - (home.instrument.y - home.centre.y)
+        )
+      ).toBeGreaterThan(0.05);
+    }
+  });
+
+  it("carries the arena to the anchor through three's own projection", () => {
+    // The lens shift is only a composition if three's asymmetric frustum
+    // agrees with the sign convention this module hands it. Projected here by
+    // the real camera rather than by a restatement of it.
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const camera = new THREE.PerspectiveCamera(
+        ARENA_FOV,
+        viewport.width / viewport.height,
+        0.1,
+        160
+      );
+      camera.position.set(0, 0.3, home.distance);
+      camera.lookAt(ORIGIN);
+      camera.setViewOffset(
+        viewport.width,
+        viewport.height,
+        home.viewOffset.x,
+        home.viewOffset.y,
+        viewport.width,
+        viewport.height
+      );
+      camera.updateMatrixWorld();
+      const landed = ORIGIN.clone().project(camera);
+      expect(landed.x).toBeCloseTo(home.centre.x, 6);
+      expect(landed.y).toBeCloseTo(home.centre.y, 6);
+
+      // And the shift is a *translation*: the same constant at every depth, or
+      // the plate solver's round trip through it would be a lie.
+      const deep = new THREE.Vector3(1.4, -0.9, -2.6);
+      const shifted = deep.clone().project(camera);
+      camera.clearViewOffset();
+      const plain = deep.clone().project(camera);
+      expect(shifted.x - plain.x).toBeCloseTo(home.centre.x, 6);
+      expect(shifted.y - plain.y).toBeCloseTo(home.centre.y, 6);
+      expect(shiftNdc(plain.x, plain.y, home).x).toBeCloseTo(shifted.x, 6);
+      expect(unshiftNdc(shifted.x, shifted.y, home).y).toBeCloseTo(plain.y, 6);
+    }
+  });
+
+  it("stands back far enough to fit its box, and no further", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const aspect = viewport.width / viewport.height;
+      const safe = worldSafeArea(aspect);
+      const box = compositionBox(aspect);
+      // Whichever side the fit is tight against, it is tight to the pixel: the
+      // distance is solved from the frame, not chosen and then defended.
+      const slack =
+        home.tight === home.margin
+          ? aspect < PORTRAIT_ASPECT
+            ? home.centre.y - home.instrument.y - box.minY
+            : box.maxX - (home.centre.x + home.instrument.x)
+          : Math.min(
+              safe.maxY - (Math.abs(home.centre.y) + home.beads.y),
+              safe.maxX - (Math.abs(home.centre.x) + home.beads.x)
+            );
+      expect(`${viewport.name} ${slack < 1e-9 ? "tight" : "slack"}`).toBe(
+        `${viewport.name} tight`
+      );
     }
   });
 });

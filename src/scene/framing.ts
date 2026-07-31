@@ -1,21 +1,24 @@
 import * as THREE from "three";
 import { ARENA_RADIUS } from "@/game/layout";
+import { MAX_BEAD_EXTENT } from "./rings";
 
 /**
  * HOW THE WORLD IS COMPOSED ON THE SCREEN
  *
- * Four things live here, and they live together because they are one problem:
+ * Five things live here, and they live together because they are one problem:
  * a frame is only well composed if the camera, the instrument, the plate and
  * the phrasing of the move all agree about where the edges are.
  *
  *   1. THE FRAME     the safe area — how close anything drawn around a bead
  *                    may come to a viewport edge, and how large the intention
  *                    plate actually is once its labels are counted.
- *   2. THE LEVEL     where the world's horizon lands for a given elevation,
+ *   2. THE HOME      where the instrument sits when nothing is being attended:
+ *                    a composed rest pose, not the middle of the rectangle.
+ *   3. THE LEVEL     where the world's horizon lands for a given elevation,
  *                    and therefore how far the camera may rise before the
  *                    level sweeps out of frame.
- *   3. THE POSTURE   the attended pose, solved rather than nudged.
- *   4. THE PHRASING  one tempo, and every camera move a whole or half multiple
+ *   4. THE POSTURE   the attended pose, solved rather than nudged.
+ *   5. THE PHRASING  one tempo, and every camera move a whole or half multiple
  *                    of it, damped in orbit coordinates so a move is always a
  *                    turn of the instrument and never a cut through it.
  *
@@ -89,11 +92,10 @@ const LABEL_GAP = 6;
 const LABEL_GAP_SIDE = 8;
 
 /**
- * How far beneath the plate the attended bead's own name hangs.
- *
- * INTEGRATOR NOTE: `scene/Beads.tsx` hard-codes this same number as
- * `ATTENDED_LABEL_DROP_PX`. It should import this one; two copies of a
- * composition constant is one copy too many, and that file is not mine.
+ * How far beneath the plate the attended bead's own name hangs — and, because
+ * the plate is what a *neighbouring* name would collide with, the screen radius
+ * `scene/labels.ts` reserves around an attended bead. `scene/Beads.tsx` used to
+ * carry a second copy of this number; it imports this one now.
  */
 export const ATTENDED_LABEL_DROP_PX = 148;
 const ATTENDED_LABEL_HALF_HEIGHT = 10;
@@ -281,10 +283,37 @@ export function plateGeometry(
  * The margin's inner ruling, as a fraction of a half-height. Inside it is the
  * reading area; a plate that crosses it is drawn on the page's margin.
  *
- * INTEGRATOR NOTE: `scene/MarginRule.tsx` strikes this rule at 0.115 in its
- * own shader. Two copies again, and that file is not mine either.
+ * `scene/MarginRule.tsx` strikes the rule from this constant.
  */
 export const FRAME_RULE_INSET = 0.115;
+
+/**
+ * THE RULE IS A MARGIN, NOT A PROPORTION OF THE HEIGHT.
+ *
+ * The ruling used to be struck at `FRAME_RULE_INSET` half-heights on *both*
+ * axes. On a 16:9 frame that is a 6.5% side margin and an 11.5% top margin —
+ * fine. On a 414x896 phone the same number is a **25% side margin**: the page's
+ * left and right rules stand at NDC ±0.75, a quarter of the width gone to
+ * ornament, which is why the portrait arena had nowhere left to be and ran over
+ * its own frame instead.
+ *
+ * A margin is a physical width. Measuring it against the *short* side of the
+ * page gives the same band on every side of every viewport, which is what a
+ * ruled page actually looks like.
+ */
+export function frameRuleShared(aspect: number): number {
+  return FRAME_RULE_INSET * Math.min(1, Math.max(aspect, 0.1));
+}
+
+/** Where the inner ruling stands, in NDC, on each axis. */
+export function frameRuleNdc(aspect: number): {
+  readonly x: number;
+  readonly y: number;
+} {
+  const a = Math.max(aspect, 0.1);
+  const shared = frameRuleShared(a);
+  return { x: 1 - shared / a, y: 1 - shared };
+}
 
 /**
  * The safe area for a plate of this size in this viewport, in three steps of
@@ -304,15 +333,16 @@ export function plateSafeArea(
   const halfW = Math.max(1, viewport.width) / 2;
   const halfH = Math.max(1, viewport.height) / 2;
   const aspect = Math.max(0.1, viewport.width / Math.max(1, viewport.height));
+  const shared = frameRuleShared(aspect);
   const horizontal = safeInterval(
     plate.extentSide / halfW,
     plate.extentSide / halfW,
-    FRAME_RULE_INSET / aspect
+    shared / aspect
   );
   const vertical = safeInterval(
     plate.extentDown / halfH,
     plate.extentUp / halfH,
-    FRAME_RULE_INSET
+    shared
   );
   return {
     minX: horizontal.min,
@@ -359,7 +389,247 @@ export function withinSafeArea(
 }
 
 /* ────────────────────────────────────────────────────────────────────── *
- * 2. THE LEVEL
+ * 2. THE HOME COMPOSITION
+ * ────────────────────────────────────────────────────────────────────── */
+
+/**
+ * THE ARENA IS NOT A BULLSEYE.
+ *
+ * Measured on the shipped build: the centre of visual mass of the opening arena
+ * frame sat at (1469, 812) against a frame centre of (1440, 810) — 1.0% off
+ * horizontally, 0.1% off vertically, with column-thirds mass 20/63/17 and
+ * row-thirds 31/37/32. That is not a composition. It is a round object dropped
+ * in the middle of a rectangle, and it looked the same on every seed because
+ * nothing about it was authored.
+ *
+ * Three commitments replace it, and all three are measurable here rather than
+ * from a screenshot:
+ *
+ *   OFF-CENTRE HOME. The instrument's centre is carried to an authored fraction
+ *   of the frame — about three-eighths across and just below the middle in
+ *   landscape, high and centred in portrait — so one third dominates and the
+ *   remaining space is *lead room* rather than leftover margin.
+ *
+ *   A RESERVED COLUMN AT REST. The margin the readings are written into is held
+ *   open whether or not a reading is showing. A column that only appears when a
+ *   note fires is a column the composition never had.
+ *
+ *   THE SILHOUETTE BREAKS THE RULE. The instrument crosses the page's inner
+ *   ruling on one side instead of floating clear of all four, which is what
+ *   makes it read as an object on a page rather than as a diagram in a box. The
+ *   bead shell crosses nothing: no bead, ever, on any viewport.
+ *
+ * HOW IT IS DONE. Not by panning the aim point — the player's orbit turns about
+ * that point, so an offset target unwinds the composition on the first drag,
+ * and the auto-orbit would swing the whole arena across the screen. It is a
+ * **lens shift**: an asymmetric frustum, exactly what a shift lens is for. An
+ * off-axis perspective frustum translates the projected image by a constant in
+ * NDC at every depth, so the composition is rigid under orbit, under zoom, and
+ * under every scripted move — and the aim point stays on the arena's centre
+ * where OrbitControls needs it.
+ */
+
+/** Below this aspect the frame is a portrait page: the margin runs along it. */
+export const PORTRAIT_ASPECT = 1;
+
+/**
+ * How much of the page is held for the margin the readings are written into.
+ * `ui/arena/Marginalia` takes `min(27rem, 32vw)` down the right in landscape
+ * and the foot of the page in portrait; this is the composition's side of that
+ * bargain, and it is honoured whether or not anything is written there.
+ */
+export const MARGIN_RESERVE = 0.36;
+
+/**
+ * Where the instrument is seated inside its box, measured down from the box's
+ * top. Not 0.5: a form seated fractionally low reads as resting in the frame,
+ * and a form seated exactly halfway reads as having been dropped there.
+ */
+export const INSTRUMENT_SEAT = 0.54;
+
+/**
+ * How far inside the ruling the bead shell must stay. A bead tangent to the
+ * rule is a bead the rule cuts as soon as anything rounds.
+ */
+export const WORLD_SAFE_CLEARANCE = 0.03;
+
+/**
+ * The box no bead may leave, in NDC, for a frame of this aspect: inside the
+ * page's ruling, with clearance. Labels are placed against this box too
+ * (`scene/labels.ts`), which is why a label can never be the thing that runs
+ * off the edge.
+ */
+export function worldSafeArea(aspect: number): SafeArea {
+  const rule = frameRuleNdc(aspect);
+  const x = Math.max(0.1, rule.x - WORLD_SAFE_CLEARANCE);
+  const y = Math.max(0.1, rule.y - WORLD_SAFE_CLEARANCE);
+  return { minX: -x, maxX: x, minY: -y, maxY: y };
+}
+
+export type FrameEdge = "left" | "right" | "top" | "bottom";
+
+/**
+ * The region of the page the instrument is composed into: the safe area on
+ * three sides, and the margin on the fourth. This box, and not the frame, is
+ * what the arena is centred in — which is the whole of why the arena stops
+ * being centred in the frame.
+ */
+export function compositionBox(aspect: number): SafeArea {
+  const safe = worldSafeArea(aspect);
+  const edge = -1 + 2 * MARGIN_RESERVE;
+  return aspect < PORTRAIT_ASPECT
+    ? { ...safe, minY: edge }
+    : { ...safe, maxX: -edge };
+}
+
+export interface HomeComposition {
+  /** Orbit distance the rest pose holds. */
+  readonly distance: number;
+  /** Where the arena's centre is carried to, in NDC. */
+  readonly centre: { readonly x: number; readonly y: number };
+  /**
+   * The lens shift, in pixels, for `PerspectiveCamera.setViewOffset`. Sign
+   * convention is three's: a positive x renders a window further right in the
+   * notional full image, which carries the world left.
+   */
+  readonly viewOffset: { readonly x: number; readonly y: number };
+  /** Half-extent of the instrument's silhouette, in NDC. */
+  readonly instrument: { readonly x: number; readonly y: number };
+  /** Half-extent of the widest a bead ever reaches, in NDC. */
+  readonly beads: { readonly x: number; readonly y: number };
+  /** Ruled edges the instrument's silhouette crosses. */
+  readonly broken: readonly FrameEdge[];
+  /** The one side the fit is tight against — the fit is a solve, not a guess. */
+  readonly tight: FrameEdge;
+  /** The side the margin runs along. The instrument never enters it. */
+  readonly margin: FrameEdge;
+  /**
+   * How much of the page is left clear of the instrument for the margin, as a
+   * fraction of the width in landscape and of the height in portrait.
+   */
+  readonly reserve: number;
+}
+
+/**
+ * The rest pose for a frame of this size: the distance at which the world
+ * exactly fills its composition box, and the lens shift that carries it there.
+ *
+ * The distance is *solved*, not tuned. It used to be the constant 10.4 in
+ * landscape and a width fit in portrait, and neither knew anything about where
+ * a bead was allowed to be — which is how a phone ended up with the sphere
+ * pushed off the left edge and 118px of unused margin on the right.
+ *
+ * Three demands, and the largest wins:
+ *
+ *   the bead shell inside the ruling, on both axes;
+ *   the instrument clear of the margin;
+ *   and nothing else. Every other edge is free to be broken, which is what
+ *   lets the silhouette cross the rule rather than float clear of all four.
+ */
+export function homeComposition(
+  viewport: Viewport,
+  fov: number = ARENA_FOV
+): HomeComposition {
+  const width = Math.max(1, viewport.width);
+  const height = Math.max(1, viewport.height);
+  const aspect = Math.max(0.1, width / height);
+  const portrait = aspect < PORTRAIT_ASPECT;
+  const safe = worldSafeArea(aspect);
+  const box = compositionBox(aspect);
+
+  const centre = {
+    x: (box.minX + box.maxX) / 2,
+    y: box.maxY - INSTRUMENT_SEAT * (box.maxY - box.minY),
+  };
+
+  const room = (a: number, b: number): number => Math.max(0.05, Math.min(a, b));
+  const beadRoomX = room(centre.x - safe.minX, safe.maxX - centre.x);
+  const beadRoomY = room(centre.y - safe.minY, safe.maxY - centre.y);
+  const marginRoom = portrait ? centre.y - box.minY : box.maxX - centre.x;
+
+  const demands: readonly (readonly [FrameEdge, number])[] = [
+    [centre.y > 0 ? "bottom" : "top", MAX_BEAD_EXTENT / beadRoomY],
+    [centre.x > 0 ? "left" : "right", MAX_BEAD_EXTENT / beadRoomX / aspect],
+    [
+      portrait ? "bottom" : "right",
+      INSTRUMENT_HALF_SPAN /
+        Math.max(0.05, marginRoom) /
+        (portrait ? 1 : aspect),
+    ],
+  ];
+  let tight: FrameEdge = demands[0][0];
+  let halfH = 0;
+  for (const [edge, demand] of demands) {
+    if (demand > halfH) {
+      halfH = demand;
+      tight = edge;
+    }
+  }
+  const halfW = halfH * aspect;
+  const distance = halfH / tanHalfFov(fov);
+
+  const instrument = {
+    x: INSTRUMENT_HALF_SPAN / halfW,
+    y: INSTRUMENT_HALF_SPAN / halfH,
+  };
+  const beads = { x: MAX_BEAD_EXTENT / halfW, y: MAX_BEAD_EXTENT / halfH };
+
+  const rule = frameRuleNdc(aspect);
+  const broken: FrameEdge[] = [];
+  if (centre.x - instrument.x < -rule.x) broken.push("left");
+  if (centre.x + instrument.x > rule.x) broken.push("right");
+  if (centre.y + instrument.y > rule.y) broken.push("top");
+  if (centre.y - instrument.y < -rule.y) broken.push("bottom");
+
+  return {
+    distance,
+    centre,
+    viewOffset: { x: (-centre.x * width) / 2, y: (centre.y * height) / 2 },
+    instrument,
+    beads,
+    broken,
+    tight,
+    margin: portrait ? "bottom" : "right",
+    reserve: portrait
+      ? (1 + (centre.y - instrument.y)) / 2
+      : (1 - (centre.x + instrument.x)) / 2,
+  };
+}
+
+/**
+ * A world point's NDC once the lens shift is applied. The shift translates the
+ * whole projected image by a constant, so this is an addition and not a second
+ * projection.
+ */
+export function shiftNdc(
+  ndcX: number,
+  ndcY: number,
+  home: HomeComposition
+): { readonly x: number; readonly y: number } {
+  return { x: ndcX + home.centre.x, y: ndcY + home.centre.y };
+}
+
+/** The inverse: where a solver must aim for a bead to *land* on `(x, y)`. */
+export function unshiftNdc(
+  ndcX: number,
+  ndcY: number,
+  home: HomeComposition
+): { readonly x: number; readonly y: number } {
+  return { x: ndcX - home.centre.x, y: ndcY - home.centre.y };
+}
+
+/** The same box, expressed in the un-shifted NDC the pose solver works in. */
+export function unshiftArea(area: SafeArea, home: HomeComposition): SafeArea {
+  return {
+    minX: area.minX - home.centre.x,
+    maxX: area.maxX - home.centre.x,
+    minY: area.minY - home.centre.y,
+    maxY: area.maxY - home.centre.y,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────── *
+ * 3. THE LEVEL
  * ────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -420,7 +690,7 @@ export function maxTargetOffset(
 }
 
 /* ────────────────────────────────────────────────────────────────────── *
- * 3. THE ATTENDED POSTURE, SOLVED RATHER THAN NUDGED
+ * 4. THE ATTENDED POSTURE, SOLVED RATHER THAN NUDGED
  * ────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -432,7 +702,7 @@ export function maxTargetOffset(
  *
  * With no camera roll the camera's right vector is always horizontal, which
  * makes the azimuth a closed form. The elevation is bounded by the level
- * (§2) — the camera never flies to the pole to chase a bead that is already
+ * (§3) — the camera never flies to the pole to chase a bead that is already
  * overhead — so it is solved by search within that range, and whatever the
  * rotation could not deliver is absorbed by a bounded target offset.
  *
@@ -695,7 +965,7 @@ export function projectFromPose(
 }
 
 /* ────────────────────────────────────────────────────────────────────── *
- * 4. THE PHRASING
+ * 5. THE PHRASING
  * ────────────────────────────────────────────────────────────────────── */
 
 /**

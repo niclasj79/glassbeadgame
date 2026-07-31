@@ -90,6 +90,26 @@ export interface SessionProgression {
   readonly attunementAvailable: () => boolean;
   readonly enterAttunement: () => void;
   readonly exitAttunement: () => void;
+  /**
+   * THE INVITATION, AS SOMETHING THE WORLD CAN HEAR.
+   *
+   * `attunementAvailable()` has always answered the question correctly and
+   * nothing ever asked it: a live DOM audit of a running session found no
+   * Attunement affordance among eighteen buttons, the project's own capture
+   * harness probes for one and gives up, and `enterAttunement` had no caller
+   * outside a unit test. A reducer state, two event types, a cue, a written
+   * caption and 346 tested lines of `audio/attunement.ts` were unreachable by
+   * any player, by any input.
+   *
+   * Availability changes only when the composition changes, so it is pushed
+   * rather than polled. Spec §13 asks that Attunement be "explicitly invited
+   * but not forced": the invitation is this edge, and what to do with it is the
+   * subscriber's business. Fires only on a change, and fires immediately with
+   * the current value so a surface that mounts late is never wrong.
+   */
+  readonly onInvitationChanged: (
+    listener: (available: boolean) => void
+  ) => () => void;
   readonly conclude: () => void;
 }
 
@@ -116,6 +136,45 @@ export function createSessionProgression(
   const append = (event: SessionEventV1): void => {
     domainStore.getState().appendEvent(event);
   };
+
+  const invitationListeners = new Set<(available: boolean) => void>();
+
+  const isAvailable = (): boolean => {
+    const session = domainStore.getState().session;
+    if (!session || session.concluded || session.attunementActive) return false;
+    return dependencies.attunementEligible(session);
+  };
+
+  let invited = isAvailable();
+
+  /**
+   * Called at the end of every operation that can change the answer. Notifies
+   * only on an edge, so a subscriber may treat `true` as "this just became
+   * possible" and stage the moment without debouncing it itself.
+   */
+  const settleInvitation = (): void => {
+    const next = isAvailable();
+    if (next === invited) return;
+    invited = next;
+    for (const listener of [...invitationListeners]) listener(next);
+  };
+
+  /**
+   * A new Game must not inherit the last one's invitation. Deliberately keyed
+   * on session identity rather than on every store write: settling inside the
+   * append that a commit is still in the middle of would announce Attunement
+   * before the motif that earned it had been staged.
+   */
+  let settledSessionId: string | null = (() => {
+    const session = domainStore.getState().session;
+    return session ? String(session.sessionId) : null;
+  })();
+  domainStore.subscribe((state) => {
+    const sessionId = state.session ? String(state.session.sessionId) : null;
+    if (sessionId === settledSessionId) return;
+    settledSessionId = sessionId;
+    settleInvitation();
+  });
 
   /**
    * Emits `motif.completed` for every detection not already in the log. Runs
@@ -157,8 +216,7 @@ export function createSessionProgression(
     }
   };
 
-  const progression: SessionProgression = {
-    afterCommit: (threadId) => {
+  const resolveCommit = (threadId: ThreadId): ThreadOutcomeResolution | null => {
       const session = requireSession(domainStore);
       const thread = session.threads.find((entry) => entry.id === threadId);
       if (!thread) return null;
@@ -272,12 +330,29 @@ export function createSessionProgression(
 
       publishNewMotifs();
       return outcome;
+  };
+
+  const progression: SessionProgression = {
+    afterCommit: (threadId) => {
+      try {
+        return resolveCommit(threadId);
+      } finally {
+        // Settled last and on every path, including the idempotent early
+        // returns: the invitation must arrive *after* the motif that earned it
+        // has been staged, and must never be skipped because a commit was
+        // replayed.
+        settleInvitation();
+      }
     },
 
-    attunementAvailable: () => {
-      const session = domainStore.getState().session;
-      if (!session || session.concluded || session.attunementActive) return false;
-      return dependencies.attunementEligible(session);
+    attunementAvailable: isAvailable,
+
+    onInvitationChanged: (listener) => {
+      invitationListeners.add(listener);
+      listener(isAvailable());
+      return () => {
+        invitationListeners.delete(listener);
+      };
     },
 
     enterAttunement: () => {
@@ -292,6 +367,7 @@ export function createSessionProgression(
       });
       append(event);
       cueBus.publish(planAttunement({ active: true }, event.id));
+      settleInvitation();
     },
 
     exitAttunement: () => {
@@ -306,6 +382,7 @@ export function createSessionProgression(
       });
       append(event);
       cueBus.publish(planAttunement({ active: false }, event.id));
+      settleInvitation();
     },
 
     conclude: () => {
@@ -339,6 +416,7 @@ export function createSessionProgression(
         lookup
       );
       cueBus.publish(planConclusion({ performance }, event.id));
+      settleInvitation();
     },
   };
   return Object.freeze(progression);

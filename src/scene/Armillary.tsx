@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useStore as useVanillaStore } from "zustand";
@@ -10,6 +10,7 @@ import { frameState } from "./frameState";
 import { GLSL_COMMON } from "./glsl";
 import { armillaryOrder, beadIdentity } from "./identity";
 import { presentationProfile } from "./quality";
+import { idleClock, precession, travellingLight } from "./idle";
 import { armillaryRings, type RingSpec } from "./rings";
 import { MAX_STATIONS, stationAnchors, type StationAnchor } from "./stations";
 
@@ -66,6 +67,9 @@ uniform float uMajor;
 uniform float uMinor;
 uniform float uOpacity;
 uniform float uBreath;
+uniform float uCreep;
+uniform float uSweep;
+uniform float uSweepGain;
 uniform float uStationCount;
 uniform vec2 uStations[${MAX_STATIONS}];
 uniform vec3 uBrass;
@@ -98,9 +102,11 @@ void main() {
   metal = mix(metal, uPatina * 0.70, hollow * 0.5);
 
   // THE ENGRAVING. Minor divisions bite only in the hollow, where a graver
-  // would reach; major divisions cross the whole band.
-  float minor = gbgLine(fract(ang * uMinor / GBG_TAU) - 0.5, 0.10) * hollow;
-  float major = gbgLine(fract(ang * uMajor / GBG_TAU) - 0.5, 0.06);
+  // would reach; major divisions cross the whole band. A ring that maps onto
+  // itself when it turns creeps its graduations instead (scene/idle.ts).
+  float eng = ang + uCreep;
+  float minor = gbgLine(fract(eng * uMinor / GBG_TAU) - 0.5, 0.10) * hollow;
+  float major = gbgLine(fract(eng * uMajor / GBG_TAU) - 0.5, 0.06);
   vec3 col = mix(metal, uVellum, minor * 0.18 + major * 0.34);
 
   // DEPTH IN THE ROOM. Negative in front of the arena's centre, positive
@@ -126,8 +132,16 @@ void main() {
   glow = clamp(glow, 0.0, 1.6);
   col += uGold * glow * 0.35;
 
+  // THE TRAVELLING LIGHT. One event crosses the world every fifteen seconds
+  // and the brass takes it as brass does: a pass along the arris, brightest
+  // where the band is already turning edge-on.
+  float toLight = abs(atan(sin(ang - uSweep), cos(ang - uSweep)));
+  float pass = exp(-pow(toLight / 0.30, 2.0)) * uSweepGain;
+  col += mix(uVellum, uBrass, 0.4) * pass * (0.18 + 0.62 * arris) * limb;
+
   float alpha = band * uOpacity * weight * (0.86 + 0.14 * uBreath)
-              + band * glow * 0.16 * weight;
+              + band * glow * 0.16 * weight
+              + band * pass * 0.10 * weight;
   gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
 }
 `;
@@ -135,11 +149,14 @@ void main() {
 function Ring({
   spec,
   stations,
+  reducedMotion,
 }: {
   spec: RingSpec;
   stations: readonly StationAnchor[];
+  reducedMotion: boolean;
 }) {
   const theme = useCurrentTheme();
+  const turn = useRef<THREE.Group>(null);
   const material = useMemo(() => {
     const p = theme.palette;
     const stationValues: THREE.Vector2[] = [];
@@ -160,6 +177,9 @@ function Ring({
         uMinor: { value: spec.minor },
         uOpacity: { value: spec.opacity },
         uBreath: { value: 0 },
+        uCreep: { value: 0 },
+        uSweep: { value: 0 },
+        uSweepGain: { value: 0 },
         uStationCount: { value: 0 },
         uStations: { value: stationValues },
         uBrass: { value: new THREE.Color(p.brass) },
@@ -187,6 +207,23 @@ function Ring({
     (material.uniforms.uBreath as { value: number }).value =
       Math.sin(frameState.breathPhase) * frameState.breathDepth;
 
+    // THE IDLE SCORE, at this ring's own rate. The turn is applied to a group
+    // about the world's axis rather than folded into the ring's own Euler, so
+    // an obliquity that was authored stays authored and only the node moves.
+    const clock = idleClock();
+    const group = turn.current;
+    if (group) {
+      group.rotation.y = precession(spec.precession, clock, reducedMotion);
+    }
+    (material.uniforms.uCreep as { value: number }).value = precession(
+      spec.creep,
+      clock,
+      reducedMotion
+    );
+    const light = travellingLight(clock, reducedMotion);
+    (material.uniforms.uSweep as { value: number }).value = light.longitude;
+    (material.uniforms.uSweepGain as { value: number }).value = light.gain;
+
     if (!spec.stations) return;
     const values = material.uniforms.uStations.value as THREE.Vector2[];
     const positions = frameState.positions;
@@ -206,17 +243,24 @@ function Ring({
   });
 
   return (
-    <mesh
-      material={material}
-      rotation={spec.rotation as unknown as [number, number, number]}
-      position={spec.position as unknown as [number, number, number]}
-      renderOrder={spec.order}
-      frustumCulled={false}
-    >
-      <ringGeometry
-        args={[spec.radius - spec.halfWidth, spec.radius + spec.halfWidth, 192, 1]}
-      />
-    </mesh>
+    <group ref={turn}>
+      <mesh
+        material={material}
+        rotation={spec.rotation as unknown as [number, number, number]}
+        position={spec.position as unknown as [number, number, number]}
+        renderOrder={spec.order}
+        frustumCulled={false}
+      >
+        <ringGeometry
+          args={[
+            spec.radius - spec.halfWidth,
+            spec.radius + spec.halfWidth,
+            192,
+            1,
+          ]}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -233,7 +277,11 @@ export function Armillary() {
     [tier, reducedMotion]
   );
 
-  /** One small circle per boundary between two faculties in this draw. */
+  /**
+   * One small circle per boundary between two faculties in this draw — and
+   * none at all before there is a draw, because a parallel says where Measure
+   * stops and Sound begins and there is nothing yet to say it about.
+   */
   const parallels = useMemo(() => {
     if (!beadIds || beadIds.length < 2) return [];
     const ordered = armillaryOrder(beadIds);
@@ -259,12 +307,29 @@ export function Armillary() {
    */
   const stations = useMemo(() => stationAnchors(threads), [threads]);
 
-  if (!beadIds || beadIds.length === 0) return null;
-
+  /**
+   * THE INSTRUMENT EXISTS BEFORE THE DRAW DOES.
+   *
+   * This used to return `null` until a session had beads, so the title screen
+   * was type over an empty sky and the opening camera move — a pure axial dolly
+   * from 15.2 to 10.4 — acted on nothing with any parallax. Frame-diffing the
+   * press showed 0.3% of pixels changing in the first 808 ms, and the largest
+   * deltas were star twinkle.
+   *
+   * The armillary is the instrument the Game is played on; the beads are one
+   * evening's draw on it. Standing the empty instrument in the title frame
+   * costs four rings, gives the opening move something to turn, and means the
+   * player's first press moves a thing they were already looking at.
+   */
   return (
     <group>
       {specs.map((spec) => (
-        <Ring key={spec.key} spec={spec} stations={stations} />
+        <Ring
+          key={spec.key}
+          spec={spec}
+          stations={stations}
+          reducedMotion={reducedMotion}
+        />
       ))}
     </group>
   );
