@@ -43,6 +43,15 @@ export function ConclusionScreen() {
       animate={{ opacity: 1, transition: { duration: 1 } }}
       exit={{ opacity: 0, transition: { duration: 0.5 } }}
     >
+      {/*
+        The web stays visible behind the reading — it is the thing being read,
+        and dismissing it to a blank page would break the one continuity the
+        conclusion has. But it must stop competing for the same pixels: without
+        this the annotation is set directly over bright glass and neither is
+        legible. Deep enough to read against, sheer enough that the arena is
+        still recognisably there.
+      */}
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-void/88 backdrop-blur-[3px]" />
       <PortraitPlate
         portrait={reading.portrait}
         annotation={reading.annotation}

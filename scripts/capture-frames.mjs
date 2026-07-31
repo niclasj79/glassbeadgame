@@ -125,6 +125,25 @@ async function main() {
         label: `draft stage ${stage}`,
       });
 
+    /**
+     * Arm an intention. The sigils are world-anchored to a bead that is still
+     * bobbing and, after a commit, still being framed by the camera — so a
+     * click issued the instant attention lands can arrive where the sigil was
+     * rather than where it is. Let the frame settle, then retry a few times
+     * before giving up. A player has no such problem; a script does.
+     */
+    const arm = async (intention) => {
+      const control = page.getByTestId(`intention-${intention}`);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await sleep(320);
+        if (v.touch) await control.tap({ force: true });
+        else await control.click({ force: true });
+        await sleep(260);
+        if ((await snap()).draftStage === "armed") return;
+      }
+      await waitDraft("armed");
+    };
+
     try {
       process.stdout.write(`${name}\n`);
       await page.goto(`${BASE}/${v.query}`, { waitUntil: "domcontentloaded" });
@@ -142,12 +161,7 @@ async function main() {
       await waitDraft("attending");
       await shot("03-attending", 1200);
 
-      // World-anchored sigils orbit a bobbing bead, so they are never
-      // "stable" by Playwright's definition. Force the hit.
-      const echo = page.getByTestId("intention-echo");
-      if (v.touch) await echo.tap({ force: true });
-      else await echo.click({ force: true });
-      await waitDraft("armed");
+      await arm("echo");
       await shot("04-armed-echo", 900);
 
       const from = await beadPoint(SOURCE);
@@ -176,8 +190,7 @@ async function main() {
         const p0 = await beadPoint(P);
         await page.mouse.click(p0.x, p0.y);
         await waitDraft("attending");
-        await page.getByTestId("intention-echo").click({ force: true });
-        await waitDraft("armed");
+        await arm("echo");
         const p1 = await beadPoint(P);
         const q1 = await beadPoint(Q);
         await page.mouse.move(p1.x, p1.y);

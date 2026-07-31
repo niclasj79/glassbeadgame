@@ -245,4 +245,23 @@ describe("buildPortrait — totality and replay stability", () => {
     );
     expect(phrase).not.toContain("Just Intonation took hold of it");
   });
+
+  it("reads correctly when a count is zero", () => {
+    // "none found nothing to stand on" is a double negative that says the
+    // opposite of what the web did, and zero is the common case early on.
+    const fixture = buildSessionFixture({
+      conceptIds: [C.fibonacci, C.counterpoint, C.primes, C.polyrhythm],
+      threads: [
+        { a: C.fibonacci, b: C.counterpoint, intention: "echo" },
+        { a: C.primes, b: C.polyrhythm, intention: "echo" },
+      ],
+    });
+    for (const dimension of buildPortrait(fixture.state, lookup).dimensions) {
+      expect(dimension.phrase).not.toMatch(/none found nothing/i);
+      expect(dimension.phrase).not.toMatch(/none [a-z]+ nothing/i);
+      expect(dimension.phrase).not.toMatch(/,\s*and\s*\./);
+      expect(dimension.phrase.trim()).not.toBe("");
+      expect(dimension.phrase.trim().endsWith(".")).toBe(true);
+    }
+  });
 });

@@ -135,13 +135,30 @@ function buildDepth(inputs: PortraitInputs): PortraitDimension {
     return dimension("depth", 0, "Nothing has been gone into yet.", []);
   }
 
-  let phrase = `${capitalise(countWord(documented))} of your ${countWord(total)} ${pluralise(
-    total,
-    "thread",
-    "threads"
-  )} met documented material, ${countWord(open)} opened a question, and ${countWord(
-    unresolved
-  )} found nothing to stand on.`;
+  // Each clause is stated only when it happened. Composing all three
+  // unconditionally produced "none found nothing to stand on" — a double
+  // negative that says the opposite of what the web did. Generated prose has to
+  // read correctly at zero, because zero is the common case early in a session.
+  const clauses: string[] = [
+    `${capitalise(countWord(documented))} of your ${countWord(total)} ${pluralise(
+      total,
+      "thread",
+      "threads"
+    )} met documented material`,
+  ];
+  if (open > 0) {
+    clauses.push(
+      `${countWord(open)} ${open === 1 ? "opened a question" : "opened questions"}`
+    );
+  }
+  if (unresolved > 0) {
+    clauses.push(`${countWord(unresolved)} found nothing to stand on`);
+  }
+  let phrase = `${
+    clauses.length === 1
+      ? clauses[0]
+      : `${clauses.slice(0, -1).join(", ")}, and ${clauses[clauses.length - 1]}`
+  }.`;
 
   const deepest = [...topology.nodes]
     .filter((node) => node.threadCount >= 2)
