@@ -78,7 +78,7 @@ async function main() {
       viewport: v.viewport,
       hasTouch: v.touch,
       isMobile: v.touch,
-      deviceScaleFactor: 1,
+      deviceScaleFactor: 2,
       colorScheme: "dark",
     });
     const page = await context.newPage();
@@ -168,11 +168,18 @@ async function main() {
       const to = await beadPoint(TARGET);
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
+      // The controlled clock only moves when a test moves it, and the gesture
+      // recorder drops any sample whose timestamp does not advance. Without
+      // interleaving these, every captured weave recorded durationMs 0 with no
+      // path at all — so every frame the art was judged against showed the
+      // minimum-phrasing case of a gesture nobody could actually make.
       await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, {
         steps: 6,
       });
+      await page.evaluate(() => window.__gbgTest.advanceClock(180));
       await shot("05-weaving", 300);
       await page.mouse.move(to.x, to.y, { steps: 6 });
+      await page.evaluate(() => window.__gbgTest.advanceClock(220));
       await poll(async () => (await snap()).snappedConceptId === TARGET, {
         label: "latch",
       });
@@ -182,33 +189,77 @@ async function main() {
       await advance(1500);
       await shot("07-committed", 900);
 
-      // A second thread so the web has structure, not one lonely line.
-      const ids = (await snap()).beadIds;
-      const P = "measure.prime-numbers";
-      const Q = "sound.polyrhythm";
-      if (ids.includes(P) && ids.includes(Q)) {
-        const p0 = await beadPoint(P);
-        await page.mouse.click(p0.x, p0.y);
+      /**
+       * Build an actual web, not one lonely line.
+       *
+       * The capture used to weave exactly two Echo threads and stop, so the
+       * frames the art direction was judged against never reached a completed
+       * motif, never reached Attunement, and never showed the world responding
+       * to topology — the three things the last third of the experience is made
+       * of. It now weaves a connected web across faculties with a Tension in
+       * it, which is what a real session looks like at minute eight.
+       */
+      const weave = async (a, c, intention) => {
+        const pa = await beadPoint(a);
+        if (v.touch) await page.touchscreen.tap(pa.x, pa.y);
+        else await page.mouse.click(pa.x, pa.y);
         await waitDraft("attending");
-        await arm("echo");
-        const p1 = await beadPoint(P);
-        const q1 = await beadPoint(Q);
+        await arm(intention);
+        const p1 = await beadPoint(a);
+        const q1 = await beadPoint(c);
         await page.mouse.move(p1.x, p1.y);
         await page.mouse.down();
-        await page.mouse.move(q1.x, q1.y, { steps: 8 });
-        await poll(async () => (await snap()).snappedConceptId === Q, {
-          label: "second latch",
+        await page.mouse.move((p1.x + q1.x) / 2, (p1.y + q1.y) / 2, { steps: 5 });
+        await page.evaluate(() => window.__gbgTest.advanceClock(170));
+        await page.mouse.move(q1.x, q1.y, { steps: 6 });
+        await page.evaluate(() => window.__gbgTest.advanceClock(210));
+        await poll(async () => (await snap()).snappedConceptId === c, {
+          label: `latch ${c}`,
+          timeout: 12000,
         });
         await page.mouse.up();
         await waitDraft("inactive");
-        await advance(1500);
-        await shot("08-two-threads", 900);
+        await advance(1400);
+      };
+
+      const ids = (await snap()).beadIds;
+      const has = (id) => ids.includes(id);
+      const PLAN = [
+        ["measure.prime-numbers", "sound.polyrhythm", "echo"],
+        ["measure.fibonacci-sequence", "measure.prime-numbers", "ground"],
+        ["sound.counterpoint", "sound.polyrhythm", "passage"],
+        ["measure.fibonacci-sequence", "sound.polyrhythm", "tension"],
+        ["measure.prime-numbers", "sound.counterpoint", "echo"],
+      ];
+      let woven = 1;
+      for (const [a, c, intention] of PLAN) {
+        if (!has(a) || !has(c)) continue;
+        try {
+          await weave(a, c, intention);
+          woven += 1;
+          if (woven === 2) await shot("08-two-threads", 900);
+        } catch (error) {
+          process.stdout.write(`  ~ skipped ${a}->${c}: ${error.message}
+`);
+        }
+      }
+      await shot("10-web", 1200);
+
+      // Attunement, if the composition has earned it.
+      const attune = page.getByRole("button", { name: /attun/i }).first();
+      if (await attune.count()) {
+        await attune.click({ force: true });
+        await advance(1200);
+        await shot("11-attunement", 1400);
       }
 
       const conclude = page.getByRole("button", { name: /conclude/i }).first();
       if (await conclude.count()) {
         await conclude.click();
-        await shot("09-conclusion", 2600);
+        await advance(900);
+        await shot("09-conclusion", 2200);
+        await advance(4000);
+        await shot("12-conclusion-late", 1400);
       }
 
       if (errors.length > 0) {
