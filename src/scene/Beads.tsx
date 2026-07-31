@@ -23,7 +23,15 @@ import {
   wovenLight,
 } from "./glass";
 import { presentationProfile } from "./quality";
-import { ARENA_FOV } from "./framing";
+import { ARENA_FOV, worldSafeArea } from "./framing";
+import { idleClock, kindling } from "./idle";
+import {
+  SUPPRESSED,
+  createLabelScratch,
+  placeLabels,
+  type LabelScratch,
+} from "./labels";
+import { assignSalience, tierWeights } from "./salience";
 
 export const BEAD_RADIUS = 0.15;
 /**
@@ -63,16 +71,34 @@ const hitGeometry = new THREE.SphereGeometry(1, 12, 8);
 
 const camQuaternion = new THREE.Quaternion();
 const screenDown = new THREE.Vector3();
+const screenRight = new THREE.Vector3();
 const camDir = new THREE.Vector3();
 const beadDir = new THREE.Vector3();
 const matrix = new THREE.Matrix4();
 const scaleVec = new THREE.Vector3();
 const originVec = new THREE.Vector3();
+const projectVec = new THREE.Vector3();
 const identityQuat = new THREE.Quaternion();
+
+const tanHalfFov = Math.tan((ARENA_FOV * Math.PI) / 360);
+
+/**
+ * A last-resort estimate of a name's size, used only for the frame or two
+ * before troika has measured the real thing. Inter's average advance is a bit
+ * over half its em; the letter spacing is added because the label sets it.
+ */
+const ESTIMATED_ADVANCE = 0.56;
 
 interface LabelHandle {
   group: THREE.Group | null;
   text: THREE.Object3D | null;
+}
+
+/** What troika publishes once a label has actually been laid out. */
+interface TroikaText {
+  fillOpacity: number;
+  outlineOpacity: number;
+  textRenderInfo?: { blockBounds?: ArrayLike<number> };
 }
 
 /**
@@ -101,6 +127,14 @@ export function Beads() {
 
   const ids = useMemo(() => beadIds ?? [], [beadIds]);
   const count = ids.length;
+  /**
+   * Where each bead sits in *this* component's arrays. Not the same as
+   * `frameState.beadIndex`, which is keyed to the armillary's own ordering.
+   */
+  const indexOf = useMemo(
+    () => new Map(ids.map((id, i) => [id, i])),
+    [ids]
+  );
 
   const profile = useMemo(
     () => presentationProfile(tier, reducedMotion),
@@ -185,6 +219,40 @@ export function Beads() {
     [count]
   );
 
+  /**
+   * THE FRAME'S FOCAL HIERARCHY, AND WHERE THE NAMES GO.
+   *
+   * Both are solved once per frame in screen space, in one place, because they
+   * are one problem: a name's placement depends on which beads the frame is
+   * about, and which beads the frame is about is decided by the hierarchy.
+   *
+   * The screen space used here is isotropic — x carries the aspect ratio — so a
+   * clearance is the same distance on both axes and a circle is a circle.
+   * Everything is pre-allocated; the frame loop allocates nothing.
+   */
+  const focal = useMemo(() => {
+    const n = Math.max(1, count);
+    return {
+      /** (tier, kindling) per bead, handed to the material. */
+      attribute: new Float32Array(n * 2),
+      tierTarget: new Float32Array(n),
+      depth: new Float32Array(n),
+      promoted: new Float32Array(n),
+      order: new Int32Array(n),
+      anchor: new Float32Array(n * 2),
+      beadRadius: new Float32Array(n),
+      half: new Float32Array(n * 2),
+      hidden: new Float32Array(n),
+      code: new Int32Array(n),
+      offset: new Float32Array(n * 2),
+      /** Measured half-extents of each name in its own local units. */
+      localHalf: new Float32Array(n * 2),
+      /** Committed threads as screen chords, so no name lies across one. */
+      chord: new Float32Array(n * n * 2),
+      scratch: createLabelScratch(n) as LabelScratch,
+    };
+  }, [count]);
+
   const bobPhases = useMemo(
     () => Float32Array.from(ids, (id) => (hashString(id) % 6283) / 1000),
     [ids]
@@ -194,6 +262,8 @@ export function Beads() {
   const live = useRef({
     woven: new Map<string, number>(),
     resonance: new Map<string, number>(),
+    /** Committed thread endpoints, flattened: a, b, a, b… */
+    threads: [] as string[],
     attendedId: null as string | null,
     candidateId: null as string | null,
     focusedId: null as string | null,
@@ -223,6 +293,11 @@ export function Beads() {
     const woven = new Map<string, number>();
     for (const [id, count] of degree) woven.set(id, wovenLight(count));
     live.current.woven = woven;
+    const chords: string[] = [];
+    for (const thread of threads ?? []) {
+      chords.push(String(thread.pair[0]), String(thread.pair[1]));
+    }
+    live.current.threads = chords;
   }, [threads]);
 
   useEffect(() => {
@@ -273,7 +348,11 @@ export function Beads() {
       "aState",
       new THREE.InstancedBufferAttribute(state, 4)
     );
-  }, [statics, state, count]);
+    mesh.geometry.setAttribute(
+      "aTier",
+      new THREE.InstancedBufferAttribute(focal.attribute, 2)
+    );
+  }, [statics, state, focal, count]);
 
   /**
    * Put the invisible hit targets where the beads already are, without
@@ -311,13 +390,19 @@ export function Beads() {
     (material.uniforms.uTime as { value: number }).value = frameState.clock;
 
     camQuaternion.copy(three.camera.quaternion);
-    // Down the screen, in world space — labels hang from beads, not from the
-    // world's vertical, so a steep camera never collapses the offset.
+    // Down and across the screen, in world space — labels hang from beads, not
+    // from the world's vertical, so a steep camera never collapses the offset.
     screenDown.set(0, -1, 0).applyQuaternion(camQuaternion);
+    screenRight.set(1, 0, 0).applyQuaternion(camQuaternion);
     camDir.copy(three.camera.position).normalize();
     const stateAttr = mesh.geometry.getAttribute("aState") as
       | THREE.InstancedBufferAttribute
       | undefined;
+    const tierAttr = mesh.geometry.getAttribute("aTier") as
+      | THREE.InstancedBufferAttribute
+      | undefined;
+    const aspect = three.size.width / Math.max(1, three.size.height);
+    const spark = kindling(idleClock(), count);
 
     for (let i = 0; i < count; i++) {
       const id = ids[i];
@@ -366,56 +451,155 @@ export function Beads() {
         hit.updateMatrixWorld();
       }
 
-      const label = labels.current[i];
+      // ── the frame's hierarchy, measured ───────────────────────────────
       const eyeDistance = three.camera.position.distanceTo(originVec);
+      focal.depth[i] = eyeDistance;
+      // Attention promotes a bead out of turn. Attention is not content: a
+      // bead the player has reached for is the subject of the frame.
+      focal.promoted[i] = attended || snapped || hovered || focused ? 1 : 0;
+
+      projectVec.set(x, y, z).project(three.camera);
+      const behind = projectVec.z < -1 || projectVec.z > 1;
+      focal.anchor[i * 2] = projectVec.x * aspect;
+      focal.anchor[i * 2 + 1] = projectVec.y;
+      focal.hidden[i] =
+        behind || Math.abs(projectVec.x) > 1.4 || Math.abs(projectVec.y) > 1.4
+          ? 1
+          : 0;
+
+      // Screen size, in half-frame-heights, of everything drawn *around* this
+      // bead. For the attended one that is the intention plate, not the glass:
+      // the plate is what a neighbouring name would actually collide with.
+      const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
+      focal.beadRadius[i] = attended
+        ? ATTENDED_LABEL_DROP_PX / (three.size.height * 0.5)
+        : (BEAD_RADIUS * GLASS_SCALE * next + 0.06) / halfAtBead;
+
+      const label = labels.current[i];
+      // Type stays the same size on screen whatever the orbit distance.
+      const typeScale = Math.min(2.2, Math.max(0.8, eyeDistance / 10.4));
+      if (label?.group) label.group.scale.setScalar(typeScale);
+      const bounds = (label?.text as TroikaText | null)?.textRenderInfo
+        ?.blockBounds;
+      const localHalfX = bounds
+        ? Math.max(Math.abs(bounds[0]), Math.abs(bounds[2]))
+        : Math.min(1.05, ids[i].length * 0.115 * ESTIMATED_ADVANCE * 0.5);
+      const localHalfY = bounds
+        ? Math.max(0.03, (bounds[3] - bounds[1]) / 2)
+        : 0.075;
+      focal.localHalf[i * 2] = localHalfX;
+      focal.localHalf[i * 2 + 1] = localHalfY;
+      focal.half[i * 2] = (localHalfX * typeScale) / halfAtBead;
+      focal.half[i * 2 + 1] = (localHalfY * typeScale) / halfAtBead;
+    }
+
+    // ── the hierarchy, then the names ───────────────────────────────────
+    assignSalience(
+      focal.depth,
+      focal.promoted,
+      count,
+      focal.order,
+      focal.tierTarget
+    );
+
+    // The player's own threads, as screen chords. A name laid across a thread
+    // is the worst of the collisions: the thread is the thing they made.
+    const woven = live.current.threads;
+    let chords = 0;
+    const maxChords = Math.floor(focal.chord.length / 4);
+    for (let t = 0; t < woven.length && chords < maxChords; t += 2) {
+      const a = indexOf.get(woven[t]);
+      const b = indexOf.get(woven[t + 1]);
+      if (a === undefined || b === undefined) continue;
+      if (focal.hidden[a] > 0 && focal.hidden[b] > 0) continue;
+      focal.chord[chords * 4] = focal.anchor[a * 2];
+      focal.chord[chords * 4 + 1] = focal.anchor[a * 2 + 1];
+      focal.chord[chords * 4 + 2] = focal.anchor[b * 2];
+      focal.chord[chords * 4 + 3] = focal.anchor[b * 2 + 1];
+      chords++;
+    }
+
+    const safe = worldSafeArea(aspect);
+    placeLabels(
+      {
+        anchor: focal.anchor,
+        beadRadius: focal.beadRadius,
+        half: focal.half,
+        tier: focal.tierTarget,
+        hidden: focal.hidden,
+        thread: focal.chord,
+        threadCount: chords,
+        count,
+        area: {
+          minX: safe.minX * aspect,
+          maxX: safe.maxX * aspect,
+          minY: safe.minY,
+          maxY: safe.maxY,
+        },
+      },
+      focal.scratch,
+      focal.code,
+      focal.offset
+    );
+
+    for (let i = 0; i < count; i++) {
+      const id = ids[i];
+      const index = frameState.beadIndex.get(id) ?? i;
+      const x = rendered[index * 3];
+      const y = rendered[index * 3 + 1];
+      const z = rendered[index * 3 + 2];
+
+      // The tier eases rather than steps: two beads that trade rank as the
+      // camera turns must cross-fade, never pop.
+      const tier = focal.attribute[i * 2];
+      focal.attribute[i * 2] =
+        tier + (focal.tierTarget[i] - tier) * Math.min(1, dt * 2.6);
+      const kindle = focal.attribute[i * 2 + 1];
+      const wantKindle = spark.index === i ? spark.gain : 0;
+      focal.attribute[i * 2 + 1] =
+        kindle + (wantKindle - kindle) * Math.min(1, dt * 3.4);
+
+      const label = labels.current[i];
+      const halfAtBead = Math.max(0.001, focal.depth[i] * tanHalfFov);
       if (label?.group) {
-        // The attended bead's label steps clear of the intention plate rather
-        // than disappearing: the player must never lose the name of the idea
-        // they are working with. The plate is a fixed number of screen pixels
-        // across, so the drop is measured in pixels too — a world-space offset
-        // would slide under the plate as the camera moves.
-        const drop = attended
-          ? (ATTENDED_LABEL_DROP_PX / (three.size.height * 0.5)) *
-            eyeDistance *
-            Math.tan((ARENA_FOV * Math.PI) / 360)
-          : BEAD_RADIUS * GLASS_SCALE + 0.16;
+        // The solver answered in half-frame-heights, which is isotropic, so one
+        // unit is the same world distance on both axes at this depth.
         label.group.position
           .set(x, y, z)
-          .addScaledVector(screenDown, drop);
-        // Type stays the same size on screen whatever the orbit distance.
-        label.group.scale.setScalar(
-          Math.min(2.2, Math.max(0.8, eyeDistance / 10.4))
-        );
+          .addScaledVector(screenRight, focal.offset[i * 2] * halfAtBead)
+          .addScaledVector(screenDown, -focal.offset[i * 2 + 1] * halfAtBead);
         label.group.quaternion.copy(camQuaternion);
       }
       if (label?.text) {
         beadDir.set(x, y, z).normalize();
         const facing = smoothstep(-0.1, 0.34, camDir.dot(beadDir));
-        // Labels thin out only in the last third of the zoom range, measured
-        // from the arena's centre — a portrait viewport has to stand much
-        // further back to frame the instrument at all, and its labels must
-        // not vanish for it.
-        const near = 1 - smoothstep(18, 25, three.camera.position.length());
-        const emphasised = hovered || snapped || focused || attended;
-        const wanted = Math.max(facing * near, emphasised ? 1 : 0);
+        const emphasised = focal.promoted[i] > 0;
+        // A name with nowhere legible to go is suppressed outright. Half a name
+        // running off the page tells the player the world is broken; no name
+        // tells them this bead is crowded, which is true and recoverable.
+        const placed = focal.code[i] !== SUPPRESSED;
+        // The tier carries label weight too, so the frame's first read is also
+        // the frame's most legible name.
+        const weight = tierWeights(focal.attribute[i * 2]).label;
+        const wanted = placed
+          ? Math.max(facing * weight, emphasised ? 1 : 0)
+          : 0;
         // troika exposes fill/outline opacity as its own uniforms; the mesh's
         // `material` is undefined until it derives one, so writing to it
         // silently produced NaN and hid every label.
         const current = labelOpacity.current[i];
         const next = current + (wanted - current) * Math.min(1, dt * 9);
         labelOpacity.current[i] = next;
-        const troika = label.text as unknown as {
-          fillOpacity: number;
-          outlineOpacity: number;
-        };
+        const troika = label.text as unknown as TroikaText;
         troika.fillOpacity = next;
-        troika.outlineOpacity = next * 0.9;
+        troika.outlineOpacity = next * 0.92;
         label.text.visible = next > 0.02;
       }
     }
 
     mesh.instanceMatrix.needsUpdate = true;
     if (stateAttr) stateAttr.needsUpdate = true;
+    if (tierAttr) tierAttr.needsUpdate = true;
 
     if (!backdrop) return;
     // Where the room lands on screen, so a bead can look up what it carries.

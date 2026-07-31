@@ -1,15 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
+import { useStore as useVanillaStore } from "zustand";
 import {
   threadingEnv,
+  advanceRecoil,
   handlePointerMove,
   handlePointerUp,
   handlePointerCancel,
   handleKeyDown,
   handleWindowBlur,
 } from "./threading";
-import { frameState } from "./frameState";
+import { emitBurst, frameState, frameStateStage } from "./frameState";
+import { attunementInvitation } from "@/audio/sfx";
+import { createSceneDirector } from "@/runtime/scene";
+import { sessionProgression } from "@/runtime/progression";
+import { currentTheme } from "@/themes/useTheme";
 import { startSession } from "@/runtime/session";
 import { domainSessionStore } from "@/state/domainSession";
 import {
@@ -115,6 +122,92 @@ function startTestSession(picks: DisciplineId[]): TestSessionSnapshot {
   return testSnapshot();
 }
 
+const sceneDirector = createSceneDirector(frameStateStage);
+
+/**
+ * THE INVITATION, IN THE WORLD.
+ *
+ * Attunement was unreachable: `enterAttunement` had no caller anywhere in the
+ * application. Spec §13 requires it be explicitly invited and never forced, and
+ * §23 step 11 puts it in the golden path — so the invitation is a mark that
+ * appears at the centre of the arena, which is the one place that belongs to
+ * the web as a whole rather than to any bead in it, and only once the
+ * composition has earned it.
+ *
+ * It is not a HUD button sitting there from the first second: it does not exist
+ * until eligibility flips, it steps aside entirely while an interpretation is
+ * being composed, and it never counts down toward anything. Accepting it is one
+ * click or one Tab and Enter; ignoring it costs nothing and it never asks
+ * twice.
+ */
+function AttunementInvitation() {
+  const [available, setAvailable] = useState(false);
+  const attuned = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.attunementActive ?? false
+  );
+  const composing = useVanillaStore(
+    interpretationDraftStore,
+    (state) => state.draft.stage !== "inactive"
+  );
+
+  useEffect(
+    () =>
+      sessionProgression.onInvitationChanged((next) => {
+        setAvailable(next);
+        if (!next) return;
+        // The world notices before the interface does: the sky answers, the
+        // arena's centre breathes out once, and two quiet notes rise. Nothing
+        // interrupts, and nothing waits for a response.
+        frameState.flare = Math.min(1, frameState.flare + 0.5);
+        emitBurst([0, 0, 0], currentTheme().palette.gold, 18, 0.5);
+        attunementInvitation();
+      }),
+    []
+  );
+
+  if (composing) return null;
+  if (!available && !attuned) return null;
+
+  return (
+    <Html center style={{ pointerEvents: "none" }} zIndexRange={[16, 10]}>
+      <div className="relative touch-none">
+        {available && !attuned && (
+          <p role="status" aria-live="polite" className="sr-only">
+            The web can carry Attunement now. It is offered, not required.
+          </p>
+        )}
+        <button
+          type="button"
+          data-testid="world-attunement"
+          aria-pressed={attuned}
+          aria-label={
+            attuned
+              ? "Release Attunement and return to composing"
+              : "Enter Attunement and listen to the web one thread at a time"
+          }
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => {
+            if (attuned) sessionProgression.exitAttunement();
+            else sessionProgression.enterAttunement();
+          }}
+          className="pointer-events-auto grid h-14 w-14 place-items-center rounded-full border border-brass/60 bg-void/70 text-bright backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow aria-pressed:border-glow aria-pressed:bg-glow/15"
+        >
+          <span className="font-display text-2xl leading-none" aria-hidden="true">
+            {attuned ? "◉" : "◎"}
+          </span>
+          <span
+            className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap font-ui text-[9px] uppercase tracking-[0.18em] text-dim"
+            aria-hidden="true"
+          >
+            {attuned ? "Release" : "Attune"}
+          </span>
+        </button>
+      </div>
+    </Html>
+  );
+}
+
 /** Wires the pointer state machine to the live camera, canvas, and controls. */
 export function ThreadingDriver() {
   const camera = useThree((s) => s.camera);
@@ -217,6 +310,20 @@ export function ThreadingDriver() {
     };
   }, [camera, gl]);
 
+  /**
+   * The world becomes a cue subscriber.
+   *
+   * Every plan in `planCues.ts` declares a `scene` channel and, until this
+   * line, `cueBus.subscribe("scene", …)` appeared in exactly one place in the
+   * repository: a unit test. `frameState.flare` was decayed every frame and
+   * never raised, `frameState.kick` likewise, and `emitBurst` — the only way
+   * into the pooled particle system — had no callers at all.
+   */
+  useEffect(
+    () => cueBus.subscribe("scene", (cue) => sceneDirector.handleCue(cue)),
+    []
+  );
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") handleWindowBlur();
@@ -252,6 +359,10 @@ export function ThreadingDriver() {
     // said it would.
     cueBus.tick(presentationNow() / 1000);
 
+    // The ribbon falling back out of a missed weave. Driven by frame time, not
+    // by a clock, so a controlled test clock cannot leave it hanging in the air.
+    advanceRecoil(Math.min(dt, 1 / 20));
+
     acc.current += dt;
     if (acc.current < 0.066) return;
     acc.current = 0;
@@ -262,5 +373,5 @@ export function ThreadingDriver() {
     ambient.setAirPan(Math.sin(az) * 0.5);
   });
 
-  return null;
+  return <AttunementInvitation />;
 }

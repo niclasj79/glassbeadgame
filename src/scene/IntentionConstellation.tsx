@@ -215,11 +215,20 @@ export function IntentionConstellation() {
     if (document.activeElement?.id !== `bead-control-${attendedId}`) return;
     let request = 0;
     let attempts = 0;
+    /**
+     * Existing is not the same as focusable, and the difference is a whole
+     * frame. The plate is carried by drei's `Html`, which mounts its wrapper
+     * with `display: none` and only reveals it from its own frame callback —
+     * and `focus()` on a display-none element does nothing at all, silently.
+     * This used to call `focus()` once the element existed and return whether
+     * or not the focus had been taken, so a keyboard player whose plate was one
+     * frame behind was simply left on the bead they had just opened.
+     */
     const focusWhenProjected = (): void => {
       const control = document.getElementById("intention-control-echo");
       if (control) {
         control.focus();
-        return;
+        if (document.activeElement === control) return;
       }
       attempts += 1;
       if (attempts < 60) request = window.requestAnimationFrame(focusWhenProjected);

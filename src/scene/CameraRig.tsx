@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
@@ -12,16 +18,29 @@ import { isCoarsePointer } from "@/lib/device";
 import { frameState } from "./frameState";
 import {
   ARENA_FOV,
+  PORTRAIT_ASPECT,
   attendedFraming,
   createOrbitDamper,
   createOrbitPose,
   dampOrbitToward,
+  homeComposition,
   orbitFromPosition,
   phraseSmoothTime,
   plateGeometry,
   plateSafeArea,
+  positionFromOrbit,
+  unshiftArea,
+  unshiftNdc,
   type CameraPhrase,
+  type HomeComposition,
 } from "./framing";
+import {
+  HOME_ELEVATION,
+  HOME_ELEVATION_PORTRAIT,
+  TITLE_AZIMUTH,
+  TITLE_DOLLY,
+  TITLE_ELEVATION,
+} from "./opening";
 import { presentationNow } from "@/runtime/testMode";
 
 /**
@@ -84,48 +103,108 @@ const ATTEND_NDC_Y = -0.28;
 const ATTEND_NDC_X_PORTRAIT = 0.3;
 const ATTEND_NDC_Y_PORTRAIT = -0.32;
 
-const POSES: Record<string, Goal> = {
-  title: {
-    position: new THREE.Vector3(0, 0.5, 15.2),
-    target: ORIGIN.clone(),
-    phrase: "settle",
-  },
-  setup: {
-    position: new THREE.Vector3(0, 0.7, 12.6),
-    target: ORIGIN.clone(),
-    phrase: "settle",
-  },
-  arena: {
-    position: new THREE.Vector3(0, 0.85, 10.4),
-    target: ORIGIN.clone(),
-    phrase: "settle",
-  },
-  conclusion: {
-    position: new THREE.Vector3(0.01, 9.6, 0.01),
-    target: ORIGIN.clone(),
-    phrase: "crown",
-  },
-};
-
 /**
- * A portrait viewport is framed by its *width*: the armillary is as wide as it
- * is tall, so a distance chosen for the short axis crops the instrument in
- * half. This is why the phone pose stands so much further back.
+ * THE REST POSTURE, AND THE ONE BEFORE IT
+ *
+ * Elevation is authored; distance and lens shift are solved by
+ * `framing.homeComposition` from the viewport itself. The title stands further
+ * back **and round to one side**: the opening move therefore has an azimuth,
+ * so the armillary assembles into view — a lattice turning toward the player —
+ * instead of a pure axial dolly, which is a move no player can perceive because
+ * nothing in an empty sky has parallax to reveal it.
  */
-function arenaHomePose(aspect: number, phrase: CameraPhrase): Goal {
-  if (aspect >= 0.75) {
-    return { ...POSES.arena, phrase };
-  }
-  const halfSpan = ARENA_RADIUS * 1.24;
-  const distance = Math.min(
-    21,
-    halfSpan / (Math.max(aspect, 0.3) * Math.tan((ARENA_FOV * Math.PI) / 360))
-  );
+const homeElevation = (aspect: number): number =>
+  aspect < PORTRAIT_ASPECT ? HOME_ELEVATION_PORTRAIT : HOME_ELEVATION;
+
+const orbitPosition = (
+  distance: number,
+  azimuth: number,
+  elevation: number,
+  out: THREE.Vector3
+): THREE.Vector3 =>
+  positionFromOrbit({ distance, azimuth, elevation }, out);
+
+/** The composed rest pose: off-centre by lens shift, solved for this frame. */
+function arenaHomePose(
+  home: HomeComposition,
+  aspect: number,
+  phrase: CameraPhrase
+): Goal {
   return {
-    position: new THREE.Vector3(0, 0.7, distance),
+    position: orbitPosition(
+      home.distance,
+      0,
+      homeElevation(aspect),
+      new THREE.Vector3()
+    ),
     target: ORIGIN.clone(),
     phrase,
   };
+}
+
+function phasePose(
+  phase: string,
+  home: HomeComposition,
+  aspect: number,
+  phrase: CameraPhrase
+): Goal {
+  if (phase === "conclusion") {
+    return {
+      position: new THREE.Vector3(0.01, ARENA_RADIUS * 3.2, 0.01),
+      target: ORIGIN.clone(),
+      phrase: "crown",
+    };
+  }
+  if (phase === "title" || phase === "setup") {
+    const away = phase === "title" ? 1 : 0.42;
+    return {
+      position: orbitPosition(
+        home.distance * (1 + (TITLE_DOLLY - 1) * away),
+        TITLE_AZIMUTH * away,
+        homeElevation(aspect) + (TITLE_ELEVATION - homeElevation(aspect)) * away,
+        new THREE.Vector3()
+      ),
+      target: ORIGIN.clone(),
+      phrase,
+    };
+  }
+  return arenaHomePose(home, aspect, phrase);
+}
+
+/**
+ * THE LENS SHIFT, APPLIED.
+ *
+ * An asymmetric frustum, refreshed only when the frame or the composition
+ * actually changes. `setViewOffset` re-derives the projection itself, and the
+ * offset survives every later `updateProjectionMatrix` — including the impact
+ * kick's FOV punch — because three keeps it on the camera.
+ */
+function applyLensShift(
+  camera: THREE.Camera,
+  home: HomeComposition,
+  width: number,
+  height: number
+): void {
+  const cam = camera as THREE.PerspectiveCamera;
+  if (!cam.isPerspectiveCamera) return;
+  const view = cam.view;
+  if (
+    view?.enabled &&
+    view.fullWidth === width &&
+    view.fullHeight === height &&
+    Math.abs(view.offsetX - home.viewOffset.x) < 0.01 &&
+    Math.abs(view.offsetY - home.viewOffset.y) < 0.01
+  ) {
+    return;
+  }
+  cam.setViewOffset(
+    width,
+    height,
+    home.viewOffset.x,
+    home.viewOffset.y,
+    width,
+    height
+  );
 }
 
 const beadVec = new THREE.Vector3();
@@ -155,6 +234,25 @@ export function CameraRig() {
   const previousAttendedId = useRef<string | null>(null);
 
   /**
+   * The composition this frame is being made in: where the arena's centre is
+   * carried to, how far back the camera has to stand for the bead shell to fit
+   * inside the page's ruling, and the lens shift that does the carrying.
+   */
+  const home = useMemo(
+    () => homeComposition({ width: viewportWidth, height: viewportHeight }),
+    [viewportWidth, viewportHeight]
+  );
+
+  // A layout effect, so the very first frame is already composed: applying the
+  // shift from the frame loop would publish one centred frame first.
+  useLayoutEffect(() => {
+    applyLensShift(camera, home, viewportWidth, viewportHeight);
+    return () => {
+      (camera as THREE.PerspectiveCamera).clearViewOffset?.();
+    };
+  }, [camera, home, viewportWidth, viewportHeight]);
+
+  /**
    * Every scripted move enters here. One door, so a move is always a named
    * phrase and never an object literal invented at the call site.
    */
@@ -172,7 +270,7 @@ export function CameraRig() {
     }
     if (!attendedId) {
       if (previousAttendedId.current) {
-        perform(arenaHomePose(aspect, "release"));
+        perform(arenaHomePose(home, aspect, "release"));
       }
       previousAttendedId.current = null;
       return;
@@ -187,8 +285,8 @@ export function CameraRig() {
       rendered[index * 3 + 2]
     );
 
-    const home = arenaHomePose(aspect, "lean");
-    const portrait = aspect < 0.75;
+    const rest = arenaHomePose(home, aspect, "lean");
+    const portrait = aspect < PORTRAIT_ASPECT;
     // Keep the bead on the side of the frame it is already on: the phrase is
     // a lean toward the idea, never a lurch across it.
     screenVec.copy(beadVec).project(camera);
@@ -196,7 +294,7 @@ export function CameraRig() {
     const ndcX = side * (portrait ? ATTEND_NDC_X_PORTRAIT : ATTEND_NDC_X);
     const ndcY = portrait ? ATTEND_NDC_Y_PORTRAIT : ATTEND_NDC_Y;
     const ceiling = maxOrbit(aspect);
-    const distance = Math.min(home.position.length() * 1.18, ceiling);
+    const distance = Math.min(rest.position.length() * 1.18, ceiling);
 
     // The plate is drawn in screen space around this bead, so the pose is only
     // acceptable if the plate fits. This is the whole of B1: under reduced
@@ -210,19 +308,25 @@ export function CameraRig() {
       height: viewportHeight,
     });
 
+    // The plate is placed on the *screen*, and the lens shift stands between
+    // the screen and the projection the solver works in. Both the target and
+    // the box it is judged against are carried back through the shift, so a
+    // composed frame cannot quietly move the plate off the edge it was solved
+    // to stay inside.
+    const wanted = unshiftNdc(ndcX, ndcY, home);
     const framing = attendedFraming({
       bead: beadVec,
       distance,
       aspect,
-      ndcX,
-      ndcY,
-      safeArea,
+      ndcX: wanted.x,
+      ndcY: wanted.y,
+      safeArea: unshiftArea(safeArea, home),
       maxDistance: ceiling,
     });
     perform(
       framing
         ? { position: framing.position, target: framing.target, phrase: "lean" }
-        : home
+        : rest
     );
   }, [
     attendedId,
@@ -230,6 +334,7 @@ export function CameraRig() {
     lensActive,
     camera,
     aspect,
+    home,
     viewportWidth,
     viewportHeight,
     perform,
@@ -261,12 +366,8 @@ export function CameraRig() {
     // while it owns the pose this one must not re-home the camera, or a resize
     // during an interpretation would throw the plate back to the middle.
     if (phase === "arena" && previousAttendedId.current) return;
-    perform(
-      phase === "arena"
-        ? arenaHomePose(aspect, "settle")
-        : (POSES[phase] ?? POSES.title)
-    );
-  }, [phase, aspect, perform]);
+    perform(phasePose(phase, home, aspect, "settle"));
+  }, [phase, aspect, home, perform]);
 
   // The Lens: square up to whichever plane reading is showing.
   const wasLensed = useRef(false);
@@ -274,15 +375,15 @@ export function CameraRig() {
     if (lensActive) {
       wasLensed.current = true;
       perform({
-        position: new THREE.Vector3(0, 0, aspect < 0.75 ? 16.5 : 10.6),
+        position: new THREE.Vector3(0, 0, home.distance * 0.99),
         target: ORIGIN.clone(),
         phrase: "square",
       });
     } else if (wasLensed.current && phase === "arena") {
       wasLensed.current = false;
-      perform(arenaHomePose(aspect, "square"));
+      perform(arenaHomePose(home, aspect, "square"));
     }
-  }, [lensActive, lensView, phase, aspect, perform]);
+  }, [lensActive, lensView, phase, aspect, home, perform]);
 
   /**
    * The concluding cinematic: rise to the pole and crown the finished web.
