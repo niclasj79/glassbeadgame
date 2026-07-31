@@ -68,9 +68,58 @@ describe("resolveThreadOutcome — documented relations", () => {
     ) as DocumentedThreadOutcome;
 
     expect(outcome.stance).toBe("complicated");
-    expect(outcome.statement).toContain("stands as yours");
+    // The commitment is that the reading survives, not that one phrase is used.
+    // Asserting the exact wording made this test fail when the interpretive
+    // branch said the same thing in the Game's own voice.
+    expect(outcome.statement.toLowerCase()).toMatch(
+      /(stands as yours|yours stands)/
+    );
     expect(outcome.statement.toLowerCase()).not.toContain("wrong");
     expect(outcome.statement.toLowerCase()).not.toContain("incorrect");
+  });
+
+  it("never lets an interpretive relation speak as though it were a record", () => {
+    // Twelve of the forty-four authored relations are readings the Game offers,
+    // asserting nothing beyond the structures compared. Calling one of those a
+    // record invents an authority the pack does not carry — the exact failure
+    // CAV-009 exists to prevent.
+    const interpretiveLookup: typeof lookup = {
+      ...lookup,
+      findRelation: (a, b) => {
+        const relation = lookup.findRelation(a, b);
+        return relation === null
+          ? null
+          : { ...relation, evidence: "interpretive" as const };
+      },
+    };
+    for (const intention of ["echo", "passage", "tension", "ground"] as const) {
+      const outcome = resolveThreadOutcome(
+        singleThread(C.fibonacci, C.counterpoint, intention),
+        interpretiveLookup
+      ) as DocumentedThreadOutcome;
+      const said = outcome.statement.toLowerCase();
+      expect(said).not.toContain("the record");
+      expect(said).not.toContain("is documented");
+      expect(said).not.toContain("what is recorded");
+      expect(said).toMatch(/reading|reads/);
+    }
+  });
+
+  it("still speaks of the record when the evidence supports one", () => {
+    for (const evidence of ["established", "attested", "contested"] as const) {
+      const recordLookup: typeof lookup = {
+        ...lookup,
+        findRelation: (a, b) => {
+          const relation = lookup.findRelation(a, b);
+          return relation === null ? null : { ...relation, evidence };
+        },
+      };
+      const outcome = resolveThreadOutcome(
+        singleThread(C.fibonacci, C.counterpoint, "echo"),
+        recordLookup
+      ) as DocumentedThreadOutcome;
+      expect(outcome.statement.toLowerCase()).toMatch(/record|documented/);
+    }
   });
 
   it("maps every fit to exactly one stance", () => {

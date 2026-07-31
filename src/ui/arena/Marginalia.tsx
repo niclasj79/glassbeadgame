@@ -39,6 +39,8 @@ interface Note {
   readonly aside: string | null;
   /** The honest label for how firmly the Game stands behind this. */
   readonly standing: string;
+  /** True when the Game is offering a reading, not reporting a record. */
+  readonly interpretive?: boolean;
   readonly sources: readonly string[];
   readonly seconds: number;
 }
@@ -56,6 +58,21 @@ const RECEPTION_NOTE: Record<string, string> = {
   complicated: "The record runs across your reading. It still stands.",
 };
 
+/**
+ * An interpretive relation has no record to run with. Twelve of the
+ * forty-four authored relations are readings the Game offers, asserting nothing
+ * beyond the two structures compared — so they get the Game's own voice, and
+ * never a sentence that lends them an authority the pack does not carry.
+ */
+const READING_NOTE: Record<string, string> = {
+  confirmed: "The Game reads it the same way.",
+  refined: "The Game reads it slightly differently.",
+  complicated: "The Game reads it across yours. Both are readings.",
+};
+
+/** Only these classes may be spoken of as a record. */
+const SPEAKS_FOR_RECORD = new Set(["established", "attested", "contested"]);
+
 function noteFor(cue: PresentationCue): Note | null {
   switch (cue.type) {
     case "outcome.documented": {
@@ -66,8 +83,11 @@ function noteFor(cue: PresentationCue): Note | null {
         title: relation.title,
         body: relation.insight,
         aside: relation.counterpoint ?? null,
+        interpretive: !SPEAKS_FOR_RECORD.has(evidence),
         standing: `${EVIDENCE_STANDING[evidence] ?? evidence} · ${
-          RECEPTION_NOTE[reception] ?? ""
+          (SPEAKS_FOR_RECORD.has(evidence)
+            ? RECEPTION_NOTE[reception]
+            : READING_NOTE[reception]) ?? ""
         }`,
         sources: relation.sources,
         seconds: cue.duration,
@@ -171,7 +191,9 @@ export function Marginalia() {
             <div
               className={
                 "mb-3 h-px w-16 " +
-                (note.kind === "documented" ? "bg-gold/70" : "bg-brass/50")
+                (note.kind === "documented" && !note.interpretive
+                  ? "bg-gold/70"
+                  : "bg-brass/50")
               }
             />
             <figcaption className="engraved mb-2">{note.standing}</figcaption>

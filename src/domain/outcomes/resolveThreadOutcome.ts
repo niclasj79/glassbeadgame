@@ -1,7 +1,11 @@
 import type { RelationIntention } from "../events";
 import type { ConceptId } from "../ids";
 import type { CommittedThreadV1, SessionStateV1 } from "../model/sessionState";
-import type { FacetId, IntentionFit } from "@/content/castalia/schema";
+import type {
+  EvidenceClass,
+  FacetId,
+  IntentionFit,
+} from "@/content/castalia/schema";
 import type { RelationLookup } from "./lookup";
 import {
   INTENTION_LABELS,
@@ -79,12 +83,45 @@ export function stanceForFit(fit: IntentionFit): IntentionStance {
   }
 }
 
+/**
+ * Whether the Game may say "the record" about this relation at all.
+ *
+ * Twelve of the forty-four authored relations are `interpretive`: readings the
+ * Game offers, asserting nothing beyond the two structures compared. Calling one
+ * of those a record — "your reading runs with the record", "the one this
+ * relation is documented around" — invents an authority that does not exist, and
+ * it is exactly the failure CAV-009 and product law 8 are built to prevent.
+ *
+ * So an interpretive relation speaks in the Game's own voice, never in the
+ * record's. It is not a weaker outcome; it is a different kind of claim.
+ */
+function speaksForTheRecord(evidence: EvidenceClass): boolean {
+  return evidence !== "interpretive";
+}
+
 function documentedStatement(
   intention: RelationIntention,
   fit: IntentionFit,
-  gloss: string
+  gloss: string,
+  evidence: EvidenceClass
 ): string {
   const label = INTENTION_LABELS[intention];
+  if (!speaksForTheRecord(evidence)) {
+    // No "record", no "documented", no authority the Game does not hold.
+    switch (fit) {
+      case "primary":
+        return `Your ${label} reading is the one the Game would offer here too: ${gloss}. This is a reading, not a claim of influence.`;
+      case "supported":
+      case "partial":
+        return `The Game reads this pairing as ${gloss}, which meets your ${label} reading part of the way. Neither is a claim of influence.`;
+      case "unsupported":
+        return `The Game reads this pairing as ${gloss}, which runs across your ${label} reading rather than along it. Both are readings; yours stands.`;
+      default: {
+        const exhaustive: never = fit;
+        return exhaustive;
+      }
+    }
+  }
   switch (fit) {
     case "primary":
       return `Your ${label} reading is the one this relation is documented around: what is recorded here is ${gloss}.`;
@@ -161,7 +198,7 @@ function resolveDocumented(
     fit,
     stance,
     sharedFacets: facets,
-    statement: documentedStatement(thread.intention, fit, gloss),
+    statement: documentedStatement(thread.intention, fit, gloss, relation.evidence),
   });
 }
 
