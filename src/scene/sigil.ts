@@ -123,6 +123,13 @@ export const FIGURE_GEOMETRY = Object.freeze({
   lineWidthSpan: 0.03,
   /** Warp amplitude at full turbulence. */
   warpMax: 0.19,
+  /**
+   * How far past its own radius a construction is still drawing. Every family
+   * in `glsl.ts` fades out between |q| = 1 and |q| ≈ 1.3 in its own figure
+   * space, and the ink is essentially spent by 1.18 — which is what makes a
+   * bounding sphere for the figure meaningful rather than optimistic.
+   */
+  boundScale: 1.18,
 });
 
 /**
@@ -152,6 +159,53 @@ export function figureWarp(turbulence: number): number {
   return FIGURE_GEOMETRY.warpMax * clamp(turbulence, 0, 1);
 }
 
+/**
+ * Radius, in unit-bead space, of the sphere that contains everything a figure
+ * draws — its own extent, the fade past it, and the wander turbulence is
+ * allowed. Never more than the bead itself.
+ *
+ * The refraction march used to spread its samples evenly along the whole chord
+ * the refracted ray makes through the glass, which for a sparse figure spent
+ * most of them on empty glass and left three or four to describe the drawing.
+ * Three samples of a plane, each at a different lateral offset because the ray
+ * is bent, is exactly how you draw a figure twice and tear it. The march is now
+ * clipped to this bound, so every sample lands where there is something to see.
+ */
+export function figureBound(density: number, turbulence: number): number {
+  const reach =
+    figureRadius(density) * FIGURE_GEOMETRY.boundScale + figureWarp(turbulence);
+  return reach < 1 ? reach : 1;
+}
+
+/** A bead whose pack declares no faculty claims no hand either. */
+const UNATTRIBUTED_INK_WEIGHT = 1;
+
+/**
+ * INKING BY CONSTRUCTION GEOMETRY
+ *
+ * A faculty's ink used to carry its identity by hue alone, and contrast by gold
+ * leaf: a gilded figure was a third brighter than an ungilded one, which made
+ * the four ungilded faculties the faint ones at bead size regardless of what
+ * they were drawing. Value is now normalised (see `INK_VALUE` in `glass.ts`),
+ * so gold cannot be the source of legibility, and the faculty's own
+ * construction geometry decides how the figure is *drawn* instead:
+ *
+ *   lattice  ruled and fine — a straightedge line
+ *   wave     a broad wet nib, the way a curve is laid down in one stroke
+ *   orbit    an even compass line
+ *   ray      a hard thin pencil, because a ray construction is mostly lines
+ *
+ * That is a channel a greyscale print keeps, which hue was never going to be.
+ * Order is a shader ABI: the emitted GLSL switches on `settingCode`.
+ */
+export function settingInkWeight(family: SigilFamily): number {
+  if (family === "lattice") return 0.94;
+  if (family === "wave") return 1.22;
+  if (family === "orbit") return 1.08;
+  if (family === "ray") return 0.86;
+  return UNATTRIBUTED_INK_WEIGHT;
+}
+
 /** GLSL literal: a shader rejects an integer where a float belongs. */
 const glslFloat = (value: number): string => value.toFixed(6);
 
@@ -174,6 +228,32 @@ float gbgFigureLineWidth(float density) {
 
 float gbgFigureWarp(float turbulence) {
   return ${glslFloat(FIGURE_GEOMETRY.warpMax)} * clamp(turbulence, 0.0, 1.0);
+}
+
+float gbgFigureBound(float density, float turbulence) {
+  return min(1.0, gbgFigureRadius(density) * ${glslFloat(
+    FIGURE_GEOMETRY.boundScale
+  )} + gbgFigureWarp(turbulence));
+}
+`;
+
+/**
+ * The per-faculty inking, as GLSL, switched on the same setting codes
+ * `settingCode` produces and carrying the same weights `settingInkWeight`
+ * returns. One description of how a faculty draws, not two.
+ */
+export const GLSL_SETTING_INK = /* glsl */ `
+float gbgSettingInkWeight(float code) {
+  int c = int(code + 0.5);
+${SIGIL_FAMILIES.filter((family) => settingCode(family) !== 0)
+  .map(
+    (family) =>
+      `  if (c == ${settingCode(family)}) return ${glslFloat(
+        settingInkWeight(family)
+      )};`
+  )
+  .join("\n")}
+  return ${glslFloat(UNATTRIBUTED_INK_WEIGHT)};
 }
 `;
 

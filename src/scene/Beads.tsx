@@ -15,7 +15,13 @@ import { frameState } from "./frameState";
 import { beadPointerHandlers } from "./threading";
 import { beadIdentity } from "./identity";
 import { sigilUniform, settingCode } from "./sigil";
-import { createBeadGlassMaterial, wovenLight } from "./glass";
+import {
+  BEAD_PROXY_SEGMENTS,
+  backdropResolution,
+  beadProxyScale,
+  createBeadGlassMaterial,
+  wovenLight,
+} from "./glass";
 import { presentationProfile } from "./quality";
 import { ARENA_FOV } from "./framing";
 
@@ -39,8 +45,20 @@ const RESONANCE_LEVEL: Readonly<Record<string, number>> = Object.freeze({
   high: 1,
 });
 
-// One shared unit sphere; the instanced mesh scales it per bead.
-const sphereGeometry = new THREE.SphereGeometry(1, 40, 28);
+/**
+ * The proxy the glass is drawn with. It is *not* the bead: the fragment shader
+ * solves the sphere it circumscribes, so the silhouette is a true circle at any
+ * zoom instead of the drawn polygon's forty-sided wobble. Being a proxy it can
+ * also be much coarser than the sphere it stands for — this is a third of the
+ * triangles the old bead had.
+ */
+const sphereGeometry = (() => {
+  const { width, height } = BEAD_PROXY_SEGMENTS;
+  const lift = beadProxyScale(width, height);
+  const geometry = new THREE.SphereGeometry(1, width, height);
+  geometry.scale(lift, lift, lift);
+  return geometry;
+})();
 const hitGeometry = new THREE.SphereGeometry(1, 12, 8);
 
 const camQuaternion = new THREE.Quaternion();
@@ -99,6 +117,41 @@ export function Beads() {
     [theme, profile.budget, profile.reducedMotion]
   );
   useEffect(() => () => material.dispose(), [material]);
+
+  /**
+   * THE ROOM THE BEADS ARE CARRYING
+   *
+   * A bead is glass, and glass transmits what is behind it. The arena is drawn
+   * once more per frame — without its beads — into a small buffer, and each
+   * fragment of each bead looks the room up along the ray that actually leaves
+   * its far surface. That is why the armillary band now compresses, turns over
+   * and splits into colour inside a bead instead of stopping dead at its edge.
+   *
+   * It is deliberately small (see `backdropResolution`): a transmitted image is
+   * bent and inverted before anyone sees it, so its detail is spent long before
+   * its resolution is, and the extra pass costs a fraction of a frame rather
+   * than a second one. The engraved tier asks for no buffer at all and gets no
+   * extra pass — a plate does not transmit.
+   */
+  const backdrop = useMemo(() => {
+    // The size is a per-frame question (the viewport moves); whether there is a
+    // buffer at all is a tier question, and that is what is asked here.
+    if (!backdropResolution(profile.budget, 2, 2)) return null;
+    const target = new THREE.WebGLRenderTarget(2, 2, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      type: THREE.HalfFloatType,
+      depthBuffer: true,
+      stencilBuffer: false,
+    });
+    target.texture.name = "castalia.beadBackdrop";
+    return target;
+  }, [profile.budget]);
+  useEffect(() => () => backdrop?.dispose(), [backdrop]);
+  useEffect(() => {
+    (material.uniforms.uBackdrop as { value: THREE.Texture | null }).value =
+      backdrop?.texture ?? null;
+  }, [material, backdrop]);
 
   /** Static per-instance description: figure, setting, ink, phase. */
   const statics = useMemo(() => {
@@ -184,6 +237,7 @@ export function Beads() {
   }, [candidateResonance]);
 
   const glass = useRef<THREE.InstancedMesh>(null);
+  const root = useRef<THREE.Group>(null);
 
   // These are built during render, not in an effect: ref callbacks fire before
   // effects, so allocating them afterwards would wipe every handle React had
@@ -362,12 +416,45 @@ export function Beads() {
 
     mesh.instanceMatrix.needsUpdate = true;
     if (stateAttr) stateAttr.needsUpdate = true;
+
+    if (!backdrop) return;
+    // Where the room lands on screen, so a bead can look up what it carries.
+    // Written in the same breath as the buffer below, so the two always agree
+    // about which camera the photograph was taken from.
+    (
+      material.uniforms.uProjView as { value: THREE.Matrix4 }
+    ).value.multiplyMatrices(
+      three.camera.projectionMatrix,
+      three.camera.matrixWorldInverse
+    );
+
+    const wanted = backdropResolution(
+      profile.budget,
+      three.size.width * three.viewport.dpr,
+      three.size.height * three.viewport.dpr
+    );
+    if (!wanted) return;
+    if (backdrop.width !== wanted.width || backdrop.height !== wanted.height) {
+      backdrop.setSize(wanted.width, wanted.height);
+    }
+
+    // The beads step out of the room while it is photographed: without this a
+    // bead transmits itself, and the second frame is a hall of mirrors. This
+    // runs at the default frame priority, which is before the composer's, so
+    // the buffer is always the arena as it is about to be drawn.
+    const group = root.current;
+    if (group) group.visible = false;
+    const previous = three.gl.getRenderTarget();
+    three.gl.setRenderTarget(backdrop);
+    three.gl.render(three.scene, three.camera);
+    three.gl.setRenderTarget(previous);
+    if (group) group.visible = true;
   });
 
   if (count === 0) return null;
 
   return (
-    <group>
+    <group ref={root}>
       <instancedMesh
         ref={glass}
         args={[sphereGeometry, material, count]}

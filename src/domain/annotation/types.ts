@@ -22,7 +22,12 @@ export interface AnnotationReferences {
 }
 
 export interface Annotation {
-  /** Three to five sentences, in reading order. */
+  /**
+   * The coda, in reading order. Never fewer than one sentence and never more
+   * than the web has structural facts to state: length scales with the size of
+   * the web rather than sitting at a fixed cap, so a twelve-thread session is
+   * not compressed into the same breath as a two-thread one.
+   */
   readonly sentences: readonly string[];
   /** The sentences joined by a single space. */
   readonly text: string;

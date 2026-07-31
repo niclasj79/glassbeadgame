@@ -3,6 +3,7 @@ import { productionInterpretation } from "@/runtime/interpretation";
 import { sessionProgression } from "@/runtime/progression";
 import { useStore } from "@/state/store";
 import { BeadInspectCard } from "./BeadInspectCard";
+import { CueCaptions } from "./CueCaptions";
 import { InterpretationControls } from "./InterpretationControls";
 import { Marginalia } from "./Marginalia";
 
@@ -59,6 +60,12 @@ export function ArenaHud() {
           Conclude
         </button>
       </div>
+      {/* Outside the Lens gate on purpose. The Lens hides the interpretation
+          controls because there is nothing to interpret while it is open, but
+          the world still resolves motifs and attunement behind it, and a player
+          who cannot see the arena is precisely the one who must still be told
+          what it answered. */}
+      <CueCaptions />
       {!lensActive && <InterpretationControls />}
       {!lensActive && <Marginalia />}
       <BeadInspectCard />

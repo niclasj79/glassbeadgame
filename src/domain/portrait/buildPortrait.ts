@@ -96,15 +96,27 @@ function buildRange(inputs: PortraitInputs): PortraitDimension {
   if (topology.wovenConceptIds.length === 0) {
     phrase = "No faculty has been drawn on yet.";
   } else if (absent.length === 0) {
-    phrase = `${formatList(present)} all answered.`;
+    // "Sound all answered" is what a one-item list does to a quantifier that
+    // presumes several. A session confined to one faculty gets the singular.
+    phrase =
+      present.length === 1
+        ? `${present[0]} answered, and it was the only faculty asked.`
+        : `${formatList(present)} all answered.`;
   } else {
     phrase = `${formatList(present)} answered; ${formatList(absent)} stayed silent.`;
   }
 
-  if (topology.threadCount > 0) {
+  // "One of your one thread crossed between faculties" is the same defect in
+  // the denominator: at one thread the fraction is not a fraction.
+  if (topology.threadCount === 1) {
+    phrase +=
+      spread.crossingThreadCount === 1
+        ? " Your one thread crossed between faculties."
+        : " Your one thread stayed inside a single faculty.";
+  } else if (topology.threadCount > 1) {
     phrase += ` ${capitalise(countWord(spread.crossingThreadCount))} of your ${countWord(
       topology.threadCount
-    )} ${pluralise(topology.threadCount, "thread", "threads")} crossed between faculties.`;
+    )} threads crossed between faculties.`;
   }
 
   const evidence = FACULTY_IDS.filter((faculty) => sessionByFaculty[faculty] > 0).map(
@@ -139,26 +151,38 @@ function buildDepth(inputs: PortraitInputs): PortraitDimension {
   // unconditionally produced "none found nothing to stand on" — a double
   // negative that says the opposite of what the web did. Generated prose has to
   // read correctly at zero, because zero is the common case early in a session.
-  const clauses: string[] = [
-    `${capitalise(countWord(documented))} of your ${countWord(total)} ${pluralise(
-      total,
-      "thread",
-      "threads"
-    )} met documented material`,
-  ];
-  if (open > 0) {
-    clauses.push(
-      `${countWord(open)} ${open === 1 ? "opened a question" : "opened questions"}`
-    );
+  //
+  // One is the other boundary: "one of your one thread met documented material"
+  // is a fraction whose denominator is not plural, so the single thread is
+  // reported as itself rather than as a share of itself.
+  let phrase: string;
+  if (total === 1) {
+    phrase =
+      documented === 1
+        ? "Your one thread met documented material."
+        : open === 1
+          ? "Your one thread opened a question rather than meeting documented material."
+          : "Your one thread found nothing documented to stand on.";
+  } else {
+    const clauses: string[] = [
+      `${capitalise(countWord(documented))} of your ${countWord(
+        total
+      )} threads met documented material`,
+    ];
+    if (open > 0) {
+      clauses.push(
+        `${countWord(open)} ${open === 1 ? "opened a question" : "opened questions"}`
+      );
+    }
+    if (unresolved > 0) {
+      clauses.push(`${countWord(unresolved)} found nothing to stand on`);
+    }
+    phrase = `${
+      clauses.length === 1
+        ? clauses[0]
+        : `${clauses.slice(0, -1).join(", ")}, and ${clauses[clauses.length - 1]}`
+    }.`;
   }
-  if (unresolved > 0) {
-    clauses.push(`${countWord(unresolved)} found nothing to stand on`);
-  }
-  let phrase = `${
-    clauses.length === 1
-      ? clauses[0]
-      : `${clauses.slice(0, -1).join(", ")}, and ${clauses[clauses.length - 1]}`
-  }.`;
 
   const deepest = [...topology.nodes]
     .filter((node) => node.threadCount >= 2)
@@ -271,7 +295,11 @@ function buildOpenness(inputs: PortraitInputs): PortraitDimension {
         openThreads.length,
         "Thread is",
         "Threads are"
-      )} still standing; the first asks after ${lookup.facetName(first.facet)} in ${lookup.conceptName(
+      )} still standing; ${pluralise(
+        openThreads.length,
+        "it asks",
+        "the first asks"
+      )} after ${lookup.facetName(first.facet)} in ${lookup.conceptName(
         first.pair[0]
       )} and ${lookup.conceptName(first.pair[1])}.`
     );
@@ -328,11 +356,34 @@ function buildReturn(inputs: PortraitInputs): PortraitDimension {
     return compareStrings(a[0], b[0]);
   })[0];
 
-  let phrase = `${capitalise(countWord(closing))} of your ${countWord(total)} ${pluralise(
-    total,
-    "thread",
-    "threads"
-  )} closed back into what you had already made rather than reaching outward.`;
+  /*
+   * "None of your seven threads closed back into what you had already made
+   * rather than reaching outward" is not a proposition: under the negation the
+   * contrastive clause has nothing left to attach to, and the sentence stops
+   * short of saying what the web did instead. Zero is its own sentence, and it
+   * states the positive fact — every thread reached outward. See buildDepth: a
+   * dimension that reads correctly only above zero is a dimension that reads
+   * incorrectly for most of a session.
+   *
+   * One is the other boundary. The first thread can never close back — nothing
+   * is woven when it is drawn — so a one-thread web is always the zero case,
+   * and telling it "none of your one thread" would compound both defects.
+   */
+  let phrase: string;
+  if (closing === 0) {
+    phrase =
+      total === 1
+        ? "Your one thread reached outward; there was nothing yet for it to close back into."
+        : `Every one of your ${countWord(
+            total
+          )} threads reached outward, and none closed back into what you had already made.`;
+  } else {
+    phrase = `${capitalise(countWord(closing))} of your ${countWord(total)} ${pluralise(
+      total,
+      "thread",
+      "threads"
+    )} closed back into what you had already made rather than reaching outward.`;
+  }
   if (strongest !== undefined && strongest[1].length >= 2) {
     phrase += ` ${lookup.facetName(strongest[0])} came back in ${countWord(
       strongest[1].length

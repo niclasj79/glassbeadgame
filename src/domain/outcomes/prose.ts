@@ -53,12 +53,27 @@ export function facultyLabel(id: string): string {
   return `${id.charAt(0).toUpperCase()}${id.slice(1)}`;
 }
 
-/** "a", "a and b", "a, b, and c" — Oxford comma, deterministic. */
+/**
+ * "a", "a and b", "a, b, and c" — Oxford comma, deterministic.
+ *
+ * Exact repeats are dropped, keeping first-occurrence order. A list is a list
+ * of *things named*, and naming the same thing twice reads as a fault in the
+ * writing rather than as a count: a thread that completed two Bridges emitted
+ * "it completed the Bridge, and the Bridge", which tells the player nothing
+ * except that the Game is broken. Deduplicating here fixes every list in the
+ * Game at once, and it can never make a sentence less true — two identical
+ * phrases assert exactly what one of them asserts.
+ *
+ * It does not preserve *multiplicity*: a caller that needs to say "two Bridges"
+ * has to count its own items before formatting, because only the caller knows
+ * how to pluralise what it is naming.
+ */
 export function formatList(items: readonly string[]): string {
-  if (items.length === 0) return "";
-  if (items.length === 1) return items[0] as string;
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  const distinct = items.length < 2 ? items : [...new Set(items)];
+  if (distinct.length === 0) return "";
+  if (distinct.length === 1) return distinct[0] as string;
+  if (distinct.length === 2) return `${distinct[0]} and ${distinct[1]}`;
+  return `${distinct.slice(0, -1).join(", ")}, and ${distinct[distinct.length - 1]}`;
 }
 
 /** English count words up to twelve; numerals beyond. Keeps prose readable. */

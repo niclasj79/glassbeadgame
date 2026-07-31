@@ -97,7 +97,16 @@ export function PortraitPlate({
   const step = reducedMotion ? 0 : 0.09;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-16">
+    /*
+     * The measure is deliberately narrower than the column scrim behind it, so
+     * the type never runs to the edge of its own ground. Vertical rhythm was
+     * pulled in from py-16/my-10 because the plate did not fit a 1440x810
+     * viewport by roughly the height of one reading: the last row was cut
+     * mid-heading. It still scrolls on a short screen — six readings and a
+     * five-sentence annotation will not fit every laptop — but it now fits
+     * more of them, and `ReadingScroller` says so when it does not.
+     */
+    <div className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-14">
       <p className="engraved">The Game concludes</p>
 
       {/* The annotation leads, because it is the sentence about *this* web.
@@ -122,13 +131,13 @@ export function PortraitPlate({
         ))}
       </motion.div>
 
-      <div className="rule-engraved my-10" />
+      <div className="rule-engraved my-8" />
 
-      <p className="engraved mb-6">
+      <p className="engraved mb-5">
         {threadCount === 1 ? "One thread" : `${threadCount} threads`} · six readings, no total
       </p>
 
-      <div className="grid gap-7 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
         {portrait.dimensions.map((dimension, index) => (
           <motion.div
             key={dimension.id}
@@ -141,7 +150,7 @@ export function PortraitPlate({
         ))}
       </div>
 
-      <div className="rule-engraved my-10" />
+      <div className="rule-engraved my-8" />
 
       <div className="flex flex-wrap items-center gap-3">
         <button

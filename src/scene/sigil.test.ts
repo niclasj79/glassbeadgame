@@ -5,13 +5,16 @@ import { FACULTIES } from "@/content/castalia/faculties";
 import { SIGIL_FAMILIES } from "@/content/castalia/schema";
 import { GLSL_FIGURE } from "./glsl";
 import {
+  GLSL_SETTING_INK,
   SIGIL_FAMILY_CODE,
+  figureBound,
   figureFunctionName,
   figureLineWidth,
   figureRadius,
   figureWarp,
   isRadialFamily,
   settingCode,
+  settingInkWeight,
   sigilFamilyCode,
   sigilUniform,
 } from "./sigil";
@@ -184,5 +187,109 @@ describe("settings", () => {
       if (facultyGeometries.has(family)) continue;
       expect(settingCode(family)).toBe(0);
     }
+  });
+});
+
+/**
+ * MAT-02 — HOW FAR A FIGURE REACHES
+ *
+ * The refraction march used to spread its samples over the whole chord the
+ * refracted ray makes through the glass. This is the number that lets it spend
+ * them on the drawing instead, so it has to be honest in both directions: large
+ * enough that no part of a construction is clipped away, small enough that it
+ * is worth clipping to.
+ */
+describe("the figure's bound", () => {
+  it("contains every authored figure and everything its turbulence adds", () => {
+    for (const concept of CASTALIA_CONCEPTS) {
+      const bound = figureBound(concept.sigil.density, concept.sigil.turbulence);
+      expect(bound).toBeGreaterThanOrEqual(
+        figureRadius(concept.sigil.density) + figureWarp(concept.sigil.turbulence)
+      );
+      expect(bound).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("is worth clipping to at the densities the pack actually authors", () => {
+    // If the bound were the whole bead for every figure the march would be
+    // unchanged, and MAT-02's fix would be a comment.
+    const bounds = CASTALIA_CONCEPTS.map((concept) =>
+      figureBound(concept.sigil.density, concept.sigil.turbulence)
+    );
+    expect(Math.min(...bounds)).toBeLessThan(0.75);
+    expect(bounds.filter((bound) => bound < 0.95).length).toBeGreaterThan(
+      bounds.length / 2
+    );
+  });
+
+  it("grows with density and never leaves the glass", () => {
+    expect(figureBound(0.9, 0)).toBeGreaterThan(figureBound(0.4, 0));
+    expect(figureBound(1, 1)).toBe(1);
+    expect(figureBound(0, 0)).toBeGreaterThan(0);
+  });
+
+  it("is the same number in the shader as it is here", () => {
+    // The emitted form, read back and evaluated: min(1, radius * s + warp).
+    const emitted =
+      /float gbgFigureBound\(float density, float turbulence\) \{\s*return min\(1\.0, gbgFigureRadius\(density\) \* ([\d.]+) \+ gbgFigureWarp\(turbulence\)\);/.exec(
+        GLSL_FIGURE
+      );
+    expect(emitted, "gbgFigureBound is not emitted into the shader").not.toBeNull();
+    const scale = Number(emitted![1]);
+    for (let density = 0; density <= 1.0001; density += 0.1) {
+      for (let turbulence = 0; turbulence <= 1.0001; turbulence += 0.25) {
+        expect(
+          Math.min(1, figureRadius(density) * scale + figureWarp(turbulence))
+        ).toBeCloseTo(figureBound(density, turbulence), 6);
+      }
+    }
+  });
+});
+
+/**
+ * m9 — A FACULTY IS DRAWN, NOT TINTED
+ *
+ * Contrast used to come from gold leaf, which only four concepts have. Value is
+ * normalised now (see `INK_VALUE` in `scene/glass.ts`), so what is left to tell
+ * one faculty's hand from another is the hand: the weight of the line, chosen
+ * by the faculty's own construction geometry. That is a channel a greyscale
+ * print keeps and a colour-blind player keeps, which hue never was.
+ */
+describe("inking by construction geometry", () => {
+  const facultyGeometries = FACULTIES.map((faculty) => faculty.geometry);
+
+  it("gives every faculty geometry a weight of its own", () => {
+    const weights = facultyGeometries.map(settingInkWeight);
+    expect(new Set(weights).size).toBe(FACULTIES.length);
+  });
+
+  it("keeps every weight a hand rather than a handicap", () => {
+    for (const family of SIGIL_FAMILIES) {
+      // Wide enough to tell apart, narrow enough that no faculty's figures are
+      // drawn so fine they fall under a pixel at bead size.
+      expect(settingInkWeight(family)).toBeGreaterThanOrEqual(0.8);
+      expect(settingInkWeight(family)).toBeLessThanOrEqual(1.3);
+    }
+  });
+
+  it("says nothing about a bead whose pack declares no faculty", () => {
+    for (const family of SIGIL_FAMILIES) {
+      if (facultyGeometries.includes(family)) continue;
+      expect(settingCode(family)).toBe(0);
+      expect(settingInkWeight(family)).toBe(1);
+    }
+  });
+
+  it("emits one branch per faculty, switched on the same setting codes", () => {
+    for (const family of facultyGeometries) {
+      expect(GLSL_SETTING_INK).toContain(
+        `if (c == ${settingCode(family)}) return ${settingInkWeight(
+          family
+        ).toFixed(6)};`
+      );
+    }
+    const branches = GLSL_SETTING_INK.match(/if \(c == \d+\)/g) ?? [];
+    expect(branches).toHaveLength(FACULTIES.length);
+    expect(GLSL_SETTING_INK).toContain("return 1.000000;");
   });
 });

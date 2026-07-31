@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { buildTopology } from "../graph/buildTopology";
+import { detectMotifs } from "../motifs/detectMotifs";
 import { buildSessionFixture } from "../outcomes/testing/buildSessionFixture";
 import { C, createFixtureLookup } from "../outcomes/testing/fixtureContent";
 import { buildAnnotation } from "./buildAnnotation";
@@ -51,7 +53,9 @@ const survey = buildSessionFixture({
 });
 
 describe("buildAnnotation — shape", () => {
-  it("produces three to five sentences for a developed web", () => {
+  it("gives these developed webs three to five sentences", () => {
+    // Five is the budget's floor, not a universal ceiling — see "length is
+    // earned, not fixed" below, where a nine-thread web is allowed more.
     for (const fixture of [argument, survey]) {
       const annotation = buildAnnotation(fixture.state, lookup);
       expect(annotation.sentences.length).toBeGreaterThanOrEqual(3);
@@ -150,6 +154,127 @@ describe("buildAnnotation — a different web reads differently", () => {
   });
 });
 
+describe("buildAnnotation — the coda does not contradict itself", () => {
+  /**
+   * A web in two pieces, where one of those pieces has an internal crossing.
+   * The Bridge detector confines itself to a single component, so this shape is
+   * both fragmented *and* bridged at the same time — which is exactly the shape
+   * the coda used to describe twice, in opposite terms.
+   */
+  const fragmentedWithBridge = buildSessionFixture({
+    conceptIds: [C.fourier, C.overtones, C.energy, C.perspective, C.girih, C.cantor],
+    threads: [
+      { a: C.fourier, b: C.overtones, intention: "echo" },
+      { a: C.overtones, b: C.energy, intention: "ground" },
+      { a: C.perspective, b: C.girih, intention: "echo" },
+    ],
+  });
+
+  it("builds a web that is genuinely fragmented and genuinely bridged", () => {
+    // If this stops holding, the contradiction test below proves nothing.
+    const topology = buildTopology(fragmentedWithBridge.state, lookup);
+    const motifs = detectMotifs(fragmentedWithBridge.state, lookup);
+    expect(topology.componentCount).toBeGreaterThan(1);
+    expect(motifs.some((motif) => motif.kind === "bridge")).toBe(true);
+  });
+
+  it("never states a crossing it has already said does not exist", () => {
+    // Regression: crossingFragment returned early on componentCount > 1, and
+    // bridgeFragment was an independent later candidate deduped only by exact
+    // string equality — so one coda said "nothing you wove crosses between
+    // them" and then named the single thread holding "those two regions"
+    // together.
+    const { text } = buildAnnotation(fragmentedWithBridge.state, lookup);
+
+    expect(text).toContain("nothing you wove crosses between them");
+    expect(text).not.toContain("is all that holds those two regions together");
+    expect(text).not.toContain("the only doorway between the regions you opened");
+  });
+
+  it("still relocates the crossing rather than silently dropping it", () => {
+    // Suppression would also be non-contradictory, but it would throw away a
+    // true structural fact. The fragmented sentence absorbs it instead.
+    const { text } = buildAnnotation(fragmentedWithBridge.state, lookup);
+    expect(text).toMatch(/holds one of those figures together on its own|only doorway inside one of them/);
+  });
+
+  it("does not call a concept the point everything turned on in a web of pieces", () => {
+    const { text } = buildAnnotation(fragmentedWithBridge.state, lookup);
+    expect(text).toContain("separate figures");
+    expect(text).not.toContain("became the point everything turned on");
+    expect(text).toContain("became the point its own figure turned on");
+  });
+
+  it("keeps the unqualified claim where the web really is one figure", () => {
+    expect(buildAnnotation(argument.state, lookup).text).toContain(
+      "became the point everything turned on"
+    );
+  });
+});
+
+describe("buildAnnotation — length is earned, not fixed", () => {
+  const ALL_SIXTEEN = [...CONCEPTS, C.symmetry, C.cantor, C.divisionism, C.pendulums];
+
+  const large = buildSessionFixture({
+    conceptIds: ALL_SIXTEEN,
+    threads: [
+      { a: C.just, b: C.equal, intention: "tension" },
+      { a: C.overtones, b: C.just, intention: "ground" },
+      { a: C.overtones, b: C.equal, intention: "ground" },
+      { a: C.fourier, b: C.overtones, intention: "echo" },
+      { a: C.fourier, b: C.standingWave, intention: "echo" },
+      { a: C.overtones, b: C.standingWave, intention: "ground" },
+      { a: C.fibonacci, b: C.counterpoint, intention: "echo" },
+      { a: C.primes, b: C.polyrhythm, intention: "echo" },
+      { a: C.perspective, b: C.girih, intention: "echo" },
+    ],
+  });
+
+  const small = buildSessionFixture({
+    conceptIds: ALL_SIXTEEN,
+    threads: [
+      { a: C.just, b: C.equal, intention: "tension" },
+      { a: C.overtones, b: C.just, intention: "ground" },
+    ],
+  });
+
+  it("lets a nine-thread web say more than a two-thread web", () => {
+    // Regression: a flat cap of five meant a large, fragmented, motif-bearing
+    // web was cut off at exactly the same length as a two-thread pair, so true
+    // sentences it had already composed were discarded.
+    const many = buildAnnotation(large.state, lookup).sentences;
+    const few = buildAnnotation(small.state, lookup).sentences;
+
+    expect(many.length).toBeGreaterThan(5);
+    expect(many.length).toBeGreaterThan(few.length);
+    expect(few.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("does not pad: the extra sentences are extra facts, all distinct", () => {
+    const sentences = buildAnnotation(large.state, lookup).sentences;
+    expect(new Set(sentences).size).toBe(sentences.length);
+  });
+
+  it("never shortens a web that the old flat cap already fitted", () => {
+    // The budget's floor is the cap it replaced, so raising the ceiling for
+    // large webs cannot cost a small or middling one a sentence it used to be
+    // given. The four-thread session photographed in
+    // artifacts/capture/desktop--12-conclusion-late.png uses all five of them.
+    const captured = buildSessionFixture({
+      conceptIds: CONCEPTS,
+      threads: [
+        { a: C.fibonacci, b: C.counterpoint, intention: "echo" },
+        { a: C.fibonacci, b: C.polyrhythm, intention: "tension" },
+        { a: C.primes, b: C.polyrhythm, intention: "echo" },
+        { a: C.fibonacci, b: C.primes, intention: "echo" },
+      ],
+    });
+    expect(buildAnnotation(captured.state, lookup).sentences).toHaveLength(5);
+    // Six threads, still five: the budget's floor carries it, not its slope.
+    expect(buildAnnotation(argument.state, lookup).sentences).toHaveLength(5);
+  });
+});
+
 describe("buildAnnotation — totality and determinism", () => {
   it("says something true and short about an empty web", () => {
     const empty = buildSessionFixture({ conceptIds: CONCEPTS });
@@ -158,6 +283,27 @@ describe("buildAnnotation — totality and determinism", () => {
     expect(annotation.sentences[0]).toBe("Nothing has been woven yet.");
     expect(annotation.text).toContain("no thread joins any of them");
     expect(annotation.references.conceptIds).toEqual([]);
+  });
+
+  it("names a single dark bead instead of sampling a one-item list", () => {
+    // "One bead stayed dark, including X" offers the whole of a one-item list
+    // as an example drawn from it.
+    const single = buildSessionFixture({
+      conceptIds: [C.just, C.equal, C.overtones],
+      threads: [{ a: C.just, b: C.equal, intention: "tension" }],
+    });
+    const { text } = buildAnnotation(single.state, lookup);
+
+    expect(text).toContain("One bead stayed dark: The Overtone Series.");
+    expect(text).not.toContain("stayed dark, including");
+  });
+
+  it("does not tell a single-bead arena that no thread joins any of them", () => {
+    const lonely = buildSessionFixture({ conceptIds: [C.fibonacci] });
+    const { text } = buildAnnotation(lonely.state, lookup);
+
+    expect(text).toContain("One bead is in the arena and no thread joins it,");
+    expect(text).not.toContain("any of them");
   });
 
   it("does not pad a one-thread session up to a quota", () => {

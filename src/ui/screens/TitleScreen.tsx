@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { startSession } from "@/runtime/session";
 import { Button } from "../components/Button";
+import { TITLE_EPIGRAPH } from "./titleEpigraph";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -53,9 +54,11 @@ export function TitleScreen() {
         transition={{ duration: 0.9, delay: 0.55 }}
         className="mt-7 max-w-xl text-center font-display text-lg italic leading-relaxed text-dim text-balance"
       >
-        "The hidden harmony is better than the obvious."
-        <footer className="mt-3 font-ui text-[10px] uppercase not-italic tracking-[0.35em] text-dim/60">
-          Heraclitus
+        {TITLE_EPIGRAPH.quotation}
+        {/* Cited, not merely name-dropped. See titleEpigraph.ts for why the
+            fragment number is given and a translator is not. */}
+        <footer className="mx-auto mt-3 max-w-xs font-ui text-[10px] uppercase not-italic leading-relaxed tracking-[0.22em] text-dim/60">
+          {TITLE_EPIGRAPH.attribution}
         </footer>
       </motion.blockquote>
 

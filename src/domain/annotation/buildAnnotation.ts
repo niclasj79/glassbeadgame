@@ -34,8 +34,27 @@ interface AnnotationInputs {
   readonly motifs: readonly MotifDetection[];
 }
 
-const MAX_SENTENCES = 5;
+/**
+ * The coda's length is earned, not fixed.
+ *
+ * A flat cap of five made a twelve-thread web with three motifs, two components
+ * and an Open Thread say no more than a two-thread web — the later true
+ * sentences were composed and then dropped on the floor.
+ *
+ * The budget now grows with the web, from the old cap upward: `BASE_SENTENCES`
+ * is a floor rather than a ceiling, so no session says less than it used to,
+ * and `MAX_SENTENCES` is simply the number of fragments that can exist at all.
+ * The budget is still only a ceiling — a fragment is added only when the web
+ * gives it something to name — so a larger budget can never pad a quiet web.
+ */
 const MIN_SENTENCES = 3;
+const BASE_SENTENCES = 5;
+const MAX_SENTENCES = 9;
+
+function sentenceBudget(inputs: AnnotationInputs): number {
+  const earned = 2 + Math.ceil(inputs.topology.threadCount / 2);
+  return Math.min(MAX_SENTENCES, Math.max(BASE_SENTENCES, earned));
+}
 
 function facultyPhrase(faculties: readonly FacultyId[]): string {
   return formatList(faculties.map(facultyLabel));
@@ -83,8 +102,19 @@ function centreFragment(inputs: AnnotationInputs): Fragment | null {
   const centre = candidates[0];
   if (centre === undefined) return null;
 
+  /*
+   * "Everything" is only true when there is one figure. In a fragmented web the
+   * centre is the centre of its own piece, and the coda goes on to say in the
+   * same breath that the work stands in several pieces — so the unqualified
+   * claim would be contradicted by the paragraph containing it.
+   */
+  const scope =
+    inputs.topology.componentCount > 1
+      ? "became the point its own figure turned on"
+      : "became the point everything turned on";
+
   return {
-    text: `${inputs.lookup.conceptName(centre.conceptId)} became the point everything turned on, carrying ${countWord(
+    text: `${inputs.lookup.conceptName(centre.conceptId)} ${scope}, carrying ${countWord(
       centre.threadCount
     )} ${pluralise(centre.threadCount, "thread", "threads")} out into ${facultyPhrase(
       centre.neighbourFaculties
@@ -95,43 +125,25 @@ function centreFragment(inputs: AnnotationInputs): Fragment | null {
 }
 
 /**
- * Where the web is held together — or where it is not.
+ * The one thread or concept a crossing hangs on, read two ways.
  *
- * Fragmentation is reported first because it is the larger fact: telling a
- * player which single thread carries a crossing, while quietly omitting that
- * their work stands in three unconnected pieces, would be true and misleading.
+ * `whole` states it of the web, which is only honest when the web is one
+ * figure. `inside` states it of the figure the bridge actually sits in, which
+ * is the only true form when the web is in pieces — the bridge detector
+ * confines itself to a single component, so a bridge in a fragmented web never
+ * spans "the regions you opened", only two regions of one of them.
  */
-function crossingFragment(inputs: AnnotationInputs): Fragment | null {
-  if (inputs.topology.componentCount > 1) {
-    return {
-      text: `The work stands in ${countWord(
-        inputs.topology.componentCount
-      )} separate figures, and nothing you wove crosses between them.`,
-      conceptIds: inputs.topology.wovenConceptIds,
-    };
-  }
-
-  const bridge = inputs.motifs.find((motif) => motif.kind === "bridge");
-  const bridgeSentence = bridgeFragment(inputs, bridge);
-  if (bridgeSentence !== null) return bridgeSentence;
-
-  const crossings = inputs.topology.facultySpread.crossingThreadCount;
-  if (crossings >= 2) {
-    return {
-      text: `${facultyPhrase(
-        inputs.topology.facultySpread.presentFaculties
-      )} meet in ${countWord(crossings)} places rather than one, so no single thread is load-bearing.`,
-      conceptIds: inputs.topology.wovenConceptIds,
-    };
-  }
-  return null;
+interface BridgeReading {
+  readonly whole: string;
+  readonly inside: string;
+  readonly conceptIds: readonly ConceptId[];
+  readonly threadIds: readonly ThreadId[];
 }
 
-/** The one thread or concept the crossing hangs on, when there is one. */
-function bridgeFragment(
+function readBridge(
   inputs: AnnotationInputs,
   bridge: MotifDetection | undefined
-): Fragment | null {
+): BridgeReading | null {
   if (bridge === undefined) return null;
 
   if (bridge.focusThreadId !== null) {
@@ -139,27 +151,102 @@ function bridgeFragment(
       (entry) => entry.threadId === bridge.focusThreadId
     );
     if (edge !== undefined) {
+      const aName = inputs.lookup.conceptName(edge.pair[0]);
+      const bName = inputs.lookup.conceptName(edge.pair[1]);
+      const label = INTENTION_LABELS[edge.intention];
       return {
-        text: `A single ${INTENTION_LABELS[edge.intention]} between ${inputs.lookup.conceptName(
-          edge.pair[0]
-        )} and ${inputs.lookup.conceptName(
-          edge.pair[1]
-        )} is all that holds those two regions together; cut it and they come apart.`,
+        whole: `A single ${label} between ${aName} and ${bName} is all that holds those two regions together; cut it and they come apart.`,
+        inside: `a single ${label} between ${aName} and ${bName} holds one of those figures together on its own`,
         conceptIds: [edge.pair[0], edge.pair[1]],
         threadIds: [edge.threadId],
       };
     }
   }
   if (bridge.focusConceptId !== null) {
+    const name = inputs.lookup.conceptName(bridge.focusConceptId);
     return {
-      text: `${inputs.lookup.conceptName(
-        bridge.focusConceptId
-      )} is standing in the only doorway between the regions you opened.`,
+      whole: `${name} is standing in the only doorway between the regions you opened.`,
+      inside: `${name} is standing in the only doorway inside one of them`,
       conceptIds: [bridge.focusConceptId],
       threadIds: bridge.threadIds,
     };
   }
   return null;
+}
+
+/**
+ * Where the web is held together — or where it is not, and what remains.
+ *
+ * Fragmentation is reported first because it is the larger fact: telling a
+ * player which single thread carries a crossing, while quietly omitting that
+ * their work stands in three unconnected pieces, would be true and misleading.
+ *
+ * The two claims used to be independent candidates deduped by exact string
+ * equality, which is no defence at all against a *factual* contradiction: one
+ * coda said "nothing you wove crosses between them" and then, three sentences
+ * later, that a concept stood "in the only doorway between the regions you
+ * opened". They are now mutually exclusive by construction. When the web is
+ * fragmented the crossing sentence absorbs the bridge and relocates it inside a
+ * single figure, and `bridgeConsumed` stops it being offered a second time.
+ */
+interface CrossingReading {
+  readonly fragment: Fragment | null;
+  readonly bridgeConsumed: boolean;
+}
+
+function crossingFragment(
+  inputs: AnnotationInputs,
+  bridge: MotifDetection | undefined
+): CrossingReading {
+  const reading = readBridge(inputs, bridge);
+
+  if (inputs.topology.componentCount > 1) {
+    const opening = `The work stands in ${countWord(
+      inputs.topology.componentCount
+    )} separate figures, and nothing you wove crosses between them`;
+    if (reading !== null) {
+      return {
+        fragment: {
+          text: `${opening}; ${reading.inside}.`,
+          conceptIds: [...inputs.topology.wovenConceptIds, ...reading.conceptIds],
+          threadIds: reading.threadIds,
+        },
+        bridgeConsumed: true,
+      };
+    }
+    return {
+      fragment: {
+        text: `${opening}.`,
+        conceptIds: inputs.topology.wovenConceptIds,
+      },
+      bridgeConsumed: false,
+    };
+  }
+
+  if (reading !== null) {
+    return {
+      fragment: {
+        text: reading.whole,
+        conceptIds: reading.conceptIds,
+        threadIds: reading.threadIds,
+      },
+      bridgeConsumed: true,
+    };
+  }
+
+  const crossings = inputs.topology.facultySpread.crossingThreadCount;
+  if (crossings >= 2) {
+    return {
+      fragment: {
+        text: `${facultyPhrase(
+          inputs.topology.facultySpread.presentFaculties
+        )} meet in ${countWord(crossings)} places rather than one, so no single thread is load-bearing.`,
+        conceptIds: inputs.topology.wovenConceptIds,
+      },
+      bridgeConsumed: false,
+    };
+  }
+  return { fragment: null, bridgeConsumed: false };
 }
 
 /** What kept coming back. */
@@ -295,12 +382,14 @@ function untouchedFragment(inputs: AnnotationInputs): Fragment | null {
       conceptIds: untouched,
     };
   }
+  // "One bead stayed dark, including X" names the whole of a one-item list as
+  // though it were a sample of it. At one, the bead is simply named.
+  const named = inputs.lookup.conceptName(untouched[0] as ConceptId);
   return {
-    text: `${capitalise(countWord(untouched.length))} ${pluralise(
-      untouched.length,
-      "bead",
-      "beads"
-    )} stayed dark, including ${inputs.lookup.conceptName(untouched[0] as ConceptId)}.`,
+    text:
+      untouched.length === 1
+        ? `One bead stayed dark: ${named}.`
+        : `${capitalise(countWord(untouched.length))} beads stayed dark, including ${named}.`,
     conceptIds: untouched,
   };
 }
@@ -316,7 +405,11 @@ function emptyAnnotation(inputs: AnnotationInputs): Annotation {
             count,
             "bead is",
             "beads are"
-          )} in the arena and no thread joins any of them, so there is nothing yet to say about the shape of this Game.`,
+          )} in the arena and no thread joins ${pluralise(
+            count,
+            "it",
+            "any of them"
+          )}, so there is nothing yet to say about the shape of this Game.`,
         ];
 
   return Object.freeze({
@@ -373,22 +466,30 @@ export function buildAnnotation(
   const opening = openingFragment(inputs);
   const chosen: Fragment[] = opening === null ? [] : [opening];
 
+  const bridge = inputs.motifs.find((motif) => motif.kind === "bridge");
+  const crossing = crossingFragment(inputs, bridge);
+  const standaloneBridge = crossing.bridgeConsumed ? null : readBridge(inputs, bridge);
+
   const candidates: readonly (Fragment | null)[] = [
     centreFragment(inputs),
-    crossingFragment(inputs),
+    crossing.fragment,
     tensionFragment(inputs),
     openQuestionFragment(inputs),
     recurrenceFragment(inputs),
-    bridgeFragment(
-      inputs,
-      inputs.motifs.find((motif) => motif.kind === "bridge")
-    ),
+    standaloneBridge === null
+      ? null
+      : {
+          text: standaloneBridge.whole,
+          conceptIds: standaloneBridge.conceptIds,
+          threadIds: standaloneBridge.threadIds,
+        },
     orderFragment(inputs),
     untouchedFragment(inputs),
   ];
 
+  const budget = sentenceBudget(inputs);
   for (const candidate of candidates) {
-    if (chosen.length >= MAX_SENTENCES) break;
+    if (chosen.length >= budget) break;
     if (candidate === null) continue;
     if (chosen.some((fragment) => fragment.text === candidate.text)) continue;
     chosen.push(candidate);

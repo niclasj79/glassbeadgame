@@ -246,6 +246,93 @@ describe("buildPortrait — totality and replay stability", () => {
     expect(phrase).not.toContain("Just Intonation took hold of it");
   });
 
+  it("gives Return a zero case that resolves to a proposition", () => {
+    // Regression: with no thread closing back, Return said "None of your three
+    // threads closed back into what you had already made rather than reaching
+    // outward" — under the negation the contrastive clause attaches to nothing,
+    // and the sentence never states what the web did instead.
+    const outwardOnly = buildSessionFixture({
+      conceptIds: [C.fourier, C.overtones, C.energy, C.perspective, C.girih],
+      threads: [
+        { a: C.fourier, b: C.overtones, intention: "echo" },
+        { a: C.overtones, b: C.energy, intention: "ground" },
+        { a: C.perspective, b: C.girih, intention: "echo" },
+      ],
+    });
+    const phrase = buildPortrait(outwardOnly.state, lookup).byId.return.phrase;
+
+    expect(phrase).not.toMatch(/\bnone\b[^.?]*\brather than\b/i);
+    expect(phrase).toContain(
+      "Every one of your three threads reached outward, and none closed back into what you had already made."
+    );
+  });
+
+  it("gives Return a one-thread case, which is always the zero case", () => {
+    // The first thread cannot close back — nothing is woven when it is drawn —
+    // so "none of your one thread" was the guaranteed reading of every
+    // single-thread session.
+    const single = buildSessionFixture({
+      conceptIds: [C.just, C.equal, C.overtones],
+      threads: [{ a: C.just, b: C.equal, intention: "tension" }],
+    });
+    const phrase = buildPortrait(single.state, lookup).byId.return.phrase;
+
+    expect(phrase).toBe(
+      "Your one thread reached outward; there was nothing yet for it to close back into."
+    );
+  });
+
+  it("keeps the contrast where some threads really did close back", () => {
+    expect(buildPortrait(wide.state, lookup).byId.return.phrase).toContain(
+      "closed back into what you had already made rather than reaching outward"
+    );
+  });
+
+  it("never states a fraction whose denominator is one", () => {
+    // The same class of defect as Return's zero case, in Range and Depth:
+    // "One of your one thread met documented material".
+    const single = buildSessionFixture({
+      conceptIds: [C.just, C.equal, C.overtones],
+      threads: [{ a: C.just, b: C.equal, intention: "tension" }],
+    });
+    const portrait = buildPortrait(single.state, lookup);
+
+    for (const entry of portrait.dimensions) {
+      expect(entry.phrase).not.toMatch(/of your one thread\b/i);
+    }
+    expect(portrait.byId.depth.phrase).toBe("Your one thread met documented material.");
+    expect(portrait.byId.range.phrase).toContain(
+      "Your one thread stayed inside a single faculty."
+    );
+  });
+
+  it("does not apply a plural quantifier to a single faculty", () => {
+    // "Sound all answered." — `all` presumes several, and a one-faculty session
+    // supplies one.
+    const oneFaculty = buildSessionFixture({
+      conceptIds: [C.just, C.equal, C.overtones],
+      threads: [
+        { a: C.just, b: C.equal, intention: "tension" },
+        { a: C.overtones, b: C.just, intention: "ground" },
+      ],
+    });
+    const phrase = buildPortrait(oneFaculty.state, lookup).byId.range.phrase;
+
+    expect(phrase).not.toContain("Sound all answered");
+    expect(phrase).toContain("Sound answered, and it was the only faculty asked.");
+  });
+
+  it("does not call the sole Open Thread the first of several", () => {
+    const oneOpen = buildSessionFixture({
+      conceptIds: [C.fibonacci, C.girih, C.counterpoint],
+      threads: [{ a: C.fibonacci, b: C.girih, intention: "echo" }],
+    });
+    const phrase = buildPortrait(oneOpen.state, lookup).byId.openness.phrase;
+
+    expect(phrase).toContain("One Open Thread is still standing; it asks after");
+    expect(phrase).not.toContain("the first asks");
+  });
+
   it("reads correctly when a count is zero", () => {
     // "none found nothing to stand on" is a double negative that says the
     // opposite of what the web did, and zero is the common case early on.

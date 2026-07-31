@@ -10,17 +10,31 @@ import { frameState } from "./frameState";
 import { GLSL_COMMON } from "./glsl";
 import { armillaryOrder, beadIdentity } from "./identity";
 import { presentationProfile } from "./quality";
+import { armillaryRings, type RingSpec } from "./rings";
 import { MAX_STATIONS, stationAnchors, type StationAnchor } from "./stations";
 
 /**
  * THE ARMILLARY
  *
- * The beads do not float in a void; they sit in an instrument. Three principal
- * rings — a graduated prime circle and two colures — plus a tilted index ring
- * and one small circle for every boundary between faculties. The parallels are
- * therefore *derived from the draw*: they mark where Measure stops and Sound
- * begins in this particular session, which is why the arena reads as a chart
- * rather than as decoration.
+ * The beads do not float in a void; they sit in an instrument. A graduated
+ * prime circle, two colures, a tilted index ring, and one small circle for
+ * every boundary between faculties. The parallels are therefore *derived from
+ * the draw*: they mark where Measure stops and Sound begins in this particular
+ * session, which is why the arena reads as a chart rather than as decoration.
+ *
+ * Where the rings *are* — their nesting, and the clearance that keeps every
+ * one of them outside the widest a bead ever reaches — is geometry, and lives
+ * in `scene/rings.ts` where it can be measured. What is decided here is how
+ * brass looks:
+ *
+ *   PROFILE. The band is rolled, not painted: two bright arrises with a hollow
+ *   between them. A single gradient across the width reads as a printed
+ *   stripe, which is what the rings used to be.
+ *
+ *   DEPTH. Every ring is weighted by where it stands in the room — brightest
+ *   at the limb, receding on the far side, and deliberately held back on the
+ *   near side, so brass passing in front of a bead reads as brass over glass
+ *   rather than as a scratch through it.
  *
  * Committed threads leave stations on the prime circle at the longitudes their
  * endpoints occupy. That is topology, not a completion percentage: two threads
@@ -33,9 +47,12 @@ import { MAX_STATIONS, stationAnchors, type StationAnchor } from "./stations";
 
 const VERTEX = /* glsl */ `
 varying vec2 vLocal;
+varying vec3 vWorld;
 void main() {
   vLocal = position.xy;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 world = modelMatrix * vec4(position, 1.0);
+  vWorld = world.xyz;
+  gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
 
@@ -44,6 +61,7 @@ precision highp float;
 
 uniform float uInner;
 uniform float uOuter;
+uniform float uRadius;
 uniform float uMajor;
 uniform float uMinor;
 uniform float uOpacity;
@@ -56,6 +74,7 @@ uniform vec3 uGold;
 uniform vec3 uVellum;
 
 varying vec2 vLocal;
+varying vec3 vWorld;
 
 ${GLSL_COMMON}
 
@@ -65,16 +84,37 @@ void main() {
   float t = (rho - uInner) / max(uOuter - uInner, 1e-4);
 
   // Soft band edges: the composer renders without MSAA, so the antialiasing
-  // has to live in the material.
-  float band = smoothstep(0.0, 0.22, t) * smoothstep(1.0, 0.78, t);
+  // has to live in the material. Tighter than it was, because the profile
+  // below needs the edges to be edges.
+  float band = smoothstep(0.0, 0.13, t) * smoothstep(1.0, 0.87, t);
   if (band < 0.002) discard;
 
-  // Rolled metal is brighter toward its outer edge.
-  vec3 metal = mix(uPatina, uBrass, smoothstep(0.1, 0.95, t));
+  // THE PROFILE. A rolled band has two bright arrises and a hollow between
+  // them; a single gradient across the width reads as a printed stripe.
+  float across = min(t, 1.0 - t) * 2.0;
+  float arris = 1.0 - smoothstep(0.0, 0.40, across);
+  float hollow = smoothstep(0.28, 0.96, across);
+  vec3 metal = mix(uPatina, uBrass, 0.30 + 0.70 * arris);
+  metal = mix(metal, uPatina * 0.70, hollow * 0.5);
 
-  float minor = gbgLine(fract(ang * uMinor / GBG_TAU) - 0.5, 0.10) * smoothstep(0.45, 0.75, t);
+  // THE ENGRAVING. Minor divisions bite only in the hollow, where a graver
+  // would reach; major divisions cross the whole band.
+  float minor = gbgLine(fract(ang * uMinor / GBG_TAU) - 0.5, 0.10) * hollow;
   float major = gbgLine(fract(ang * uMajor / GBG_TAU) - 0.5, 0.06);
-  vec3 col = mix(metal, uVellum, minor * 0.16 + major * 0.3);
+  vec3 col = mix(metal, uVellum, minor * 0.18 + major * 0.34);
+
+  // DEPTH IN THE ROOM. Negative in front of the arena's centre, positive
+  // behind it, +/-1 at the limb of this ring.
+  float toFragment = length(vWorld - cameraPosition);
+  float toCentre = length(cameraPosition);
+  float rel = clamp((toFragment - toCentre) / max(uRadius, 1e-3), -1.0, 1.0);
+  float limb = 1.0 - abs(rel);
+  // Brightest where the ring turns edge-on, receding behind, and deliberately
+  // held back in front so a ring crossing a bead reads as brass passing over
+  // glass rather than as a scratch through it.
+  float weight = mix(0.42, 1.0, pow(limb, 0.75));
+  float behind = smoothstep(0.05, 0.9, rel);
+  col = mix(col, uPatina * 0.8, behind * 0.45);
 
   float glow = 0.0;
   for (int i = 0; i < ${MAX_STATIONS}; i++) {
@@ -86,78 +126,11 @@ void main() {
   glow = clamp(glow, 0.0, 1.6);
   col += uGold * glow * 0.35;
 
-  float alpha = band * uOpacity * (0.86 + 0.14 * uBreath) + band * glow * 0.16;
+  float alpha = band * uOpacity * weight * (0.86 + 0.14 * uBreath)
+              + band * glow * 0.16 * weight;
   gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
 }
 `;
-
-interface RingSpec {
-  readonly key: string;
-  readonly radius: number;
-  readonly halfWidth: number;
-  readonly major: number;
-  readonly minor: number;
-  readonly opacity: number;
-  readonly rotation: readonly [number, number, number];
-  readonly position: readonly [number, number, number];
-  readonly stations: boolean;
-}
-
-function ringSpecs(parallels: readonly number[], graduations: number): RingSpec[] {
-  const R = ARENA_RADIUS;
-  const specs: RingSpec[] = [
-    {
-      key: "prime",
-      radius: R * 1.16,
-      halfWidth: 0.062,
-      major: 12,
-      minor: graduations,
-      opacity: 0.62,
-      rotation: [-Math.PI / 2, 0, 0],
-      position: [0, 0, 0],
-      stations: true,
-    },
-    {
-      key: "colure-a",
-      radius: R * 1.16,
-      halfWidth: 0.04,
-      major: 4,
-      minor: graduations / 2,
-      opacity: 0.34,
-      rotation: [0, 0, 0],
-      position: [0, 0, 0],
-      stations: false,
-    },
-    {
-      key: "colure-b",
-      radius: R * 1.16,
-      halfWidth: 0.04,
-      major: 4,
-      minor: graduations / 2,
-      opacity: 0.34,
-      rotation: [0, Math.PI / 2, 0],
-      position: [0, 0, 0],
-      stations: false,
-    },
-  ];
-
-  parallels.forEach((y, index) => {
-    const r = Math.sqrt(Math.max(0.04, R * R - y * y)) * 1.03;
-    specs.push({
-      key: `parallel-${index}`,
-      radius: r,
-      halfWidth: 0.022,
-      major: 6,
-      minor: Math.max(12, graduations / 3),
-      opacity: 0.3,
-      rotation: [-Math.PI / 2, 0, 0],
-      position: [0, y, 0],
-      stations: false,
-    });
-  });
-
-  return specs;
-}
 
 function Ring({
   spec,
@@ -176,11 +149,13 @@ function Ring({
       fragmentShader: FRAGMENT,
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       side: THREE.DoubleSide,
       toneMapped: false,
       uniforms: {
         uInner: { value: spec.radius - spec.halfWidth },
         uOuter: { value: spec.radius + spec.halfWidth },
+        uRadius: { value: Math.hypot(spec.radius, spec.position[1]) },
         uMajor: { value: spec.major },
         uMinor: { value: spec.minor },
         uOpacity: { value: spec.opacity },
@@ -235,7 +210,7 @@ function Ring({
       material={material}
       rotation={spec.rotation as unknown as [number, number, number]}
       position={spec.position as unknown as [number, number, number]}
-      renderOrder={-4}
+      renderOrder={spec.order}
       frustumCulled={false}
     >
       <ringGeometry
@@ -273,7 +248,7 @@ export function Armillary() {
   }, [beadIds]);
 
   const specs = useMemo(
-    () => ringSpecs(parallels, budget.graduations),
+    () => armillaryRings(parallels, budget.graduations),
     [parallels, budget.graduations]
   );
 
