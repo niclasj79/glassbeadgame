@@ -102,6 +102,22 @@ export function deterministicUnit(seed: string): number {
 }
 
 /**
+ * The rhythmic unit *after* gesture has bent it.
+ *
+ * Breadth stretches a motif's gait a little. Everything that has to land on the
+ * grid must therefore be measured in this unit rather than the nominal one —
+ * the review found Echo's stagger computed in nominal units and then laid
+ * alongside a subject rendered in phrased ones, which put the imitation off the
+ * grid under every gesture except the neutral one.
+ */
+export function phrasedUnitSeconds(
+  unitSeconds: number,
+  phrasing: AudioPhrasing = NEUTRAL_PHRASING
+): number {
+  return unitSeconds * (0.85 + clamp01(phrasing.breadth) * 0.3);
+}
+
+/**
  * Envelope for one note. Articulation sets the shape; phrasing bends it inside
  * bounds tight enough that a motif keeps its identity under any gesture.
  */
@@ -166,6 +182,8 @@ export interface RenderMotifOptions {
   readonly finalDegree?: number;
   /** Marks every note as not closing. Captions and shaders both read this. */
   readonly openEnded?: boolean;
+  /** Marks every note as part of a deliberately tense simultaneity (CAV-007). */
+  readonly tense?: boolean;
 }
 
 /**
@@ -189,7 +207,7 @@ export function renderMotif(
   const openEnded = options.openEnded ?? false;
 
   // Breadth stretches the gait a little; bounded so a motif stays recognisable.
-  const unit = options.unitSeconds * (0.85 + clamp01(phrasing.breadth) * 0.3);
+  const unit = phrasedUnitSeconds(options.unitSeconds, phrasing);
   // Weight moves level inside a narrow band. It never silences and never shouts.
   const gain = options.gain * (0.82 + clamp01(phrasing.weight) * 0.36);
   const rubato = clamp01(phrasing.rubato);
@@ -230,6 +248,7 @@ export function renderMotif(
         gain: Number(gain.toFixed(5)),
         floorGain: options.floorGain ?? 0,
         openEnded: openEnded && isLast,
+        tense: options.tense ?? false,
       })
     );
     cursor += length;
@@ -244,8 +263,7 @@ export function motifSpanSeconds(
   unitSeconds: number,
   phrasing: AudioPhrasing = NEUTRAL_PHRASING
 ): number {
-  const unit = unitSeconds * (0.85 + clamp01(phrasing.breadth) * 0.3);
-  return motifUnits(motif) * unit;
+  return motifUnits(motif) * phrasedUnitSeconds(unitSeconds, phrasing);
 }
 
 /**

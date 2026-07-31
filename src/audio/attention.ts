@@ -116,6 +116,7 @@ export function planAttentionSpace(
       resolves: false,
       interval: null,
       beatingHz: null,
+      outcome: null,
     },
   });
 

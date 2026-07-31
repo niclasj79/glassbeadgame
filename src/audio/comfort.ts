@@ -70,6 +70,21 @@ export function clampBeatingHz(hz: number): number {
   return hz;
 }
 
+/**
+ * The absolute level a tense simultaneity may not exceed, given the ambient bed
+ * *as it actually sounds at that moment*.
+ *
+ * This function exists because the review found the ceiling being computed
+ * against a level that was not the bed — a plan's own reference gain, or the
+ * nominal bed while the score had already dropped it for Attunement. CAV-007
+ * says "below the ambient bed", so the only argument this takes is the bed, and
+ * every caller has to produce one.
+ */
+export function tensionCeiling(bedGain: number): number {
+  if (!Number.isFinite(bedGain) || bedGain <= 0) return 0;
+  return bedGain * COMFORT.tension.gainFractionOfBed;
+}
+
 /** Clamp a voice's total lifetime. Applied at the last moment before scheduling. */
 export function clampLifetimeSeconds(seconds: number): number {
   if (!Number.isFinite(seconds) || seconds <= 0) return 0;

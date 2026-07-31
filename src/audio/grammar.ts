@@ -37,13 +37,15 @@
  */
 import type { RelationIntention } from "@/domain/events";
 import type { MotifArticulation, TimbreId } from "@/content/castalia/schema";
-import { COMFORT, clampBeatingHz } from "./comfort";
+import { clampBeatingHz, tensionCeiling } from "./comfort";
+import { COMFORT } from "./comfort";
 import {
   anchorDegree,
   deterministicUnit,
   envelopeFor,
   motifSpanSeconds,
   motifUnits,
+  phrasedUnitSeconds,
   renderMotif,
   NEUTRAL_PHRASING,
   type AudioPhrasing,
@@ -63,6 +65,7 @@ import {
 } from "./mode";
 import {
   makeVoicePlan,
+  type AudioOutcomeKind,
   type PlannedBeating,
   type PlannedNote,
   type VoicePlan,
@@ -80,8 +83,19 @@ export interface RelationPlanInput {
   readonly b: MotifSource;
   /** One rhythm unit: a sixteenth of the world's phrase slot. */
   readonly unitSeconds: number;
-  /** Summed peak level of the ambient bed. Tension is capped below it. */
+  /**
+   * The level this relation is *sized against* — how loud it should be relative
+   * to the room it speaks into.
+   */
   readonly ambientGain: number;
+  /**
+   * The ambient bed **as it actually sounds right now**, after every scale the
+   * score has applied. CAV-007 caps the tense pair below the bed, and the review
+   * found that cap being computed against `ambientGain` instead — which during
+   * Attunement is a different, louder number. The two are separate fields so
+   * that confusing them again requires saying so.
+   */
+  readonly bedGain: number;
   readonly phrasing?: AudioPhrasing;
   /**
    * Whether the phrase closes. A documented relation closes; an Open Thread and
@@ -95,6 +109,12 @@ export interface RelationPlanInput {
    * for Ground and the audio layer must not invent one.
    */
   readonly ground?: "a" | "b";
+  /**
+   * The epistemic state this plan speaks for (CAV-006). Carried into the plan's
+   * meta so the captioned path can distinguish an Open Thread from a weak
+   * outcome, which `resolves` alone cannot — both decline to close.
+   */
+  readonly outcome?: AudioOutcomeKind;
 }
 
 // ─── Interval selection ─────────────────────────────────────────────────────
@@ -129,45 +149,104 @@ export function imitationInterval(
   return SCORE.grammar.echoFallbackInterval;
 }
 
+/** Shortest distance between two semitone classes, around the circle. */
+function classDistance(a: number, b: number): number {
+  const d = Math.abs(pitchClass(a) - pitchClass(b));
+  return Math.min(d, 12 - d);
+}
+
+/**
+ * How often each interval class occurs between and within a pair of contours.
+ *
+ * Cross intervals — every degree of one motif against every degree of the other
+ * — weigh more than intervals internal to a single motif, because a Tension is
+ * about how the two rub against *each other*. The unison is discarded: it says
+ * nothing about how two contours differ, and in this content pack twenty-three
+ * of twenty-four motifs open on degree 0, so counting it would drown everything
+ * else out. That is exactly how the previous rule became degenerate.
+ */
+function intervalWeights(a: MotifSource, b: MotifSource): readonly number[] {
+  const weight = new Array<number>(12).fill(0);
+  for (const da of a.motif.degrees) {
+    for (const db of b.motif.degrees) {
+      weight[intervalClass(da, db)] += SCORE.grammar.suspensionCrossWeight;
+    }
+  }
+  for (const source of [a, b]) {
+    const degrees = source.motif.degrees;
+    for (let i = 0; i < degrees.length; i++) {
+      for (let j = i + 1; j < degrees.length; j++) {
+        weight[intervalClass(degrees[i], degrees[j])] +=
+          SCORE.grammar.suspensionWithinWeight;
+      }
+    }
+  }
+  weight[0] = 0;
+  return weight;
+}
+
 /**
  * The tense interval class a Tension suspends on.
  *
- * Derived from the pair's own natural distance so that two concepts always
- * produce the same suspension, and so the suspension is *theirs* rather than a
- * generic sour chord pasted over every Tension. If their distance is already
- * tense, it is used unchanged; otherwise the nearest tense class is taken.
+ * The previous rule read only the two motifs' *first* degrees. Against the
+ * shipped pack that is very nearly a constant — twenty-three of the twenty-four
+ * concepts anchor on the same pitch class — so 253 of the 276 possible pairs
+ * suspended on the identical minor second, and every Tension in the game sounded
+ * like every other one.
+ *
+ * The rule now reads the whole of both contours. Each tense class is scored by
+ * how strongly the pair implies it: an exact occurrence counts heavily, and a
+ * class one semitone away counts a little, so a pair whose motifs never actually
+ * rub still gets a suspension leaning on the interval they *do* have rather than
+ * a default. The pair is canonically ordered first, so the same two concepts
+ * always suspend the same way whichever one is the subject.
+ *
+ * Over the shipped 24 this reaches all five tense classes, and no single class
+ * accounts for more than about a third of the pairs.
  */
 export function suspensionInterval(
   mode: WorldMode,
   a: MotifSource,
   b: MotifSource
 ): number {
-  const natural = intervalClass(anchorDegree(a.motif), anchorDegree(b.motif));
-  if (mode.tense.includes(natural)) return natural;
+  const [first, second] = a.conceptId <= b.conceptId ? [a, b] : [b, a];
+  const weight = intervalWeights(first, second);
   let best = mode.tense[0];
-  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestScore = -1;
   for (const candidate of mode.tense) {
-    const distance = Math.min(
-      Math.abs(candidate - natural),
-      12 - Math.abs(candidate - natural)
-    );
-    if (distance < bestDistance || (distance === bestDistance && candidate < best)) {
+    let score = 0;
+    for (let observed = 1; observed < 12; observed += 1) {
+      const distance = classDistance(observed, candidate);
+      if (distance === 0) score += weight[observed] * SCORE.grammar.suspensionExactWeight;
+      else if (distance === 1) score += weight[observed];
+    }
+    if (score > bestScore) {
+      bestScore = score;
       best = candidate;
-      bestDistance = distance;
     }
   }
   return best;
 }
 
-/** The beat rate a pair takes. Deterministic, and inside CAV-007 by construction. */
+/**
+ * The beat rate a relation takes. Deterministic, and inside CAV-007 by
+ * construction — the band comes from the comfort table and only the position
+ * within it is taste.
+ */
 export function beatingRateFor(planId: string): number {
   const span = COMFORT.beating.maxHz - COMFORT.beating.minHz;
   // Weighted toward the slower half: slow beating reads as breathing, fast
-  // beating reads as a fault. 0.35 of the band is the centre of gravity.
+  // beating reads as a fault.
   const unit = deterministicUnit(`beat:${planId}`);
   return clampBeatingHz(
-    COMFORT.beating.minHz + span * (0.15 + unit * 0.55)
+    COMFORT.beating.minHz +
+      span * (SCORE.grammar.beatingBandFloor + unit * SCORE.grammar.beatingBandSpread)
   );
+}
+
+/** The key two concepts beat by, so the same relation always beats alike. */
+export function beatingKeyFor(a: string, b: string): string {
+  return a <= b ? `${a}|${b}` : `${b}|${a}`;
 }
 
 // ─── Echo ───────────────────────────────────────────────────────────────────
@@ -182,6 +261,12 @@ function planEcho(input: RelationPlanInput): VoicePlan {
     Math.max(1, Math.round(units * SCORE.grammar.echoStaggerFraction)),
     Math.max(1, units - 1)
   );
+  // Quantised *after* phrasing, not before. The subject is laid out on the
+  // gesture's own grid, so a stagger measured in nominal units lands between
+  // that grid's lines under any breadth but the neutral one — which is exactly
+  // what stopped the imitation reading as imitation.
+  const unit = phrasedUnitSeconds(input.unitSeconds, phrasing);
+  const stagger = staggerUnits * unit;
   const bed = input.ambientGain;
 
   const subject = renderMotif(a, {
@@ -201,7 +286,7 @@ function planEcho(input: RelationPlanInput): VoicePlan {
     { conceptId: b.conceptId, motif: a.motif },
     {
       mode,
-      at: staggerUnits * input.unitSeconds,
+      at: stagger,
       unitSeconds: input.unitSeconds,
       gain: bed * SCORE.grammar.answerGain,
       role: "answer",
@@ -223,7 +308,7 @@ function planEcho(input: RelationPlanInput): VoicePlan {
   if (input.resolves) {
     // The two entries agree on one pitch. Nothing new is asserted by it; it is
     // the cadence that tells the ear the imitation was complete.
-    const at = staggerUnits * input.unitSeconds + motifSpanSeconds(a.motif, input.unitSeconds, phrasing);
+    const at = stagger + motifSpanSeconds(a.motif, input.unitSeconds, phrasing);
     const degree = nearestStableDegree(mode, anchorDegree(a.motif));
     notes.push(
       Object.freeze({
@@ -241,6 +326,7 @@ function planEcho(input: RelationPlanInput): VoicePlan {
         gain: Number((bed * SCORE.grammar.residueGain).toFixed(5)),
         floorGain: 0,
         openEnded: false,
+        tense: false,
       })
     );
   }
@@ -256,6 +342,7 @@ function planEcho(input: RelationPlanInput): VoicePlan {
       resolves: input.resolves,
       interval,
       beatingHz: null,
+      outcome: input.outcome ?? null,
     },
   });
 }
@@ -333,6 +420,7 @@ function planPassage(input: RelationPlanInput): VoicePlan {
         ),
         floorGain: 0,
         openEnded: !input.resolves && i === steps - 1,
+        tense: false,
       })
     );
     cursor += length;
@@ -360,6 +448,7 @@ function planPassage(input: RelationPlanInput): VoicePlan {
       gain: Number((bed * SCORE.grammar.residueGain).toFixed(5)),
       floorGain: 0,
       openEnded: false,
+      tense: false,
     })
   );
 
@@ -374,6 +463,7 @@ function planPassage(input: RelationPlanInput): VoicePlan {
       resolves: input.resolves,
       interval: null,
       beatingHz: null,
+      outcome: input.outcome ?? null,
     },
   });
 }
@@ -387,15 +477,18 @@ function planTension(input: RelationPlanInput): VoicePlan {
   // Rounded *before* it is turned into a tuning, so the rate the plan reports is
   // exactly the rate the detuned twin will produce. A caption that says 2.0 Hz
   // and a voice that beats at 2.0496 Hz would be a small lie.
-  const beatingHz = Number(beatingRateFor(planId).toFixed(4));
+  //
+  // Seeded by the *pair*, not by the plan id: the same two concepts beat at the
+  // same rate in ordinary play, in Attunement, and in the conclusion, so the
+  // rate is part of that relation's identity rather than of one performance.
+  const beatingHz = Number(
+    beatingRateFor(beatingKeyFor(a.conceptId, b.conceptId)).toFixed(4)
+  );
 
   // Everything sounding in a tense interval class shares one budget, and that
-  // budget sits below the ambient bed (CAV-007). Headroom keeps rounding from
-  // creeping over the line.
-  const budget =
-    input.ambientGain *
-    COMFORT.tension.gainFractionOfBed *
-    SCORE.grammar.tensionHeadroom;
+  // budget sits below the ambient bed *as the bed actually sounds now*
+  // (CAV-007). Headroom keeps rounding from creeping over the line.
+  const budget = tensionCeiling(input.bedGain) * SCORE.grammar.tensionHeadroom;
   const shares = SCORE.grammar.tensionShares;
   const shareTotal = shares[0] + shares[1] + shares[2];
 
@@ -455,6 +548,10 @@ function planTension(input: RelationPlanInput): VoicePlan {
       // A Tension never closes. Not when it is documented, not when the player
       // was right, not ever — that is the whole point of the category.
       openEnded: true,
+      // All three sound inside the tense interval class, and all three share the
+      // budget CAV-007 caps. Marking them is what lets the bound be enforced
+      // across a timeline rather than inside one plan.
+      tense: true,
     });
   };
 
@@ -522,6 +619,7 @@ function planTension(input: RelationPlanInput): VoicePlan {
       resolves: false,
       interval: 12 + interval,
       beatingHz: beating.beatingHz,
+      outcome: input.outcome ?? null,
     },
   });
 }
@@ -571,6 +669,7 @@ function planGround(input: RelationPlanInput): VoicePlan {
       gain: Number((bed * SCORE.grammar.pedalGain).toFixed(5)),
       floorGain: 0,
       openEnded: false,
+      tense: false,
     }),
     // The fifth above the pedal: stabilising harmonic function, not a melody.
     // In just intonation 3/2 is exact, so it locks to the pedal and disappears
@@ -590,6 +689,7 @@ function planGround(input: RelationPlanInput): VoicePlan {
       gain: Number((bed * SCORE.grammar.groundGain).toFixed(5)),
       floorGain: 0,
       openEnded: false,
+      tense: false,
     }),
   ];
 
@@ -627,6 +727,7 @@ function planGround(input: RelationPlanInput): VoicePlan {
       resolves: input.resolves,
       interval: pitchClass(anchorDegree(above.motif) - pedalDegree),
       beatingHz: null,
+      outcome: input.outcome ?? null,
     },
   });
 }
@@ -646,6 +747,9 @@ export function planRelationVoices(input: RelationPlanInput): VoicePlan {
   }
   if (input.ambientGain <= 0) {
     throw new RangeError("the ambient bed gain must be positive");
+  }
+  if (input.bedGain <= 0) {
+    throw new RangeError("the audible bed gain must be positive");
   }
   switch (input.intention) {
     case "echo":

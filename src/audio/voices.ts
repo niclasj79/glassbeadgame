@@ -246,13 +246,49 @@ export function noiseSource(ctx: AudioContext, seconds: number): AudioBufferSour
 
 // ─── Envelope ───────────────────────────────────────────────────────────────
 
-function humanizedFrequency(hz: number, detuneCents: number): number {
-  const jitter = (runtimeRandom() * 2 - 1) * SCORE.humanize.detuneCents;
+/**
+ * Small human imperfections, derived rather than rolled.
+ *
+ * Two things were wrong with rolling them. The game must be reproducible under a
+ * fixed seed, and a random detune on *every* voice quietly falsified two claims
+ * the score makes about itself: that stable just intervals are exact and
+ * therefore do not beat, and that a Tension beats at the rate written into its
+ * plan. Three and a half cents on each of two voices is a third of a hertz at
+ * this register — on a planned two-hertz beat that is not a rounding error, it
+ * is a different sound from the one the caption promised.
+ *
+ * So the jitter is a deterministic function of the voice's own identity: the
+ * same note in the same plan is humanised the same way on every replay, and a
+ * caller whose tuning is load-bearing asks for `exactTuning` and gets none.
+ */
+const jitterUnit = (seed: string, salt: string): number =>
+  seed.length === 0
+    ? runtimeRandom() * 2 - 1
+    : hashString(`${salt}:${seed}`) / 2147483648 - 1;
+
+function humanizedFrequency(
+  hz: number,
+  detuneCents: number,
+  seed: string,
+  exact: boolean
+): number {
+  const jitter = exact
+    ? 0
+    : jitterUnit(seed, "detune") * SCORE.humanize.detuneCents;
   return hz * Math.pow(2, (detuneCents + jitter) / 1200);
 }
 
-function humanizedGain(gain: number): number {
-  return gain * (1 + (runtimeRandom() * 2 - 1) * SCORE.humanize.gainJitter);
+/**
+ * Level jitter, and it only ever ducks.
+ *
+ * A planned gain is an upper bound — `capTenseGain()` sizes the tense voices to
+ * sit exactly under the CAV-007 ceiling, and a humaniser that could add ten per
+ * cent would put them back over it. Shaving rather than boosting keeps every
+ * planned level a real ceiling and costs nothing musically: the ear reads the
+ * variation, not its sign.
+ */
+function humanizedGain(gain: number, seed: string): number {
+  return gain * (1 - Math.abs(jitterUnit(seed, "gain")) * SCORE.humanize.gainJitter);
 }
 
 /**
@@ -305,6 +341,19 @@ export interface VoiceRequest {
   /** Sustained level after the hold. Zero for an ordinary note. */
   readonly floorGain?: number;
   readonly pan?: number;
+  /**
+   * Stable identity for this voice — a planned note's id in the semantic layer.
+   * Humanising is derived from it, so the same voice sounds identical on every
+   * replay of the same session. Omitted means "no identity available"; those
+   * callers fall back to the seeded runtime random.
+   */
+  readonly seed?: string;
+  /**
+   * Suppress the humanising detune entirely. Set wherever the tuning itself
+   * carries meaning: a tense pair's beat rate, or a just interval whose whole
+   * point is that it locks and does not beat.
+   */
+  readonly exactTuning?: boolean;
 }
 
 /**
@@ -329,8 +378,14 @@ export function playVoice(
   const stopAt = t0 + life + 0.08;
   if (!voiceBudget.claim(ctx.currentTime, stopAt)) return false;
 
-  const freq = humanizedFrequency(request.frequency, request.detuneCents ?? 0);
-  const gain = humanizedGain(request.gain);
+  const voiceSeed = request.seed ?? "";
+  const freq = humanizedFrequency(
+    request.frequency,
+    request.detuneCents ?? 0,
+    voiceSeed,
+    request.exactTuning ?? false
+  );
+  const gain = humanizedGain(request.gain, voiceSeed);
   const floor = request.floorGain ?? 0;
   const sustained = life > 2.2;
   const seed = hashString(`${request.timbre}:${Math.round(freq)}`);
@@ -495,6 +550,8 @@ export interface SimpleVoiceOptions {
   readonly detuneCents?: number;
   readonly floorGain?: number;
   readonly pan?: number;
+  readonly seed?: string;
+  readonly exactTuning?: boolean;
 }
 
 /**
@@ -520,6 +577,8 @@ export function playNote(
     detuneCents: options.detuneCents,
     floorGain: options.floorGain,
     pan: options.pan,
+    seed: options.seed,
+    exactTuning: options.exactTuning,
   });
 }
 

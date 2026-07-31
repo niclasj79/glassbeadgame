@@ -22,7 +22,7 @@
  */
 import { audio } from "./engine";
 import { playVoice } from "./voices";
-import type { VoicePlan } from "./plan";
+import { capTenseGain, type VoicePlan } from "./plan";
 
 export interface QueuedPlan {
   /** Absolute AudioContext time at which the plan begins. */
@@ -87,8 +87,13 @@ export function createPlanQueue(options: PlanQueueOptions = {}): PlanQueue {
 export interface RealizeTargets {
   /** Where ordinary semantic voices go. */
   readonly music: AudioNode;
-  /** Where tense voices go — a bus with its own ceiling. */
+  /** Where tense voices go — a bus followed by a limiter at the ceiling. */
   readonly tension: AudioNode;
+  /**
+   * The absolute level tense voices may not exceed, right now. Read from
+   * `audio.tensionCeiling()` in production, so it follows the bed.
+   */
+  readonly tensionCeiling: number;
 }
 
 /**
@@ -97,7 +102,9 @@ export interface RealizeTargets {
  * one — the texture thins rather than the ceiling being breached.
  *
  * This is the entire Web Audio surface of the semantic layer. Everything above
- * it is data.
+ * it is data — and everything above it is now *checked* here: whatever a plan
+ * asks for, the tense voices are brought under the ceiling before any of them
+ * is created.
  */
 export function realizeVoicePlan(
   ctx: AudioContext,
@@ -106,13 +113,13 @@ export function realizeVoicePlan(
   atSeconds: number
 ): number {
   let sounded = 0;
-  const tense = plan.intention === "tension";
-  for (const note of plan.notes) {
+  const bounded = capTenseGain(plan, targets.tensionCeiling);
+  for (const note of bounded.notes) {
     // A note in the past is dropped, not rushed: playing it "now" would put it
     // off the grid, and off the grid is more noticeable than absent.
     const at = atSeconds + note.atSeconds;
     if (at < ctx.currentTime - 0.02) continue;
-    const dest = tense || note.role === "shadow" ? targets.tension : targets.music;
+    const dest = note.tense ? targets.tension : targets.music;
     const ok = playVoice(ctx, dest, {
       timbre: note.timbre,
       frequency: note.frequency,
@@ -123,6 +130,10 @@ export function realizeVoicePlan(
       release: note.envelope.release,
       detuneCents: note.detuneCents,
       floorGain: note.floorGain,
+      // Deterministic humanising, and exact tuning where the tuning is the
+      // point: a tense voice's beat rate is planned, so it must not be jittered.
+      seed: note.id,
+      exactTuning: note.tense,
     });
     if (ok) sounded += 1;
   }
@@ -169,8 +180,14 @@ export function createLookaheadScheduler(
     const music = audio.motifBus;
     const tension = audio.tensionBus;
     if (!ctx || !music || !tension) return;
+    const ceiling = audio.tensionCeiling();
     for (const entry of queue.drain(ctx.currentTime + lookahead)) {
-      realizeVoicePlan(ctx, { music, tension }, entry.plan, entry.at);
+      realizeVoicePlan(
+        ctx,
+        { music, tension, tensionCeiling: ceiling },
+        entry.plan,
+        entry.at
+      );
     }
   };
 

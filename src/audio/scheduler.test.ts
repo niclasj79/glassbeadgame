@@ -27,6 +27,7 @@ const plan = (id: string): VoicePlan =>
         gain: 0.05,
         floorGain: 0,
         openEnded: false,
+        tense: false,
       },
     ],
     meta: {
@@ -35,6 +36,7 @@ const plan = (id: string): VoicePlan =>
       resolves: true,
       interval: 7,
       beatingHz: null,
+      outcome: "documented",
     },
   });
 

@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { COMFORT, clampBeatingHz, clampLifetimeSeconds } from "./comfort";
+import {
+  COMFORT,
+  clampBeatingHz,
+  clampLifetimeSeconds,
+  tensionCeiling,
+} from "./comfort";
 import { CASTALIA_MODE, degreeFrequency } from "./mode";
 import {
   auditComfort,
+  capTenseGain,
   makeVoicePlan,
+  mergePlans,
   noteEndSeconds,
   noteLifetime,
   notesSoundingAt,
   peakConcurrentNotes,
   peakSummedGain,
+  peakTenseSummedGain,
   type PlannedBeating,
   type PlannedNote,
 } from "./plan";
@@ -29,8 +37,13 @@ const note = (overrides: Partial<PlannedNote> = {}): PlannedNote => ({
   gain: 0.05,
   floorGain: 0,
   openEnded: false,
+  tense: false,
   ...overrides,
 });
+
+/** A voice inside a deliberately tense simultaneity. */
+const tenseNote = (overrides: Partial<PlannedNote> = {}): PlannedNote =>
+  note({ tense: true, ...overrides });
 
 const beating = (overrides: Partial<PlannedBeating> = {}): PlannedBeating => ({
   id: "b",
@@ -47,7 +60,7 @@ const beating = (overrides: Partial<PlannedBeating> = {}): PlannedBeating => ({
 const plan = (
   notes: readonly PlannedNote[],
   beatings: readonly PlannedBeating[] = [],
-  intention: "tension" | null = null,
+  intention: "tension" | "echo" | null = null,
   resolves = false
 ) =>
   makeVoicePlan({
@@ -62,6 +75,7 @@ const plan = (
       resolves,
       interval: null,
       beatingHz: null,
+      outcome: null,
     },
   });
 
@@ -111,45 +125,84 @@ describe("plan geometry", () => {
 describe("the comfort audit", () => {
   it("passes a plan inside the envelope", () => {
     expect(
-      auditComfort(plan([note(), note({ id: "n2" })], [beating()], "tension"), {
-        ambientGain: 0.19,
-      })
+      auditComfort(
+        plan([tenseNote(), tenseNote({ id: "n2" })], [beating()], "tension"),
+        { bedGain: 0.19 }
+      )
     ).toEqual([]);
   });
 
   it("catches beating above the ceiling", () => {
     const problems = auditComfort(plan([note()], [beating({ beatingHz: 9 })]), {
-      ambientGain: 0.19,
+      bedGain: 0.19,
     });
     expect(problems.join(" ")).toContain("ceiling");
   });
 
   it("catches beating below the minimum, which reads as drift not instability", () => {
     const problems = auditComfort(plan([note()], [beating({ beatingHz: 0.2 })]), {
-      ambientGain: 0.19,
+      bedGain: 0.19,
     });
     expect(problems.join(" ")).toContain("below");
   });
 
   it("catches a fourth voice in a tense interval class", () => {
-    const notes = [0, 1, 2, 3].map((i) => note({ id: `n${i}`, atSeconds: i * 0.1 }));
+    const notes = [0, 1, 2, 3].map((i) =>
+      tenseNote({ id: `n${i}`, atSeconds: i * 0.1 })
+    );
     const problems = auditComfort(plan(notes, [beating()], "tension"), {
-      ambientGain: 0.19,
+      bedGain: 0.19,
     });
     expect(problems.join(" ")).toContain("voices sound at once");
   });
 
+  it("counts tense voices, not voices — a four-part Echo is not a breach", () => {
+    const notes = [0, 1, 2, 3].map((i) => note({ id: `n${i}`, atSeconds: i * 0.1 }));
+    expect(auditComfort(plan(notes, [], "echo"), { bedGain: 0.19 })).toEqual([]);
+  });
+
+  it("catches tense voices stacked from more than one plan", () => {
+    // The Attunement defect, reduced to its essentials: two plans that are each
+    // legal, laid onto one timeline, are not.
+    const legal = plan(
+      [tenseNote({ id: "x" }), tenseNote({ id: "y", gain: 0.04 })],
+      [],
+      "tension"
+    );
+    expect(auditComfort(legal, { bedGain: 0.19 })).toEqual([]);
+    const stacked = mergePlans("merged", "attunement", [
+      { plan: legal, atSeconds: 0 },
+      { plan: legal, atSeconds: 0.2 },
+    ]);
+    expect(auditComfort(stacked, { bedGain: 0.19 }).join(" ")).toContain(
+      "voices sound at once"
+    );
+  });
+
   it("catches a Tension louder than the ambient bed", () => {
-    const problems = auditComfort(plan([note({ gain: 0.5 })], [beating()], "tension"), {
-      ambientGain: 0.19,
-    });
+    const problems = auditComfort(
+      plan([tenseNote({ gain: 0.5 })], [beating()], "tension"),
+      { bedGain: 0.19 }
+    );
     expect(problems.join(" ")).toContain("ambient bed ceiling");
+  });
+
+  it("caps tense voices at the ceiling without touching the rest", () => {
+    const loud = plan(
+      [tenseNote({ id: "t", gain: 0.5 }), note({ id: "m", gain: 0.2 })],
+      [beating({ gain: 0.5 })],
+      "tension"
+    );
+    const bounded = capTenseGain(loud, tensionCeiling(0.19));
+    expect(peakTenseSummedGain(bounded)).toBeCloseTo(tensionCeiling(0.19), 6);
+    expect(bounded.notes.find((n) => n.id === "m")!.gain).toBe(0.2);
+    expect(auditComfort(bounded, { bedGain: 0.19 })).toEqual([]);
   });
 
   it("catches a Tension that claims to resolve", () => {
     const problems = auditComfort(
       plan([note()], [beating()], "tension", true),
-      { ambientGain: 0.19 }
+      { bedGain: 0.19 }
     );
     expect(problems.join(" ")).toContain("may not declare that it resolves");
   });
@@ -157,7 +210,7 @@ describe("the comfort audit", () => {
   it("catches an unbounded voice", () => {
     const problems = auditComfort(
       plan([note({ envelope: { attack: 1, hold: 60, release: 1 } })]),
-      { ambientGain: 0.19 }
+      { bedGain: 0.19 }
     );
     expect(problems.join(" ")).toContain("beyond the");
   });

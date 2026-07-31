@@ -66,7 +66,13 @@ import {
   shiftRegister,
   type WorldMode,
 } from "./mode";
-import { makeVoicePlan, type PlannedNote, type VoicePlan } from "./plan";
+import {
+  makeVoicePlan,
+  type AudioOutcomeKind,
+  type PlannedNote,
+  type VoicePlan,
+  type VoicePlanKind,
+} from "./plan";
 import { SCORE, unitSecondsFor } from "./score";
 
 // ─── Seams ──────────────────────────────────────────────────────────────────
@@ -93,9 +99,22 @@ export interface AudioSink {
   readonly activeVoiceCount: () => number;
 }
 
+/**
+ * One thing the music is doing, in words.
+ *
+ * `text` is the sentence. The rest is structure a caption surface needs and
+ * should not have to parse back out of prose: which plan it belongs to, what
+ * kind of moment it was, and — the field the review asked for — which epistemic
+ * state it describes, so an Open Thread and a weak outcome can be presented
+ * differently as well as read differently (CAV-006).
+ */
 export interface AudioCaption {
   readonly planId: string;
   readonly text: string;
+  readonly kind: VoicePlanKind | "system";
+  readonly outcome: AudioOutcomeKind | null;
+  /** Nothing the audio layer says ever interrupts. */
+  readonly urgency: "polite";
 }
 
 export type AudioCaptionListener = (caption: AudioCaption) => void;
@@ -171,6 +190,8 @@ function planArming(
     gain: Number((ambientGain * SCORE.grammar.residueGain).toFixed(5)),
     floorGain: 0,
     openEnded: intention === "tension",
+    // One voice cannot be a tense simultaneity; arming asserts nothing.
+    tense: false,
   });
   return makeVoicePlan({
     id: planId,
@@ -183,6 +204,7 @@ function planArming(
       resolves: false,
       interval: ARM_INTERVAL[intention],
       beatingHz: null,
+      outcome: null,
     },
   });
 }
@@ -212,6 +234,7 @@ function planLanding(
       gain: Number((ambientGain * SCORE.grammar.residueGain).toFixed(5)),
       floorGain: 0,
       openEnded: false,
+      tense: false,
     });
   });
   return makeVoicePlan({
@@ -225,6 +248,7 @@ function planLanding(
       resolves: false,
       interval: null,
       beatingHz: null,
+      outcome: null,
     },
   });
 }
@@ -271,6 +295,7 @@ function planEnsemble(
       resolves: true,
       interval: null,
       beatingHz: null,
+      outcome: null,
     },
   });
 }
@@ -317,11 +342,39 @@ export function createAudioDirector(
     motif: lookup.conceptMotif(id),
   });
 
-  const bedGain = (): number => SCORE.grammar.bedGain;
+  /**
+   * The bed the score is currently leaving, as a multiplier. Every state that
+   * thins the bed does so by telling the sink; the director remembers what it
+   * asked for, because the CAV-007 tense ceiling is a fraction of the bed the
+   * player can actually hear at that moment — the review found it being taken
+   * against the nominal bed while Attunement had already dropped it to 0.55.
+   */
+  let bedScale = ATTENTION_RELEASED.bedGainScale;
 
-  const say = (planId: string, text: string | null): void => {
+  const setSpace = (density: number, bed: number): void => {
+    bedScale = bed;
+    sink.setSpace(density, bed);
+  };
+
+  /** The bed, sized against the room; the level relations are sized against. */
+  const ambientGain = (): number => SCORE.grammar.bedGain;
+  /** The bed as it actually sounds now. The tense ceiling is a fraction of it. */
+  const bedGain = (): number => SCORE.grammar.bedGain * bedScale;
+
+  const say = (
+    planId: string,
+    text: string | null,
+    kind: VoicePlanKind | "system",
+    outcome: AudioOutcomeKind | null = null
+  ): void => {
     if (text === null || text.length === 0) return;
-    const caption: AudioCaption = Object.freeze({ planId, text });
+    const caption: AudioCaption = Object.freeze({
+      planId,
+      text,
+      kind,
+      outcome,
+      urgency: "polite" as const,
+    });
     lastCaption = caption;
     for (const listener of [...captionListeners]) listener(caption);
   };
@@ -330,7 +383,7 @@ export function createAudioDirector(
     // The caption describes the plan as *planned*, before intensity thins it.
     // A reduced-intensity player is told the same thing a full-intensity player
     // is told; what changes is how much of it they hear.
-    say(plan.id, describeVoicePlan(plan, names));
+    say(plan.id, describeVoicePlan(plan, names), plan.kind, plan.meta.outcome);
     const rendered = applyIntensity(plan, intensity);
     if (rendered.notes.length === 0) return;
     sink.play(rendered, atSeconds);
@@ -358,7 +411,7 @@ export function createAudioDirector(
     threadId: string,
     pair: readonly [string, string],
     intention: RelationIntention,
-    resolves: boolean
+    outcome: AudioOutcomeKind
   ): VoicePlan =>
     planRelationVoices({
       planId: `relation:${threadId}`,
@@ -367,8 +420,13 @@ export function createAudioDirector(
       a: source(pair[0]),
       b: source(pair[1]),
       unitSeconds,
-      ambientGain: bedGain(),
-      resolves,
+      ambientGain: ambientGain(),
+      bedGain: bedGain(),
+      // Only a documented relation closes (CAV-006). The other two states are
+      // rendered at the same weight and left unclosed; what distinguishes them
+      // for a muted player is the caption, not the gain.
+      resolves: outcome === "documented",
+      outcome,
     });
 
   const handleAttention = (
@@ -379,11 +437,11 @@ export function createAudioDirector(
       mode,
       attended: source(conceptId),
       unitSeconds,
-      ambientGain: bedGain(),
+      ambientGain: ambientGain(),
       activeThreadCount: sink.activeVoiceCount(),
     });
-    sink.setSpace(plan.densityScale, plan.bedGainScale);
-    say(plan.foreground.id, describeAttentionSpace(plan, names));
+    setSpace(plan.densityScale, plan.bedGainScale);
+    say(plan.foreground.id, describeAttentionSpace(plan, names), "attention");
     const rendered = applyIntensity(plan.foreground, intensity);
     if (rendered.notes.length > 0) sink.play(rendered, sink.quantize());
     return plan;
@@ -391,8 +449,12 @@ export function createAudioDirector(
 
   const handleAttunement = (active: boolean): AttunementPlan | null => {
     if (!active) {
-      sink.setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
-      say("attunement:exit", "Attunement released. The score returns to its usual density.");
+      setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
+      say(
+        "attunement:exit",
+        "Attunement released. The score returns to its usual density.",
+        "system"
+      );
       return null;
     }
     const plan = planAttunement({
@@ -400,12 +462,14 @@ export function createAudioDirector(
       mode,
       threads,
       unitSeconds,
-      ambientGain: bedGain(),
+      ambientGain: ambientGain(),
       cycleIndex: attunementCycle,
     });
     attunementCycle += 1;
-    sink.setSpace(plan.densityScale, plan.bedGainScale);
-    say(`attunement:${attunementCycle}`, describeAttunement(plan, names));
+    // The bed is dropped *before* the channels are played, and `planAttunement`
+    // already sized their tense voices against that dropped bed.
+    setSpace(plan.densityScale, plan.bedGainScale);
+    say(`attunement:${attunementCycle}`, describeAttunement(plan, names), "attunement");
     const start = sink.quantize();
     for (const channel of plan.channels) {
       const rendered = applyIntensity(channel.plan, intensity);
@@ -418,16 +482,21 @@ export function createAudioDirector(
     if (!isPerformanceScore(performance)) {
       say(
         "conclusion:invalid",
-        "The performance could not be read, so nothing is played back."
+        "The performance could not be read, so nothing is played back.",
+        "system"
       );
       return null;
     }
+    // The conclusion thins the bed the way Attunement does, so the tense voices
+    // of its unresolved threads are capped against that thinner bed.
+    setSpace(SCORE.attunement.densityScale, SCORE.attunement.bedGainScale);
     const plan = planConclusionPerformance(performance, {
       mode,
-      ambientGain: bedGain(),
+      ambientGain: ambientGain(),
+      bedGain: bedGain(),
+      motifFor: (id) => lookup.conceptMotif(id) ?? null,
     });
-    sink.setSpace(SCORE.attunement.densityScale, SCORE.attunement.bedGainScale);
-    say(`conclusion:${plan.sessionId}`, describeConclusion(plan, names));
+    say(`conclusion:${plan.sessionId}`, describeConclusion(plan, names), "conclusion");
     const start = sink.quantize();
     for (const section of plan.sections) {
       const rendered = applyIntensity(section.plan, intensity);
@@ -446,7 +515,7 @@ export function createAudioDirector(
 
       case "attention.clear": {
         attended = null;
-        sink.setSpace(
+        setSpace(
           ATTENTION_RELEASED.densityScale,
           ATTENTION_RELEASED.bedGainScale
         );
@@ -461,7 +530,7 @@ export function createAudioDirector(
             mode,
             source(conceptId),
             cue.payload.intention,
-            bedGain()
+            ambientGain()
           ),
           sink.now()
         );
@@ -476,7 +545,7 @@ export function createAudioDirector(
             mode,
             source(String(a)),
             source(String(b)),
-            bedGain()
+            ambientGain()
           ),
           sink.now()
         );
@@ -492,7 +561,7 @@ export function createAudioDirector(
             mode,
             source(String(a)),
             source(String(b)),
-            bedGain()
+            ambientGain()
           ),
           sink.quantize()
         );
@@ -508,7 +577,10 @@ export function createAudioDirector(
         // A documented relation closes — except a Tension, which the grammar
         // refuses to close whatever the record says.
         rememberThread(threadId, pair, cue.payload.intention, true);
-        emit(relation(threadId, pair, cue.payload.intention, true), sink.quantize());
+        emit(
+          relation(threadId, pair, cue.payload.intention, "documented"),
+          sink.quantize()
+        );
         break;
       }
 
@@ -519,9 +591,14 @@ export function createAudioDirector(
           String(cue.payload.pair[1]),
         ];
         // Same grammar, same gain, same duration as a documented relation. The
-        // only difference is that it does not close (CAV-006).
+        // only difference is that it does not close (CAV-006) — and that the
+        // caption names it as an Open Thread, which is the only way a muted
+        // player can tell it from a weak outcome.
         rememberThread(threadId, pair, cue.payload.intention, false);
-        emit(relation(threadId, pair, cue.payload.intention, false), sink.quantize());
+        emit(
+          relation(threadId, pair, cue.payload.intention, "open-thread"),
+          sink.quantize()
+        );
         break;
       }
 
@@ -534,8 +611,8 @@ export function createAudioDirector(
         rememberThread(threadId, pair, cue.payload.intention, false);
         // Quiet and short, never dim and never grey (CAV-006): the same grammar,
         // thinned. Nothing was done wrong, so nothing sounds like an error.
-        const plan = relation(threadId, pair, cue.payload.intention, false);
-        say(plan.id, describeVoicePlan(plan, names));
+        const plan = relation(threadId, pair, cue.payload.intention, "unresolved");
+        say(plan.id, describeVoicePlan(plan, names), plan.kind, plan.meta.outcome);
         const thinned = applyIntensity(
           plan,
           intensity === "silent" ? "silent" : "reduced"
@@ -553,7 +630,7 @@ export function createAudioDirector(
             mode,
             sources,
             unitSeconds,
-            bedGain()
+            ambientGain()
           ),
           sink.quantize()
         );
@@ -592,7 +669,7 @@ export function createAudioDirector(
       attunementCycle = 0;
       attended = null;
       lastCaption = null;
-      sink.setSpace(
+      setSpace(
         ATTENTION_RELEASED.densityScale,
         ATTENTION_RELEASED.bedGainScale
       );

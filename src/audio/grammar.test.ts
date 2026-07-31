@@ -59,6 +59,7 @@ const base = (
   mode: CASTALIA_MODE,
   unitSeconds: UNIT,
   ambientGain: BED,
+  bedGain: BED,
   resolves: true,
   // Metronomic, so entries can be asserted exactly. Gesture is tested separately.
   phrasing: { ...NEUTRAL_PHRASING, rubato: 0 },
@@ -411,7 +412,7 @@ describe("every grammar, over the whole content pack", () => {
       for (const intention of RELATION_INTENTIONS) {
         for (const resolves of [true, false]) {
           const plan = planRelationVoices(base({ intention, a, b, resolves }));
-          expect(auditComfort(plan, { ambientGain: BED })).toEqual([]);
+          expect(auditComfort(plan, { bedGain: BED })).toEqual([]);
         }
       }
     }
@@ -456,6 +457,9 @@ describe("every grammar, over the whole content pack", () => {
     ).toThrow(RangeError);
     expect(() =>
       planRelationVoices(base({ intention: "echo", a: FIBONACCI, b: COUNTERPOINT, ambientGain: 0 }))
+    ).toThrow(RangeError);
+    expect(() =>
+      planRelationVoices(base({ intention: "echo", a: FIBONACCI, b: COUNTERPOINT, bedGain: 0 }))
     ).toThrow(RangeError);
   });
 });

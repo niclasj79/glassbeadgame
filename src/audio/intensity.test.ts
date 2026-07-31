@@ -29,6 +29,7 @@ const tension = planRelationVoices({
   b: EQUAL,
   unitSeconds: 0.125,
   ambientGain: BED,
+  bedGain: BED,
   resolves: false,
   phrasing: { ...NEUTRAL_PHRASING, rubato: 0 },
 });
@@ -77,6 +78,7 @@ describe("reduced intensity", () => {
       b: EQUAL,
       unitSeconds: 0.125,
       ambientGain: BED,
+  bedGain: BED,
       resolves: true,
     });
     const thin = applyIntensity(echo, "reduced");
@@ -96,10 +98,11 @@ describe("reduced intensity", () => {
         b: EQUAL,
         unitSeconds: 0.125,
         ambientGain: BED,
+  bedGain: BED,
         resolves: true,
       });
       expect(
-        auditComfort(applyIntensity(plan, "reduced"), { ambientGain: BED })
+        auditComfort(applyIntensity(plan, "reduced"), { bedGain: BED })
       ).toEqual([]);
     }
   });

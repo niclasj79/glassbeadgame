@@ -73,6 +73,25 @@ export const SCORE = {
     tensionShares: [0.45, 0.34, 0.21] as const, // subject / suspension / beating twin
     tensionAttackSeconds: 1.4, // instability arrives, it does not stab
 
+    /**
+     * Where a beat rate sits inside the accepted band. The band itself is
+     * CAV-007's and lives in `comfort.ts`; only its centre of gravity is taste.
+     * Floor 0.15 + spread 0.55 leans toward the slower half, because slow
+     * beating reads as breathing and fast beating reads as a fault.
+     */
+    beatingBandFloor: 0.15,
+    beatingBandSpread: 0.55,
+
+    /**
+     * How a Tension picks the interval it suspends on. A degree of one motif
+     * against a degree of the other counts for more than two degrees inside the
+     * same motif, and an exact tense occurrence counts far more than a class one
+     * semitone away — the neighbours only decide when the pair never truly rubs.
+     */
+    suspensionCrossWeight: 3,
+    suspensionWithinWeight: 1,
+    suspensionExactWeight: 8,
+
     groundPasses: 2, // how many times the grounded motif continues above
     groundEntryUnits: 4, // units of pedal alone before the motif enters
   },

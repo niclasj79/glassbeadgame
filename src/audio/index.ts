@@ -16,7 +16,13 @@
  */
 
 // ─── Pure: the musical decisions ────────────────────────────────────────────
-export { COMFORT, clampBeatingHz, clampLifetimeSeconds, type ComfortTable } from "./comfort";
+export {
+  COMFORT,
+  clampBeatingHz,
+  clampLifetimeSeconds,
+  tensionCeiling,
+  type ComfortTable,
+} from "./comfort";
 export {
   CASTALIA_MODE,
   REGISTER_ORDER,
@@ -40,17 +46,24 @@ export {
   type WorldMode,
 } from "./mode";
 export {
+  AUDIO_OUTCOME_KINDS,
   AUDIO_VOICE_ROLES,
   VOICE_PLAN_KINDS,
   auditComfort,
+  capTenseGain,
   makeVoicePlan,
+  mergePlans,
   noteEndSeconds,
   noteLifetime,
   notesSoundingAt,
   peakConcurrentNotes,
+  peakConcurrentTenseNotes,
   peakSummedGain,
+  peakTenseSummedGain,
   planDurationSeconds,
   summedGainAt,
+  tenseNotesSoundingAt,
+  type AudioOutcomeKind,
   type AudioVoiceRole,
   type ComfortAuditInput,
   type PlannedBeating,
@@ -59,6 +72,7 @@ export {
   type VoicePlan,
   type VoicePlanKind,
   type VoicePlanMeta,
+  type VoicePlanMetaInput,
 } from "./plan";
 export {
   ARTICULATION_SHAPE,
@@ -68,12 +82,14 @@ export {
   envelopeFor,
   motifSpanSeconds,
   motifUnits,
+  phrasedUnitSeconds,
   renderMotif,
   type AudioPhrasing,
   type MotifSource,
   type RenderMotifOptions,
 } from "./motif";
 export {
+  beatingKeyFor,
   beatingRateFor,
   imitationInterval,
   planEcho,
@@ -93,7 +109,10 @@ export {
   type AttentionSpacePlan,
 } from "./attention";
 export {
+  attunementBedGain,
+  auditAttunement,
   condenseChannel,
+  flattenAttunement,
   planAttunement,
   shimmerDegree,
   type AttunementChannel,
@@ -123,6 +142,7 @@ export {
   describeConclusion,
   describeVoicePlan,
   intervalPhrase,
+  outcomePhrase,
   type AudioNames,
 } from "./describe";
 export {
@@ -174,6 +194,8 @@ export {
 export {
   attachAudioDirector,
   audioDirector,
+  lastAudioCaption,
+  onAudioCaption,
   productionSink,
   semanticScheduler,
   stopSemanticAudio,

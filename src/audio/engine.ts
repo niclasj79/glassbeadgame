@@ -1,4 +1,4 @@
-import { COMFORT } from "./comfort";
+import { tensionCeiling } from "./comfort";
 import { SCORE } from "./score";
 import { runtimeRandom, testMode } from "@/runtime/testMode";
 
@@ -32,10 +32,17 @@ function makeImpulseResponse(
  *
  *   ambientBus  the generative floor — drone, pad, room tone
  *   motifBus    concept motifs and relation grammar: the things that mean something
- *   tensionBus  dissonance only, held under a hard ceiling derived from the bed
- *               so CAV-007's "summed gain below the ambient bed" cannot be
+ *   tensionBus  dissonance only, followed by a limiter set to the CAV-007
+ *               ceiling, so "summed gain below the ambient bed" cannot be
  *               breached by a plan, a bug, or a future caller
  *   sfxBus      interaction sound: touch, silk, cancel
+ *
+ * The tense path used to be a bare `GainNode` at 0.85 that the comments called a
+ * ceiling. A gain node multiplies; it does not bound. Feed it twice the bed and
+ * it passes 1.7 times the bed, politely. The limiter below is what makes the
+ * word "ceiling" true in the graph, and `capTenseGain()` in `plan.ts` makes it
+ * true in the arithmetic before a voice is ever created — belt and braces, at
+ * the two places a bound can be lost.
  *
  * No React in here, and no game rules.
  */
@@ -47,8 +54,13 @@ class AudioEngine {
   sfxBus: GainNode | null = null;
   /** The semantic music: concept motifs, relation grammar, attunement channels. */
   motifBus: GainNode | null = null;
-  /** Dissonance, and only dissonance. Ceiling-limited against the bed. */
+  /**
+   * Dissonance, and only dissonance. Its output passes through `tensionLimiter`
+   * before reaching the master, so what leaves is genuinely bounded.
+   */
   tensionBus: GainNode | null = null;
+  /** The brick wall the tense path is held under. Threshold tracks the bed. */
+  private tensionLimiter: DynamicsCompressorNode | null = null;
   /** Multiplier the attention and attunement states apply to the bed. */
   private bedScale = 1;
   /** Sits between ambientBus and master — the Breath modulates it alone,
@@ -129,11 +141,20 @@ class AudioEngine {
       this.motifBus.gain.value = 1;
       this.motifBus.connect(this.master);
 
-      // The ceiling is structural: even if a plan asked for more, the bus
-      // cannot pass more than the accepted fraction of the bed.
+      // The ceiling is structural: a limiter, not a trim. Ratio 20 with a hard
+      // knee is a brick wall in practice; the fast attack catches the onset of a
+      // suspension, and the slow release keeps it from pumping while a Tension
+      // decays to its floor over twelve seconds.
       this.tensionBus = this.ctx.createGain();
-      this.tensionBus.gain.value = COMFORT.tension.gainFractionOfBed;
-      this.tensionBus.connect(this.master);
+      this.tensionBus.gain.value = 1;
+      this.tensionLimiter = this.ctx.createDynamicsCompressor();
+      this.tensionLimiter.knee.value = 0;
+      this.tensionLimiter.ratio.value = 20;
+      this.tensionLimiter.attack.value = 0.003;
+      this.tensionLimiter.release.value = 0.4;
+      this.tensionLimiter.threshold.value = this.tensionThresholdDb();
+      this.tensionBus.connect(this.tensionLimiter);
+      this.tensionLimiter.connect(this.master);
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") void this.ctx?.resume();
@@ -187,6 +208,16 @@ class AudioEngine {
       this.ctx.currentTime,
       0.6
     );
+    // The tense ceiling is a fraction of the bed, so when the bed moves the
+    // ceiling moves with it. Thinning the bed while leaving the ceiling where it
+    // was is precisely how Attunement ended up over CAV-007.
+    if (this.tensionLimiter) {
+      this.tensionLimiter.threshold.setTargetAtTime(
+        this.tensionThresholdDb(),
+        this.ctx.currentTime,
+        0.3
+      );
+    }
   }
 
   /**
@@ -195,6 +226,15 @@ class AudioEngine {
    */
   bedGain(): number {
     return SCORE.grammar.bedGain * this.bedScale;
+  }
+
+  /** The absolute level tense voices may not exceed, right now. */
+  tensionCeiling(): number {
+    return tensionCeiling(this.bedGain());
+  }
+
+  private tensionThresholdDb(): number {
+    return 20 * Math.log10(Math.max(1e-5, this.tensionCeiling()));
   }
 
   /**

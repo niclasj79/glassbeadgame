@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { castaliaConceptById } from "@/content/castalia/concepts";
 import type { RelationIntention } from "@/domain/events";
 import {
+  attunementBedGain,
+  auditAttunement,
+  flattenAttunement,
   planAttunement,
   shimmerDegree,
   type AttunementInput,
@@ -11,7 +14,12 @@ import {
 import { COMFORT } from "./comfort";
 import { CASTALIA_MODE, isTense } from "./mode";
 import type { MotifSource } from "./motif";
-import { auditComfort, noteLifetime } from "./plan";
+import {
+  auditComfort,
+  noteLifetime,
+  peakConcurrentTenseNotes,
+  peakTenseSummedGain,
+} from "./plan";
 import { SCORE } from "./score";
 
 const source = (id: string): MotifSource => {
@@ -72,9 +80,15 @@ describe("attunement", () => {
     const plan = planAttunement(input());
     for (let i = 1; i < plan.channels.length; i++) {
       const previous = plan.channels[i - 1];
+      // A channel reserves its onsets, plus the whole life of any tense voice —
+      // a suspension still sounding under the next thread would breach CAV-007.
       const gap =
-        plan.channels[i].atSeconds - (previous.atSeconds + previous.spanSeconds);
+        plan.channels[i].atSeconds -
+        (previous.atSeconds + previous.reservedSeconds);
       expect(gap).toBeCloseTo(SCORE.attunement.channelGapSeconds, 4);
+      expect(previous.reservedSeconds).toBeGreaterThanOrEqual(
+        previous.spanSeconds
+      );
     }
   });
 
@@ -141,6 +155,8 @@ describe("attunement", () => {
     const plan = planAttunement(input({ maxChannelSeconds: 4 }));
     const tension = plan.channels.find((c) => c.threadId === "t2")!;
     expect(tension.spanSeconds).toBeLessThanOrEqual(4.001);
+    // A tense channel is fitted by its whole life, release included.
+    expect(tension.reservedSeconds).toBeLessThanOrEqual(4.001);
     // Onsets — the rhythm — are untouched; only the sustain shortens.
     expect(tension.plan.notes.map((n) => n.atSeconds)).toEqual(
       planAttunement(input({ maxChannelSeconds: 60 }))
@@ -168,16 +184,37 @@ describe("attunement", () => {
   it("stays inside the comfort envelope in every channel", () => {
     const plan = planAttunement(input());
     for (const channel of plan.channels) {
-      expect(
-        auditComfort(channel.plan, {
-          ambientGain: BED * SCORE.attunement.channelGainScale,
-        })
-      ).toEqual([]);
+      // Audited against the bed Attunement actually leaves, not against the
+      // level the channel is sized to. Those are different numbers, and using
+      // the louder one is how the cycle went 2.5x over CAV-007.
+      expect(auditComfort(channel.plan, { bedGain: attunementBedGain(BED) })).toEqual(
+        []
+      );
       for (const note of channel.plan.notes) {
         expect(noteLifetime(note)).toBeLessThanOrEqual(
           COMFORT.voice.maxLifetimeSeconds
         );
       }
+    }
+  });
+
+  it("stays inside the comfort envelope across the whole cycle", () => {
+    // Two Tensions in one cycle: the case the per-channel audit could not see.
+    const tense: readonly AttunementThread[] = [
+      thread("x1", "tension", "sound.just-intonation", "sound.equal-temperament", false),
+      thread("x2", "tension", "measure.fibonacci-sequence", "sound.counterpoint", false),
+      thread("x3", "tension", "image.linear-perspective", "image.camera-obscura", false),
+    ];
+    for (const threads of [THREADS, tense]) {
+      const plan = planAttunement(input({ threads }));
+      expect(auditAttunement(plan, BED)).toEqual([]);
+      const whole = flattenAttunement(plan);
+      expect(peakConcurrentTenseNotes(whole)).toBeLessThanOrEqual(
+        COMFORT.tension.maxConcurrentVoices
+      );
+      expect(peakTenseSummedGain(whole)).toBeLessThanOrEqual(
+        attunementBedGain(BED) * COMFORT.tension.gainFractionOfBed + 1e-9
+      );
     }
   });
 

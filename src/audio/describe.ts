@@ -30,7 +30,7 @@ import type { AttentionSpacePlan } from "./attention";
 import type { AttunementPlan } from "./attunement";
 import type { ConclusionAudioPlan } from "./conclusion";
 import { pitchClass } from "./mode";
-import type { VoicePlan } from "./plan";
+import type { AudioOutcomeKind, VoicePlan } from "./plan";
 
 export interface AudioNames {
   /** Player-facing concept name. Falls back to the id rather than to silence. */
@@ -92,6 +92,34 @@ export const GRAMMAR_PHRASE: Readonly<Record<RelationIntention, string>> =
 const nameOf = (id: string | null, names: AudioNames): string =>
   id === null ? "the score" : names.conceptName(id);
 
+/**
+ * The epistemic state, said plainly (CAV-006).
+ *
+ * The review found that an Open Thread and a weak outcome produced *byte
+ * identical* captions, because the only thing separating them in the plan was
+ * `resolves`, and neither of them resolves. For a muted player the caption track
+ * is not a description of the experience, it is the experience — so two
+ * different states of knowledge that read the same are two states the player
+ * cannot have.
+ *
+ * The wording carries the distinction the director accepted: a documented
+ * relation resolves; an Open Thread is a specific question held open at the same
+ * weight; a weak outcome is quiet and short and claims nothing. None of the
+ * three is described as an error, and none is described as worth more.
+ */
+const OUTCOME_PHRASE: Readonly<Record<AudioOutcomeKind, string>> = Object.freeze({
+  documented: "The Game has a record for this pair, and the figure closes on it.",
+  "open-thread":
+    "This is an Open Thread: a specific question, sounded at full weight and left open.",
+  unresolved:
+    "The Game has no grounded relation here yet, so this is played quietly and briefly, and claims nothing.",
+});
+
+/** The outcome clause, or an empty string where a plan carries no outcome. */
+export function outcomePhrase(outcome: AudioOutcomeKind | null): string {
+  return outcome === null ? "" : ` ${OUTCOME_PHRASE[outcome]}`;
+}
+
 function describeEcho(plan: VoicePlan, names: AudioNames): string {
   const [a, b] = plan.meta.conceptIds;
   const answer = plan.notes.find((note) => note.role === "answer");
@@ -150,13 +178,13 @@ export function describeVoicePlan(
 ): string | null {
   switch (plan.intention) {
     case "echo":
-      return describeEcho(plan, names);
+      return describeEcho(plan, names) + outcomePhrase(plan.meta.outcome);
     case "passage":
-      return describePassage(plan, names);
+      return describePassage(plan, names) + outcomePhrase(plan.meta.outcome);
     case "tension":
-      return describeTension(plan, names);
+      return describeTension(plan, names) + outcomePhrase(plan.meta.outcome);
     case "ground":
-      return describeGround(plan, names);
+      return describeGround(plan, names) + outcomePhrase(plan.meta.outcome);
     default:
       break;
   }

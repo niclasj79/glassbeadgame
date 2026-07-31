@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { castaliaConceptById } from "@/content/castalia/concepts";
 import type { ConclusionPerformance } from "@/domain/performance";
-import { COMFORT } from "./comfort";
+import { COMFORT, tensionCeiling } from "./comfort";
 import {
   planConclusionPerformance,
   renderPerformedVoice,
+  type ConclusionRenderOptions,
   type PerformanceScore,
   type PerformedEntry,
   type PerformedVoice,
@@ -26,6 +28,19 @@ const _assignable = (performance: ConclusionPerformance): PerformanceScore =>
 void _assignable;
 
 const BED = SCORE.grammar.bedGain;
+
+/**
+ * The render seam. `motifFor` is the real content pack, because an unresolved
+ * thread has to sound like the two concepts it names rather than like a
+ * placeholder — the pitches are looked up here exactly as the director looks
+ * them up in production.
+ */
+const RENDER: ConclusionRenderOptions = {
+  mode: CASTALIA_MODE,
+  ambientGain: BED,
+  bedGain: BED,
+  motifFor: (id) => castaliaConceptById.get(id)?.motif ?? null,
+};
 
 const voice = (overrides: Partial<PerformedVoice> = {}): PerformedVoice => ({
   conceptId: "measure.fibonacci-sequence",
@@ -76,7 +91,7 @@ describe("rendering a compiled performance", () => {
           entry({ threadId: "second", order: 1, atSeconds: 4 }),
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(plan.sections.map((s) => s.threadId)).toEqual([
       "first",
@@ -88,7 +103,7 @@ describe("rendering a compiled performance", () => {
   it("places each entry exactly where the compiler put it", () => {
     const plan = planConclusionPerformance(
       score({ entries: [entry({ atSeconds: 4.25 })] }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(plan.sections[0].atSeconds).toBe(4.25);
   });
@@ -103,7 +118,7 @@ describe("rendering a compiled performance", () => {
     });
     const plan = planConclusionPerformance(
       score({ entries: [documented, open] }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     const [a, b] = plan.sections;
     expect(peakSummedGain(a.plan)).toBeCloseTo(peakSummedGain(b.plan), 9);
@@ -155,7 +170,7 @@ describe("rendering a compiled performance", () => {
           }),
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     const drawn = planConclusionPerformance(
       score({
@@ -166,7 +181,7 @@ describe("rendering a compiled performance", () => {
           }),
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(sharp.sections[0].plan.notes[0].envelope.attack).toBeLessThan(
       drawn.sections[0].plan.notes[0].envelope.attack
@@ -191,7 +206,7 @@ describe("rendering a compiled performance", () => {
           },
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     const section = plan.sections.find((s) => s.kind === "unresolved")!;
     expect(section.atSeconds).toBe(10);
@@ -226,14 +241,14 @@ describe("rendering a compiled performance", () => {
           },
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     const section = plan.sections.find((s) => s.kind === "unresolved")!;
     const peak = section.plan.notes
       .filter((note) => note.id.endsWith(":0"))
       .reduce((total, note) => total + note.gain, 0);
     expect(peak).toBeLessThan(BED);
-    expect(peak).toBeLessThanOrEqual(BED * COMFORT.tension.gainFractionOfBed);
+    expect(peak).toBeLessThanOrEqual(tensionCeiling(BED));
   });
 
   it("renders completed motifs as ensembles", () => {
@@ -252,7 +267,7 @@ describe("rendering a compiled performance", () => {
           },
         ],
       }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     const section = plan.sections.find((s) => s.kind === "ensemble")!;
     expect(section.threadId).toBeNull();
@@ -268,7 +283,7 @@ describe("rendering a compiled performance", () => {
   it("falls back to an ensemble role for a role it does not recognise", () => {
     const plan = planConclusionPerformance(
       score({ entries: [entry({ voices: [voice({ role: "chorus-mistake" })] })] }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(plan.sections[0].plan.notes[0].role).toBe("ensemble");
   });
@@ -276,7 +291,7 @@ describe("rendering a compiled performance", () => {
   it("clamps a runaway dynamic instead of trusting it", () => {
     const loud = planConclusionPerformance(
       score({ entries: [entry({ dynamic: 40 })] }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(loud.sections[0].plan.notes[0].gain).toBeCloseTo(
       0.1 * SCORE.conclusion.dynamicCeiling,
@@ -284,7 +299,7 @@ describe("rendering a compiled performance", () => {
     );
     const quiet = planConclusionPerformance(
       score({ entries: [entry({ dynamic: 0 })] }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(quiet.sections[0].plan.notes[0].gain).toBeGreaterThan(0);
   });
@@ -292,7 +307,7 @@ describe("rendering a compiled performance", () => {
   it("survives an empty session without inventing anything", () => {
     const plan = planConclusionPerformance(
       score({ entries: [], totalSeconds: 0 }),
-      { mode: CASTALIA_MODE, ambientGain: BED }
+      RENDER
     );
     expect(plan.sections).toEqual([]);
     expect(plan.totalSeconds).toBe(0);

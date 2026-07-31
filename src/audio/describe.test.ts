@@ -49,6 +49,7 @@ const relation = (
     b,
     unitSeconds: 0.125,
     ambientGain: SCORE.grammar.bedGain,
+    bedGain: SCORE.grammar.bedGain,
     resolves,
     phrasing: { ...NEUTRAL_PHRASING, rubato: 0 },
   });
@@ -257,7 +258,12 @@ describe("captions for the states", () => {
           ],
           totalSeconds: 10,
         },
-        { mode: CASTALIA_MODE, ambientGain: SCORE.grammar.bedGain }
+        {
+          mode: CASTALIA_MODE,
+          ambientGain: SCORE.grammar.bedGain,
+          bedGain: SCORE.grammar.bedGain,
+          motifFor: (id) => castaliaConceptById.get(id)?.motif ?? null,
+        }
       ),
       names
     );

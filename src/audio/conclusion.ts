@@ -25,19 +25,23 @@
  * Pure. No Web Audio, no browser, no React.
  */
 import type {
+  ConceptMotif,
   MotifArticulation,
   MotifRegister,
   TimbreId,
 } from "@/content/castalia/schema";
 import type { RelationIntention } from "@/domain/events";
-import { COMFORT, clampBeatingHz } from "./comfort";
+import { COMFORT, tensionCeiling } from "./comfort";
+import { beatingKeyFor, beatingRateFor, suspensionInterval } from "./grammar";
 import {
   centsForBeatingHz,
   degreeFrequency,
   nearestTenseDegree,
+  registerIndex,
+  shiftRegister,
   type WorldMode,
 } from "./mode";
-import { envelopeFor, type AudioPhrasing } from "./motif";
+import { anchorDegree, envelopeFor, type AudioPhrasing, type MotifSource } from "./motif";
 import {
   makeVoicePlan,
   type AudioVoiceRole,
@@ -136,7 +140,20 @@ export interface ConclusionAudioPlan {
 
 export interface ConclusionRenderOptions {
   readonly mode: WorldMode;
+  /** The level the performance is sized against. */
   readonly ambientGain: number;
+  /** The bed the conclusion actually leaves sounding. Caps the tense voices. */
+  readonly bedGain: number;
+  /**
+   * The authored motif for a concept, or null if the pack cannot supply one.
+   *
+   * The compiler hands the conclusion identities, not music. Everything an
+   * *entry* needs is already compiled into its voices; an unresolved thread is
+   * the one thing that is not, because nothing was performed for it — so this
+   * module has to look the two concepts up to sound them. Without this seam the
+   * loose ends of every session were the same two hard-coded pitches.
+   */
+  readonly motifFor: (conceptId: string) => ConceptMotif | null;
 }
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
@@ -218,6 +235,7 @@ export function renderPerformedVoice(
         gain: Number((voice.gain * options.gainScale).toFixed(6)),
         floorGain: 0,
         openEnded: isLast && voice.openEnded,
+        tense: false,
       })
     );
     cursor += length;
@@ -262,6 +280,7 @@ function renderEntry(
         resolves: entry.resolved,
         interval: null,
         beatingHz: null,
+        outcome: entry.resolved ? "documented" : "open-thread",
       },
     }),
   });
@@ -303,16 +322,34 @@ function renderEnsemble(
         resolves: true,
         interval: null,
         beatingHz: null,
+        outcome: null,
       },
     }),
   });
 }
+
+/** The fallback voice for a concept the pack cannot name. Deliberately plain. */
+const FALLBACK_MOTIF: ConceptMotif = Object.freeze({
+  degrees: Object.freeze([0]),
+  rhythm: Object.freeze([4]),
+  register: "low" as MotifRegister,
+  articulation: "sustained" as MotifArticulation,
+  timbre: "glass" as TimbreId,
+});
 
 /**
  * An unresolved Tension keeps sounding to the end of the performance — but no
  * single voice is unbounded, so it is re-stated at its comfort lifetime instead
  * of held open. The restatements are capped, so a very long conclusion cannot
  * allocate without limit.
+ *
+ * What it re-states is *those two concepts*. The review found every loose end in
+ * every session sounding the same two hard-coded pitches through the same two
+ * hard-coded bodies, which made the conclusion stop being a reconstruction of a
+ * particular session at exactly the moment the session was most itself. The
+ * pitches, registers, bodies, suspension interval, and beat rate below are all
+ * the pair's own — and they are the same ones `planTension()` would have chosen,
+ * so an unresolved thread sounds continuous with how it sounded when it was woven.
  */
 function renderUnresolved(
   unresolved: PerformedUnresolved,
@@ -324,10 +361,35 @@ function renderUnresolved(
     SCORE.conclusion.unresolvedRepeats,
     Math.max(1, Math.ceil(remaining / COMFORT.tension.lifetimeSeconds))
   );
-  const beatingHz = clampBeatingHz(
-    COMFORT.beating.minHz +
-      (COMFORT.beating.maxHz - COMFORT.beating.minHz) * 0.35
+
+  const [idA, idB] = unresolved.conceptIds;
+  const a: MotifSource = {
+    conceptId: idA,
+    motif: options.motifFor(idA) ?? FALLBACK_MOTIF,
+  };
+  const b: MotifSource = {
+    conceptId: idB,
+    motif: options.motifFor(idB) ?? FALLBACK_MOTIF,
+  };
+
+  const interval = suspensionInterval(options.mode, a, b);
+  const beatingHz = Number(
+    beatingRateFor(beatingKeyFor(idA, idB)).toFixed(4)
   );
+
+  // The same construction the grammar uses: the lower of the two registers
+  // carries the suspension, and the answer sits a compound interval above it, so
+  // the pair suspends rather than turning to mud in the bass.
+  const lowRegister =
+    registerIndex(a.motif.register) <= registerIndex(b.motif.register)
+      ? a.motif.register
+      : b.motif.register;
+  const highRegister = shiftRegister(lowRegister, 1);
+  const lowDegree = anchorDegree(a.motif);
+  const highDegree = lowDegree + interval;
+  const lowFrequency = degreeFrequency(options.mode, lowDegree, lowRegister);
+  const highFrequency = degreeFrequency(options.mode, highDegree, highRegister);
+
   const decay = Math.min(
     unresolved.decayToFloorSeconds,
     COMFORT.tension.decayToFloorSeconds
@@ -336,73 +398,74 @@ function renderUnresolved(
   const release = Math.max(0, COMFORT.tension.lifetimeSeconds - attack - decay);
 
   // CAV-007 again, at the one place the conclusion can breach it: the three
-  // shares below sum to exactly the peak, so capping the peak caps the sum.
-  const ceiling =
-    options.ambientGain *
-    COMFORT.tension.gainFractionOfBed *
-    SCORE.grammar.tensionHeadroom;
+  // shares below sum to exactly the peak, so capping the peak caps the sum. The
+  // ceiling is a fraction of the bed the conclusion actually leaves sounding.
+  const ceiling = tensionCeiling(options.bedGain) * SCORE.grammar.tensionHeadroom;
   const peak = Math.min(unresolved.gain, ceiling);
   const floor = Math.min(
     unresolved.floorGain,
     peak * COMFORT.tension.floorFraction
   );
+  const shares = SCORE.grammar.tensionShares;
+  const shareTotal = shares[0] + shares[1] + shares[2];
 
   const notes: PlannedNote[] = [];
   const beatings: PlannedBeating[] = [];
 
   for (let repeat = 0; repeat < repeats; repeat++) {
     const at = repeat * COMFORT.tension.lifetimeSeconds;
-    const lowFrequency = degreeFrequency(options.mode, 0, "low");
-    const highFrequency = degreeFrequency(options.mode, 13, "low");
     const shared = {
       articulation: "sustained" as MotifArticulation,
       envelope: Object.freeze({ attack, hold: decay, release }),
       openEnded: true,
+      tense: true,
     };
     notes.push(
       Object.freeze({
         ...shared,
         id: `${unresolved.threadId}:hold:${repeat}`,
-        conceptId: unresolved.conceptIds[0],
+        conceptId: idA,
         role: "subject" as const,
-        timbre: "glass" as const,
-        register: "low" as const,
-        degree: 0,
+        timbre: a.motif.timbre,
+        register: lowRegister,
+        degree: lowDegree,
         frequency: lowFrequency,
         detuneCents: 0,
         atSeconds: Number(at.toFixed(5)),
-        gain: Number((peak * 0.55).toFixed(6)),
-        floorGain: Number((floor * 0.55).toFixed(6)),
+        gain: Number(((peak * shares[0]) / shareTotal).toFixed(6)),
+        floorGain: Number(((floor * shares[0]) / shareTotal).toFixed(6)),
       }),
       Object.freeze({
         ...shared,
         id: `${unresolved.threadId}:suspend:${repeat}`,
-        conceptId: unresolved.conceptIds[1],
+        conceptId: idB,
         role: "answer" as const,
-        timbre: "voice" as const,
-        register: "low" as const,
-        degree: 13,
+        timbre: b.motif.timbre,
+        register: highRegister,
+        degree: highDegree,
         frequency: highFrequency,
         detuneCents: 0,
         atSeconds: Number((at + 0.4).toFixed(5)),
-        gain: Number((peak * 0.3).toFixed(6)),
-        floorGain: Number((floor * 0.3).toFixed(6)),
+        gain: Number(((peak * shares[1]) / shareTotal).toFixed(6)),
+        floorGain: Number(((floor * shares[1]) / shareTotal).toFixed(6)),
       }),
       Object.freeze({
         ...shared,
         id: `${unresolved.threadId}:shadow:${repeat}`,
-        conceptId: unresolved.conceptIds[0],
+        conceptId: idA,
         role: "shadow" as const,
+        // The twin is glass wherever it appears: it is not a third concept
+        // speaking, it is the first one beating against itself.
         timbre: "glass" as const,
-        register: "low" as const,
-        degree: 0,
+        register: lowRegister,
+        degree: lowDegree,
         frequency: lowFrequency,
         detuneCents: Number(
           centsForBeatingHz(lowFrequency, beatingHz).toFixed(4)
         ),
         atSeconds: Number((at + 0.2).toFixed(5)),
-        gain: Number((peak * 0.15).toFixed(6)),
-        floorGain: Number((floor * 0.15).toFixed(6)),
+        gain: Number(((peak * shares[2]) / shareTotal).toFixed(6)),
+        floorGain: Number(((floor * shares[2]) / shareTotal).toFixed(6)),
       })
     );
     beatings.push(
@@ -413,10 +476,10 @@ function renderUnresolved(
           Number(lowFrequency.toFixed(4)),
           Number((lowFrequency + beatingHz).toFixed(4)),
         ] as const,
-        beatingHz: Number(beatingHz.toFixed(4)),
+        beatingHz,
         atSeconds: Number((at + 0.2).toFixed(5)),
-        gain: Number((peak * 0.15).toFixed(6)),
-        floorGain: Number((floor * 0.15).toFixed(6)),
+        gain: Number(((peak * shares[2]) / shareTotal).toFixed(6)),
+        floorGain: Number(((floor * shares[2]) / shareTotal).toFixed(6)),
         decayToFloorSeconds: decay,
       })
     );
@@ -436,8 +499,9 @@ function renderUnresolved(
         conceptIds: unresolved.conceptIds,
         grammar: "displacement",
         resolves: false,
-        interval: 13,
-        beatingHz: Number(beatingHz.toFixed(4)),
+        interval: 12 + interval,
+        beatingHz,
+        outcome: "unresolved",
       },
     }),
   });
