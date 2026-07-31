@@ -1,6 +1,6 @@
 import { audio } from "./engine";
-import { playVoice, noiseSource } from "./voices";
-import { degreeToFreq, noteForConcept } from "./theory";
+import { playNote, noiseSource } from "./voices";
+import { modeFreq, noteForConcept, timbreForDiscipline } from "./theory";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import { hashString, mulberry32 } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { frameState } from "@/scene/frameState";
 import { runtimeRandom } from "@/runtime/testMode";
 import { currentTheme } from "@/themes/useTheme";
 import { SCORE } from "./score";
-import type { TimbreId } from "@/content/types";
+import type { TimbreId } from "@/content/castalia/schema";
 import type { MotifAward } from "@/state/types";
 
 /**
@@ -18,6 +18,12 @@ import type { MotifAward } from "@/state/types";
  * setTimeout-as-metronome). Each woven thread registers a recurring two-note
  * motif; density is capped and probabilities rebalance so the piece thickens
  * without turning to mud.
+ *
+ * It also owns the *space* the semantic layer speaks into. setSpace() is how
+ * attention and Attunement thin the texture: they hand the score a density
+ * multiplier and a bed level, and the score decides what to do with them. The
+ * attention planner never reaches in and silences a particular voice — leaving
+ * space is the score's own act (VERTICAL-SLICE-SPEC section 6).
  */
 
 const TICK_MS = 25;
@@ -55,8 +61,11 @@ class AmbientEngine {
   /** Completed-motif ensemble voices — each motif joins the piece forever. */
   private motifPatterns: { kind: MotifAward["motifId"]; freqs: number[]; rng: () => number }[] =
     [];
-  /** The harmonic journey: which pentatonic degree grounds the drone now. */
-  private rootDegree: 0 | 4 = 0;
+  /** The harmonic journey: which semitone of the mode grounds the drone now. */
+  private rootDegree = 0;
+  /** Space the semantic layer has asked for: density and bed multipliers. */
+  private densityScale = 1;
+  private bedScale = 1;
 
   start(): void {
     const ctx = audio.ensure();
@@ -70,6 +79,8 @@ class AmbientEngine {
     this.motifs = [];
     this.motifPatterns = [];
     this.rootDegree = 0;
+    this.densityScale = 1;
+    this.bedScale = 1;
     this.slot = 0;
     this.nextSlotTime = ctx.currentTime + 0.15;
     this.droneRefreshAt = 0;
@@ -134,6 +145,30 @@ class AmbientEngine {
     return t;
   }
 
+  /**
+   * Leave space, or stop leaving it.
+   *
+   * The first argument scales the probability that any thread voice speaks; the
+   * second scales the ambient floor. Both are multipliers rather than
+   * absolutes, so attention composes with the web's own growth instead of
+   * overwriting it.
+   */
+  setSpace(density: number, bed: number): void {
+    this.densityScale = Math.max(0, Math.min(1, density));
+    this.bedScale = Math.max(0.1, Math.min(1, bed));
+    audio.setBedScale(this.bedScale);
+  }
+
+  /** Restore ordinary play. */
+  clearSpace(): void {
+    this.setSpace(1, 1);
+  }
+
+  /** Thread voices currently able to speak — the attention planner reads it. */
+  activeVoiceCount(): number {
+    return Math.min(this.motifs.length, MAX_ACTIVE_MOTIFS);
+  }
+
   /** Camera azimuth → gentle stereo drift of the room tone. */
   setAirPan(pan: number): void {
     const ctx = audio.get();
@@ -157,7 +192,7 @@ class AmbientEngine {
         if (!disc || seen.has(disc)) continue;
         seen.add(disc);
         const d = disciplineById.get(disc);
-        if (d) freqs.push(degreeToFreq(0, d.register === "low" ? 2 : d.register === "mid" ? 3 : 4));
+        if (d) freqs.push(modeFreq(0, d.register));
         if (freqs.length >= 3) break;
       }
     } else {
@@ -179,14 +214,14 @@ class AmbientEngine {
     const a = conceptById.get(aId);
     const b = conceptById.get(bId);
     if (!a || !b) return;
-    const da = disciplineById.get(a.discipline)!;
-    const db = disciplineById.get(b.discipline)!;
+    const da = disciplineById.get(a.discipline);
+    const db = disciplineById.get(b.discipline);
     this.motifs.push({
       threadId,
       freqA: noteForConcept(a),
       freqB: noteForConcept(b),
-      timbreA: da.timbre,
-      timbreB: db.timbre,
+      timbreA: timbreForDiscipline(da),
+      timbreB: timbreForDiscipline(db),
       rng: mulberry32(hashString(threadId)),
       flip: false,
     });
@@ -225,28 +260,30 @@ class AmbientEngine {
     const ground = audio.breathFilter ?? bus;
     if (slot >= this.droneRefreshAt) {
       this.droneRefreshAt = slot + 8;
-      playVoice(ctx, ground, "drone", degreeToFreq(this.rootDegree, 2), {
-        gain: this.droneGain,
+      playNote(ctx, ground, "glass", modeFreq(this.rootDegree, "low"), {
+        gain: this.droneGain * this.bedScale,
         at: t,
         attack: 2.5,
         hold: 12,
         release: 6,
       });
-      playVoice(ctx, ground, "pad", degreeToFreq(this.rootDegree === 0 ? 3 : 1, 2), {
-        gain: 0.05,
-        at: t + 1.2,
-        attack: 3,
-        hold: 10,
-        release: 6,
-      });
+      // The fifth above the root when grounded, the fourth when leaning to the
+      // mode's shadow — both exact ratios, so the floor locks rather than beats.
+      playNote(
+        ctx,
+        ground,
+        "voice",
+        modeFreq(this.rootDegree + (this.rootDegree === 0 ? 7 : 5), "low"),
+        { gain: 0.05 * this.bedScale, at: t + 1.2, attack: 3, hold: 10, release: 6 }
+      );
     }
 
     // The heartbeat: past half-awakening, a low pulse enters on each slot —
     // the stage is alive and knows it.
     const awakening = frameState.awakening;
     if (awakening >= 0.5) {
-      playVoice(ctx, ground, "drone", degreeToFreq(this.rootDegree, 2) * 0.5, {
-        gain: 0.05 * awakening,
+      playNote(ctx, ground, "glass", modeFreq(this.rootDegree, "sub"), {
+        gain: 0.05 * awakening * this.bedScale,
         at: t,
         attack: 0.06,
         hold: 0.05,
@@ -256,9 +293,9 @@ class AmbientEngine {
 
     // Near-full awakening: a rare high shimmer, three quick falling bells.
     if (awakening >= SCORE.shimmer.threshold && runtimeRandom() < SCORE.shimmer.probability) {
-      const top = degreeToFreq(2, 5);
-      [top, top * 0.833, degreeToFreq(4, 4)].forEach((f, i) => {
-        playVoice(ctx, bus, "bell", f, {
+      const top = modeFreq(4, "air");
+      [top, modeFreq(2, "air"), modeFreq(9, "high")].forEach((f, i) => {
+        playNote(ctx, bus, "glass", f, {
           gain: SCORE.shimmer.gain,
           at: t + 0.4 + i * 0.19,
           release: 1.6,
@@ -272,7 +309,7 @@ class AmbientEngine {
       const start = t + p.rng() * (this.slotS * 0.4);
       if (p.kind === "triad") {
         p.freqs.forEach((f, i) =>
-          playVoice(ctx, ground, "pad", f, {
+          playNote(ctx, ground, "voice", f, {
             gain: SCORE.motifVoices.triadGain,
             at: start + i * 0.09,
             attack: 0.4,
@@ -282,7 +319,7 @@ class AmbientEngine {
         );
       } else if (p.kind === "symposium") {
         p.freqs.forEach((f) =>
-          playVoice(ctx, ground, "pad", f, {
+          playNote(ctx, ground, "voice", f, {
             gain: SCORE.motifVoices.symposiumGain,
             at: start,
             attack: 1.6,
@@ -294,7 +331,7 @@ class AmbientEngine {
         // The fugue subject: its beads' notes as a walking line.
         const step = this.slotS / SCORE.motifVoices.fugueStepDivisor;
         p.freqs.forEach((f, i) =>
-          playVoice(ctx, bus, "pluck", f, {
+          playNote(ctx, bus, "gut", f, {
             gain: SCORE.motifVoices.fugueGain,
             at: start + i * step,
             release: 0.9,
@@ -308,8 +345,11 @@ class AmbientEngine {
     const active = this.motifs.slice(-MAX_ACTIVE_MOTIFS * 2);
     const density = Math.min(active.length, MAX_ACTIVE_MOTIFS);
     if (density === 0) return;
+    // The one place setSpace actually bites: fewer voices speak while the score
+    // is leaving room for something else.
     const perMotifProb =
-      (0.4 * this.motifBias * (1 + 0.6 * awakening)) / Math.sqrt(density);
+      (0.4 * this.motifBias * this.densityScale * (1 + 0.6 * awakening)) /
+      Math.sqrt(density);
     const gainScale = 1 / Math.sqrt(Math.max(1, density));
 
     for (const m of active) {
@@ -333,20 +373,20 @@ class AmbientEngine {
       if (frameState.pulses.length > 24) {
         frameState.pulses.splice(0, frameState.pulses.length - 24);
       }
-      playVoice(ctx, bus, timbre1, first, {
-        gain: 0.075 * gainScale,
+      playNote(ctx, bus, timbre1, first, {
+        gain: 0.075 * gainScale * this.bedScale,
         at: t + jitter,
         release: 1.6,
       });
-      playVoice(ctx, bus, timbre2, second, {
-        gain: 0.06 * gainScale,
+      playNote(ctx, bus, timbre2, second, {
+        gain: 0.06 * gainScale * this.bedScale,
         at: t + jitter + 0.55 + m.rng() * 0.3,
         release: 1.8,
       });
       // Occasionally the motif lifts an octave — a thought recurring, changed.
       if (m.rng() < 0.18) {
-        playVoice(ctx, bus, "bell", first * 2, {
-          gain: 0.03 * gainScale,
+        playNote(ctx, bus, "glass", first * 2, {
+          gain: 0.03 * gainScale * this.bedScale,
           at: t + jitter + 1.3,
           release: 1.4,
         });

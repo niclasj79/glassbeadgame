@@ -353,7 +353,9 @@ describe("the golden path, in the domain alone", () => {
     for (const event of log.events) {
       expect(event.id).toBe(eventIdFor(event.sessionId, event.sequence));
     }
-    expect(String(log.events[0].payload.contentPackVersion ?? "")).toBe(
+    const started = log.events[0];
+    if (started.type !== "session.started") throw new Error("expected a start");
+    expect(String(started.payload.contentPackVersion)).toBe(
       String(toContentPackVersion("castalia.v1"))
     );
   });

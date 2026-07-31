@@ -25,6 +25,10 @@ describe("production session-start composition", () => {
     expect(result.session).toBe(domainSessionStore.getState().session);
     expect(legacy.applySessionStart).toBe(applySessionStart);
     expect(result.eventLog.events).toHaveLength(1);
+    // The slice has one world, so the pack and the world are fixed.
+    expect(String(result.session.contentPackVersion)).toBe("castalia.v1");
+    expect(String(result.session.worldId)).toBe("castalia");
+    expect(result.session.conceptIds).toHaveLength(12);
     expect(legacy).toMatchObject({ phase: "arena", lensActive: false, focusedBeadId: null });
     expect(legacy.session).toMatchObject({
       seed: 12_345,
@@ -36,7 +40,10 @@ describe("production session-start composition", () => {
       score: 0,
       startedAt: fixedNow.getTime(),
       interaction: { mode: "idle", fromId: null, sticky: false, reveal: null },
-      insight: 1,
+      // Insight was a legacy score currency spent to reveal a hidden pair.
+      // Nothing grants it and nothing spends it any more; it is written as zero
+      // and leaves with the legacy store.
+      insight: 0,
       illuminationsUsed: 0,
       themeId: result.session.worldId,
     });

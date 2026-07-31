@@ -1,24 +1,59 @@
 import { useEffect } from "react";
 import { useStore } from "@/state/store";
+import { cueBus } from "@/runtime/cues";
 import { audio } from "./engine";
 import { ambient } from "./ambient";
 import { discoveryChord, faintDyad, setAimTension, conclusionCadence } from "./sfx";
 import { noteForConcept } from "./theory";
+import { attachAudioDirector, audioDirector, stopSemanticAudio } from "./productionAudio";
 import { conceptById } from "@/content/concepts";
 import { testMode } from "@/runtime/testMode";
 
 /**
- * The single React↔audio contact point. Mounted once in App; drives the
- * engine from store subscriptions. High-frequency events (hover) bypass this
- * and call sfx directly from the pointer layer.
+ * The single React↔audio contact point. Mounted once in App; drives the engine
+ * from store subscriptions, and attaches the audio director to the cue bus.
+ *
+ * The two halves are deliberately different in kind. Store subscriptions drive
+ * the *legacy* prototype paths, which are being retired. The cue subscription
+ * drives the semantic layer, and it is the only one that will remain: a cue
+ * carries meaning plus timing, so audio, scene, and camera cannot disagree about
+ * when a moment happened (ADR-009).
+ *
+ * High-frequency events (hover) bypass this and call sfx directly from the
+ * pointer layer.
  */
 export function AudioBridge(): null {
   const muted = useStore((s) => s.settings.muted);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   useEffect(() => {
     if (testMode.enabled) return;
     audio.setMuted(muted);
   }, [muted]);
+
+  /**
+   * Intensity, and the two accessible paths.
+   *
+   * Muted is not "audio off" as far as the director is concerned — it is the
+   * captioned path, and captions keep being emitted for every plan. Reduced
+   * motion carries reduced audio intensity with it, per CAV-007: thinner,
+   * slower-beating, gentler onsets, with the Tension still present.
+   */
+  useEffect(() => {
+    audioDirector.setIntensity(
+      muted ? "silent" : reducedMotion ? "reduced" : "full"
+    );
+  }, [muted, reducedMotion]);
+
+  /** The semantic layer's only subscription. */
+  useEffect(() => {
+    if (testMode.enabled) return;
+    const detach = attachAudioDirector(cueBus);
+    return () => {
+      detach();
+      stopSemanticAudio();
+    };
+  }, []);
 
   // Unlock on the first gesture anywhere (autoplay policy).
   useEffect(() => {
@@ -55,7 +90,9 @@ export function AudioBridge(): null {
             if (useStore.getState().settings.binaural) audio.startBinaural();
           } else if (phase === "title" || phase === "setup") {
             ambient.stop();
+            ambient.clearSpace();
             audio.stopBinaural();
+            stopSemanticAudio();
           }
           // conclusion: ambient and bed continue under the mandala.
         }

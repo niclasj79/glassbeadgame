@@ -49,7 +49,10 @@ describe("legacy Zustand mutation and persistence baseline", () => {
     expect(state.codex[connection.id]).toEqual({ firstFoundAt: Date.now(), count: 1 });
     expect(state.session).toMatchObject({
       score: attempt.discovery.points + motif.points + 3,
-      insight: 3,
+      // Sessions no longer open with a free Insight: it was a currency for
+      // revealing a hidden pair, and there are no hidden pairs to reveal. The
+      // accrual rule below it is unchanged and leaves with the legacy store.
+      insight: 2,
     });
     expect(state.session!.threads.find((thread) => thread.id === faintThread.id)?.consecratedBy)
       .toBe("triad");

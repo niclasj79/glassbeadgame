@@ -3,6 +3,7 @@ import { productionInterpretation } from "@/runtime/interpretation";
 import { useStore } from "@/state/store";
 import { BeadInspectCard } from "./BeadInspectCard";
 import { InterpretationControls } from "./InterpretationControls";
+import { Marginalia } from "./Marginalia";
 
 /** The world remains primary; these controls mirror its interpretation actions accessibly. */
 export function ArenaHud() {
@@ -41,6 +42,7 @@ export function ArenaHud() {
         </button>
       </div>
       {!lensActive && <InterpretationControls />}
+      {!lensActive && <Marginalia />}
       <BeadInspectCard />
     </motion.div>
   );

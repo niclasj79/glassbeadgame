@@ -1,8 +1,10 @@
 import { audio } from "./engine";
 import { ambient } from "./ambient";
 import { SCORE } from "./score";
-import { playVoice, noiseSource } from "./voices";
-import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
+import { playNote, noiseSource } from "./voices";
+import { chordForPair, modeFreq, noteForConcept, pentatonic, timbreForDiscipline } from "./theory";
+import { clampBeatingHz } from "./comfort";
+import { centsForBeatingHz, transposeCents } from "./mode";
 import { conceptById } from "@/content/concepts";
 import { disciplineById } from "@/content/disciplines";
 import type { Discovery } from "@/state/types";
@@ -19,7 +21,7 @@ export function hoverPing(conceptId: string): void {
   if (!ctx || !audio.sfxBus) return;
   const concept = conceptById.get(conceptId);
   if (!concept) return;
-  playVoice(ctx, audio.sfxBus, "bell", noteForConcept(concept) * 2, {
+  playNote(ctx, audio.sfxBus, "glass", noteForConcept(concept) * 2, {
     gain: 0.045,
     release: 0.5,
   });
@@ -31,7 +33,7 @@ export function selectTick(conceptId: string): void {
   const concept = conceptById.get(conceptId);
   if (!concept) return;
   const disc = disciplineById.get(concept.discipline);
-  playVoice(ctx, audio.sfxBus, disc?.timbre ?? "pluck", noteForConcept(concept), {
+  playNote(ctx, audio.sfxBus, timbreForDiscipline(disc), noteForConcept(concept), {
     gain: 0.09,
     release: 0.45,
   });
@@ -53,7 +55,7 @@ export function selectTick(conceptId: string): void {
   env.connect(audio.sfxBus);
   noise.start(t0);
   noise.stop(t0 + 0.35);
-  playVoice(ctx, audio.sfxBus, "bell", noteForConcept(concept) * 4, {
+  playNote(ctx, audio.sfxBus, "glass", noteForConcept(concept) * 4, {
     gain: 0.012,
     release: 0.35,
   });
@@ -169,11 +171,17 @@ export function consecrationChime(count: number): void {
   const t0 = ambient.quantize();
   const steps = Math.min(4, 1 + count);
   for (let i = 0; i < steps; i++) {
-    playVoice(ctx, bus, "bell", degreeToFreq([1, 2, 4, 0][i % 4], 4 + (i === 3 ? 1 : 0)), {
-      gain: SCORE.consecration.gain,
-      at: t0 + i * SCORE.consecration.noteGapSeconds,
-      release: 1.7,
-    });
+    playNote(
+      ctx,
+      bus,
+      "glass",
+      pentatonic([1, 2, 4, 0][i % 4], i === 3 ? "air" : "high"),
+      {
+        gain: SCORE.consecration.gain,
+        at: t0 + i * SCORE.consecration.noteGapSeconds,
+        release: 1.7,
+      }
+    );
   }
 }
 
@@ -186,9 +194,9 @@ export function illuminationChime(aId: string, bId: string): void {
   const b = conceptById.get(bId);
   if (!a || !b) return;
   const t0 = ctx.currentTime + 0.03;
-  const notes = [noteForConcept(a), noteForConcept(b), degreeToFreq(0, 5)];
+  const notes = [noteForConcept(a), noteForConcept(b), modeFreq(0, "air")];
   notes.forEach((freq, i) => {
-    playVoice(ctx, bus, "bell", freq, {
+    playNote(ctx, bus, "glass", freq, {
       gain: 0.05,
       at: t0 + i * 0.16,
       release: 1.8,
@@ -221,12 +229,17 @@ export function setAimTension(active: boolean): void {
     lp.frequency.value = 700;
     lp.connect(gain);
     gain.connect(audio.sfxBus);
+    // Expectancy, not dissonance: one pitch and its slightly sharp twin, tuned
+    // to beat at the slow end of the comfort band (CAV-007) rather than at
+    // whatever rate an arbitrary ratio happened to give.
+    const aim = modeFreq(9, "mid");
+    const aimBeatHz = clampBeatingHz(1.3);
     const osc1 = ctx.createOscillator();
     osc1.type = "sine";
-    osc1.frequency.value = degreeToFreq(4, 3); // A3
+    osc1.frequency.value = aim;
     const osc2 = ctx.createOscillator();
     osc2.type = "sine";
-    osc2.frequency.value = degreeToFreq(4, 3) * 1.006; // a hair sharp — expectancy
+    osc2.frequency.value = transposeCents(aim, centsForBeatingHz(aim, aimBeatHz));
     osc1.connect(lp);
     osc2.connect(lp);
     osc1.start();
@@ -250,8 +263,8 @@ export function cancelGliss(): void {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(degreeToFreq(2, 4), t);
-  osc.frequency.exponentialRampToValueAtTime(degreeToFreq(0, 3), t + 0.28);
+  osc.frequency.setValueAtTime(modeFreq(4, "high"), t);
+  osc.frequency.exponentialRampToValueAtTime(modeFreq(0, "mid"), t + 0.28);
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.05, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
@@ -271,7 +284,7 @@ export function discoveryChord(discovery: Discovery): void {
   const tierGain = discovery.tier >= 3 ? 1.15 : discovery.tier === 2 ? 1.0 : 0.9;
   const release = discovery.tier >= 3 ? 3.2 : 2.2;
   for (const n of notes) {
-    playVoice(ctx, audio.sfxBus, n.timbre, n.freq, {
+    playNote(ctx, audio.sfxBus, n.timbre, n.freq, {
       gain: n.gain * tierGain,
       at: t0 + n.delay,
       release,
@@ -287,8 +300,8 @@ export function faintDyad(discovery: Discovery): void {
   const b = conceptById.get(discovery.b);
   if (!a || !b) return;
   const t0 = ambient.quantize();
-  playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(a), { gain: 0.07, at: t0, release: 0.8 });
-  playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(b) * 1.5, {
+  playNote(ctx, audio.sfxBus, "gut", noteForConcept(a), { gain: 0.07, at: t0, release: 0.8 });
+  playNote(ctx, audio.sfxBus, "gut", noteForConcept(b) * 1.5, {
     gain: 0.055,
     at: t0 + 0.13,
     release: 0.8,
@@ -303,21 +316,21 @@ export function conclusionCadence(pitches: number[]): void {
   const t0 = ctx.currentTime + 0.05;
   const unique = [...new Set(pitches)].slice(0, 10);
   unique.forEach((freq, i) => {
-    playVoice(ctx, bus, "bell", freq, {
+    playNote(ctx, bus, "glass", freq, {
       gain: 0.08,
       at: t0 + i * 0.14,
       release: 2.8,
     });
   });
   const tEnd = t0 + unique.length * 0.14 + 0.5;
-  playVoice(ctx, bus, "drone", degreeToFreq(0, 2), {
+  playNote(ctx, bus, "glass", modeFreq(0, "low"), {
     gain: 0.3,
     at: tEnd,
     attack: 0.3,
     hold: 1.6,
     release: 4,
   });
-  playVoice(ctx, bus, "pad", degreeToFreq(3, 3), {
+  playNote(ctx, bus, "voice", modeFreq(7, "mid"), {
     gain: 0.16,
     at: tEnd + 0.1,
     hold: 1.4,

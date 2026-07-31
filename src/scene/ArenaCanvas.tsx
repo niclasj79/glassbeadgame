@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { PerformanceMonitor } from "@react-three/drei";
 import { useStore } from "@/state/store";
 import { initialQualityTier } from "@/lib/device";
+import { DEFAULT_THEME } from "@/themes";
 import { Cosmos } from "./Cosmos";
 import { testMode } from "@/runtime/testMode";
 import { handleArenaMiss } from "./threading";
@@ -20,7 +21,8 @@ export function ArenaCanvas() {
   const setQualityTier = useStore((s) => s.setQualityTier);
 
   const handleCreated = useCallback((state: { gl: { domElement: HTMLCanvasElement; setClearColor: (c: string) => void } }) => {
-    state.gl.setClearColor("#06090f");
+    // The deepest dye in the world, never `#000` — see themes/types.ts.
+    state.gl.setClearColor(DEFAULT_THEME.palette.ground);
     glRef.current = state.gl.domElement;
   }, []);
 
@@ -82,7 +84,7 @@ export function ArenaCanvas() {
           alpha: false,
           stencil: false,
         }}
-        camera={{ fov: 42, near: 0.1, far: 160, position: [0, 0.5, 13.8] }}
+        camera={{ fov: 42, near: 0.1, far: 160, position: [0, 0.5, 15.2] }}
         onCreated={handleCreated}
         onPointerMissed={handleArenaMiss}
       >

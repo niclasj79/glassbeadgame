@@ -61,6 +61,21 @@ export const frameState = {
   recenter: false,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
+  /**
+   * False while a scripted camera transit is in flight, and from the moment a
+   * new layout is published until the first frame has been drawn with it. A
+   * bead's screen position is meaningless before then — it would be reported
+   * from a camera that is about to be replaced — so the test adapter reports
+   * such a bead as off screen rather than lying about where to click it.
+   */
+  cameraSettled: false,
+  /**
+   * Frames drawn since the current bead layout was published. Positions exist
+   * in these arrays the instant the layout is computed, but nothing can be
+   * pointed at until the scene has actually drawn with them — so the test
+   * adapter waits for a few real frames before answering "where is this bead".
+   */
+  framesSinceLayout: 0,
 };
 
 export function initFramePositions(beadIds: string[], initial: Float32Array): void {
@@ -75,6 +90,8 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.clock = 0;
   frameState.hoveredId = null;
   frameState.aim.active = false;
+  frameState.cameraSettled = false;
+  frameState.framesSinceLayout = 0;
   frameState.idleSince = presentationNow();
 }
 

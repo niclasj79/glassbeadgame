@@ -20,11 +20,13 @@ import { interpretationDraftStore } from "@/state/interactionDraft";
 import { interpretationPresentationStore } from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
 import type { DisciplineId } from "@/content/types";
+import { cueBus } from "@/runtime/cues";
 import { audio } from "@/audio/engine";
 import { ambient } from "@/audio/ambient";
 import {
   advanceTestClock,
   gameNow,
+  presentationNow,
   finishFrameSample,
   recordFrameSample,
   resetTestRuntime,
@@ -156,6 +158,12 @@ export function ThreadingDriver() {
       beadScreen: (id: string) => {
         const i = frameState.beadIndex.get(id);
         if (i === undefined) return null;
+        // A camera mid-transit, or a layout the scene has not drawn yet,
+        // would report a point that is already wrong by the time anyone acts
+        // on it — and on a slow software renderer "not yet" can be a second.
+        if (!frameState.cameraSettled || frameState.framesSinceLayout < 3) {
+          return { x: 0, y: 0, behind: true };
+        }
         v.set(
           frameState.rendered[i * 3],
           frameState.rendered[i * 3 + 1],
@@ -237,6 +245,13 @@ export function ThreadingDriver() {
   const acc = useRef(0);
   useFrame((state, dt) => {
     if (testMode.enabled) recordFrameSample(dt);
+
+    // The cue bus owns no timer of its own, so that a staged cue can never
+    // drift from the frame that dresses it. Ticking every frame — not on the
+    // throttled path below — is what keeps an outcome landing when the planner
+    // said it would.
+    cueBus.tick(presentationNow() / 1000);
+
     acc.current += dt;
     if (acc.current < 0.066) return;
     acc.current = 0;

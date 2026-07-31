@@ -1,15 +1,16 @@
-import { useMemo, useRef } from "react";
-import { useStore as useVanillaStore } from "zustand";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { QuadraticBezierLine } from "@react-three/drei";
-import type { Line2 } from "three-stdlib";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
-import type { CommittedThreadV1 } from "@/domain/model";
+import { useStore as useVanillaStore } from "zustand";
+import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
+import type { CommittedThreadV1 } from "@/domain/model";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
-import { arcMid } from "./curves";
+import { intentionArcMid } from "./curves";
+import { presentationProfile } from "./quality";
+import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./ribbon";
+import { threadForm, unrestAmplitude } from "./threadGrammar";
 
 const EMPTY_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
 
@@ -17,53 +18,145 @@ const vStart = new THREE.Vector3();
 const vEnd = new THREE.Vector3();
 const vMid = new THREE.Vector3();
 
-function ThreadLine({ thread }: { thread: CommittedThreadV1 }) {
-  const ref = useRef<Line2>(null);
-  const colors = useMemo(() => {
-    return thread.pair.map((id) => {
-      const concept = conceptById.get(String(id));
-      return concept ? disciplineById.get(concept.discipline)?.color ?? "#dfe6ff" : "#dfe6ff";
-    }) as [string, string];
-  }, [thread]);
-  const pattern = {
-    echo: [0.13, 0.1],
-    passage: [0.3, 0.09],
-    tension: [0.08, 0.06],
-    ground: [0.5, 0.04],
-  }[thread.intention];
+interface RibbonProps {
+  readonly sourceId: string;
+  readonly targetId: string | null;
+  readonly intention: CommittedThreadV1["intention"];
+  readonly opacity: number;
+  readonly resolved: boolean;
+  /** Committed threads grow once and stay; a preview is always fully drawn. */
+  readonly animateGrowth: boolean;
+}
 
-  useFrame(() => {
-    const line = ref.current;
-    const a = frameState.beadIndex.get(String(thread.pair[0]));
-    const b = frameState.beadIndex.get(String(thread.pair[1]));
-    if (!line || a === undefined || b === undefined) return;
+/**
+ * One relation, drawn as material. The curve is evaluated in the vertex
+ * shader from three endpoint uniforms, so a moving bead costs three vector
+ * writes rather than a geometry rebuild.
+ */
+function Ribbon({
+  sourceId,
+  targetId,
+  intention,
+  opacity,
+  resolved,
+  animateGrowth,
+}: RibbonProps) {
+  const theme = useCurrentTheme();
+  const tier = useStore((s) => s.settings.qualityTier);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const profile = useMemo(
+    () => presentationProfile(tier, reducedMotion),
+    [tier, reducedMotion]
+  );
+  const form = useMemo(() => threadForm(intention), [intention]);
+  const geometry = useMemo(
+    () => ribbonGeometry(profile.budget.threadSegments),
+    [profile.budget.threadSegments]
+  );
+
+  const material = useMemo(
+    () =>
+      createRibbonMaterial({
+        theme,
+        form,
+        ink: threadInk(theme, sourceId, targetId ?? sourceId),
+        width: 0.022,
+        opacity,
+      }),
+    [theme, form, sourceId, targetId, opacity]
+  );
+  useEffect(() => () => material.dispose(), [material]);
+
+  useEffect(() => {
+    (material.uniforms.uResolved as { value: number }).value = resolved ? 1 : 0;
+    (material.uniforms.uRhythmA as { value: number }).value = rhythmOf(sourceId);
+    (material.uniforms.uRhythmB as { value: number }).value = rhythmOf(
+      targetId ?? sourceId
+    );
+    (material.uniforms.uGrow as { value: number }).value = animateGrowth ? 0 : 1;
+  }, [material, resolved, sourceId, targetId, animateGrowth]);
+
+  const age = useRef(0);
+
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 1 / 20);
+    age.current += dt;
+    const uniforms = material.uniforms;
+    (uniforms.uTime as { value: number }).value = frameState.clock;
+
+    const ia = frameState.beadIndex.get(sourceId);
+    if (ia === undefined) return;
     const rendered = frameState.rendered;
-    vStart.set(rendered[a * 3], rendered[a * 3 + 1], rendered[a * 3 + 2]);
-    vEnd.set(rendered[b * 3], rendered[b * 3 + 1], rendered[b * 3 + 2]);
-    arcMid(vStart, vEnd, vMid);
-    (line as unknown as { setPoints: (a: THREE.Vector3, b: THREE.Vector3, m: THREE.Vector3) => void }).setPoints(vStart, vEnd, vMid);
+    vStart.set(rendered[ia * 3], rendered[ia * 3 + 1], rendered[ia * 3 + 2]);
+
+    if (targetId) {
+      const ib = frameState.beadIndex.get(targetId);
+      if (ib === undefined) return;
+      vEnd.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
+    } else if (frameState.snapId) {
+      const ib = frameState.beadIndex.get(frameState.snapId);
+      if (ib === undefined) return;
+      vEnd.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
+    } else if (frameState.aim.active) {
+      vEnd.set(frameState.aim.x, frameState.aim.y, frameState.aim.z);
+    } else {
+      return;
+    }
+
+    intentionArcMid(vStart, vEnd, intention, vMid);
+    (uniforms.uA.value as THREE.Vector3).copy(vStart);
+    (uniforms.uB.value as THREE.Vector3).copy(vEnd);
+    (uniforms.uM.value as THREE.Vector3).copy(vMid);
+
+    if (animateGrowth) {
+      const grow = uniforms.uGrow as { value: number };
+      const speed = reducedMotion ? 6 : 1.6;
+      grow.value = Math.min(1, grow.value + dt * speed);
+    }
+
+    // Tension keeps its instability as a permanent fact but stops shouting:
+    // the amplitude decays to a floor within roughly twelve seconds (CAV-007).
+    (uniforms.uUnrest as { value: number }).value =
+      form.beatHz > 0 ? unrestAmplitude(age.current) : 1;
+
+    // Ground settles once and stays seated.
+    (uniforms.uSettle as { value: number }).value = Math.min(
+      1,
+      age.current / (reducedMotion ? 0.2 : 1.4)
+    );
   });
 
   return (
-    <QuadraticBezierLine
-      ref={ref as never}
-      start={[0, 0, 0]}
-      end={[0, 0, 0.001]}
-      lineWidth={1.8}
-      color={colors[0]}
-      dashed
-      dashSize={pattern[0]}
-      gapSize={pattern[1]}
-      transparent
-      opacity={0.86}
-      toneMapped={false}
-      depthWrite={false}
+    <mesh
+      geometry={geometry}
+      material={material}
+      frustumCulled={false}
+      renderOrder={2}
     />
   );
 }
 
+export { Ribbon };
+
 export function Threads() {
-  const threads = useVanillaStore(domainSessionStore, (state) => state.session?.threads ?? EMPTY_THREADS);
+  const threads = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.threads ?? EMPTY_THREADS
+  );
   if (threads.length === 0) return null;
-  return <group>{threads.map((thread) => <ThreadLine key={thread.id} thread={thread} />)}</group>;
+  return (
+    <group>
+      {threads.map((thread) => (
+        <Ribbon
+          key={thread.id}
+          sourceId={String(thread.pair[0])}
+          targetId={String(thread.pair[1])}
+          intention={thread.intention}
+          opacity={0.9}
+          resolved
+          animateGrowth
+        />
+      ))}
+    </group>
+  );
 }

@@ -1,0 +1,315 @@
+/**
+ * SHARED GLSL — THE MATERIAL LANGUAGE OF CASTALIA
+ *
+ * Three chunks, used by more than one material, kept in one place so the world
+ * a bead refracts is literally the same function as the world drawn behind it.
+ * When the firmament changes, every lens changes with it; that is what makes
+ * the beads read as glass in a room rather than as spheres in a void.
+ *
+ * All of it is GLSL ES 1.00 compatible: constant loop bounds, no `inverse()`,
+ * no dynamic array indexing. Step counts are `#define`d by the material factory
+ * from the quality budget, so a tier change recompiles rather than branches.
+ */
+
+export const GLSL_COMMON = /* glsl */ `
+#define GBG_TAU 6.28318530718
+#define GBG_PI  3.14159265359
+
+vec2 gbgRot(vec2 p, float a) {
+  float s = sin(a);
+  float c = cos(a);
+  return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+
+/** Ink coverage for a signed distance and a half-width. */
+float gbgLine(float d, float w) {
+  return 1.0 - smoothstep(0.0, w, abs(d));
+}
+
+/** Distance to the nearest integer, per component. */
+vec3 gbgLattice(vec3 p) {
+  return abs(fract(p + 0.5) - 0.5);
+}
+`;
+
+/**
+ * The world, as a function of direction. Deep dyed darkness below, a vellum-lit
+ * horizon where the armillary stands, ribbed vault above. No stars: those are
+ * drawn objects, because an authored sky cannot be a noise function.
+ */
+export const GLSL_ENVIRONMENT = /* glsl */ `
+uniform vec3 uGround;
+uniform vec3 uDepth;
+uniform vec3 uHorizon;
+uniform vec3 uVellum;
+uniform vec3 uBrass;
+uniform vec3 uEngraving;
+uniform vec3 uKey;
+
+vec3 gbgEnvironment(vec3 d) {
+  vec3 dir = normalize(d);
+  float y = dir.y;
+
+  // Down is a well of dyed pigment; up is the vault. The darkest place in the
+  // world is the floor, and it still is not black.
+  vec3 col = mix(uGround * 0.72, uDepth, smoothstep(-0.55, 0.55, y));
+
+  // A narrow band of lit air at the instrument's own level. Narrow on purpose:
+  // a wide glow would read as haze, and haze is what outer space looks like.
+  float band = exp(-pow((y - 0.01) * 42.0, 2.0));
+  col = mix(col, uHorizon, band * 0.3);
+
+  // Brass light rising off the rings just under the eye — a reflection on the
+  // floor of the room, not a dye poured through the whole well.
+  col += uBrass * exp(-pow((y + 0.2) * 9.0, 2.0)) * 0.028;
+
+#ifndef GBG_CHEAP_ENV
+  // The vault: primary ribs converging on the boss overhead, with the courses
+  // that spring from them. Above the eye the world is architecture.
+  float up = smoothstep(0.42, 0.86, y);
+  float lon = atan(dir.z, dir.x);
+  float ribs = pow(abs(sin(lon * 6.0)), 30.0);
+  float rings = pow(abs(sin(acos(clamp(y, -1.0, 1.0)) * 7.0)), 30.0);
+  col += uEngraving * (ribs * 1.2 + rings * 0.45) * up * 0.10;
+
+  // The springing line where the vault meets the wall.
+  col += uBrass * exp(-pow((y - 0.42) * 26.0, 2.0)) * 0.07;
+
+  // One key light, so the world has a direction even with no geometry in it.
+  col += uVellum * pow(max(dot(dir, normalize(uKey)), 0.0), 9.0) * 0.055;
+#endif
+  return col;
+}
+`;
+
+/**
+ * THE FIGURE INSIDE THE GLASS
+ *
+ * Ten constructions, one per `SigilFamily`, in the schema's order. `sym` folds
+ * the plane for the radial families and multiplies frequency for the cartesian
+ * ones — see `scene/sigil.ts`, which owns that distinction and is tested.
+ *
+ * Every branch returns ink coverage in 0–1 and must remain legible with hue
+ * removed: these are line drawings, and the line is the meaning.
+ */
+export const GLSL_FIGURE = /* glsl */ `
+float gbgFigureSpiral(vec3 q, float k, float w) {
+  float r = length(q.xy);
+  float a = atan(q.y, q.x);
+  float phase = (a + 2.3 * log(r + 0.09)) * k / GBG_TAU;
+  float arm = gbgLine(fract(phase) - 0.5, w * 0.9);
+  arm *= smoothstep(1.15, 0.92, r) * smoothstep(0.03, 0.12, r);
+  float core = gbgLine(r - 0.05, w * 1.1);
+  float sheet = 1.0 - smoothstep(0.06, 0.34, abs(q.z));
+  return max(arm, core) * sheet;
+}
+
+float gbgFigureLattice(vec3 q, float k, float w) {
+  vec3 g = gbgLattice(q * (1.4 + k * 0.5));
+  float d = min(min(max(g.x, g.y), max(g.y, g.z)), max(g.x, g.z));
+  float node = 1.0 - smoothstep(0.0, w * 1.4, length(g));
+  float body = 1.0 - smoothstep(0.0, w * 1.1, d);
+  return max(body, node) * smoothstep(1.25, 0.95, length(q));
+}
+
+float gbgFigureWave(vec3 q, float k, float w) {
+  float y = sin(q.x * 3.1);
+  y += sin(q.x * 6.2 + 1.1) * 0.5 * step(1.5, k);
+  y += sin(q.x * 9.3 + 2.2) * 0.33 * step(2.5, k);
+  y *= 0.34;
+  float crest = gbgLine(q.y - y, w * 1.2);
+  float trough = gbgLine(q.y + y, w * 0.8) * 0.55;
+  float node = gbgLine(q.y, w * 0.5) * 0.4;
+  float span = smoothstep(1.2, 0.95, abs(q.x));
+  float sheet = 1.0 - smoothstep(0.05, 0.32, abs(q.z));
+  return max(max(crest, trough), node) * span * sheet;
+}
+
+float gbgFigureOrbit(vec3 q, float k, float w) {
+  float best = 1e3;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float ri = 0.3 + fi * 0.23;
+    vec3 p = q;
+    p.yz = gbgRot(p.yz, fi * 0.42);
+    float ring = max(abs(length(p.xy) - ri), abs(p.z) - 0.012);
+    best = min(best, ring);
+  }
+  float rings = 1.0 - smoothstep(0.0, w * 1.1, best);
+  float a = atan(q.y, q.x);
+  float nodes = gbgLine(fract(a * k / GBG_TAU) - 0.5, 0.06)
+              * gbgLine(length(q.xy) - 0.99, w * 1.6);
+  return max(rings, nodes) * smoothstep(1.3, 1.02, length(q));
+}
+
+float gbgFigureFold(vec3 q, float k, float w) {
+  float a = atan(q.y, q.x);
+  float r = length(q.xy);
+  vec2 lp = gbgRot(vec2(r - 0.64, q.z), a * 0.5);
+  float within = 1.0 - smoothstep(0.0, 0.075, abs(lp.y));
+  float edges = gbgLine(abs(lp.x) - 0.27, w * 1.1) * within;
+  float rulings = gbgLine(fract(a * k * 1.5 / GBG_TAU) - 0.5, w * 0.7)
+                * (1.0 - smoothstep(0.24, 0.3, abs(lp.x))) * within;
+  return max(edges, rulings * 0.85);
+}
+
+float gbgFigureRay(vec3 q, float k, float w) {
+  vec2 vp = vec2(0.0, 0.16);
+  vec2 d = q.xy - vp;
+  float len = length(d);
+  float a = atan(d.y, d.x);
+  float rays = max(7.0, k * 3.0);
+  float pencil = gbgLine(fract(a * rays / GBG_TAU) - 0.5, w * 0.75);
+  pencil *= smoothstep(0.06, 0.26, len) * smoothstep(1.2, 0.85, len);
+  float horizon = gbgLine(q.y - 0.16, w * 0.8) * smoothstep(1.2, 0.95, abs(q.x));
+  float point = gbgLine(len - 0.035, w * 1.2);
+  float sheet = 1.0 - smoothstep(0.05, 0.3, abs(q.z));
+  return max(max(pencil, horizon), point) * sheet;
+}
+
+float gbgFigureGrid(vec3 q, float k, float w) {
+  float n = 2.0 + k * 1.3;
+  vec2 g = abs(fract(q.xy * n + 0.5) - 0.5) / n;
+  float d = min(g.x, g.y);
+  float body = 1.0 - smoothstep(0.0, w * 0.75, d);
+  float frame = max(gbgLine(abs(q.x) - 1.0, w), gbgLine(abs(q.y) - 1.0, w));
+  float inside = smoothstep(1.06, 0.98, max(abs(q.x), abs(q.y)));
+  float sheet = 1.0 - smoothstep(0.05, 0.28, abs(q.z));
+  return max(body * inside, frame) * sheet;
+}
+
+float gbgFigureBranch(vec3 q, float k, float w) {
+  vec2 p = vec2(abs(q.x), q.y + 0.86);
+  float d = 1e3;
+  float s = 1.0;
+  for (int i = 0; i < 4; i++) {
+    float L = 0.6 * s;
+    vec2 seg = vec2(p.x, p.y - clamp(p.y, 0.0, L));
+    d = min(d, length(seg));
+    p.y -= L;
+    p.x = abs(p.x);
+    p = gbgRot(p, -0.46 - 0.03 * k);
+    s *= 0.66;
+  }
+  float sheet = 1.0 - smoothstep(0.05, 0.3, abs(q.z));
+  return (1.0 - smoothstep(0.0, w * 1.2, d)) * sheet;
+}
+
+float gbgFigureVessel(vec3 q, float k, float w) {
+  float d = 1e3;
+  for (int i = 0; i < 3; i++) {
+    float ri = 0.42 + float(i) * 0.25;
+    float shell = abs(length(q) - ri);
+    // Open above: the vessel is a container, not a ball.
+    shell += step(0.30, q.y) * 1e3;
+    d = min(d, shell);
+  }
+  float lip = max(abs(q.y - 0.30), abs(length(q.xz) - 0.44));
+  d = min(d, lip);
+  float ribs = gbgLine(fract(atan(q.z, q.x) * k / GBG_TAU) - 0.5, w * 0.6)
+             * (1.0 - smoothstep(0.5, 1.0, length(q)))
+             * step(q.y, 0.3);
+  return max(1.0 - smoothstep(0.0, w * 1.3, d), ribs * 0.7);
+}
+
+float gbgFigureArc(vec3 q, float k, float w) {
+  float a = atan(q.y, q.x);
+  float r = length(q.xy);
+  float limb = 1.0 - smoothstep(1.18, 1.32, abs(a));
+  float d = 1e3;
+  for (int i = 0; i < 3; i++) {
+    d = min(d, abs(r - (0.46 + float(i) * 0.24)));
+  }
+  float arcs = (1.0 - smoothstep(0.0, w * 1.0, d)) * limb;
+  float ticks = gbgLine(fract(a * k * 6.0 / GBG_TAU) - 0.5, w * 0.5)
+              * smoothstep(0.68, 0.72, r) * smoothstep(0.98, 0.94, r) * limb;
+  float index = gbgLine(a, w * 0.9) * smoothstep(0.1, 0.2, r);
+  float sheet = 1.0 - smoothstep(0.05, 0.3, abs(q.z));
+  return max(max(arcs, ticks), index * 0.8) * sheet;
+}
+
+/**
+ * sigil is (familyCode, symmetry, density, turbulence) exactly as produced by
+ * scene/sigil.ts. t is the world clock; turbulence is the only channel allowed
+ * to consume it, and only at a bounded amplitude.
+ */
+float gbgFigure(vec3 pIn, vec4 sigil, float t, float bias) {
+  float family = sigil.x;
+  float k = max(sigil.y, 1.0);
+  float density = sigil.z;
+  float turbulence = sigil.w;
+
+  float radius = 0.34 + 0.56 * density;
+  float w = (0.055 - 0.03 * density) * bias;
+  float warp = 0.19 * turbulence;
+
+  vec3 p = pIn;
+  p += warp * 0.5 * vec3(
+    sin(p.y * 6.1 + t * 0.55),
+    sin(p.z * 5.3 + t * 0.41),
+    sin(p.x * 7.0 + t * 0.47)
+  );
+  p /= radius;
+  if (dot(p, p) > 2.9) return 0.0;
+
+  int fam = int(family + 0.5);
+  if (fam == 0) return gbgFigureSpiral(p, k, w);
+  if (fam == 1) return gbgFigureLattice(p, k, w);
+  if (fam == 2) return gbgFigureWave(p, k, w);
+  if (fam == 3) return gbgFigureOrbit(p, k, w);
+  if (fam == 4) return gbgFigureFold(p, k, w);
+  if (fam == 5) return gbgFigureRay(p, k, w);
+  if (fam == 6) return gbgFigureGrid(p, k, w);
+  if (fam == 7) return gbgFigureBranch(p, k, w);
+  if (fam == 8) return gbgFigureVessel(p, k, w);
+  return gbgFigureArc(p, k, w);
+}
+`;
+
+/**
+ * THE SETTING — the engraved metal collar the glass is mounted in.
+ *
+ * This is the faculty channel that survives a greyscale print: four visibly
+ * different collars, cut in the faculty's own construction geometry, plus a
+ * plain graduated collar for a bead whose pack declares no faculty.
+ */
+export const GLSL_SETTING = /* glsl */ `
+float gbgSetting(vec2 uv, float code, float majors) {
+  float rho = length(uv);
+  float ang = atan(uv.y, uv.x);
+  if (rho < 0.78) return 0.0;
+
+  int c = int(code + 0.5);
+  float band = step(0.845, rho) * step(rho, 0.975);
+  float mark = 0.0;
+
+  if (c == 1) {
+    // lattice — two rules cross-tied on the square
+    mark = max(gbgLine(rho - 0.855, 0.014), gbgLine(rho - 0.968, 0.011));
+    mark = max(mark, gbgLine(fract(ang * 4.0 / GBG_TAU) - 0.5, 0.055) * band);
+  } else if (c == 2) {
+    // wave — a scalloped rule over a plain one
+    float s = 0.912 + 0.03 * sin(ang * 13.0);
+    mark = gbgLine(rho - s, 0.016);
+    mark = max(mark, gbgLine(rho - 0.972, 0.009));
+  } else if (c == 3) {
+    // orbit — three concentric rules
+    mark = max(gbgLine(rho - 0.848, 0.009), gbgLine(rho - 0.909, 0.009));
+    mark = max(mark, gbgLine(rho - 0.970, 0.009));
+  } else if (c == 4) {
+    // ray — sixteen spokes between two rules
+    mark = max(gbgLine(rho - 0.855, 0.012), gbgLine(rho - 0.968, 0.012));
+    mark = max(mark, gbgLine(fract(ang * 16.0 / GBG_TAU) - 0.5, 0.028) * band);
+  } else {
+    // unattributed — one plain rule, finely graduated
+    mark = gbgLine(rho - 0.93, 0.013);
+    mark = max(mark, gbgLine(fract(ang * 48.0 / GBG_TAU) - 0.5, 0.02)
+                     * step(0.90, rho) * step(rho, 0.96));
+  }
+
+  // Countable major graduations: the colour-free resonance channel.
+  float major = gbgLine(fract(ang * majors / GBG_TAU) - 0.5, 0.024)
+              * step(0.975, rho) * step(rho, 1.0);
+  return clamp(max(mark, major * 1.2), 0.0, 1.0);
+}
+`;

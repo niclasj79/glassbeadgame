@@ -1,3 +1,4 @@
+import { COMFORT } from "./comfort";
 import { SCORE } from "./score";
 import { runtimeRandom, testMode } from "@/runtime/testMode";
 
@@ -21,8 +22,22 @@ function makeImpulseResponse(
 
 /**
  * The audio engine singleton — context lifecycle and gain staging.
- * Everything audible flows: (voice) → ambientBus | sfxBus → master →
- * (dry + convolver wet) → compressor → destination. No React in here.
+ *
+ * Everything audible flows:
+ *   (voice) → ambientBus | motifBus | tensionBus | sfxBus
+ *           → master → (dry + convolver wet) → compressor → destination.
+ *
+ * Four buses rather than two, because the semantic layer needs levels the bed
+ * does not:
+ *
+ *   ambientBus  the generative floor — drone, pad, room tone
+ *   motifBus    concept motifs and relation grammar: the things that mean something
+ *   tensionBus  dissonance only, held under a hard ceiling derived from the bed
+ *               so CAV-007's "summed gain below the ambient bed" cannot be
+ *               breached by a plan, a bug, or a future caller
+ *   sfxBus      interaction sound: touch, silk, cancel
+ *
+ * No React in here, and no game rules.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -30,6 +45,12 @@ class AudioEngine {
   private compressor: DynamicsCompressorNode | null = null;
   ambientBus: GainNode | null = null;
   sfxBus: GainNode | null = null;
+  /** The semantic music: concept motifs, relation grammar, attunement channels. */
+  motifBus: GainNode | null = null;
+  /** Dissonance, and only dissonance. Ceiling-limited against the bed. */
+  tensionBus: GainNode | null = null;
+  /** Multiplier the attention and attunement states apply to the bed. */
+  private bedScale = 1;
   /** Sits between ambientBus and master — the Breath modulates it alone,
    *  so it never fights setAmbientIntensity over the same AudioParam. */
   private breathGain: GainNode | null = null;
@@ -104,6 +125,16 @@ class AudioEngine {
       this.sfxBus.gain.value = 1;
       this.sfxBus.connect(this.master);
 
+      this.motifBus = this.ctx.createGain();
+      this.motifBus.gain.value = 1;
+      this.motifBus.connect(this.master);
+
+      // The ceiling is structural: even if a plan asked for more, the bus
+      // cannot pass more than the accepted fraction of the bed.
+      this.tensionBus = this.ctx.createGain();
+      this.tensionBus.gain.value = COMFORT.tension.gainFractionOfBed;
+      this.tensionBus.connect(this.master);
+
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") void this.ctx?.resume();
       });
@@ -132,8 +163,38 @@ class AudioEngine {
   /** Gentle ambient swell as the web grows; capped, never dominant. */
   setAmbientIntensity(score: number): void {
     if (!this.ctx || !this.ambientBus) return;
-    const target = 0.9 + Math.min(0.35, score / 400);
-    this.ambientBus.gain.setTargetAtTime(target, this.ctx.currentTime, 0.8);
+    this.ambientSwell = 0.9 + Math.min(0.35, score / 400);
+    this.ambientBus.gain.setTargetAtTime(
+      this.ambientSwell * this.bedScale,
+      this.ctx.currentTime,
+      0.8
+    );
+  }
+
+  private ambientSwell = 0.9;
+
+  /**
+   * The bed recedes so something else can be heard — attention leaving space,
+   * Attunement dropping the floor beneath individual threads. Separate from
+   * `setAmbientIntensity` so the web's growth and the current state of attention
+   * never fight over the same AudioParam.
+   */
+  setBedScale(scale: number): void {
+    this.bedScale = Math.max(0.1, Math.min(1, scale));
+    if (!this.ctx || !this.ambientBus) return;
+    this.ambientBus.gain.setTargetAtTime(
+      this.ambientSwell * this.bedScale,
+      this.ctx.currentTime,
+      0.6
+    );
+  }
+
+  /**
+   * The bed's summed reference level, which is what the Tension gain ceiling is
+   * expressed against (CAV-007). Planners read it rather than assuming a number.
+   */
+  bedGain(): number {
+    return SCORE.grammar.bedGain * this.bedScale;
   }
 
   /**

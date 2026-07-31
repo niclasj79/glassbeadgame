@@ -1,80 +1,116 @@
+/**
+ * THE LEGACY PITCH BRIDGE.
+ *
+ * The prototype's content pack (`src/content/concepts.ts`, `disciplines.ts`)
+ * authors a pentatonic degree and one of six discipline timbres per concept. It
+ * is being retired with the rest of the pre-Castalia loop, but it still plays,
+ * and while it plays it must not keep its own private tuning system.
+ *
+ * So every legacy pitch is resolved through the world mode (`mode.ts`) and every
+ * legacy timbre through the six bodies (`voices.ts`). The audible result is
+ * essentially the old bed, in just intonation. What is gone is the *claim* the
+ * old comment made — that all pitches live in one gamut so every simultaneity is
+ * guaranteed consonant. That guarantee is what `docs/CURRENT-STATE-AUDIT.md`
+ * lists for removal, because a world in which nothing can clash cannot say
+ * Tension.
+ *
+ * New code should use `mode.ts` and the Castalia concept motifs directly.
+ */
+import type { MotifRegister, TimbreId } from "@/content/castalia/schema";
 import type { Concept, Discipline } from "@/content/types";
 import { disciplineById } from "@/content/disciplines";
 import { conceptById } from "@/content/concepts";
+import { CASTALIA_MODE, degreeFrequency } from "./mode";
+import { LEGACY_TIMBRE } from "./voices";
 
-/**
- * One shared pitch space: C major pentatonic (C D E G A) across four octaves.
- * Any subset of it is consonant, so every possible discovery chord is
- * guaranteed pleasant — this is the fix for v1's cross-discipline clashes.
- */
-const GAMUT_SEMITONES = [0, 2, 4, 7, 9]; // C D E G A
+/** Semitone offsets of the legacy pentatonic degrees, in the world mode. */
+const PENTATONIC_SEMITONES: readonly number[] = Object.freeze([0, 2, 4, 7, 9]);
 
-const REGISTER_OCTAVE: Record<Discipline["register"], number> = {
-  low: 2,
-  mid: 3,
-  high: 4,
-};
+const REGISTER_FOR: Readonly<Record<Discipline["register"], MotifRegister>> =
+  Object.freeze({ low: "low", mid: "mid", high: "high" });
 
-export function degreeToFreq(degree: number, octave: number): number {
-  const midi = 12 * (octave + 1) + GAMUT_SEMITONES[((degree % 5) + 5) % 5];
-  return 440 * Math.pow(2, (midi - 69) / 12);
+/** Resolve a semitone degree in a register through the world mode. */
+export function modeFreq(degree: number, register: MotifRegister): number {
+  return degreeFrequency(CASTALIA_MODE, degree, register);
 }
 
-/** A concept's identity note: its pitch degree in its discipline's register. */
+/** A legacy pentatonic degree index, resolved in the world mode. */
+export function pentatonic(index: number, register: MotifRegister): number {
+  const semitone = PENTATONIC_SEMITONES[((Math.round(index) % 5) + 5) % 5];
+  return modeFreq(semitone, register);
+}
+
+/** A legacy concept's identity note, in its discipline's register. */
 export function noteForConcept(concept: Concept): number {
-  const disc = disciplineById.get(concept.discipline);
-  const octave = disc ? REGISTER_OCTAVE[disc.register] : 3;
-  return degreeToFreq(concept.pitchDegree, octave);
+  const discipline = disciplineById.get(concept.discipline);
+  return pentatonic(
+    concept.pitchDegree,
+    discipline ? REGISTER_FOR[discipline.register] : "mid"
+  );
+}
+
+export function timbreForDiscipline(discipline: Discipline | undefined): TimbreId {
+  return discipline ? LEGACY_TIMBRE[discipline.timbre] : "gut";
 }
 
 export interface ChordNote {
-  freq: number;
-  timbre: Discipline["timbre"];
-  gain: number;
+  readonly freq: number;
+  readonly timbre: TimbreId;
+  readonly gain: number;
   /** Seconds after chord start (the strum). */
-  delay: number;
+  readonly delay: number;
 }
 
 /**
- * The discovery chord: both concepts' identity notes plus supporting tones,
- * voiced wider and richer with tier. Staggered like a harp strum.
+ * The legacy discovery chord: both concepts' identity notes plus supporting
+ * tones, voiced wider with tier and staggered like a harp strum.
  */
-export function chordForPair(aId: string, bId: string, tier: 0 | 1 | 2 | 3): ChordNote[] {
+export function chordForPair(
+  aId: string,
+  bId: string,
+  tier: 0 | 1 | 2 | 3
+): ChordNote[] {
   const a = conceptById.get(aId);
   const b = conceptById.get(bId);
   if (!a || !b) return [];
-  const da = disciplineById.get(a.discipline)!;
-  const db = disciplineById.get(b.discipline)!;
-  const octA = REGISTER_OCTAVE[da.register];
-  const octB = REGISTER_OCTAVE[db.register];
+  const da = disciplineById.get(a.discipline);
+  const db = disciplineById.get(b.discipline);
+  if (!da || !db) return [];
 
   const notes: ChordNote[] = [
-    // Grounding root + fifth, always low, always quiet.
-    { freq: degreeToFreq(0, 2), timbre: "drone", gain: 0.16, delay: 0 },
-    { freq: degreeToFreq(3, 2), timbre: "drone", gain: 0.1, delay: 0.05 },
-    // The two voices themselves.
-    { freq: noteForConcept(a), timbre: da.timbre, gain: 0.24, delay: 0.09 },
-    { freq: noteForConcept(b), timbre: db.timbre, gain: 0.24, delay: 0.16 },
+    { freq: modeFreq(0, "low"), timbre: "glass", gain: 0.16, delay: 0 },
+    { freq: modeFreq(7, "low"), timbre: "glass", gain: 0.1, delay: 0.05 },
+    {
+      freq: noteForConcept(a),
+      timbre: timbreForDiscipline(da),
+      gain: 0.24,
+      delay: 0.09,
+    },
+    {
+      freq: noteForConcept(b),
+      timbre: timbreForDiscipline(db),
+      gain: 0.24,
+      delay: 0.16,
+    },
   ];
 
   if (tier >= 2) {
     notes.push({
-      freq: degreeToFreq(da.degrees[1], octA + 1),
-      timbre: da.timbre,
+      freq: pentatonic(da.degrees[1], REGISTER_FOR[da.register] === "low" ? "mid" : "high"),
+      timbre: timbreForDiscipline(da),
       gain: 0.14,
       delay: 0.24,
     });
     notes.push({
-      freq: degreeToFreq(db.degrees[1], Math.min(octB + 1, 5)),
-      timbre: db.timbre,
+      freq: pentatonic(db.degrees[1], REGISTER_FOR[db.register] === "low" ? "mid" : "high"),
+      timbre: timbreForDiscipline(db),
       gain: 0.12,
       delay: 0.32,
     });
   }
   if (tier >= 3) {
-    // The floated ninth — a high D that makes profound discoveries shimmer.
-    notes.push({ freq: degreeToFreq(1, 5), timbre: "bell", gain: 0.1, delay: 0.44 });
-    notes.push({ freq: degreeToFreq(0, 5), timbre: "bell", gain: 0.08, delay: 0.58 });
+    notes.push({ freq: modeFreq(2, "air"), timbre: "glass", gain: 0.1, delay: 0.44 });
+    notes.push({ freq: modeFreq(0, "air"), timbre: "glass", gain: 0.08, delay: 0.58 });
   }
   return notes;
 }

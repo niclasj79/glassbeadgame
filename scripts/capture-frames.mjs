@@ -29,8 +29,8 @@ const args = Object.fromEntries(
 const BASE = args.url ?? "http://localhost:8080";
 const OUT = path.resolve(process.cwd(), args.out ?? "artifacts/capture");
 const PICKS = ["mathematics", "music", "art"];
-const SOURCE = "math.fibonacci-sequence";
-const TARGET = "music.counterpoint";
+const SOURCE = "measure.fibonacci-sequence";
+const TARGET = "sound.counterpoint";
 
 const VARIANTS = {
   desktop: {
@@ -97,6 +97,18 @@ async function main() {
     };
 
     const snap = () => page.evaluate(() => window.__gbgTest.snapshot());
+
+    /**
+     * Test mode runs a controlled clock so gesture timing is deterministic,
+     * which also means the presentation clock the cue bus reads does not move
+     * on its own. Anything staged to resolve *after* a moment — an outcome
+     * following its weave — therefore needs time advanced deliberately, the
+     * way a player's seconds would advance it.
+     */
+    const advance = async (ms) => {
+      await page.evaluate((v) => window.__gbgTest.advanceClock(v), ms);
+      await sleep(220);
+    };
     const beadPoint = async (id) =>
       poll(
         async () => {
@@ -153,12 +165,13 @@ async function main() {
       await shot("06-latched", 250);
       await page.mouse.up();
       await waitDraft("inactive");
-      await shot("07-committed", 1200);
+      await advance(1500);
+      await shot("07-committed", 900);
 
       // A second thread so the web has structure, not one lonely line.
       const ids = (await snap()).beadIds;
-      const P = "math.prime-numbers";
-      const Q = "music.polyrhythm";
+      const P = "measure.prime-numbers";
+      const Q = "sound.polyrhythm";
       if (ids.includes(P) && ids.includes(Q)) {
         const p0 = await beadPoint(P);
         await page.mouse.click(p0.x, p0.y);
@@ -175,7 +188,8 @@ async function main() {
         });
         await page.mouse.up();
         await waitDraft("inactive");
-        await shot("08-two-threads", 1400);
+        await advance(1500);
+        await shot("08-two-threads", 900);
       }
 
       const conclude = page.getByRole("button", { name: /conclude/i }).first();

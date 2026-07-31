@@ -1,186 +1,541 @@
-import type { TimbreId } from "@/content/types";
+/**
+ * THE SIX BODIES — glass, gut, reed, metal, wood, voice.
+ *
+ * The content pack authors a `TimbreId` per concept, so these six are not a
+ * palette the audio layer chose; they are a vocabulary the content speaks. Each
+ * one has to be identifiable in isolation, at any pitch, in any register, or the
+ * whole idea of learning a bead by ear collapses — a player who cannot tell reed
+ * from gut cannot tell Diffraction from Counterpoint.
+ *
+ * So the difference between them is *spectral*, not cosmetic. Each body is a
+ * different way of making a sound rather than the same oscillator behind a
+ * different filter:
+ *
+ *   glass   near-pure partials on odd harmonics, immediate onset, long ring
+ *   gut     dense harmonic series, two slightly detuned strings, warm rolloff
+ *   reed    odd harmonics only — a stopped pipe — plus audible breath
+ *   metal   frequency modulation at an irrational ratio, so the partials are
+ *           inharmonic and it clangs rather than sings
+ *   wood    a pitched transient: fast downward glide plus a noise strike
+ *   voice   fixed formants at vowel frequencies, so it reads as a voice
+ *           regardless of the pitch underneath
+ *
+ * Three engineering rules hold everywhere below:
+ *
+ *  1. `playVoice()` is the only place a note is born (CAV-008). Swapping a
+ *     branch for an `AudioBufferSourceNode` replaces synthesis with recordings
+ *     and no content or grammar changes.
+ *  2. Every node is fully enveloped and explicitly stopped. There is no path
+ *     through this file that leaves an oscillator running.
+ *  3. Nothing that can be shared is allocated per note. Wave tables, noise,
+ *     vibrato LFOs, and each body's colour filter are pooled; only the
+ *     oscillators and one envelope gain are per-note.
+ */
+import type { TimbreId } from "@/content/castalia/schema";
+import { COMFORT, clampLifetimeSeconds } from "./comfort";
 import { SCORE } from "./score";
+import { hashString } from "@/lib/utils";
 import { runtimeRandom } from "@/runtime/testMode";
 
-/** Human hands: per-note detune and level never repeat exactly. */
-function humanizeFreq(freq: number): number {
-  const cents = (runtimeRandom() * 2 - 1) * SCORE.humanize.detuneCents;
-  return freq * Math.pow(2, cents / 1200);
-}
-function humanizeGain(gain: number): number {
-  return gain * (1 + (runtimeRandom() * 2 - 1) * SCORE.humanize.gainJitter);
-}
+// ─── The voice budget ───────────────────────────────────────────────────────
 
-/** Delayed-onset vibrato for the sustaining voices. */
-function attachVibrato(ctx: AudioContext, osc: OscillatorNode, freq: number, t0: number): void {
-  if (SCORE.humanize.vibratoDepth <= 0) return;
-  const lfo = ctx.createOscillator();
-  lfo.frequency.value = SCORE.humanize.vibratoHz * (0.9 + runtimeRandom() * 0.2);
-  const depth = ctx.createGain();
-  depth.gain.setValueAtTime(0, t0);
-  depth.gain.linearRampToValueAtTime(freq * SCORE.humanize.vibratoDepth, t0 + 0.7);
-  lfo.connect(depth);
-  depth.connect(osc.frequency);
-  lfo.start(t0);
-  lfo.stop(t0 + 20);
-}
-
-export interface VoiceOptions {
-  gain?: number;
-  attack?: number;
-  /** Seconds of audible body before release begins. */
-  hold?: number;
-  release?: number;
-  /** Absolute AudioContext time to start; defaults to now. */
-  at?: number;
+export interface VoiceBudget {
+  /** Reserve a slot. False means the note is dropped rather than queued. */
+  readonly claim: (now: number, endsAt: number) => boolean;
+  readonly active: (now: number) => number;
+  readonly reset: () => void;
 }
 
 /**
- * Six timbre families, one per discipline — all pure synthesis, descended
- * from v1's warm-pad recipes: soft attacks, lowpass everywhere, every node
- * fully enveloped and stopped (no clicks, no leaks).
+ * A hard ceiling on simultaneously scheduled voices, so "no unbounded audio
+ * voice allocation" (VERTICAL-SLICE-SPEC §21) is a property of the code rather
+ * than of the content behaving itself. Dropping the newest note is the right
+ * failure: the texture thins, and nothing that is already sounding is cut off.
+ *
+ * Pure — no Web Audio — so the ceiling is unit-testable.
  */
-export function playVoice(
-  ctx: AudioContext,
-  dest: AudioNode,
-  timbre: TimbreId,
-  rawFreq: number,
-  opts: VoiceOptions = {}
-): void {
-  const t0 = opts.at ?? ctx.currentTime;
-  const freq = humanizeFreq(rawFreq);
-  const gain = humanizeGain(opts.gain ?? 0.2);
+export function createVoiceBudget(
+  max: number = COMFORT.voice.maxConcurrent
+): VoiceBudget {
+  let ends: number[] = [];
+  const budget: VoiceBudget = {
+    claim: (now, endsAt) => {
+      ends = ends.filter((end) => end > now);
+      if (ends.length >= max) return false;
+      ends.push(endsAt);
+      return true;
+    },
+    active: (now) => ends.filter((end) => end > now).length,
+    reset: () => {
+      ends = [];
+    },
+  };
+  return Object.freeze(budget);
+}
 
+/** The process-wide budget. The scheduler and every sfx path share it. */
+export const voiceBudget: VoiceBudget = createVoiceBudget();
+
+// ─── Pooled resources ───────────────────────────────────────────────────────
+
+const waveCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
+const stripCache = new WeakMap<AudioNode, Map<TimbreId, AudioNode>>();
+const lfoCache = new WeakMap<BaseAudioContext, OscillatorNode[]>();
+let sharedNoiseBuffer: AudioBuffer | null = null;
+
+/**
+ * Partial amplitudes per body. Index 1 is the fundamental (index 0 is DC and is
+ * always zero). These tables are the timbral identity — everything else is
+ * envelope and filtering.
+ */
+const PARTIALS: Partial<Record<TimbreId, readonly number[]>> = Object.freeze({
+  // Odd partials, thin and clean: struck glass.
+  glass: Object.freeze([0, 1, 0.02, 0.3, 0.012, 0.12, 0, 0.05, 0, 0.028]),
+  // A full harmonic series falling roughly as 1/n^1.2: a bowed or plucked string.
+  gut: Object.freeze([
+    0, 1, 0.55, 0.34, 0.22, 0.15, 0.1, 0.072, 0.052, 0.038, 0.028, 0.021,
+  ]),
+  // Odd harmonics only — the spectrum of a pipe stopped at one end.
+  reed: Object.freeze([0, 1, 0, 0.42, 0, 0.26, 0, 0.18, 0, 0.13, 0, 0.1]),
+  // A sawtooth's 1/n series, which is what the formants below need to bite on.
+  voice: Object.freeze([
+    0, 1, 0.5, 0.333, 0.25, 0.2, 0.167, 0.143, 0.125, 0.111, 0.1, 0.091,
+  ]),
+});
+
+/** Vowel formants for the `voice` body. Fixed in Hz — that is what a vowel is. */
+const FORMANTS: readonly { readonly hz: number; readonly q: number; readonly gain: number }[] =
+  Object.freeze([
+    Object.freeze({ hz: 700, q: 8, gain: 1 }),
+    Object.freeze({ hz: 1220, q: 10, gain: 0.5 }),
+    Object.freeze({ hz: 2600, q: 12, gain: 0.22 }),
+  ]);
+
+function periodicWave(ctx: BaseAudioContext, timbre: TimbreId): PeriodicWave | null {
+  const partials = PARTIALS[timbre];
+  if (!partials) return null;
+  let byTimbre = waveCache.get(ctx);
+  if (!byTimbre) {
+    byTimbre = new Map();
+    waveCache.set(ctx, byTimbre);
+  }
+  const cached = byTimbre.get(timbre);
+  if (cached) return cached;
+  const real = new Float32Array(partials.length);
+  const imag = new Float32Array(partials);
+  const wave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+  byTimbre.set(timbre, wave);
+  return wave;
+}
+
+/**
+ * The colour filter each body is heard through, created once per destination
+ * and reused forever. `voice` returns a formant bank: three parallel bandpass
+ * resonators, which is the expensive part of a sung tone and the part that does
+ * not depend on the note.
+ */
+function timbreStrip(ctx: AudioContext, dest: AudioNode, timbre: TimbreId): AudioNode {
+  let byTimbre = stripCache.get(dest);
+  if (!byTimbre) {
+    byTimbre = new Map();
+    stripCache.set(dest, byTimbre);
+  }
+  const cached = byTimbre.get(timbre);
+  if (cached) return cached;
+
+  let node: AudioNode;
   switch (timbre) {
-    case "bell": {
-      // Glassy: fundamental + quiet 3rd harmonic, fast attack, long ring.
-      tone(ctx, dest, "sine", freq, gain, t0, opts.attack ?? 0.004, opts.hold ?? 0.05, opts.release ?? 1.6);
-      tone(ctx, dest, "sine", freq * 3, gain * 0.14, t0, 0.004, 0.02, (opts.release ?? 1.6) * 0.45);
+    case "glass": {
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 5200;
+      lp.connect(dest);
+      node = lp;
       break;
     }
-    case "pluck": {
-      // Harp-like: detuned triangle pair through a lowpass, quick decay.
-      const lp = lowpass(ctx, dest, 2400);
-      tone(ctx, lp, "triangle", freq * 0.9985, gain * 0.6, t0, 0.002, 0.03, opts.release ?? 0.7);
-      tone(ctx, lp, "triangle", freq * 1.0015, gain * 0.6, t0, 0.002, 0.03, opts.release ?? 0.7);
+    case "gut": {
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2600;
+      lp.Q.value = 0.8;
+      lp.connect(dest);
+      node = lp;
       break;
     }
-    case "pad": {
-      // v1's warm pad, essentially verbatim: detuned saws, dark filter, slow swell.
-      const lp = lowpass(ctx, dest, 900);
-      tone(ctx, lp, "sawtooth", freq * 0.9965, gain * 0.32, t0, opts.attack ?? 0.5, opts.hold ?? 1.2, opts.release ?? 1.8);
-      tone(ctx, lp, "sawtooth", freq * 1.0035, gain * 0.32, t0, opts.attack ?? 0.5, opts.hold ?? 1.2, opts.release ?? 1.8);
-      break;
-    }
-    case "fm": {
-      // Hollow, physical: one sine bending another.
-      const carrier = ctx.createOscillator();
-      carrier.type = "sine";
-      carrier.frequency.value = freq;
-      const mod = ctx.createOscillator();
-      mod.type = "sine";
-      mod.frequency.value = freq * 2.001;
-      const modGain = ctx.createGain();
-      modGain.gain.value = freq * 0.35;
-      mod.connect(modGain);
-      modGain.connect(carrier.frequency);
-      const env = envelope(ctx, dest, gain, t0, opts.attack ?? 0.03, opts.hold ?? 0.15, opts.release ?? 1.1);
-      carrier.connect(env);
-      attachVibrato(ctx, carrier, freq, t0);
-      const stopAt = t0 + (opts.attack ?? 0.03) + (opts.hold ?? 0.15) + (opts.release ?? 1.1) + 0.1;
-      carrier.start(t0);
-      mod.start(t0);
-      carrier.stop(stopAt);
-      mod.stop(stopAt);
-      break;
-    }
-    case "breath": {
-      // Airy: bandpassed noise with a sine core.
-      const noise = noiseSource(ctx, 2.5);
+    case "reed": {
       const bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
-      bp.frequency.value = freq;
-      bp.Q.value = 14;
-      const env = envelope(ctx, dest, gain * 0.8, t0, opts.attack ?? 0.09, opts.hold ?? 0.25, opts.release ?? 1.2);
-      noise.connect(bp);
-      bp.connect(env);
-      tone(ctx, dest, "sine", freq, gain * 0.35, t0, opts.attack ?? 0.09, opts.hold ?? 0.25, opts.release ?? 1.2);
-      const stopAt = t0 + (opts.attack ?? 0.09) + (opts.hold ?? 0.25) + (opts.release ?? 1.2) + 0.1;
-      noise.start(t0);
-      noise.stop(Math.min(stopAt, t0 + 2.4));
+      bp.frequency.value = 1500;
+      bp.Q.value = 1.1;
+      bp.connect(dest);
+      node = bp;
       break;
     }
-    case "drone": {
-      // Deep and steady: detuned sines plus a sub octave.
-      tone(ctx, dest, "sine", freq * 0.998, gain * 0.5, t0, opts.attack ?? 0.4, opts.hold ?? 1.0, opts.release ?? 2.2);
-      tone(ctx, dest, "sine", freq * 1.002, gain * 0.5, t0, opts.attack ?? 0.4, opts.hold ?? 1.0, opts.release ?? 2.2);
-      tone(ctx, dest, "sine", freq * 0.5, gain * 0.35, t0, opts.attack ?? 0.5, opts.hold ?? 1.0, opts.release ?? 2.4);
+    case "metal": {
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 260;
+      hp.connect(dest);
+      node = hp;
+      break;
+    }
+    case "wood": {
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 4200;
+      lp.connect(dest);
+      node = lp;
+      break;
+    }
+    case "voice": {
+      const input = ctx.createGain();
+      input.gain.value = 1;
+      for (const formant of FORMANTS) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = formant.hz;
+        bp.Q.value = formant.q;
+        const level = ctx.createGain();
+        level.gain.value = formant.gain;
+        input.connect(bp);
+        bp.connect(level);
+        level.connect(dest);
+      }
+      // A little direct signal keeps low notes from disappearing between formants.
+      const through = ctx.createGain();
+      through.gain.value = 0.18;
+      input.connect(through);
+      through.connect(dest);
+      node = input;
       break;
     }
   }
+  byTimbre.set(timbre, node);
+  return node;
 }
 
-// ── primitives ────────────────────────────────────────────────────────────
-
-function envelope(
-  ctx: AudioContext,
-  dest: AudioNode,
-  peak: number,
-  t0: number,
-  attack: number,
-  hold: number,
-  release: number
-): GainNode {
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(peak, t0 + attack);
-  g.gain.setValueAtTime(peak, t0 + attack + hold);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + hold + release);
-  g.connect(dest);
-  return g;
+/** Three pooled LFOs at slightly different rates — vibrato without per-note LFOs. */
+function vibratoSource(ctx: AudioContext, seed: number): OscillatorNode {
+  let lfos = lfoCache.get(ctx);
+  if (!lfos) {
+    lfos = [0.92, 1, 1.09].map((ratio) => {
+      const lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = SCORE.humanize.vibratoHz * ratio;
+      lfo.start();
+      return lfo;
+    });
+    lfoCache.set(ctx, lfos);
+  }
+  return lfos[seed % lfos.length];
 }
 
-function tone(
-  ctx: AudioContext,
-  dest: AudioNode,
-  type: OscillatorType,
-  freq: number,
-  peak: number,
-  t0: number,
-  attack: number,
-  hold: number,
-  release: number
-): void {
-  const osc = ctx.createOscillator();
-  osc.type = type;
-  osc.frequency.value = freq;
-  osc.connect(envelope(ctx, dest, peak, t0, attack, hold, release));
-  // Sustained voices breathe: slow notes earn a delayed-onset vibrato.
-  if (attack + hold + release > 2.2) attachVibrato(ctx, osc, freq, t0);
-  osc.start(t0);
-  osc.stop(t0 + attack + hold + release + 0.1);
-}
-
-function lowpass(ctx: AudioContext, dest: AudioNode, cutoff: number): BiquadFilterNode {
-  const lp = ctx.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.value = cutoff;
-  lp.connect(dest);
-  return lp;
-}
-
-let sharedNoiseBuffer: AudioBuffer | null = null;
-
-/** Looped white-noise source from a shared buffer — caller starts/stops it. */
+/** Looped white noise from one shared buffer. The caller starts and stops it. */
 export function noiseSource(ctx: AudioContext, seconds: number): AudioBufferSourceNode {
   if (!sharedNoiseBuffer || sharedNoiseBuffer.sampleRate !== ctx.sampleRate) {
-    const len = Math.ceil(ctx.sampleRate * Math.max(2.5, seconds));
-    sharedNoiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const length = Math.ceil(ctx.sampleRate * Math.max(2.5, seconds));
+    sharedNoiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = sharedNoiseBuffer.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = runtimeRandom() * 2 - 1;
+    for (let i = 0; i < length; i++) data[i] = runtimeRandom() * 2 - 1;
   }
   const src = ctx.createBufferSource();
   src.buffer = sharedNoiseBuffer;
   src.loop = true;
   return src;
 }
+
+// ─── Envelope ───────────────────────────────────────────────────────────────
+
+function humanizedFrequency(hz: number, detuneCents: number): number {
+  const jitter = (runtimeRandom() * 2 - 1) * SCORE.humanize.detuneCents;
+  return hz * Math.pow(2, (detuneCents + jitter) / 1200);
+}
+
+function humanizedGain(gain: number): number {
+  return gain * (1 + (runtimeRandom() * 2 - 1) * SCORE.humanize.gainJitter);
+}
+
+/**
+ * Attack → peak, hold → (floor, if one was asked for), release → silence.
+ *
+ * The floor is how a Tension persists: the amplitude falls to a low sustained
+ * level over the hold, and the instability keeps sounding there rather than
+ * either resolving or staying loud (CAV-007).
+ */
+function envelope(
+  ctx: AudioContext,
+  dest: AudioNode,
+  peak: number,
+  floor: number,
+  t0: number,
+  attack: number,
+  hold: number,
+  release: number
+): GainNode {
+  const g = ctx.createGain();
+  const safePeak = Math.max(0.00012, peak);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(safePeak, t0 + attack);
+  if (floor > 0.0001) {
+    g.gain.exponentialRampToValueAtTime(
+      Math.max(0.00011, Math.min(floor, safePeak)),
+      t0 + attack + hold
+    );
+  } else {
+    g.gain.setValueAtTime(safePeak, t0 + attack + hold);
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + hold + release);
+  g.connect(dest);
+  return g;
+}
+
+// ─── The one place a note is born ───────────────────────────────────────────
+
+export interface VoiceRequest {
+  readonly timbre: TimbreId;
+  readonly frequency: number;
+  readonly gain: number;
+  /** Absolute AudioContext time. */
+  readonly at: number;
+  readonly attack: number;
+  readonly hold: number;
+  readonly release: number;
+  /** Deliberate mistuning. This is what carries controlled beating. */
+  readonly detuneCents?: number;
+  /** Sustained level after the hold. Zero for an ordinary note. */
+  readonly floorGain?: number;
+  readonly pan?: number;
+}
+
+/**
+ * Schedule one note. Returns false when the voice budget refused it.
+ *
+ * Every branch obeys the same contract: no node outlives `stopAt`, no node is
+ * created that is not connected and stopped, and the total lifetime is clamped
+ * by the comfort table regardless of what the caller asked for.
+ */
+export function playVoice(
+  ctx: AudioContext,
+  dest: AudioNode,
+  request: VoiceRequest
+): boolean {
+  const attack = Math.max(0.001, request.attack);
+  const hold = Math.max(0, request.hold);
+  const release = Math.max(0.02, request.release);
+  const life = clampLifetimeSeconds(attack + hold + release);
+  if (life <= 0) return false;
+
+  const t0 = request.at;
+  const stopAt = t0 + life + 0.08;
+  if (!voiceBudget.claim(ctx.currentTime, stopAt)) return false;
+
+  const freq = humanizedFrequency(request.frequency, request.detuneCents ?? 0);
+  const gain = humanizedGain(request.gain);
+  const floor = request.floorGain ?? 0;
+  const sustained = life > 2.2;
+  const seed = hashString(`${request.timbre}:${Math.round(freq)}`);
+
+  // Panning is per-note and therefore not poolable; it is only created when a
+  // caller actually asks for a position.
+  let target: AudioNode = timbreStrip(ctx, dest, request.timbre);
+  if (request.pan !== undefined && request.pan !== 0) {
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, request.pan));
+    panner.connect(timbreStrip(ctx, dest, request.timbre));
+    target = panner;
+  }
+
+  const env = envelope(ctx, target, gain, floor, t0, attack, hold, release);
+
+  const startOscillator = (osc: OscillatorNode): void => {
+    osc.start(t0);
+    osc.stop(stopAt);
+  };
+
+  const addVibrato = (osc: OscillatorNode): void => {
+    if (!sustained || SCORE.humanize.vibratoDepth <= 0) return;
+    const depth = ctx.createGain();
+    depth.gain.setValueAtTime(0, t0);
+    depth.gain.linearRampToValueAtTime(
+      freq * SCORE.humanize.vibratoDepth,
+      t0 + Math.min(0.9, life * 0.4)
+    );
+    depth.gain.setValueAtTime(freq * SCORE.humanize.vibratoDepth, stopAt);
+    const lfo = vibratoSource(ctx, seed);
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    // The pooled LFO runs for the life of the context, so the per-note depth
+    // gain must be released explicitly or it would be kept alive by it forever.
+    // `ended` fires at the oscillator's own stop time — no timer, no leak.
+    osc.addEventListener(
+      "ended",
+      () => {
+        lfo.disconnect(depth);
+        depth.disconnect();
+      },
+      { once: true }
+    );
+  };
+
+  switch (request.timbre) {
+    case "glass":
+    case "reed":
+    case "voice": {
+      const osc = ctx.createOscillator();
+      const wave = periodicWave(ctx, request.timbre);
+      if (wave) osc.setPeriodicWave(wave);
+      else osc.type = "sine";
+      osc.frequency.value = freq;
+      osc.connect(env);
+      addVibrato(osc);
+      startOscillator(osc);
+      if (request.timbre === "reed") {
+        // Breath: the noise a reed makes before it speaks. Short, and quiet
+        // enough that it colours the onset rather than becoming a texture.
+        const noise = noiseSource(ctx, 2.5);
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = Math.min(9000, freq * 3);
+        bp.Q.value = 3;
+        const breath = envelope(
+          ctx,
+          target,
+          gain * 0.22,
+          0,
+          t0,
+          Math.min(attack, 0.05),
+          0.03,
+          Math.min(release, 0.5)
+        );
+        noise.connect(bp);
+        bp.connect(breath);
+        noise.start(t0);
+        noise.stop(Math.min(stopAt, t0 + 1.2));
+      }
+      break;
+    }
+
+    case "gut": {
+      // Two strings, a few cents apart. The beating between them is the warmth.
+      const wave = periodicWave(ctx, "gut");
+      for (const ratio of [0.9986, 1.0014]) {
+        const osc = ctx.createOscillator();
+        if (wave) osc.setPeriodicWave(wave);
+        else osc.type = "sawtooth";
+        osc.frequency.value = freq * ratio;
+        const half = ctx.createGain();
+        half.gain.value = 0.5;
+        osc.connect(half);
+        half.connect(env);
+        addVibrato(osc);
+        startOscillator(osc);
+      }
+      break;
+    }
+
+    case "metal": {
+      // FM at an irrational ratio: the partials do not land on the harmonic
+      // series, which is exactly why struck metal does not sound like a string.
+      const carrier = ctx.createOscillator();
+      carrier.type = "sine";
+      carrier.frequency.value = freq;
+      const modulator = ctx.createOscillator();
+      modulator.type = "sine";
+      modulator.frequency.value = freq * Math.SQRT2;
+      const index = ctx.createGain();
+      index.gain.setValueAtTime(freq * 2.4, t0);
+      // The index collapses fast — a strike is bright then settles into a hum.
+      index.gain.exponentialRampToValueAtTime(
+        Math.max(1, freq * 0.12),
+        t0 + Math.min(1.2, life * 0.5)
+      );
+      modulator.connect(index);
+      index.connect(carrier.frequency);
+      carrier.connect(env);
+      startOscillator(carrier);
+      startOscillator(modulator);
+      break;
+    }
+
+    case "wood": {
+      // A pitched strike: the body drops in pitch as the block gives way, and a
+      // filtered noise transient supplies the contact sound.
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq * 1.045, t0);
+      osc.frequency.exponentialRampToValueAtTime(freq, t0 + 0.035);
+      osc.connect(env);
+      startOscillator(osc);
+
+      const noise = noiseSource(ctx, 2.5);
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = Math.min(9000, freq * 3.2);
+      bp.Q.value = 6;
+      const strike = envelope(ctx, target, gain * 0.5, 0, t0, 0.001, 0.004, 0.09);
+      noise.connect(bp);
+      bp.connect(strike);
+      noise.start(t0);
+      noise.stop(Math.min(stopAt, t0 + 0.35));
+      break;
+    }
+  }
+
+  return true;
+}
+
+export interface SimpleVoiceOptions {
+  readonly gain?: number;
+  readonly attack?: number;
+  /** Seconds of audible body before release begins. */
+  readonly hold?: number;
+  readonly release?: number;
+  /** Absolute AudioContext time to start; defaults to now. */
+  readonly at?: number;
+  readonly detuneCents?: number;
+  readonly floorGain?: number;
+  readonly pan?: number;
+}
+
+/**
+ * The convenience form, for callers that only want a note and sensible
+ * defaults. It is a thin adapter over `playVoice()` and adds no synthesis of its
+ * own — there is still exactly one place a note is born.
+ */
+export function playNote(
+  ctx: AudioContext,
+  dest: AudioNode,
+  timbre: TimbreId,
+  frequency: number,
+  options: SimpleVoiceOptions = {}
+): boolean {
+  return playVoice(ctx, dest, {
+    timbre,
+    frequency,
+    gain: options.gain ?? 0.2,
+    at: options.at ?? ctx.currentTime,
+    attack: options.attack ?? 0.02,
+    hold: options.hold ?? 0.1,
+    release: options.release ?? 1.2,
+    detuneCents: options.detuneCents,
+    floorGain: options.floorGain,
+    pan: options.pan,
+  });
+}
+
+/**
+ * The legacy prototype's six discipline timbres, mapped onto the six bodies.
+ *
+ * Kept only so the pre-Castalia ambient bed and sfx keep sounding while the
+ * legacy content pack is retired. Nothing new should reach for these names.
+ */
+export const LEGACY_TIMBRE: Readonly<
+  Record<"bell" | "pluck" | "pad" | "fm" | "breath" | "drone", TimbreId>
+> = Object.freeze({
+  bell: "glass",
+  pluck: "gut",
+  pad: "voice",
+  fm: "metal",
+  breath: "reed",
+  drone: "glass",
+});

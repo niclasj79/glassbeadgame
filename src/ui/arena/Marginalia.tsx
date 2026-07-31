@@ -35,6 +35,8 @@ interface Note {
   readonly kind: "documented" | "open" | "unresolved" | "motif";
   readonly title: string;
   readonly body: string;
+  /** The honest complication, set apart so it reads as a caveat, not a clause. */
+  readonly aside: string | null;
   /** The honest label for how firmly the Game stands behind this. */
   readonly standing: string;
   readonly sources: readonly string[];
@@ -62,9 +64,8 @@ function noteFor(cue: PresentationCue): Note | null {
         id: cue.id,
         kind: "documented",
         title: relation.title,
-        body: `${relation.insight}${
-          relation.counterpoint ? ` — ${relation.counterpoint}` : ""
-        }`,
+        body: relation.insight,
+        aside: relation.counterpoint ?? null,
         standing: `${EVIDENCE_STANDING[evidence] ?? evidence} · ${
           RECEPTION_NOTE[reception] ?? ""
         }`,
@@ -81,6 +82,7 @@ function noteFor(cue: PresentationCue): Note | null {
         kind: "open",
         title: "An open thread",
         body: cue.payload.question,
+        aside: null,
         standing: `No documented relation here · both carry ${facet}`,
         sources: [],
         seconds: cue.duration,
@@ -92,6 +94,7 @@ function noteFor(cue: PresentationCue): Note | null {
         kind: "unresolved",
         title: "Nothing grounded yet",
         body: cue.payload.statement,
+        aside: null,
         standing: "The Game is not asserting anything here",
         sources: [],
         seconds: cue.duration,
@@ -102,6 +105,7 @@ function noteFor(cue: PresentationCue): Note | null {
         kind: "motif",
         title: `${String(cue.payload.motifKindId)} has formed`,
         body: cue.payload.reason,
+        aside: null,
         standing: cue.payload.conceptIds
           .map((id) => castaliaConceptById.get(String(id))?.name ?? String(id))
           .join(" · "),
@@ -142,8 +146,17 @@ export function Marginalia() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-[min(30rem,36vw)] items-center pr-8 md:flex"
+      className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-[min(27rem,32vw)] items-center md:flex"
     >
+      {/* The page beneath the margin. Without it the note competes with the
+          arena for the same pixels and both become unreadable — a margin is
+          only a margin if something is holding it. */}
+      <div
+        className={
+          "absolute inset-0 -z-10 bg-gradient-to-l from-void via-void/92 to-transparent transition-opacity duration-700 " +
+          (note ? "opacity-100" : "opacity-0")
+        }
+      />
       <AnimatePresence mode="wait">
         {note && (
           <motion.figure
@@ -152,7 +165,7 @@ export function Marginalia() {
             animate={{ opacity: 1, x: 0 }}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, x: 6 }}
             transition={{ duration: reducedMotion ? 0.14 : 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="m-0 w-full"
+            className="m-0 w-full pl-10 pr-8"
           >
             {/* The scribe's rule: the margin is ruled before it is written in. */}
             <div
@@ -165,7 +178,14 @@ export function Marginalia() {
             <h2 className="font-display text-title font-medium leading-tight text-vellum">
               {note.title}
             </h2>
-            <p className="prose-castalia mt-2">{note.body}</p>
+            <p className="prose-castalia mt-2 max-w-none text-body leading-relaxed">
+              {note.body}
+            </p>
+            {note.aside && (
+              <p className="mt-3 border-l border-brass/40 pl-3 font-ui text-caption leading-relaxed text-dim">
+                {note.aside}
+              </p>
+            )}
             {note.sources.length > 0 && (
               <p className="engraved mt-3 normal-case tracking-[0.12em] text-faint">
                 {note.sources.length === 1
