@@ -100,12 +100,20 @@ decide deliberately, not a reason to avoid deciding.
 The freeze holds only because of three binding conditions. Each is a real
 constraint on other work, not a restatement of current behaviour:
 
-1. **`DocumentedRelationId` must be `relationKey(a, b)` and must resolve in the
-   pack pinned by `session.started.contentPackVersion`.** The event therefore
-   stores an identity, and everything else — relation type, evidence class,
-   sources, intention fit, counterpoint — is a pure lookup at replay time. The
-   content validator must enforce resolvability, because an unresolvable id
-   would become a durable, permanently valid, permanently meaningless event.
+1. **`DocumentedRelationId` must resolve in the pack pinned by
+   `session.started.contentPackVersion`, and a pair must have at most one
+   authored relation.** The event stores an identity, and everything else —
+   relation type, evidence class, sources, intention fit, counterpoint — is a
+   pure lookup at replay time. The content validator enforces both halves,
+   because an unresolvable id would become a durable, permanently valid,
+   permanently meaningless event.
+
+   An earlier draft of this ADR required the id to *be* `relationKey(a, b)`.
+   That was stricter than the guarantee needs and it cost readability for
+   nothing: the pair is already carried by `thread.committed`, so one relation
+   per pair means replay can resolve by pair whether or not the id encodes it.
+   Readable ids like `rel.fibonacci-counterpoint` are kept, and the one-relation
+   -per-pair rule supplies the property the freeze actually depends on.
 
 2. **Open Thread generation must not consult topology.** An `OpenThreadId` is a
    structured handle over `(pair, intention, sharedFacet, packVersion)`, all of
