@@ -198,6 +198,36 @@ distinguishable from audiovisual behaviour without relying on label or colour.
 
 ---
 
+## Automated evidence at campaign close
+
+Reproduce with the commands named in each section above.
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit -p tsconfig.app.json` | clean |
+| `npx vitest run` | 56 files, 815 tests passing |
+| `npm run lint` | clean |
+| `npm run validate:content` | 48 tests; pack validates with 0 errors, 0 warnings |
+| `npm run build` | clean |
+| `npm run bundle:check` | every budget passing (JS gzip 488 kB against a 500 kB ceiling) |
+| `npm run test:browser` | 7 of 7 passing |
+
+Set `GBG_BASE_URL` to point the browser suite at a dev server that is already
+running; starting a second one doubles the content gate and can push first paint
+past the per-test timeout.
+
+**What that table does and does not mean.** It means the game is correct,
+deterministic, replayable, and within budget. It means no committed thread can
+produce a fabricated claim, because the content model makes fabrication a build
+failure rather than a matter of care. It does not mean the game is beautiful,
+comfortable, well-paced, or well-scored — and the sections above exist because
+those are the questions that remain.
+
+One item deserves naming rather than burying: **the conclusion performance has
+never been heard.** It compiles deterministically from the event log and its
+structure is asserted in tests, but no human has listened to a session play
+itself back. That is the single largest untested claim in the slice.
+
 ## Standing constraints
 
 - No item above may be ticked by an assistant.
