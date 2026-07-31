@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
+import { domainSessionStore } from "@/state/domainSession";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { conceptById } from "@/content/concepts";
 import type { Concept } from "@/content/types";
@@ -89,18 +90,53 @@ export function Cosmos() {
         : 1;
     frameState.breathDepth += (depthTarget - frameState.breathDepth) * Math.min(1, dt * 2);
 
-    // The room brightens with each luminous find.
-    const sess = st.session;
-    const awakeTarget =
-      sess && sess.curatedAvailable > 0
-        ? Math.min(
-            1,
-            sess.discoveries.filter((d) => d.kind === "curated").length /
-              sess.curatedAvailable
-          )
-        : 0;
+    /**
+     * How far the web has been *carried*, not how much of it has been found.
+     *
+     * This was `curatedDiscoveries / curatedAvailable` — the fraction of the
+     * draw's hidden authored pairs the player had located. The sky literally
+     * brightened as they guessed more correct answers, and global bloom scaled
+     * with it. That is a completion meter wearing an atmosphere, and it breaks
+     * two product laws at once: the player is not hunting hidden pairs, and the
+     * environment must evolve from topology rather than from percentage
+     * completion (VERTICAL-SLICE-SPEC §17).
+     *
+     * It is now the reach of the largest connected region, normalised against
+     * the arena. Reach is a property of the composition: it rises when threads
+     * join, and it cannot be raised by finding anything. There is no ceiling to
+     * complete and nothing to fill.
+     */
+    const domain = domainSessionStore.getState().session;
+    let reach = 0;
+    if (domain && domain.threads.length > 0) {
+      const neighbours = new Map<string, string[]>();
+      for (const thread of domain.threads) {
+        const a = String(thread.pair[0]);
+        const b = String(thread.pair[1]);
+        (neighbours.get(a) ?? neighbours.set(a, []).get(a)!).push(b);
+        (neighbours.get(b) ?? neighbours.set(b, []).get(b)!).push(a);
+      }
+      const seen = new Set<string>();
+      let largest = 0;
+      for (const startId of neighbours.keys()) {
+        if (seen.has(startId)) continue;
+        let size = 0;
+        const stack = [startId];
+        while (stack.length > 0) {
+          const current = stack.pop() as string;
+          if (seen.has(current)) continue;
+          seen.add(current);
+          size += 1;
+          for (const next of neighbours.get(current) ?? []) {
+            if (!seen.has(next)) stack.push(next);
+          }
+        }
+        if (size > largest) largest = size;
+      }
+      reach = Math.min(1, largest / Math.max(4, domain.conceptIds.length));
+    }
     frameState.awakening +=
-      (awakeTarget - frameState.awakening) * Math.min(1, dt * 0.8);
+      (reach - frameState.awakening) * Math.min(1, dt * 0.8);
 
     // Layout morph toward targets.
     if (frameState.morphActive) {

@@ -339,7 +339,6 @@ function detectBridges(
   lookup: RelationLookup
 ): readonly MotifDetection[] {
   const detections: MotifDetection[] = [];
-  const woven = topology.wovenConceptIds;
 
   for (const node of topology.nodes) {
     if (!node.isArticulation) continue;
@@ -347,7 +346,22 @@ function detectBridges(
     // more than one faculty, or it is merely a link in a single-faculty chain.
     if (node.neighbourFaculties.length < 2) continue;
 
-    const regions = componentsExcluding(adjacency, woven, node.conceptId, null).map(
+    /**
+     * Only this concept's own component may supply the regions it bridges.
+     *
+     * This previously passed every woven concept in the session, so two regions
+     * belonging to entirely *different* connected components could be picked as
+     * the two sides of a crossing — and the web is fragmented for most of a
+     * session, so that was the common case rather than a corner one. The Game
+     * would then state, as a structural finding, that removing a concept made
+     * two faculties "fall away" from a third that had never been attached to
+     * anything. Product law 8: silence is preferable to fabricated significance.
+     */
+    const component = topology.components[node.componentIndex];
+    if (component === undefined) continue;
+    const members = component.conceptIds;
+
+    const regions = componentsExcluding(adjacency, members, node.conceptId, null).map(
       (piece) => facultiesOf(piece, lookup)
     );
     let left: readonly FacultyId[] | null = null;
@@ -393,7 +407,15 @@ function detectBridges(
 
   for (const edge of topology.edges) {
     if (!edge.isGraphBridge) continue;
-    const pieces = componentsExcluding(adjacency, woven, null, [
+    // Same confinement as above: a thread can only bridge regions inside the
+    // component it belongs to.
+    const endpoint = topology.nodes.find(
+      (node) => node.conceptId === edge.pair[0]
+    );
+    const edgeComponent =
+      endpoint === undefined ? undefined : topology.components[endpoint.componentIndex];
+    if (edgeComponent === undefined) continue;
+    const pieces = componentsExcluding(adjacency, edgeComponent.conceptIds, null, [
       edge.pair[0],
       edge.pair[1],
     ]);

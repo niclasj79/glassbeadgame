@@ -141,8 +141,14 @@ void main() {
     // Tension — counter-wound pair. The helix is construction; the bounded
     // oscillation on top of it is the counter-motion, and it never resolves.
     float wind = t * GBG_TAU * 1.35 * aStrand;
+    // uTorsion is CAV-007's accepted bound and is used at face value. It was
+    // multiplied by 4 here, which put each strand at +/-56 degrees and, since
+    // the strands counter-rotate, ~112 degrees of visible relative counter-
+    // motion — eight times the envelope. The grammar test asserted the value
+    // going *into* this uniform, so it passed while the render broke the bound.
+    // A bound that a shader is free to scale is not a bound.
     float sway = uTorsion * uUnrest * sin(GBG_TAU * uBeat * uTime + t * 2.1) * aStrand;
-    float angle = wind + sway * 4.0;
+    float angle = wind + sway;
     float sep = uWidth * (1.25 + 0.35 * uUnrest);
     offset = (side * cos(angle) + up * sin(angle)) * sep;
     twist = sway;

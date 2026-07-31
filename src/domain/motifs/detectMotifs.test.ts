@@ -167,6 +167,43 @@ describe("Canon", () => {
 });
 
 describe("Bridge", () => {
+  it("never claims a crossing between regions that were never connected", () => {
+    // Reported by adversarial review. Bridge detection considered every woven
+    // concept in the session as candidate regions, so two pieces belonging to
+    // *different* connected components could be picked as the two sides of a
+    // crossing. Since the web is fragmented for most of a session, this was the
+    // common case, and the Game stated as a structural finding that removing a
+    // concept made faculties "fall away" from a region that had never been
+    // attached to it. Product law 8: silence beats fabricated significance.
+    const fixture = buildSessionFixture({
+      conceptIds: [
+        C.fourier,
+        C.counterpoint,
+        C.primes,
+        C.cantor,
+        C.perspective,
+        C.girih,
+      ],
+      threads: [
+        // One component: a Measure/Sound triangle with a leaf on Fourier.
+        { a: C.fourier, b: C.counterpoint, intention: "echo" },
+        { a: C.counterpoint, b: C.primes, intention: "echo" },
+        { a: C.primes, b: C.fourier, intention: "echo" },
+        { a: C.fourier, b: C.cantor, intention: "ground" },
+        // A separate component, in Image, touching nothing above.
+        { a: C.perspective, b: C.girih, intention: "echo" },
+      ],
+    });
+
+    for (const bridge of only(detectMotifs(fixture.state, lookup), "bridge")) {
+      // Whatever is detected must be a genuine cut inside one component, so it
+      // may never name a concept from the unattached Image region.
+      expect([...bridge.conceptIds]).not.toContain(C.perspective);
+      expect([...bridge.conceptIds]).not.toContain(C.girih);
+      expect(bridge.reason).not.toContain("Image");
+    }
+  });
+
   it("completes for the one thread joining two faculty regions", () => {
     const fixture = buildSessionFixture({
       conceptIds: [C.fibonacci, C.primes, C.counterpoint, C.polyrhythm],

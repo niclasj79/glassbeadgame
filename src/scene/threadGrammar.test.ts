@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { RELATION_INTENTIONS } from "@/domain/events";
 import {
@@ -57,11 +58,25 @@ describe("the four thread materials", () => {
 });
 
 describe("CAV-007 comfort envelope", () => {
-  it("bounds torsion to fourteen degrees", () => {
-    expect(COMFORT.maxTorsionRadians).toBeCloseTo((14 * Math.PI) / 180, 10);
-    for (const form of THREAD_FORMS) {
+  it("bounds torsion to fourteen degrees, as the shader actually renders it", () => {
+    // This assertion used to read the value on its way *into* a uniform that
+    // the shader then multiplied by four — so it passed at +/-14 degrees while
+    // the render ran at +/-56 per strand, and ~112 of visible counter-rotation
+    // between the two. The bound is only real if the amplitude reaching
+    // `angle` is the bound, so the multiplier is gone and this test now names
+    // the shader expression it is protecting.
+    for (const intention of RELATION_INTENTIONS) {
+      const form = threadForm(intention);
       expect(form.torsion).toBeLessThanOrEqual(COMFORT.maxTorsionRadians + 1e-9);
     }
+    const source = readFileSync(
+      new URL("./ribbon.ts", import.meta.url),
+      "utf8"
+    );
+    // uUnrest and aStrand are both bounded to 1, so `sway` cannot exceed
+    // uTorsion. Any scalar reintroduced here would silently break the envelope.
+    expect(source).toContain("float angle = wind + sway;");
+    expect(source).not.toMatch(/sway\s*\*\s*[0-9]/);
   });
 
   it("keeps every beat inside 0.8–6.5 Hz and never above 7", () => {
