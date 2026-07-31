@@ -3,8 +3,8 @@ import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
 import { useCurrentTheme } from "@/themes/useTheme";
-import { conceptById } from "@/content/concepts";
-import type { Concept } from "@/content/types";
+import { castaliaConceptById } from "@/content/castalia";
+import type { CastaliaConcept } from "@/content/castalia/schema";
 import { fibonacciSpherePositions, lensPlanePositions } from "@/game/layout";
 import { frameState, initFramePositions, setMorphTargets } from "./frameState";
 import { armillaryOrder } from "./identity";
@@ -49,15 +49,16 @@ export function Cosmos() {
     }
   }, [ordered]);
 
-  // The Lens morphs between the armillary and one of three transcendental
-  // planes. It reads the older pack's coordinates; a draw whose concepts have
-  // none simply does not morph rather than throwing.
+  // The Lens morphs between the armillary and one of three plane readings, each
+  // laid out from fields the pack authors. A draw containing a bead the pack
+  // does not know simply does not morph rather than throwing.
   useEffect(() => {
     if (!ordered || ordered.length === 0) return;
     const reduced = useStore.getState().settings.reducedMotion;
-    const concepts = ordered.map((id) => conceptById.get(id));
+    const concepts = ordered.map((id) => castaliaConceptById.get(id));
     const plane =
-      lensActive && concepts.every((concept): concept is Concept => Boolean(concept))
+      lensActive &&
+      concepts.every((concept): concept is CastaliaConcept => Boolean(concept))
         ? lensPlanePositions(concepts, lensView)
         : null;
     const targets = plane ?? fibonacciSpherePositions(ordered.length);

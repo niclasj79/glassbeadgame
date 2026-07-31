@@ -99,4 +99,15 @@ describe("the thread ribbon honours reduced motion", () => {
       "reducedMotion: profile.reducedMotion"
     );
   });
+
+  it("never makes one relation intention dimmer than another", () => {
+    // A settled Tension used to render ~22% dimmer than an Echo. That is the
+    // "one kind pays better" failure CAV-006 forbids for outcomes, applied to
+    // intentions instead: a player who watches Tension fade learns it is worth
+    // less than the readings that stay bright. CAV-007's decay belongs to the
+    // amplitude of the instability, which the vertex stage already carries.
+    const source = readFileSync(new URL("./ribbon.ts", import.meta.url), "utf8");
+    const fragment = source.slice(source.indexOf("uniform float uUnrest;", source.indexOf("uniform float uUnrest;") + 1));
+    expect(fragment).not.toMatch(/alpha\s*\*=[^;]*uUnrest/);
+  });
 });

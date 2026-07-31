@@ -200,7 +200,7 @@ export function CameraRig() {
     }
   }, [phase, reducedMotion, camera, aspect]);
 
-  // The Lens: square up to whichever transcendental plane is showing.
+  // The Lens: square up to whichever plane reading is showing.
   const wasLensed = useRef(false);
   useEffect(() => {
     if (lensActive) {

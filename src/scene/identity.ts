@@ -1,47 +1,31 @@
 import { castaliaConceptById } from "@/content/castalia/concepts";
 import { facultyById } from "@/content/castalia/faculties";
-import {
-  SIGIL_FAMILIES,
-  type ConceptSigil,
-  type FacultyId,
-  type SigilFamily,
+import type {
+  ConceptSigil,
+  FacultyId,
+  SigilFamily,
 } from "@/content/castalia/schema";
-import { conceptById as legacyConceptById } from "@/content/concepts";
-import type { DisciplineId } from "@/content/types";
-import { hashString } from "@/lib/utils";
 
 /**
  * WHAT THE SCENE IS ALLOWED TO KNOW ABOUT A BEAD
  *
- * The arena currently draws whichever concept pack the session was built from.
- * The authored Castalia pack carries a `ConceptSigil` and a `Faculty`; the
- * older pack that still feeds `startSession` carries neither. Rather than
- * reach into another agent's migration, the scene resolves both through one
- * narrow, pure function and records **which of the two it got**.
+ * Every bead the arena draws comes from the Castalia pack, so every figure,
+ * faculty, ink and collar on screen is authored. This module is the single
+ * narrow, pure seam through which the scene reads them.
  *
- * The honesty rule that makes this safe, stated as the code actually
- * implements it:
+ * It used to carry a second branch: a bead from the pre-Castalia pack got a
+ * hash-derived placeholder figure and a faculty read off a discipline table.
+ * That branch is gone with the pack it served, and with it the risk it managed
+ * — nothing here can now put an unauthored figure on screen.
  *
- *  1. **Gold leaf is authored-only.** A derived identity is never gilded, so
- *     no placeholder can wear the mark the Game reserves for a claim it is
- *     making. `derivedSigil` hard-codes `gilded: false`.
- *  2. **A faculty is never invented.** It is either authored by the pack, or
- *     read from `DISCIPLINE_FACULTY` — a small, explicit table of exact
- *     counterparts. A discipline with no counterpart resolves to `null` and
- *     renders unattributed: neutral ink, a plain graduated collar, no claim.
- *
- * Note the difference between the two: gilding is withheld from every derived
- * bead, while faculty *is* attributed to a derived bead when the table has an
- * exact counterpart for its discipline (and its ink and collar follow). This
- * docblock used to say that faculty attribution, like gold leaf, was "reserved
- * for authored content" — which the legacy branch below has never done, and
- * `identity.test.ts` has always asserted the opposite. A comment that
- * contradicts the code is worse than no comment: it is the version a reader
- * believes. The table, not the sentence, is the rule.
- *
- * When the Castalia pack becomes the session source, every bead resolves
- * through the authored branch and the derived branch disappears on its own —
- * there is nothing to remove.
+ * What remains is the rule that made the branch safe in the first place, and it
+ * is still worth stating because it governs the one case left. An id the pack
+ * does not know is **not** given a figure, a faculty, or gold leaf. It resolves
+ * to a neutral, unattributed bead: a plain graduated collar, the world's
+ * engraving ink, and no claim of any kind. In ordinary play that case is
+ * unreachable — the draw comes from the pack — but a function the scene calls
+ * every frame must not throw on a stale id from a persisted session, so it
+ * returns something honest instead.
  */
 export interface BeadIdentity {
   readonly id: string;

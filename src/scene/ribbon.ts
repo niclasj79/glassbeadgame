@@ -271,7 +271,13 @@ void main() {
 
   vec3 col = mix(uInk, uMarkColor, mark * 0.85);
   float alpha = body * uOpacity * reveal;
-  alpha *= mix(0.72, 1.0, uUnrest);
+  // Deliberately NOT modulated by uUnrest. A settled Tension used to render
+  // about 22% dimmer than an Echo, which is the "one kind pays better" failure
+  // CAV-006 forbids for outcomes, applied instead to intentions — a player who
+  // sees Tension fade learns it is worth less. CAV-007's decay governs the
+  // *amplitude of the instability*, and that is already carried by the sway in
+  // the vertex stage and by the beat; spending ink on it a second time costs
+  // legibility for nothing. Every relation is equally present.
   if (alpha < 0.004) discard;
   gl_FragColor = vec4(col, alpha);
 }
