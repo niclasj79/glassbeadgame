@@ -100,6 +100,32 @@ export interface CastaliaConcept {
   readonly era: string;
   readonly motif: ConceptMotif;
   readonly sigil: ConceptSigil;
+  readonly standing: TranscendentalStanding;
+}
+
+/**
+ * WHERE THE GAME READS A CONCEPT ON CASTALIA'S OWN THREE AXES.
+ *
+ * True, Beautiful and Good are the frame Hesse's Castalia is built on, and the
+ * Lens exists to rearrange the arena along them. They are the one place in this
+ * pack where the Game says something it cannot cite.
+ *
+ * So they are declared, loudly, as what they are: **a reading the Game offers,
+ * never a measurement of the concept.** Prime Numbers does not possess a
+ * quantity of truth. What this records is where the Game would place it if
+ * asked, and the Lens says so on screen every time it opens — the same
+ * distinction the content model already draws between a record and a reading,
+ * applied to the one arrangement that could not be sourced.
+ *
+ * Read them as: how far the idea is a claim about what *is* (`truth`); how far
+ * it is valued for its form (`beauty`); how far it concerns what should be made
+ * or done (`good`). Each in [-1, 1]. A player who disagrees with a position is
+ * having exactly the argument the Lens is for.
+ */
+export interface TranscendentalStanding {
+  readonly truth: number;
+  readonly beauty: number;
+  readonly good: number;
 }
 
 // ─── Musical identity ───────────────────────────────────────────────────────

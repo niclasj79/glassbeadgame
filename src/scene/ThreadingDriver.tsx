@@ -194,21 +194,41 @@ function AttunementInvitation() {
               ? "Release Attunement and return to composing"
               : "Enter Attunement and listen to the web one thread at a time"
           }
+          title={
+            attuned
+              ? "Release Attunement and go back to composing."
+              : "Attunement — the world quietens and the web sounds one thread at a time, so you can hear what you have made. Nothing is added, nothing is scored, and you can leave whenever you like."
+          }
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => {
             if (attuned) sessionProgression.exitAttunement();
             else sessionProgression.enterAttunement();
           }}
-          className="pointer-events-auto grid h-14 w-14 place-items-center rounded-full border border-brass/60 bg-void/70 text-bright backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow aria-pressed:border-glow aria-pressed:bg-glow/15"
+          className="group pointer-events-auto grid h-14 w-14 place-items-center rounded-full border border-brass/60 bg-void/70 text-bright backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow aria-pressed:border-glow aria-pressed:bg-glow/15 [&:focus-visible_.attune-gloss]:opacity-100"
         >
           <span className="font-display text-2xl leading-none" aria-hidden="true">
             {attuned ? "◉" : "◎"}
           </span>
+          {/*
+            "Attune" is a word, not an explanation. A player who has never met
+            it has no way to know whether pressing it costs them anything — and
+            in a game with no failure state, hesitating over a button is a
+            failure of copy rather than of nerve. The mark keeps its one-word
+            name; the sentence that says what happens arrives on hover and on
+            focus, and lives in full in the title and the accessible name.
+          */}
           <span
-            className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap font-ui text-[9px] uppercase tracking-[0.18em] text-dim"
+            className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 text-center"
             aria-hidden="true"
           >
-            {attuned ? "Release" : "Attune"}
+            <span className="block whitespace-nowrap font-ui text-[9px] uppercase tracking-[0.18em] text-dim">
+              {attuned ? "Release" : "Attune"}
+            </span>
+            <span className="attune-gloss mx-auto mt-1 block w-52 font-ui text-[9px] normal-case leading-relaxed tracking-[0.04em] text-faint opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              {attuned
+                ? "Go back to composing."
+                : "The world quietens and the web sounds one thread at a time. Nothing is added or scored — leave whenever you like."}
+            </span>
           </span>
         </button>
       </div>

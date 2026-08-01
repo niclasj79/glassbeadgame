@@ -102,14 +102,37 @@ export function BeadDetails({ concept, lensActive, onClose }: BeadDetailsProps) 
           reading: an engraved run, not a row of filled chips. These are the
           handles a connection can actually be built from, so they are the last
           thing read before the player goes back to the arena. */}
+      {/*
+        A facet name alone is a word the player has no way to look up. "No
+        Common Measure" and "Return" are precise and completely opaque on first
+        contact, and the pack already writes a one-clause gloss for every one of
+        them — it was simply never shown. Each name now carries its own gloss on
+        hover and on focus, and the gloss is in the accessible name too, so the
+        keyboard and screen-reader routes learn the same thing the pointer does.
+      */}
       {concept.facets.length > 0 && (
         <p
           data-testid="bead-facets"
           className="engraved mt-4 normal-case tracking-[0.12em] text-dim"
         >
-          {concept.facets
-            .map((facetId) => facetById.get(facetId)?.name ?? String(facetId))
-            .join(" · ")}
+          {concept.facets.map((facetId, index) => {
+            const facet = facetById.get(facetId);
+            const name = facet?.name ?? String(facetId);
+            return (
+              <span key={String(facetId)}>
+                {index > 0 && <span aria-hidden="true"> · </span>}
+                <abbr
+                  data-testid={`facet-${String(facetId)}`}
+                  title={facet ? `${name} — ${facet.gloss}` : name}
+                  aria-label={facet ? `${name}. ${facet.gloss}` : name}
+                  tabIndex={0}
+                  className="cursor-help border-b border-dotted border-line/60 no-underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/70"
+                >
+                  {name}
+                </abbr>
+              </span>
+            );
+          })}
         </p>
       )}
 

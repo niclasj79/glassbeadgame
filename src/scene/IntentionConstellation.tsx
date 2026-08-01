@@ -584,6 +584,7 @@ export function IntentionConstellation() {
                   role="radio"
                   aria-checked={false}
                   aria-label={`${option.label}: ${option.description}`}
+                  title={`${option.label} — ${option.description}`}
                   data-world-intention={option.intention}
                   data-direct-hover="false"
                   data-testid={`intention-${option.intention}`}
@@ -623,15 +624,32 @@ export function IntentionConstellation() {
                   onClick={(event) =>
                     choose(option.intention, event.detail === 0)
                   }
-                  className="pointer-events-auto absolute grid place-items-center rounded-full border border-line/80 bg-void/85 text-bright shadow-[0_2px_14px_hsl(var(--void)/0.8)] backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow data-[direct-hover=true]:scale-125 data-[direct-hover=true]:border-glow data-[direct-hover=true]:bg-glow/20"
+                  className="group pointer-events-auto absolute grid place-items-center rounded-full border border-line/80 bg-void/85 text-bright shadow-[0_2px_14px_hsl(var(--void)/0.8)] backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow data-[direct-hover=true]:scale-125 data-[direct-hover=true]:border-glow data-[direct-hover=true]:bg-glow/20 [&:focus-visible_.gloss]:opacity-100 [&[data-direct-hover=true]_.gloss]:opacity-100"
                 >
                   <span className="font-display text-xl leading-none" aria-hidden="true">
                     {option.icon}
                   </span>
+                  {/*
+                    Four abstract nouns with no verb attached is the single
+                    thing a first-time player is most likely to stall on. The
+                    gloss the pack already writes for each — "shares a form",
+                    "carries or transforms" — was reaching the accessible name
+                    and nothing else. It now appears under the sigil the moment
+                    the pointer or the keyboard reaches it, and disappears again
+                    so it never becomes chrome.
+                  */}
                   <span
-                    className={`pointer-events-none absolute whitespace-nowrap font-ui text-[9px] uppercase tracking-[0.18em] text-dim ${LABEL_PLACEMENT[PLATE_STATIONS[option.station].labelPlacement]}`}
+                    className={`pointer-events-none absolute whitespace-nowrap ${LABEL_PLACEMENT[PLATE_STATIONS[option.station].labelPlacement]}`}
                   >
-                    {option.label}
+                    <span className="block font-ui text-[9px] uppercase tracking-[0.18em] text-dim">
+                      {option.label}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="gloss mt-0.5 block font-ui text-[9px] normal-case tracking-[0.06em] text-faint opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    >
+                      {option.description}
+                    </span>
                   </span>
                 </button>
               ))}

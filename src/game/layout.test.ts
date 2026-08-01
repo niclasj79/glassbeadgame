@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
-import { FACULTY_IDS, MOTIF_REGISTERS } from "@/content/castalia/schema";
 import {
   LENS_EXTENT,
   LENS_VIEWS,
+  LENS_DISCLOSURE,
   lensAxisValue,
   lensPlanePositions,
   type LensView,
@@ -18,44 +18,42 @@ const VIEWS: readonly LensView[] = [1, 2, 3];
  * pin exactly that: each axis is one authored field, and nothing else moves it.
  */
 describe("lens axes read one authored field each", () => {
-  it("puts every concept of a faculty in the same column, and each faculty in its own", () => {
-    const columns = new Map<string, Set<number>>();
+  it("reads each axis off its own authored standing and nothing else", () => {
     for (const concept of CASTALIA_CONCEPTS) {
-      const x = lensAxisValue(concept, "Faculty");
-      const seen = columns.get(concept.faculty) ?? new Set<number>();
-      seen.add(x);
-      columns.set(concept.faculty, seen);
-    }
-    for (const [, xs] of columns) expect(xs.size).toBe(1);
-    const distinct = new Set([...columns.values()].map((xs) => [...xs][0]));
-    expect(distinct.size).toBe(FACULTY_IDS.length);
-  });
-
-  it("orders registers from sub at the bottom to air at the top", () => {
-    const heights = MOTIF_REGISTERS.map((register) =>
-      lensAxisValue(
-        { ...CASTALIA_CONCEPTS[0], motif: { ...CASTALIA_CONCEPTS[0].motif, register } },
-        "Register"
-      )
-    );
-    for (let i = 1; i < heights.length; i++) {
-      expect(heights[i]).toBeGreaterThan(heights[i - 1]);
+      expect(lensAxisValue(concept, "True")).toBeCloseTo(concept.standing.truth, 9);
+      expect(lensAxisValue(concept, "Beautiful")).toBeCloseTo(
+        concept.standing.beauty,
+        9
+      );
+      expect(lensAxisValue(concept, "Good")).toBeCloseTo(concept.standing.good, 9);
     }
   });
 
-  it("reads density straight off the sigil, monotonically", () => {
-    const sorted = [...CASTALIA_CONCEPTS].sort(
-      (a, b) => a.sigil.density - b.sigil.density
-    );
-    const values = sorted.map((c) => lensAxisValue(c, "Density"));
-    for (let i = 1; i < values.length; i++) {
-      expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
+  it("moves a bead only when its own standing moves", () => {
+    // Nothing else about a concept may push it around the plane — not its
+    // faculty, not its register, not how full its figure is.
+    const base = CASTALIA_CONCEPTS[0];
+    const elsewhere = {
+      ...base,
+      faculty: "image" as const,
+      motif: { ...base.motif, register: "air" as const },
+      sigil: { ...base.sigil, density: 0.01 },
+    };
+    for (const axis of ["True", "Beautiful", "Good"] as const) {
+      expect(lensAxisValue(elsewhere, axis)).toBe(lensAxisValue(base, axis));
     }
+  });
+
+  it("says on its face that it is a reading and not a measurement", () => {
+    // The Lens is the one arrangement in the game that cannot be sourced, so
+    // the disclosure is part of the feature rather than a footnote to it.
+    expect(LENS_DISCLOSURE).toMatch(/not a measurement/i);
+    expect(LENS_DISCLOSURE.toLowerCase()).toContain("disagree");
   });
 
   it("keeps every axis inside [-1, 1] for every authored concept", () => {
     for (const concept of CASTALIA_CONCEPTS) {
-      for (const axis of ["Faculty", "Register", "Density"] as const) {
+      for (const axis of ["Good", "True", "Beautiful"] as const) {
         const value = lensAxisValue(concept, axis);
         expect(value).toBeGreaterThanOrEqual(-1);
         expect(value).toBeLessThanOrEqual(1);
@@ -83,23 +81,23 @@ describe("lens plane positions", () => {
     // Two `measure` concepts that also share a register read the same on both
     // axes of view 1. They belong in the same place; they must still be two
     // visible beads.
-    const same = CASTALIA_CONCEPTS.filter(
-      (c) => c.faculty === "measure" && c.motif.register === "mid"
-    );
-    expect(same.length).toBeGreaterThan(1);
-    const p = lensPlanePositions(same.slice(0, 2), 1);
+    const base = CASTALIA_CONCEPTS[0];
+    const same = [base, { ...CASTALIA_CONCEPTS[1], standing: base.standing }];
+    const p = lensPlanePositions(same, 1);
     // A bead's own width, so two are legibly two.
     expect(Math.hypot(p[0] - p[3], p[1] - p[4])).toBeCloseTo(0.5, 6);
   });
 
   it("displaces every member of a shared cell equally — none is the real one", () => {
-    const same = CASTALIA_CONCEPTS.filter(
-      (c) => c.faculty === "measure" && c.motif.register === "mid"
-    );
+    const base = CASTALIA_CONCEPTS[0];
+    const same = [0, 1, 2].map((i) => ({
+      ...CASTALIA_CONCEPTS[i],
+      standing: base.standing,
+    }));
     const p = lensPlanePositions(same, 1);
-    const centre = lensAxisValue(same[0], "Faculty") * LENS_EXTENT;
+    const centre = lensAxisValue(same[0], "Good") * LENS_EXTENT;
     const offsets = same.map((_, i) =>
-      Math.hypot(p[i * 3] - centre, p[i * 3 + 1] - lensAxisValue(same[0], "Register") * LENS_EXTENT)
+      Math.hypot(p[i * 3] - centre, p[i * 3 + 1] - lensAxisValue(same[0], "True") * LENS_EXTENT)
     );
     for (const offset of offsets) expect(offset).toBeCloseTo(offsets[0], 6);
     expect(offsets[0]).toBeGreaterThan(0);
@@ -115,19 +113,19 @@ describe("lens plane positions", () => {
     }
   });
 
-  it("columns beads by faculty in the two views whose x axis is Faculty", () => {
-    const measure = CASTALIA_CONCEPTS.filter((c) => c.faculty === "measure");
-    const image = CASTALIA_CONCEPTS.filter((c) => c.faculty === "image");
+  it("separates beads the Game reads differently on the visible axis", () => {
+    // Two concepts the Game places far apart on Good must not share a column,
+    // in the two views whose x axis is Good.
+    const low = CASTALIA_CONCEPTS.reduce((a, b) =>
+      a.standing.good <= b.standing.good ? a : b
+    );
+    const high = CASTALIA_CONCEPTS.reduce((a, b) =>
+      a.standing.good >= b.standing.good ? a : b
+    );
+    expect(high.standing.good - low.standing.good).toBeGreaterThan(0.5);
     for (const view of [1, 2] as const) {
-      const own = lensPlanePositions(measure, view);
-      const other = lensPlanePositions(image, view);
-      // Same faculty: one column, give or take the fan inside a cell.
-      const xs = measure.map((_, i) => own[i * 3]);
-      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(0.8);
-      // A different faculty is a different column entirely.
-      expect(Math.min(...image.map((_, i) => other[i * 3]))).toBeGreaterThan(
-        Math.max(...xs) + 0.5
-      );
+      const p = lensPlanePositions([low, high], view);
+      expect(p[3] - p[0]).toBeGreaterThan(1);
     }
   });
 

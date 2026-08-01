@@ -1,5 +1,4 @@
 import type { CastaliaConcept } from "@/content/castalia/schema";
-import { FACULTY_IDS, MOTIF_REGISTERS } from "@/content/castalia/schema";
 
 /** Radius of the arena sphere the beads rest on. */
 export const ARENA_RADIUS = 3;
@@ -25,52 +24,51 @@ export function fibonacciSpherePositions(n: number, radius = ARENA_RADIUS): Floa
 }
 
 /**
- * THE LENS — a rearrangement the player can check.
+ * THE LENS — Castalia's own three axes.
  *
- * The Lens used to plot each bead at its `tbg` coordinate: an authored triple
- * saying how True, Beautiful and Good the concept was. The Castalia pack does
- * not carry that triple, and it should not: those coordinates were a fixed
- * answer to a question the Game has no standing to settle, which is exactly
- * what `docs/CURRENT-STATE-AUDIT.md` lists the Lens for evolving away from.
+ * True, Beautiful and Good are the frame the whole fiction rests on, and the
+ * Lens exists to lay the arena out along them.
  *
- * So the axes now read fields the pack actually authors, chosen because each
- * one is verifiable from the arena itself rather than taken on trust:
+ * An earlier pass replaced them with faculty, register and density, on the
+ * reasoning that a transcendental coordinate is "a fixed answer to a question
+ * the Game has no standing to settle". That reasoning is right about a
+ * *measurement* and wrong about this. The Game is not measuring how true Prime
+ * Numbers is; it is saying where it would place it, which is a reading — and a
+ * reading is a thing this pack already knows how to declare rather than hide.
+ * `TranscendentalStanding` carries that declaration, the Lens repeats it on
+ * screen every time it opens, and a player who disagrees with a position is
+ * having precisely the argument the Lens is for.
  *
- *   Faculty    which of the four a bead belongs to — visible in its collar
- *              geometry and its ink, before any hue is read.
- *   Register   where its motif sits in pitch — audible the moment it is
- *              touched, since `motif.register` is what `playVoice` renders.
- *   Density    how much of the glass its figure fills — visible in the bead.
- *
- * Three views pair them three ways, so the same three readings are seen from
- * every side. Nothing here is derived, averaged, or invented: a bead's place on
- * the plane is one authored field per axis, and a player who disagrees with a
- * position can look at the bead and hear it.
+ * Three views pair the three axes three ways, so the same reading is seen from
+ * every side.
  */
 export const LENS_VIEWS = [
-  { id: "faculty-register", xAxis: "Faculty", yAxis: "Register", label: "Faculty × Register" },
-  { id: "faculty-density", xAxis: "Faculty", yAxis: "Density", label: "Faculty × Density" },
-  { id: "register-density", xAxis: "Register", yAxis: "Density", label: "Register × Density" },
+  { id: "good-true", xAxis: "Good", yAxis: "True", label: "Good × True" },
+  { id: "good-beautiful", xAxis: "Good", yAxis: "Beautiful", label: "Good × Beautiful" },
+  { id: "true-beautiful", xAxis: "True", yAxis: "Beautiful", label: "True × Beautiful" },
 ] as const;
+
+/**
+ * Shown wherever the Lens is. It is not a disclaimer to be skipped — it is the
+ * difference between an arrangement and a verdict.
+ */
+export const LENS_DISCLOSURE =
+  "An arrangement the Game offers, not a measurement. Disagreeing with a bead's place is the point.";
 
 export type LensView = 1 | 2 | 3;
 export type LensAxis = (typeof LENS_VIEWS)[number]["xAxis" | "yAxis"];
 
-/** Centre of the i-th of n equal bands across [-1, 1]. */
-const band = (i: number, n: number): number => ((i + 0.5) / n) * 2 - 1;
 
-/** One authored field, normalised to [-1, 1]. No axis reads more than one. */
+/** One authored reading, already in [-1, 1]. No axis reads more than one. */
 export function lensAxisValue(concept: CastaliaConcept, axis: LensAxis): number {
+  const clamp = (value: number): number => Math.max(-1, Math.min(1, value));
   switch (axis) {
-    case "Faculty":
-      return band(FACULTY_IDS.indexOf(concept.faculty), FACULTY_IDS.length);
-    case "Register":
-      return band(
-        MOTIF_REGISTERS.indexOf(concept.motif.register),
-        MOTIF_REGISTERS.length
-      );
-    case "Density":
-      return concept.sigil.density * 2 - 1;
+    case "True":
+      return clamp(concept.standing.truth);
+    case "Beautiful":
+      return clamp(concept.standing.beauty);
+    case "Good":
+      return clamp(concept.standing.good);
   }
 }
 

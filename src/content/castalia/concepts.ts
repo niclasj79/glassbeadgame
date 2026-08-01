@@ -45,6 +45,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "gut",
     },
     sigil: { family: "spiral", symmetry: 1, density: 0.62, turbulence: 0.05, gilded: true },
+    standing: { truth: 0.6, beauty: 0.8, good: 0 },
   }),
   concept({
     id: "measure.prime-numbers",
@@ -64,6 +65,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "metal",
     },
     sigil: { family: "lattice", symmetry: 1, density: 0.44, turbulence: 0.3, gilded: false },
+    standing: { truth: 0.95, beauty: 0.5, good: -0.2 },
   }),
   concept({
     id: "measure.continuous-symmetry",
@@ -83,6 +85,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "glass",
     },
     sigil: { family: "orbit", symmetry: 12, density: 0.5, turbulence: 0, gilded: true },
+    standing: { truth: 0.85, beauty: 0.7, good: 0 },
   }),
   concept({
     id: "measure.fourier-series",
@@ -102,6 +105,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "glass",
     },
     sigil: { family: "wave", symmetry: 2, density: 0.72, turbulence: 0.04, gilded: true },
+    standing: { truth: 0.9, beauty: 0.6, good: 0.4 },
   }),
   concept({
     id: "measure.mobius-band",
@@ -121,6 +125,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "reed",
     },
     sigil: { family: "fold", symmetry: 2, density: 0.55, turbulence: 0.12, gilded: false },
+    standing: { truth: 0.7, beauty: 0.85, good: -0.1 },
   }),
   concept({
     id: "measure.cantor-diagonal",
@@ -140,6 +145,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "metal",
     },
     sigil: { family: "grid", symmetry: 1, density: 0.68, turbulence: 0.2, gilded: false },
+    standing: { truth: 0.95, beauty: 0.6, good: -0.3 },
   }),
 
   // ── Sound ────────────────────────────────────────────────────────────────
@@ -165,6 +171,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "gut",
     },
     sigil: { family: "branch", symmetry: 2, density: 0.66, turbulence: 0.06, gilded: false },
+    standing: { truth: 0.2, beauty: 0.9, good: 0.6 },
   }),
   concept({
     id: "sound.polyrhythm",
@@ -184,6 +191,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "wood",
     },
     sigil: { family: "orbit", symmetry: 3, density: 0.58, turbulence: 0.18, gilded: false },
+    standing: { truth: 0.1, beauty: 0.8, good: 0.5 },
   }),
   concept({
     id: "sound.isorhythm",
@@ -203,6 +211,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "metal",
     },
     sigil: { family: "grid", symmetry: 1, density: 0.6, turbulence: 0.08, gilded: true },
+    standing: { truth: 0.3, beauty: 0.7, good: 0.5 },
   }),
   concept({
     id: "sound.just-intonation",
@@ -231,6 +240,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "voice",
     },
     sigil: { family: "arc", symmetry: 3, density: 0.5, turbulence: 0, gilded: true },
+    standing: { truth: 0.6, beauty: 0.8, good: 0.2 },
   }),
   concept({
     id: "sound.equal-temperament",
@@ -255,6 +265,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "metal",
     },
     sigil: { family: "lattice", symmetry: 12, density: 0.7, turbulence: 0.02, gilded: false },
+    standing: { truth: 0.3, beauty: 0.3, good: 0.8 },
   }),
   concept({
     id: "sound.overtone-series",
@@ -274,6 +285,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "glass",
     },
     sigil: { family: "wave", symmetry: 1, density: 0.8, turbulence: 0.03, gilded: true },
+    standing: { truth: 0.9, beauty: 0.7, good: 0.1 },
   }),
 
   // ── Matter ───────────────────────────────────────────────────────────────
@@ -295,6 +307,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "gut",
     },
     sigil: { family: "wave", symmetry: 2, density: 0.64, turbulence: 0.05, gilded: false },
+    standing: { truth: 0.9, beauty: 0.6, good: 0.1 },
   }),
   concept({
     id: "matter.conservation-of-energy",
@@ -324,6 +337,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "glass",
     },
     sigil: { family: "vessel", symmetry: 4, density: 0.42, turbulence: 0, gilded: true },
+    standing: { truth: 0.95, beauty: 0.4, good: 0.2 },
   }),
   concept({
     id: "matter.coupled-pendulums",
@@ -343,6 +357,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "wood",
     },
     sigil: { family: "orbit", symmetry: 2, density: 0.48, turbulence: 0.22, gilded: false },
+    standing: { truth: 0.8, beauty: 0.6, good: 0 },
   }),
   concept({
     id: "matter.diffraction",
@@ -362,6 +377,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "reed",
     },
     sigil: { family: "ray", symmetry: 2, density: 0.7, turbulence: 0.1, gilded: false },
+    standing: { truth: 0.9, beauty: 0.6, good: 0.2 },
   }),
   concept({
     id: "matter.entropy",
@@ -381,6 +397,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "voice",
     },
     sigil: { family: "branch", symmetry: 1, density: 0.75, turbulence: 0.85, gilded: false },
+    standing: { truth: 0.9, beauty: 0.2, good: -0.4 },
   }),
   concept({
     id: "matter.crystal-lattice",
@@ -400,6 +417,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "metal",
     },
     sigil: { family: "lattice", symmetry: 6, density: 0.78, turbulence: 0.01, gilded: false },
+    standing: { truth: 0.85, beauty: 0.7, good: 0.1 },
   }),
 
   // ── Image ────────────────────────────────────────────────────────────────
@@ -421,6 +439,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "glass",
     },
     sigil: { family: "ray", symmetry: 1, density: 0.56, turbulence: 0.02, gilded: true },
+    standing: { truth: 0.4, beauty: 0.8, good: 0.6 },
   }),
   concept({
     id: "image.anamorphosis",
@@ -440,6 +459,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "reed",
     },
     sigil: { family: "fold", symmetry: 1, density: 0.52, turbulence: 0.55, gilded: false },
+    standing: { truth: 0.2, beauty: 0.7, good: 0.1 },
   }),
   concept({
     id: "image.chiaroscuro",
@@ -459,6 +479,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "voice",
     },
     sigil: { family: "vessel", symmetry: 1, density: 0.38, turbulence: 0.3, gilded: false },
+    standing: { truth: 0, beauty: 0.9, good: 0.5 },
   }),
   concept({
     id: "image.girih-tiling",
@@ -478,6 +499,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "gut",
     },
     sigil: { family: "lattice", symmetry: 10, density: 0.85, turbulence: 0.02, gilded: true },
+    standing: { truth: 0.3, beauty: 0.95, good: 0.6 },
   }),
   concept({
     id: "image.divisionism",
@@ -497,6 +519,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "wood",
     },
     sigil: { family: "grid", symmetry: 1, density: 0.9, turbulence: 0.35, gilded: false },
+    standing: { truth: 0.1, beauty: 0.8, good: 0.4 },
   }),
   concept({
     id: "image.camera-obscura",
@@ -516,6 +539,7 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
       timbre: "reed",
     },
     sigil: { family: "vessel", symmetry: 1, density: 0.45, turbulence: 0.06, gilded: false },
+    standing: { truth: 0.7, beauty: 0.4, good: 0.6 },
   }),
 ]);
 

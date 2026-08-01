@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { sessionProgression } from "@/runtime/progression";
+import { LENS_DISCLOSURE, LENS_VIEWS } from "@/game/layout";
 import { useStore } from "@/state/store";
 import { OPENING_DEPARTURE_MS, arenaChromeVisible } from "@/scene/opening";
 import { BeadInspectCard } from "./BeadInspectCard";
@@ -41,6 +42,7 @@ function useChromeShown(): boolean {
 /** The world remains primary; these controls mirror its interpretation actions accessibly. */
 export function ArenaHud() {
   const lensActive = useStore((state) => state.lensActive);
+  const lensView = useStore((state) => state.lensView);
   const cycleLens = useStore((state) => state.cycleLens);
   const shown = useChromeShown();
 
@@ -88,6 +90,11 @@ export function ArenaHud() {
           <button
             type="button"
             aria-pressed={lensActive}
+            title={
+              lensActive
+                ? `${LENS_VIEWS[lensView - 1]?.label ?? ""} — ${LENS_DISCLOSURE} Press again for the next pair.`
+                : `The Lens — lays the beads out along True, Beautiful and Good. ${LENS_DISCLOSURE}`
+            }
             onClick={() => {
               productionInterpretation.reset();
               cycleLens();
@@ -105,6 +112,24 @@ export function ArenaHud() {
             Conclude
           </button>
         </motion.div>
+        {/*
+          The Lens is the one arrangement in this game that cannot be sourced —
+          it places a bead where the Game would place it, which is a reading and
+          not a measurement. So it says so while it is open, in the same margin
+          the outcomes use, rather than hiding the admission in a tooltip.
+        */}
+        {lensActive && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center px-8">
+            <p className="max-w-[46ch] text-center">
+              <span className="engraved block">
+                {LENS_VIEWS[lensView - 1]?.label ?? ""}
+              </span>
+              <span className="mt-2 block font-ui text-caption leading-relaxed text-faint">
+                {LENS_DISCLOSURE}
+              </span>
+            </p>
+          </div>
+        )}
         {!lensActive && <Marginalia />}
         <BeadInspectCard />
       </div>

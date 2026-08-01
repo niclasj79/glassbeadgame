@@ -12,9 +12,9 @@ import { LENS_EXTENT, LENS_VIEWS, type LensAxis } from "@/game/layout";
  * deliberately outside the ink set the beads themselves use.
  */
 const AXIS_COLORS: Record<LensAxis, string> = {
-  Faculty: "#b08d4e",
-  Register: "#9fadd0",
-  Density: "#c9b79a",
+  Good: "#b08d4e",
+  True: "#9fadd0",
+  Beautiful: "#c9b79a",
 };
 
 /**
