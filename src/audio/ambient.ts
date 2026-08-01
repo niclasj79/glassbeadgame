@@ -75,6 +75,13 @@ class AmbientEngine {
   /** Space the semantic layer has asked for: density and bed multipliers. */
   private densityScale = 1;
   private bedScale = 1;
+  /**
+   * The moment the loop has to be gone by, on the audio clock, or null while the
+   * session is still open. See `concludeAt`.
+   */
+  private silenceFrom: number | null = null;
+  /** From here the loop schedules nothing new; the bed is already ramping out. */
+  private lastSlotBefore = Number.POSITIVE_INFINITY;
 
   start(): void {
     const ctx = audio.ensure();
@@ -93,6 +100,12 @@ class AmbientEngine {
     this.slot = 0;
     this.nextSlotTime = ctx.currentTime + 0.15;
     this.droneRefreshAt = 0;
+    // A previous session may have ended: the loop was told to stop and the bed
+    // was ramped to silence. Both have to be released, or the new session opens
+    // into a room that is still finishing the last one.
+    this.silenceFrom = null;
+    this.lastSlotBefore = Number.POSITIVE_INFINITY;
+    audio.setBedScale(1);
     this.timer = window.setInterval(() => this.tick(), TICK_MS);
     this.startAirBed(ctx);
   }
@@ -109,9 +122,38 @@ class AmbientEngine {
     // `start()` — no audio context yet — would otherwise inherit an ensemble
     // from a composition the player has left.
     this.motifPatterns = [];
+    this.silenceFrom = null;
+    this.lastSlotBefore = Number.POSITIVE_INFINITY;
     frameState.pulses.length = 0;
     this.stopAirBed();
     // Long-tailed voices fade out on their own envelopes.
+  }
+
+  /**
+   * THE LOOP ENDS.
+   *
+   * A generative bed does not end on its own — it is a loop, and the review
+   * found it still running under the conclusion, so the performance's last
+   * authored sound arrived over a texture that carried on afterwards. That is
+   * the difference between a game that ends and a game that stops.
+   *
+   * Three things happen, all on the audio clock so they cannot drift from the
+   * notes the semantic scheduler has already placed:
+   *
+   *  - no slot is scheduled from the moment the fade begins, so no *new*
+   *    generative material is created under the ending;
+   *  - the bed ramps to silence and is finished by `atSeconds`;
+   *  - the loop stops running once that moment passes, and the room tone with it.
+   *
+   * Idempotent, and always takes the earliest ending asked for: a second call
+   * may bring the end forward but may never push it back.
+   */
+  concludeAt(atSeconds: number, fadeSeconds: number): void {
+    const fade = Math.max(0.25, fadeSeconds);
+    if (this.silenceFrom !== null && this.silenceFrom <= atSeconds) return;
+    this.silenceFrom = atSeconds;
+    this.lastSlotBefore = atSeconds - fade;
+    audio.fadeAmbientOut(atSeconds, fade);
   }
 
   /** Distant room tone — barely-there filtered noise that pans with the
@@ -181,6 +223,16 @@ class AmbientEngine {
   /** Thread voices currently able to speak — the attention planner reads it. */
   activeVoiceCount(): number {
     return Math.min(this.motifs.length, MAX_ACTIVE_MOTIFS);
+  }
+
+  /**
+   * Whether the loop is still composing. Read by tests, and by anything that
+   * needs to know the difference between a session in progress and one that has
+   * ended — which, before `concludeAt`, was a difference the engine could not
+   * express.
+   */
+  isRunning(): boolean {
+    return this.running;
   }
 
   /** Camera azimuth → gentle stereo drift of the room tone. */
@@ -275,10 +327,24 @@ class AmbientEngine {
 
   private tick(): void {
     const ctx = audio.get();
-    if (!ctx || !audio.ambientBus) return;
+    // `running` is the authority, not the interval handle: an ended session must
+    // not compose again because one last scheduled callback was still in flight.
+    if (!ctx || !audio.ambientBus || !this.running) return;
+
+    if (this.silenceFrom !== null && ctx.currentTime >= this.silenceFrom) {
+      // The ending has passed. Everything generative is silent by now; keeping
+      // the interval alive would only be a timer with nothing to schedule.
+      this.stop();
+      return;
+    }
+
     const horizon = ctx.currentTime + LOOKAHEAD_S;
 
     while (this.nextSlotTime < horizon) {
+      // Past this point the bed is on its way out and the coda is arriving.
+      // Adding new material here is exactly what "the loop is audible under the
+      // last sound" means, so the loop stops composing rather than being ducked.
+      if (this.nextSlotTime >= this.lastSlotBefore) break;
       this.scheduleSlot(ctx, this.nextSlotTime, this.slot);
       this.nextSlotTime += this.slotS;
       this.slot += 1;

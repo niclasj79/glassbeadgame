@@ -194,11 +194,11 @@ class AudioEngine {
   setAmbientReach(reach: number): void {
     if (!this.ctx || !this.ambientBus) return;
     this.ambientSwell = 0.9 + 0.35 * Math.max(0, Math.min(1, reach));
-    this.ambientBus.gain.setTargetAtTime(
-      this.ambientSwell * this.bedScale,
-      this.ctx.currentTime,
-      0.8
-    );
+    const t = this.ctx.currentTime;
+    // Cancel first, so a scheduled conclusion fade cannot outlive the session it
+    // ended: whatever asks for the bed last is the thing the player hears.
+    this.ambientBus.gain.cancelScheduledValues(t);
+    this.ambientBus.gain.setTargetAtTime(this.ambientSwell * this.bedScale, t, 0.8);
   }
 
   private ambientSwell = 0.9;
@@ -212,6 +212,7 @@ class AudioEngine {
   setBedScale(scale: number): void {
     this.bedScale = Math.max(0.1, Math.min(1, scale));
     if (!this.ctx || !this.ambientBus) return;
+    this.ambientBus.gain.cancelScheduledValues(this.ctx.currentTime);
     this.ambientBus.gain.setTargetAtTime(
       this.ambientSwell * this.bedScale,
       this.ctx.currentTime,
@@ -227,6 +228,30 @@ class AudioEngine {
         0.3
       );
     }
+  }
+
+  /**
+   * FADE THE GENERATIVE BED TO NOTHING, ENDING AT A KNOWN MOMENT.
+   *
+   * A ramp scheduled on the Web Audio clock rather than a `setTargetAtTime`
+   * relaxation, because the whole point is that it is *finished* by `atSeconds`
+   * — an exponential approach is never finished, and the loop would still be
+   * faintly under the last authored sound, which is the thing being fixed.
+   *
+   * Not clamped to the 0.1 floor `setBedScale` keeps: that floor exists so
+   * attention and Attunement thin the bed without deleting it. This is the end
+   * of the piece, and the end of a piece is allowed to reach silence.
+   */
+  fadeAmbientOut(atSeconds: number, overSeconds: number): void {
+    if (!this.ctx || !this.ambientBus) return;
+    const over = Math.max(0.05, overSeconds);
+    const now = this.ctx.currentTime;
+    const end = Math.max(now + 0.02, atSeconds);
+    const start = Math.max(now, end - over);
+    const gain = this.ambientBus.gain;
+    gain.cancelScheduledValues(start);
+    gain.setValueAtTime(this.ambientSwell * this.bedScale, start);
+    gain.linearRampToValueAtTime(0.0001, end);
   }
 
   /**

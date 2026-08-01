@@ -13,9 +13,20 @@ import { easing } from "maath";
 import { useStore } from "@/state/store";
 import { useStore as useVanillaStore } from "zustand";
 import { interpretationDraftStore } from "@/state/interactionDraft";
+import { domainSessionStore } from "@/state/domainSession";
+import { cueBus } from "@/runtime/cues";
 import { ARENA_RADIUS } from "@/game/layout";
 import { isCoarsePointer } from "@/lib/device";
 import { frameState } from "./frameState";
+import {
+  beginConclusionPerformance,
+  conclusionPerformanceStore,
+  createConclusionCamera,
+  readScenePerformance,
+  runningConclusionFor,
+  type PerformedPose,
+  type Vec3,
+} from "./conclusionPerformance";
 import {
   ARENA_FOV,
   PORTRAIT_ASPECT,
@@ -76,6 +87,28 @@ import { presentationNow } from "@/runtime/testMode";
  * arena (I-012), and it is now checked against the plate's safe area: if the
  * intention plate would not fit at the composed distance, the camera stands
  * back until it does.
+ *
+ * THE CONCLUSION IS NOW PERFORMED (BLOCK-1, spec §14).
+ *
+ * `compileConclusion` emits an ordered `CameraHint[]` — answer, traverse, hold,
+ * settle, gather, widen, rest — each with the sentence that justifies it. It had
+ * no consumer anywhere in the application: this rig sent the conclusion to one
+ * fixed crown pose and never moved it again, so "topology variables shape
+ * camera, density, orchestration, and climax" was compiled in full and performed
+ * by nothing. The rig now subscribes to the conclusion cue on the `camera`
+ * channel — the channel every plan has always declared — and executes the hints
+ * at the seconds the compiler gave them, which are the same seconds the reading
+ * assembles on. `scene/conclusionPerformance.ts` holds the law and the
+ * reasoning; this file gives it a frame and a world.
+ *
+ * It is a performance, not a cutscene: the first touch of the orbit ends it for
+ * good and the player keeps the camera. Measured on the running build, that
+ * touch does not currently reach the canvas — `ConclusionScreen`'s scroller
+ * covers the whole viewport, so `document.elementFromPoint` anywhere over the
+ * arena returns the reading and OrbitControls never sees a press. The hold
+ * below is therefore right and reachable from every state the arena is
+ * draggable in, and unreachable from the one state this performance runs in
+ * until that surface releases its margins. That surface is not this file's.
  */
 
 interface Goal {
@@ -243,6 +276,35 @@ function cameraIsHeld(controlsEnabled: boolean, aiming: boolean): boolean {
 const beadVec = new THREE.Vector3();
 const screenVec = new THREE.Vector3();
 
+/**
+ * How far the finished web actually reaches. The crown has to clear whatever
+ * the player built, not whatever the layout was nominally sized for.
+ */
+function webRadius(): number {
+  const rendered = frameState.rendered;
+  let maxSq = 0;
+  for (let i = 0; i < rendered.length; i += 3) {
+    const x = rendered[i];
+    const y = rendered[i + 1];
+    const z = rendered[i + 2];
+    maxSq = Math.max(maxSq, x * x + y * y + z * z);
+  }
+  return Math.sqrt(maxSq) || ARENA_RADIUS;
+}
+
+/** Where a concept is being drawn, for the hints that name one. */
+function beadAt(conceptId: string): Vec3 | null {
+  const index = frameState.beadIndex.get(conceptId);
+  if (index === undefined) return null;
+  const rendered = frameState.rendered;
+  if (rendered.length < (index + 1) * 3) return null;
+  return {
+    x: rendered[index * 3],
+    y: rendered[index * 3 + 1],
+    z: rendered[index * 3 + 2],
+  };
+}
+
 export function CameraRig() {
   const controls = useRef<OrbitControlsImpl>(null);
   const goal = useRef<Goal | null>(null);
@@ -319,6 +381,56 @@ export function CameraRig() {
     orbitFromPosition(next.position, goalOrbit.current);
     transitAge.current = 0;
   }, []);
+
+  /* ── THE CONCLUSION, PERFORMED ────────────────────────────────────────── */
+
+  /**
+   * The camera director's subscription. The conclusion cue has always been
+   * published on the `camera` channel with the compiled performance on it; this
+   * is the first thing in the application to listen. `presentationNow()` is
+   * stamped at delivery — the same clock the reading measures itself against —
+   * so a strand, its voice and its line in the register are one moment rather
+   * than three approximations of it.
+   */
+  useEffect(
+    () =>
+      cueBus.subscribe("camera", (cue) => {
+        if (cue.type !== "conclusion.perform") return;
+        const performance = readScenePerformance(cue.payload.performance);
+        // Silence beats fabricated significance: a performance the scene
+        // cannot read leaves the conclusion exactly as it was.
+        if (performance === null) return;
+        beginConclusionPerformance(performance, presentationNow());
+      }),
+    []
+  );
+
+  const conclusionCamera = useRef(createConclusionCamera());
+  const running = useVanillaStore(conclusionPerformanceStore, (s) => s.running);
+  const sessionId = useVanillaStore(domainSessionStore, (s) =>
+    s.session ? String(s.session.sessionId) : null
+  );
+  /** Last Game's performance may not play over this one's arena. */
+  const conclusion = useMemo(
+    () => runningConclusionFor(running, sessionId),
+    [running, sessionId]
+  );
+
+  const poseOrbit = useRef(createOrbitPose());
+  const fromOrbit = useRef(createOrbitPose());
+  const performPose = useCallback(
+    (pose: PerformedPose): void => {
+      poseOrbit.current.distance = pose.distance;
+      poseOrbit.current.azimuth = pose.azimuth;
+      poseOrbit.current.elevation = pose.elevation;
+      perform({
+        position: positionFromOrbit(poseOrbit.current, new THREE.Vector3()),
+        target: new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z),
+        phrase: pose.phrase,
+      });
+    },
+    [perform]
+  );
 
   /** Attend: swing the instrument so the bead comes to a lower corner. */
   useLayoutEffect(() => {
@@ -424,8 +536,12 @@ export function CameraRig() {
     // while it owns the pose this one must not re-home the camera, or a resize
     // during an interpretation would throw the plate back to the middle.
     if (phase === "arena" && previousAttendedId.current) return;
+    // The conclusion is *performed*, not posed. While a compiled performance
+    // owns the camera the hints are the only thing allowed to move it — and its
+    // own last hint is the crown, so nothing is lost by standing aside.
+    if (phase === "conclusion" && conclusion !== null) return;
     perform(phasePose(phase, home, aspect, "settle"));
-  }, [phase, aspect, home, perform]);
+  }, [phase, aspect, home, perform, conclusion]);
 
   // The Lens: square up to whichever plane reading is showing.
   const wasLensed = useRef(false);
@@ -448,18 +564,16 @@ export function CameraRig() {
    * The one phrase that deliberately leaves the level behind, which is why it
    * takes two beats — and why reduced motion still performs it. Seeing the
    * whole web from above is information, not decoration.
+   *
+   * This is the *fallback* crown, for an arena that entered the concluding
+   * interaction without a compiled performance. When there is one, its own
+   * final `rest` hint brings the same pose, at the second the compiler chose.
    */
   const mode = useStore((s) => s.session?.interaction.mode ?? "idle");
   useEffect(() => {
     if (mode !== "concluding") return;
-    const r = frameState.rendered;
-    let maxSq = 0;
-    for (let i = 0; i < r.length; i += 3) {
-      maxSq = Math.max(maxSq, r[i] * r[i] + r[i + 1] * r[i + 1] + r[i + 2] * r[i + 2]);
-    }
-    const radius = Math.sqrt(maxSq) || ARENA_RADIUS;
     perform({
-      position: new THREE.Vector3(0.01, radius * 2.6 + 3, 0.01),
+      position: new THREE.Vector3(0.01, webRadius() * 2.6 + 3, 0.01),
       target: ORIGIN.clone(),
       phrase: "crown",
     });
@@ -567,6 +681,27 @@ export function CameraRig() {
       return;
     }
 
+    /*
+     * THE PERFORMANCE, EXECUTED.
+     *
+     * Whatever hint has come due by now, in the compiler's own seconds, becomes
+     * this frame's move. It is taken *after* the gesture hold above, so the
+     * conclusion can never move the world out from under a finger, and *before*
+     * the transit below, so the pose it queues is travelled this same frame.
+     */
+    if (conclusion !== null) {
+      const pose = conclusionCamera.current.advance({
+        running: conclusion,
+        nowMs: presentationNow(),
+        from: orbitFromPosition(state.camera.position, fromOrbit.current),
+        beadAt,
+        webRadius: webRadius(),
+        minDistance: MIN_ORBIT,
+        maxDistance: maxOrbit(aspect),
+      });
+      if (pose !== null) performPose(pose);
+    }
+
     const current = goal.current;
     if (current) {
       frameState.recenter = false;
@@ -619,9 +754,16 @@ export function CameraRig() {
     frameState.cameraSettled = goal.current === null && racked;
 
     const mode = useStore.getState().session?.interaction.mode ?? "idle";
-    const idle = presentationNow() - frameState.idleSince > IDLE_ORBIT_AFTER_MS;
+    const now = presentationNow();
+    const idle = now - frameState.idleSince > IDLE_ORBIT_AFTER_MS;
+    // The drift may not turn the instrument under a move that is being
+    // performed: two authorities on one orbit is a camera that fights itself.
+    // It returns of its own accord once the crown has settled.
+    const performing =
+      conclusion !== null && conclusionCamera.current.owns(now);
     ctl.autoRotate =
       !reducedMotion &&
+      !performing &&
       mode !== "reveal" &&
       mode !== "concluding" &&
       ((phase === "arena" && idle && !frameState.aim.active) ||
@@ -646,6 +788,9 @@ export function CameraRig() {
         dragging.current = true;
         frameState.idleSince = presentationNow();
         goal.current = null;
+        // A performance, not a cutscene. The player has taken the camera, so
+        // the remaining hints are dropped rather than queued to snatch it back.
+        conclusionCamera.current.interrupt();
       }}
       onEnd={() => {
         dragging.current = false;

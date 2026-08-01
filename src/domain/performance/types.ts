@@ -127,6 +127,15 @@ export interface PerformanceEntry {
   readonly resolved: boolean;
   /** Structural weight in the final web. The climax is the maximum. */
   readonly weight: number;
+  /**
+   * This entry is the web's high point.
+   *
+   * Exactly one entry carries it, or none when nothing was woven. It is stated
+   * on the entry as well as in `climax` because a renderer walks entries and
+   * would otherwise have to re-derive the arrival by comparing thread ids — and
+   * a renderer that has to re-derive something usually ends up not doing it.
+   */
+  readonly isClimax: boolean;
 }
 
 export const ENSEMBLE_STRUCTURES = Object.freeze([
@@ -200,6 +209,42 @@ export interface PerformanceClimax {
   readonly reason: string;
 }
 
+/**
+ * THE LAST GESTURE (VERTICAL-SLICE-SPEC §14).
+ *
+ * A performance that merely runs out of entries does not end; it stops. The coda
+ * is the one authored event that closes the reconstruction, and it is composed
+ * of the *climax thread's own two motifs* — the web's heaviest moment, stated
+ * once more as a single held sonority, so the ending is this session's ending
+ * and not a stock cadence bolted onto every session alike.
+ *
+ * Whether it closes is not a matter of taste and not a reward:
+ *
+ *  - a web that left no Tension unheld closes, because there is nothing still
+ *    ringing that closing would misrepresent;
+ *  - a web that still carries a Tension nothing took hold of deliberately does
+ *    NOT close. Ending such a session on a resolution would be the Game
+ *    claiming a settlement the session never reached.
+ *
+ * It is the same length and the same weight either way (CAV-006). The two forms
+ * differ in resolution, exactly as the outcomes they report on do.
+ */
+export interface PerformanceCoda {
+  /** The climax thread, whose pair the coda is built from. */
+  readonly threadId: ThreadId;
+  readonly conceptIds: readonly [ConceptId, ConceptId];
+  readonly atBeat: number;
+  readonly atSeconds: number;
+  readonly durationBeats: number;
+  readonly durationSeconds: number;
+  /** Two held voices: a ground, and the answer that arrives — or does not. */
+  readonly voices: readonly PerformanceVoice[];
+  /** False when the web still carries a Tension nothing took hold of. */
+  readonly resolves: boolean;
+  /** Why the performance ends the way it does. Never decorative, never praise. */
+  readonly reason: string;
+}
+
 export interface ConclusionPerformance {
   readonly sessionId: SessionId;
   readonly seed: string;
@@ -212,6 +257,12 @@ export interface ConclusionPerformance {
   readonly camera: readonly CameraHint[];
   /** Null only when nothing was woven. */
   readonly climax: PerformanceClimax | null;
+  /**
+   * The authored ending. Null only when nothing was woven — a session with no
+   * threads has nothing of its own to close on, and inventing a cadence for it
+   * would be fabricated significance.
+   */
+  readonly coda: PerformanceCoda | null;
   readonly totalBeats: number;
   readonly totalSeconds: number;
 }

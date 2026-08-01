@@ -256,6 +256,7 @@ describe("captions for the states", () => {
               decayToFloorSeconds: 12,
             },
           ],
+          coda: null,
           totalSeconds: 10,
         },
         {
@@ -269,6 +270,105 @@ describe("captions for the states", () => {
     );
     expect(text).toContain("Still unresolved, and left so");
     expect(text).toContain("Just Intonation and Equal Temperament");
+  });
+
+  /**
+   * Regression. The captioned path had three epistemic states and the Game has
+   * four: an interpretive relation is authored material that does not speak for
+   * the record. With no phrase of its own it was captioned as an Open Thread —
+   * the Game disowning work it had actually done — and for a muted player the
+   * caption track is the experience, so that was the experience.
+   */
+  it("distinguishes a reading the Game offers from a record", () => {
+    const plan = relation("echo", FIBONACCI, COUNTERPOINT, false);
+    const asReading = describeVoicePlan(
+      { ...plan, meta: { ...plan.meta, outcome: "reading" as const } },
+      names
+    )!;
+    const asOpen = describeVoicePlan(
+      { ...plan, meta: { ...plan.meta, outcome: "open-thread" as const } },
+      names
+    )!;
+    const asRecord = describeVoicePlan(
+      { ...plan, meta: { ...plan.meta, outcome: "documented" as const } },
+      names
+    )!;
+
+    expect(asReading).not.toBe(asOpen);
+    expect(asReading).toContain("a reading the Game offers");
+    expect(asReading).toContain("not a record");
+    expect(asReading).not.toContain("Open Thread");
+    expect(asRecord).toContain("record for this pair");
+    // Different states, never different worth: none of the three is praised,
+    // ranked, or called an error.
+    for (const text of [asReading, asOpen, asRecord]) {
+      for (const word of FORBIDDEN) {
+        expect(text.toLowerCase()).not.toContain(word);
+      }
+    }
+  });
+
+  it("says how the performance ends, so a muted player knows it ended", () => {
+    const withEnding = (resolves: boolean) =>
+      describeConclusion(
+        planConclusionPerformance(
+          {
+            sessionId: "s",
+            secondsPerBeat: 0.75,
+            entries: [],
+            ensembles: [],
+            unresolved: [],
+            coda: {
+              threadId: "t1",
+              conceptIds: [JUST.conceptId, EQUAL.conceptId],
+              atSeconds: 8,
+              durationSeconds: 4,
+              voices: [
+                {
+                  conceptId: JUST.conceptId,
+                  role: "ground",
+                  degrees: [0],
+                  rhythm: [1],
+                  register: "low",
+                  articulation: "sustained",
+                  timbre: "glass",
+                  atSeconds: 8,
+                  durationSeconds: 4,
+                  gain: 0.04,
+                  openEnded: false,
+                },
+                {
+                  conceptId: EQUAL.conceptId,
+                  role: "answer",
+                  degrees: [7],
+                  rhythm: [1],
+                  register: "mid",
+                  articulation: "sustained",
+                  timbre: "gut",
+                  atSeconds: 8.5,
+                  durationSeconds: 3.5,
+                  gain: 0.04,
+                  openEnded: !resolves,
+                },
+              ],
+              resolves,
+            },
+            totalSeconds: 12,
+          },
+          {
+            mode: CASTALIA_MODE,
+            ambientGain: SCORE.grammar.bedGain,
+            bedGain: SCORE.grammar.bedGain,
+            motifFor: (id) => castaliaConceptById.get(id)?.motif ?? null,
+          }
+        ),
+        names
+      );
+
+    expect(withEnding(true)).toContain(
+      "It ends on Just Intonation and Equal Temperament, held together, and closes."
+    );
+    expect(withEnding(false)).toContain("and does not close.");
   });
 
   it("keeps the accepted first-use vocabulary available", () => {

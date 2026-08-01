@@ -103,12 +103,16 @@ const nameOf = (id: string | null, names: AudioNames): string =>
  * cannot have.
  *
  * The wording carries the distinction the director accepted: a documented
- * relation resolves; an Open Thread is a specific question held open at the same
- * weight; a weak outcome is quiet and short and claims nothing. None of the
- * three is described as an error, and none is described as worth more.
+ * relation resolves; a reading is authored and sounded at full weight but does
+ * not close, because it is the Game's own comparison and not the record; an Open
+ * Thread is a specific question held open at the same weight; a weak outcome is
+ * quiet and short and claims nothing. None of the four is described as an error,
+ * and none is described as worth more.
  */
 const OUTCOME_PHRASE: Readonly<Record<AudioOutcomeKind, string>> = Object.freeze({
   documented: "The Game has a record for this pair, and the figure closes on it.",
+  reading:
+    "This is a reading the Game offers, not a record: sounded at full weight, and left open.",
   "open-thread":
     "This is an Open Thread: a specific question, sounded at full weight and left open.",
   unresolved:
@@ -264,6 +268,20 @@ export function describeConclusion(
       })
       .join("; ");
     parts.push(`Still unresolved, and left so: ${named}.`);
+  }
+  /*
+   * The ending, said out loud. For a muted player the caption track is the
+   * experience, and a performance that ends without saying so ends for them in
+   * exactly the way the review complained about: it stops.
+   */
+  const coda = plan.sections.find((section) => section.kind === "coda");
+  if (coda !== undefined) {
+    const [a, b] = coda.plan.meta.conceptIds;
+    parts.push(
+      coda.plan.meta.resolves
+        ? `It ends on ${names.conceptName(a)} and ${names.conceptName(b)}, held together, and closes.`
+        : `It ends on ${names.conceptName(a)} and ${names.conceptName(b)}, held together, and does not close.`
+    );
   }
   return parts.join(" ");
 }

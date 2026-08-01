@@ -4,8 +4,11 @@ import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
 import {
   ACKNOWLEDGE_FRAMES,
   ACKNOWLEDGE_MS,
+  ARRIVAL_DURATION_MS,
   HOME_ELEVATION,
   OPENING_ALPHABET,
+  OPENING_CORNER_MS,
+  OPENING_DEPARTURE_MS,
   OPENING_DOOR_DEADLINE_MS,
   OPENING_DURATION_MS,
   OPENING_LINES,
@@ -13,6 +16,10 @@ import {
   TITLE_DOLLY,
   TITLE_ELEVATION,
   acknowledgementMs,
+  arenaChromeVisible,
+  arrivalDurationMs,
+  beadArrival,
+  openingDepartureMs,
   openingStep,
   openingWorld,
 } from "./opening";
@@ -34,6 +41,9 @@ const appSource = (): string => read("../App.tsx");
 const titleSource = (): string => read("../ui/screens/TitleScreen.tsx");
 const rigSource = (): string => read("./CameraRig.tsx");
 const canvasSource = (): string => read("./ArenaCanvas.tsx");
+const beadsSource = (): string => read("./Beads.tsx");
+const hudSource = (): string => read("../ui/arena/ArenaHud.tsx");
+const soundSource = (): string => read("../ui/components/SoundToggle.tsx");
 
 /**
  * Source with its commentary removed. These files explain themselves at
@@ -178,6 +188,143 @@ describe("the opening", () => {
     // Long enough to be a move, short enough that the arena is not waited for.
     expect(OPENING_DURATION_MS).toBeGreaterThan(500);
     expect(OPENING_DURATION_MS).toBeLessThan(1200);
+  });
+});
+
+/**
+ * BLOCK-3 — THE OPENING WAS TWO SCREENS AT ONCE
+ *
+ * A real BEGIN press at 1280x720, CDP screencast, 277 frames over 4.7 s. At
+ * 206 ms the title stood at full opacity over an empty armature. Eighty-two
+ * milliseconds later, at 288 ms, all twelve beads were at full size and full
+ * opacity, drawn straight through the letterforms of "The Glass Bead Game",
+ * with THE LENS and CONCLUDE already struck top right and the headphone note
+ * still in the corner. A DOM trace put the nav pill at 0.144 opacity 132 ms
+ * after the press and at 1.0 by 412 ms — while the block's own departure does
+ * not finish for nearly a second.
+ */
+describe("one screen at a time", () => {
+  it("knows how long the block takes to leave", () => {
+    // Derived from the steps, not written down beside them: a change to the
+    // stagger that left this behind would silently un-gate everything below.
+    let latest = 0;
+    for (let i = 0; i < OPENING_LINES; i++) {
+      const step = openingStep(i);
+      latest = Math.max(latest, (step.delay + step.duration) * 1000);
+    }
+    expect(openingDepartureMs()).toBe(latest);
+    expect(OPENING_DEPARTURE_MS).toBe(latest);
+    // The measured window: the pill was fully struck at 412 ms and the block
+    // was still going. Whatever else changes, the gate must outlast that.
+    expect(OPENING_DEPARTURE_MS).toBeGreaterThan(412);
+  });
+
+  it("does not draw the arena's chrome until the type has gone", () => {
+    expect(arenaChromeVisible(0)).toBe(false);
+    expect(arenaChromeVisible(132)).toBe(false);
+    expect(arenaChromeVisible(412)).toBe(false);
+    expect(arenaChromeVisible(OPENING_DEPARTURE_MS - 1)).toBe(false);
+    expect(arenaChromeVisible(OPENING_DEPARTURE_MS)).toBe(true);
+    // Late is the safe side and early is the defect: the arena is mounted after
+    // the press, so its own age can only ever undercount the departure.
+    expect(arenaChromeVisible(OPENING_DEPARTURE_MS * 4)).toBe(true);
+  });
+
+  it("is what the HUD actually waits on", () => {
+    const source = hudSource();
+    expect(source).toContain("arenaChromeVisible");
+    expect(source).toContain("OPENING_DEPARTURE_MS");
+    // Held out of sight *and* out of reach: an invisible control that can still
+    // be clicked or announced is a worse defect than a visible one.
+    expect(source).toMatch(/visibility: shown \? undefined : "hidden"/);
+    // The two verbs the critic photographed over the title are inside the gate.
+    const code = stripComments(source);
+    const gate = code.indexOf('data-testid="arena-chrome"');
+    expect(gate).toBeGreaterThan(-1);
+    expect(code.indexOf("The Lens")).toBeGreaterThan(gate);
+    expect(code.indexOf("Conclude")).toBeGreaterThan(gate);
+  });
+
+  it("carries the title's corner note out with the title", () => {
+    // "Headphones deepen the bed" was still in the corner at 288 ms, by which
+    // time the arena had drawn all twelve beads. It left on its own 400 ms
+    // clock; it now leaves on the block's axis and curve, and sooner.
+    expect(OPENING_CORNER_MS).toBeLessThan(OPENING_DEPARTURE_MS);
+    const source = soundSource();
+    expect(source).toContain("OPENING_CORNER_MS");
+    expect(source).toContain("ACKNOWLEDGE_LIFT_REM");
+    expect(source).not.toMatch(/exit=\{\{ opacity: 0, transition: \{ duration: 0\.4 \} \}\}/);
+  });
+
+  it("assembles the world instead of switching it on", () => {
+    // The finding, exactly: at 288 ms every bead was at full size and full
+    // opacity on the frame it first appeared. Nothing may be arrived at zero.
+    for (let rank = 0; rank < 12; rank++) {
+      const first = beadArrival(rank, 12, 0, false);
+      expect(first.scale).toBeLessThan(1);
+      expect(first.light).toBe(0);
+    }
+    // …and it is an order, not a switch: a bead the hierarchy ranks second is
+    // behind the first for the whole of the first's condensation.
+    const midway = ARRIVAL_DURATION_MS / 2;
+    expect(beadArrival(0, 12, midway, false).light).toBeGreaterThan(
+      beadArrival(1, 12, midway, false).light
+    );
+    expect(beadArrival(1, 12, midway, false).light).toBeGreaterThan(
+      beadArrival(11, 12, midway, false).light
+    );
+    // Every bead does arrive, and none of them overshoots.
+    for (let rank = 0; rank < 12; rank++) {
+      const done = beadArrival(rank, 12, arrivalDurationMs(12), false);
+      expect(done.scale).toBe(1);
+      expect(done.light).toBe(1);
+      expect(done.gather).toBe(0);
+    }
+  });
+
+  it("fits the assembly inside the departure it plays under", () => {
+    // A world still arriving after the type has gone is a second opening.
+    for (const count of [1, 2, 6, 12, 24]) {
+      expect(arrivalDurationMs(count)).toBeLessThanOrEqual(
+        OPENING_DEPARTURE_MS + 1e-9
+      );
+    }
+    // And a two-bead draw is not paced like a two-dozen one.
+    expect(arrivalDurationMs(2)).toBeLessThan(arrivalDurationMs(12));
+  });
+
+  it("expresses the arrival in luminance when motion is not wanted", () => {
+    // Reduced motion suppresses the condensation, exactly as it suppresses the
+    // invitation's reach — and it does not remove the arrival, because an
+    // arrival that is deleted is the switch this was written to replace.
+    let lit = 0;
+    let gathered = 0;
+    for (let ms = 0; ms <= arrivalDurationMs(12); ms += 20) {
+      for (let rank = 0; rank < 12; rank++) {
+        const still = beadArrival(rank, 12, ms, true);
+        expect(still.scale).toBe(1);
+        const moving = beadArrival(rank, 12, ms, false);
+        expect(still.light).toBe(moving.light);
+        if (still.light > 0 && still.light < 1) lit++;
+        if (still.gather > 0) gathered++;
+      }
+    }
+    expect(lit).toBeGreaterThan(0);
+    expect(gathered).toBeGreaterThan(0);
+  });
+
+  it("is what the arena's beads actually do", () => {
+    const source = stripComments(beadsSource());
+    expect(source).toContain("beadArrival(");
+    // The condensation is applied to what is drawn, not folded into the eased
+    // interaction scale, so the authored curve is the curve on the screen.
+    expect(source).toMatch(/const drawn = next \* condensing\.scale/);
+    expect(source).toMatch(/BEAD_RADIUS \* GLASS_SCALE \* drawn/);
+    // The tier — haze, specular, rim, label weight — is the luminance half.
+    expect(source).toMatch(/focal\.tierTarget\[i\] \* focal\.light\[i\]/);
+    // The order is the hierarchy's, taken once and then held.
+    expect(source).toContain("focal.arrivalRank[focal.order[rank]] = rank");
+    expect(source).toContain("arrival.current.ranked");
   });
 });
 

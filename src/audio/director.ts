@@ -98,6 +98,21 @@ export interface AudioSink {
   readonly setSpace: (density: number, bed: number) => void;
   /** Thread voices currently able to speak. Decides which kind of space to open. */
   readonly activeVoiceCount: () => number;
+  /**
+   * BRING THE GENERATIVE LOOP TO AN END.
+   *
+   * The ambient score is a loop, and a loop has no ending — left running under
+   * the conclusion it turns the last authored sound into an interruption of
+   * something that carries on afterwards, which is why the review found that the
+   * Game stopped rather than ended.
+   *
+   * `atSeconds` is the moment on the sink's own clock at which nothing generative
+   * may still be sounding; `fadeSeconds` is how long it has to get there. The
+   * director calls it once, with the coda's onset. It is the sink's business how
+   * to obey — which slots to stop scheduling, how to ramp the bed — because that
+   * is rendering, not meaning.
+   */
+  readonly concludeAt: (atSeconds: number, fadeSeconds: number) => void;
 }
 
 /**
@@ -343,7 +358,13 @@ export function isPerformanceScore(value: unknown): value is PerformanceScore {
     typeof candidate.totalSeconds === "number" &&
     Array.isArray(candidate.entries) &&
     Array.isArray(candidate.ensembles) &&
-    Array.isArray(candidate.unresolved)
+    Array.isArray(candidate.unresolved) &&
+    // The ending is part of the contract, not an optional extra: a payload that
+    // does not carry one is a payload from a compiler that cannot end a session,
+    // and silence plus a caption is the honest response to that.
+    (candidate.coda === null ||
+      (typeof candidate.coda === "object" &&
+        Array.isArray((candidate.coda as { voices?: unknown }).voices)))
   );
 }
 
@@ -563,6 +584,19 @@ export function createAudioDirector(
     for (const section of plan.sections) {
       const rendered = applyIntensity(section.plan, intensity);
       if (rendered.notes.length > 0) sink.play(rendered, start + section.atSeconds);
+    }
+    /*
+     * THE ENDING IS AN ENDING.
+     *
+     * The bed is told to be gone by the time the coda speaks. This is not
+     * mixing taste: a generative loop still running under the last authored
+     * sound means the performance has no last sound, only a point after which
+     * the player stops listening. Asked for at every intensity, including
+     * silent — the loop is not a caption and does not belong to that path.
+     */
+    const coda = plan.sections.find((section) => section.kind === "coda");
+    if (coda !== undefined) {
+      sink.concludeAt(start + coda.atSeconds, SCORE.conclusion.bedFadeSeconds);
     }
     return plan;
   };

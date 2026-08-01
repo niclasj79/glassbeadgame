@@ -128,6 +128,34 @@ export const SCORE = {
     dynamicFloor: 0.35, // no entry is ever rendered inaudible
     dynamicCeiling: 1.4,
     unresolvedRepeats: 6, // bounded re-statements of an unresolved Tension
+    /** Shorter than this and a re-statement is a stub, not a statement. */
+    minUnresolvedHoldSeconds: 2.5,
+    /**
+     * Silence between the last of the performance and the coda. Musically it is
+     * the breath before a final sonority; structurally it is what makes the
+     * handover unambiguous, so the loose ends and the ending are never counted
+     * as one tense simultaneity by the width of a rounding error.
+     */
+    breathBeforeCodaSeconds: 0.6,
+
+    /**
+     * THE ARRIVAL, not the volume.
+     *
+     * The web's heaviest entry is rendered wider, not louder: its voices are
+     * spread a register apart and doubled at the octave, and the level of each
+     * doubled line is *taken from* the line it doubles. The summed level of the
+     * climax is therefore identical to the same entry rendered ordinarily —
+     * which is the whole point. A high point that is merely louder is a score
+     * wearing an orchestration (ADR-010).
+     */
+    climaxDoubleShare: 0.34, // share of a voice's level that moves to its octave
+    climaxWeightFloor: 0.45, // what a structurally light climax still receives
+
+    /**
+     * How long the generative bed takes to fade out before the coda, in
+     * seconds. The loop must not be audible under the last authored sound.
+     */
+    bedFadeSeconds: 4,
   },
 
   /** The motif voices — each completed motif joins the ensemble forever. */

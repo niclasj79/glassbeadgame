@@ -23,9 +23,18 @@ import {
   wovenLight,
 } from "./glass";
 import { presentationProfile } from "./quality";
-import { ARENA_FOV, worldSafeArea } from "./framing";
+import { ARENA_FOV, plateGeometry, worldSafeArea } from "./framing";
 import { idleClock, kindling } from "./idle";
+import { arrivalDurationMs, beadArrival } from "./opening";
 import {
+  ATTENDED_NAME_BLUR,
+  ATTENDED_NAME_MAX_WIDTH,
+  ATTENDED_NAME_OUTLINE,
+  ATTENDED_NAME_OUTLINE_OPACITY,
+  ATTENDED_NAME_SCALE,
+  NAME_MAX_WIDTH,
+  NAME_OUTLINE,
+  NAME_OUTLINE_OPACITY,
   SUPPRESSED,
   createLabelScratch,
   placeLabels,
@@ -45,12 +54,45 @@ export const BEAD_RADIUS = 0.15;
  * a fifth wider than the bead punishes a hand that moved a few pixels while
  * the arena was still settling. Fingers get more again.
  */
-const HIT_SCALE = typeof window !== "undefined" && isCoarsePointer() ? 3.4 : 2.8;
+const COARSE_POINTER = typeof window !== "undefined" && isCoarsePointer();
+const HIT_SCALE = COARSE_POINTER ? 3.4 : 2.8;
 const BOB_AMPLITUDE = 0.03;
 /** The glass body is drawn a little larger than the nominal bead radius. */
 const GLASS_SCALE = 1.72;
-/** How far under an attended bead its label hangs, clear of the plate. */
-const ATTENDED_LABEL_DROP_PX = 148;
+
+/**
+ * THE ATTENDED BEAD'S NAME IS THE FRAME'S CAPTION, AND IT WAS THE FRAME'S
+ * WORST ONE.
+ *
+ * Measured on the running build with a bead attended: row-max luminance
+ * profiles put the attended label's peak at 175 against a local background of
+ * 111–124 — the horizon streak and the dial's own ring — about 1.5:1, while
+ * every unattended name in the same frame ran 3.3:1 or better. Re-measured over
+ * each name's own box rather than a band, the same frame reads 86 against 29,
+ * against 149–210 for the four names beside it (the table is in `labels.ts`):
+ * different windows, same finding. The thing the player had just chosen carried
+ * the least legible caption on the page, and the intention dial was drawn over
+ * the top of it, because the name was offset by the bead's own glass and the
+ * dial is a hundred and sixty pixels wider than that in every direction.
+ *
+ * Attending now promotes the name in three ways at once, none of them colour:
+ * it is lifted clear of the whole dial, it is set larger than every other name
+ * in the frame, and it is struck on a field of the world's own ground rather
+ * than on whatever happens to be behind it.
+ *
+ * "Clear of the dial" is the circle that contains everything the plate draws,
+ * asked of the plate's own geometry rather than copied from it. A first pass
+ * here reserved the drop beneath the plate — 148 px, the number the plate's
+ * *vertical* box is solved from — and the name then landed to the *side*, where
+ * the plate reaches 181 px because a verb's engraved caption stands out there:
+ * on the running build "Fibonacci Sequence" was struck through the word
+ * PASSAGE. A name may hang on any of four sides, so the reservation has to be
+ * the widest of them.
+ *
+ * The three registers the promotion is spent in — the setting, the ground and
+ * its opacity — are in `labels.ts` beside the solver, because how a name is set
+ * and where it goes are one question.
+ */
 
 /**
  * WHAT A BEAD DOES WHEN THE POINTER ARRIVES.
@@ -282,8 +324,23 @@ export function Beads() {
        * landed, which is why an attended bead carried no name at all.
        */
       ownRadius: new Float32Array(n),
+      /** How far the drawn form reaches between the cardinals. See labels.ts. */
+      ownBetween: new Float32Array(n),
+      /** 1 for the bead whose name hangs on its dial rather than beside it. */
+      anchored: new Float32Array(n),
       /** Drawn silhouette radius, in the same isotropic screen units. */
       glassRadius: new Float32Array(n),
+      /**
+       * The opening's own three arrivals, per bead: where it stands in the
+       * salience order the world assembles in, and this frame's condensation.
+       * See `scene/opening.ts` — the world used to switch on.
+       */
+      arrivalRank: new Int32Array(n),
+      drawn: new Float32Array(n),
+      light: new Float32Array(n),
+      gather: new Float32Array(n),
+      /** The eased idle kindling, kept apart from what is handed to the glass. */
+      kindled: new Float32Array(n),
       /** This frame's wanted separation, and the eased one actually applied. */
       push: new Float32Array(n * 2),
       pushEased: new Float32Array(n * 2),
@@ -316,8 +373,15 @@ export function Beads() {
   });
 
   live.current.focusedId = focusedBeadId;
-  live.current.attendedId =
+  /**
+   * Which bead the player is attending. Read during render as well as through
+   * the ref, because the promotion attending performs on that bead's name is a
+   * change of *type* — a larger setting on a ground of its own — and that is a
+   * property of the label, not a number the frame loop can write.
+   */
+  const attendedId =
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
+  live.current.attendedId = attendedId;
   live.current.candidateId =
     draft.stage === "candidate-selected" ? String(draft.candidateConceptId) : null;
 
@@ -366,6 +430,21 @@ export function Beads() {
    */
   const invite = useRef({ unresolved: 1, touched: false });
 
+  /**
+   * How long this draw has been assembling, in real milliseconds, and whether
+   * the order it assembles in has been taken yet. A ref for the same reason:
+   * this changes every frame and must never re-render the arena.
+   */
+  const arrival = useRef({ elapsed: 0, ranked: false });
+
+  /**
+   * The radius of the circle that contains the whole intention dial, in CSS
+   * pixels. Solved from the plate's own geometry and cached against the width
+   * it was solved for: the frame loop must not allocate, and a viewport only
+   * changes when somebody drags a window edge.
+   */
+  const plate = useRef({ width: -1, radius: 0, between: 0 });
+
   // These are built during render, not in an effect: ref callbacks fire before
   // effects, so allocating them afterwards would wipe every handle React had
   // just given us — and the labels would silently never appear.
@@ -382,6 +461,10 @@ export function Beads() {
     // player who has not yet touched *this* arena.
     invite.current.unresolved = 1;
     invite.current.touched = false;
+    // …and a new draw is a new arrival. A Game begun after a conclusion
+    // assembles exactly as the first one did.
+    arrival.current.elapsed = 0;
+    arrival.current.ranked = false;
   }, [ids, count]);
 
   // Instance attributes are static for the life of a draw; state is not.
@@ -479,6 +562,16 @@ export function Beads() {
     }
     const offer = invitationWeights(spark.gain, invite.current.unresolved);
 
+    // ── the world assembling ────────────────────────────────────────────
+    // Real milliseconds, not the clamped frame delta: the assembly is cut to
+    // the departure of the title it plays under, and the title leaves on the
+    // document's clock however slowly this machine is drawing.
+    const assembling = arrival.current.elapsed;
+    const assembly = arrivalDurationMs(count);
+    if (assembling < assembly) {
+      arrival.current.elapsed = Math.min(assembly, assembling + rawDt * 1000);
+    }
+
     // ── pass one: where each bead stands, and how big it is drawn ───────
     for (let i = 0; i < count; i++) {
       const id = ids[i];
@@ -521,6 +614,20 @@ export function Beads() {
       const next = current + (target - current) * Math.min(1, dt * rate);
       scales.current[i] = next;
 
+      // The opening's condensation is applied to what is *drawn* rather than
+      // folded into the eased scale above, so the authored curve is the curve
+      // on the screen and the interaction scales stay exactly what they were.
+      const condensing = beadArrival(
+        focal.arrivalRank[i],
+        count,
+        assembling,
+        reducedMotion
+      );
+      focal.light[i] = condensing.light;
+      focal.gather[i] = condensing.gather;
+      const drawn = next * condensing.scale;
+      focal.drawn[i] = drawn;
+
       originVec.set(x, y, z);
       // ── the frame's hierarchy, measured ───────────────────────────────
       const eyeDistance = three.camera.position.distanceTo(originVec);
@@ -539,7 +646,7 @@ export function Beads() {
           : 0;
 
       const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
-      focal.glassRadius[i] = (BEAD_RADIUS * GLASS_SCALE * next) / halfAtBead;
+      focal.glassRadius[i] = (BEAD_RADIUS * GLASS_SCALE * drawn) / halfAtBead;
     }
 
     // ── pass two: no two beads may read as one ──────────────────────────
@@ -562,6 +669,26 @@ export function Beads() {
     }
 
     // ── pass three: place the glass, the targets and the names ──────────
+    if (plate.current.width !== three.size.width) {
+      const geometry = plateGeometry(three.size.width, COARSE_POINTER);
+      plate.current.width = three.size.width;
+      plate.current.radius = Math.max(
+        geometry.extentUp,
+        geometry.extentDown,
+        geometry.extentSide
+      );
+      // Between the cardinals there is nothing but the graduated circle and the
+      // band its stations sit in: the four verbs and their engraved captions
+      // are on the cardinals, the two utilities on the upper diagonals. A point
+      // at 45° on this radius is outside every station box, and reserving the
+      // widest reach there instead is what left a phone with nowhere to put the
+      // name at all — the plate is 350 px across on a 414 px page.
+      plate.current.between = geometry.ring + geometry.station / 2;
+    }
+    const halfFrame = three.size.height * 0.5;
+    const plateRadius = plate.current.radius / halfFrame;
+    const plateBetween = plate.current.between / halfFrame;
+
     for (let i = 0; i < count; i++) {
       const id = ids[i];
       const index = frameState.beadIndex.get(id) ?? i;
@@ -569,7 +696,7 @@ export function Beads() {
       const snapped = frameState.snapId === id || now.candidateId === id;
       const hovered = frameState.hoveredId === id;
       const focused = now.focusedId === id;
-      const next = scales.current[i];
+      const drawn = focal.drawn[i];
       const eyeDistance = focal.depth[i];
       const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
       const pushX = focal.pushEased[i * 2];
@@ -597,7 +724,7 @@ export function Beads() {
       const breath = reducedMotion
         ? 1
         : 1 + Math.sin(frameState.clock * 0.9 + bobPhases[i]) * 0.01;
-      const radius = BEAD_RADIUS * GLASS_SCALE * next * breath;
+      const radius = BEAD_RADIUS * GLASS_SCALE * drawn * breath;
 
       originVec.set(x, y, z);
       scaleVec.setScalar(radius);
@@ -655,16 +782,30 @@ export function Beads() {
       // bead. For the attended one that is the intention plate, not the glass:
       // the plate is what a neighbouring name would actually collide with.
       focal.beadRadius[i] = attended
-        ? ATTENDED_LABEL_DROP_PX / (three.size.height * 0.5)
+        ? plateRadius
         : focal.glassRadius[i] + 0.06 / halfAtBead;
-      // …and what its *own* name hangs from is its own glass, whatever else is
-      // drawn around it. Handing the plate's radius to both is what left the
-      // attended bead — the frame's one definite subject — with no name at all.
-      focal.ownRadius[i] = focal.glassRadius[i] + 0.02;
+      // …and the attended bead's *own* name is offset by the same plate,
+      // because the dial is drawn over the canvas and a name hung off the glass
+      // is a name underneath the instrument. Every other bead draws nothing but
+      // itself, and is not further from its own name for it.
+      focal.ownRadius[i] = attended
+        ? plateRadius
+        : focal.glassRadius[i] + 0.02;
+      focal.ownBetween[i] = attended
+        ? plateBetween
+        : focal.glassRadius[i] + 0.02;
+      // …and it is the dial's caption rather than a caption competing with the
+      // rest of the frame on proximity, which is the one thing the solver has
+      // to be told (see `labels.ts`). Exactly one bead is ever attended.
+      focal.anchored[i] = attended ? 1 : 0;
 
       const label = labels.current[i];
-      // Type stays the same size on screen whatever the orbit distance.
-      const typeScale = Math.min(2.2, Math.max(0.8, eyeDistance / 10.4));
+      // Type stays the same size on screen whatever the orbit distance — and
+      // the attended bead's name is set larger than every other name in the
+      // frame, which is the promotion the verb has to earn.
+      const typeScale =
+        Math.min(2.2, Math.max(0.8, eyeDistance / 10.4)) *
+        (attended ? ATTENDED_NAME_SCALE : 1);
       if (label?.group) label.group.scale.setScalar(typeScale);
       const bounds = (label?.text as TroikaText | null)?.textRenderInfo
         ?.blockBounds;
@@ -689,6 +830,18 @@ export function Beads() {
       focal.tierTarget
     );
 
+    // The order the world assembles in is taken once, on the draw's first
+    // frame, and then held. A stagger that re-sorted itself as the camera
+    // turned would be a queue rather than an arrival — and by the time this
+    // runs on that first frame the whole draw is still at `elapsed = 0`, so
+    // nothing has been drawn out of order to get here.
+    if (!arrival.current.ranked) {
+      for (let rank = 0; rank < count; rank++) {
+        focal.arrivalRank[focal.order[rank]] = rank;
+      }
+      arrival.current.ranked = true;
+    }
+
     // The player's own threads, as screen chords. A name laid across a thread
     // is the worst of the collisions: the thread is the thing they made.
     const woven = live.current.threads;
@@ -712,6 +865,8 @@ export function Beads() {
         anchor: focal.anchor,
         beadRadius: focal.beadRadius,
         ownRadius: focal.ownRadius,
+        ownRadiusBetween: focal.ownBetween,
+        anchored: focal.anchored,
         half: focal.half,
         tier: focal.tierTarget,
         hidden: focal.hidden,
@@ -739,10 +894,17 @@ export function Beads() {
 
       // The tier eases rather than steps: two beads that trade rank as the
       // camera turns must cross-fade, never pop.
+      //
+      // A bead that has not finished arriving has not gathered its tier yet:
+      // the room's haze still stands in front of it, it has no specular and
+      // its rim is held back. That is the whole of the arrival under reduced
+      // motion, where the condensation above is suppressed — never removed,
+      // and expressed in luminance instead of in size.
       const tier = focal.attribute[i * 2];
+      const tierTarget = focal.tierTarget[i] * focal.light[i];
       focal.attribute[i * 2] =
-        tier + (focal.tierTarget[i] - tier) * Math.min(1, dt * 2.6);
-      const kindle = focal.attribute[i * 2 + 1];
+        tier + (tierTarget - tier) * Math.min(1, dt * 2.6);
+      const kindle = focal.kindled[i];
       // The idle score's own light, raised while the invitation stands — and
       // under reduced motion this is the whole of the invitation, because the
       // reach is travel and travel is what the preference is about.
@@ -750,24 +912,41 @@ export function Beads() {
         spark.index === i
           ? Math.min(1, spark.gain * (1 + 0.55 * offer.light))
           : 0;
-      focal.attribute[i * 2 + 1] =
-        kindle + (wantKindle - kindle) * Math.min(1, dt * 3.4);
+      focal.kindled[i] = kindle + (wantKindle - kindle) * Math.min(1, dt * 3.4);
+      // The arrival's own gathering light rides the same channel — both are the
+      // world putting light on a bead for a moment, and neither is content. It
+      // is handed over unsmoothed because it is already a hump with no velocity
+      // at either end, and easing a hump is how you lose it.
+      focal.attribute[i * 2 + 1] = Math.max(
+        focal.kindled[i],
+        focal.gather[i]
+      );
 
       const label = labels.current[i];
       const halfAtBead = Math.max(0.001, focal.depth[i] * tanHalfFov);
       if (label?.group) {
         // The solver answered in half-frame-heights, which is isotropic, so one
         // unit is the same world distance on both axes at this depth.
+        //
+        // The half-height is added because the solver reserves a box around its
+        // *centre* and the label is anchored at its *top*: without it every name
+        // is drawn half its own block lower than the clearance that was solved
+        // for it. That was a few pixels while every name was one line, and it is
+        // a whole line now the attended name sets over two.
         label.group.position
           .set(x, y, z)
           .addScaledVector(screenRight, focal.offset[i * 2] * halfAtBead)
-          .addScaledVector(screenDown, -focal.offset[i * 2 + 1] * halfAtBead);
+          .addScaledVector(
+            screenDown,
+            -(focal.offset[i * 2 + 1] + focal.half[i * 2 + 1]) * halfAtBead
+          );
         label.group.quaternion.copy(camQuaternion);
       }
       if (label?.text) {
         beadDir.set(x, y, z).normalize();
         const facing = smoothstep(-0.1, 0.34, camDir.dot(beadDir));
         const emphasised = focal.promoted[i] > 0;
+        const attended = now.attendedId === id;
         // A name with nowhere legible to go is suppressed outright. Half a name
         // running off the page tells the player the world is broken; no name
         // tells them this bead is crowded, which is true and recoverable.
@@ -775,9 +954,12 @@ export function Beads() {
         // The tier carries label weight too, so the frame's first read is also
         // the frame's most legible name.
         const weight = tierWeights(focal.attribute[i * 2]).label;
-        const wanted = placed
-          ? Math.max(facing * weight, emphasised ? 1 : 0)
-          : 0;
+        // …and a name arrives with the bead it belongs to. `light` is 0 until
+        // this bead's turn in the assembly, so the world's captions are written
+        // in the same order the world condenses in.
+        const wanted =
+          (placed ? Math.max(facing * weight, emphasised ? 1 : 0) : 0) *
+          focal.light[i];
         // troika exposes fill/outline opacity as its own uniforms; the mesh's
         // `material` is undefined until it derives one, so writing to it
         // silently produced NaN and hid every label.
@@ -786,7 +968,12 @@ export function Beads() {
         labelOpacity.current[i] = next;
         const troika = label.text as unknown as TroikaText;
         troika.fillOpacity = next;
-        troika.outlineOpacity = next * 0.92;
+        // The attended name's ground is opaque: the measurement that opened
+        // this was a peak of 175 against a background of 111–124, and a field
+        // held at 0.92 is a field the horizon is still coming through.
+        troika.outlineOpacity =
+          next *
+          (attended ? ATTENDED_NAME_OUTLINE_OPACITY : NAME_OUTLINE_OPACITY);
         label.text.visible = next > 0.02;
       }
     }
@@ -876,10 +1063,19 @@ export function Beads() {
             color={theme.palette.vellum}
             anchorX="center"
             anchorY="top"
-            outlineWidth={0.008}
+            /* Attention is a rare change, not a per-frame one, so these may be
+               props: the attended name is struck on a feathered field of the
+               world's own ground, which is what makes it legible over the
+               horizon streak the plate is usually opened against. */
+            outlineWidth={
+              id === attendedId ? ATTENDED_NAME_OUTLINE : NAME_OUTLINE
+            }
+            outlineBlur={id === attendedId ? ATTENDED_NAME_BLUR : 0}
             outlineColor={theme.palette.ground}
-            outlineOpacity={0.92}
-            maxWidth={2.1}
+            outlineOpacity={NAME_OUTLINE_OPACITY}
+            maxWidth={
+              id === attendedId ? ATTENDED_NAME_MAX_WIDTH : NAME_MAX_WIDTH
+            }
             textAlign="center"
           >
             {beadIdentity(id).name}

@@ -46,6 +46,8 @@ const sink: AudioSink = {
   },
   setSpace: (density, bed) => ambient.setSpace(density, bed),
   activeVoiceCount: () => ambient.activeVoiceCount(),
+  concludeAt: (atSeconds, fadeSeconds) =>
+    ambient.concludeAt(atSeconds, fadeSeconds),
 };
 
 export const productionSink: AudioSink = Object.freeze(sink);

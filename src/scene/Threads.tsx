@@ -7,11 +7,17 @@ import { domainSessionStore } from "@/state/domainSession";
 import type { CommittedThreadV1, ThreadOutcomeV1 } from "@/domain/model";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { audio } from "@/audio/engine";
+import { presentationNow } from "@/runtime/testMode";
 import { frameState } from "./frameState";
 import { intentionArcMid } from "./curves";
 import { presentationProfile } from "./quality";
 import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./ribbon";
 import { threadForm, unrestAmplitude } from "./threadGrammar";
+import {
+  conclusionPerformanceStore,
+  runningConclusionFor,
+  threadLightingTimes,
+} from "./conclusionPerformance";
 import {
   ATTUNED_EASE_SECONDS,
   ATTUNED_HOLD_SECONDS,
@@ -31,6 +37,16 @@ const vPoint = new THREE.Vector3();
 
 /** Two lights is the most any grammar asks for — Echo's mirrored pair. */
 const MAX_VOICE_LIGHTS = 2;
+
+/**
+ * How quickly a strand comes back when the conclusion reaches it. Short enough
+ * that it reads as a stroke landing on its beat rather than as a dissolve, and
+ * well inside the gap between two entries at the tempi the compiler uses.
+ * Reduced motion arrives sooner, as everywhere else: the *information* — this
+ * one, now, in the order you made it — is what matters and is preserved.
+ */
+const REBUILD_EASE_S = 0.35;
+const REBUILD_EASE_REDUCED_S = 0.08;
 
 /** Quadratic Bézier, the same curve the ribbon's vertex shader evaluates. */
 function arcPoint(
@@ -69,6 +85,21 @@ interface RibbonProps {
   readonly threadId?: string;
   /** Whether the world is currently in the held state of Attunement. */
   readonly attuned?: boolean;
+  /**
+   * THE CONCLUSION'S REBUILDING (spec §14).
+   *
+   * When the concluded log has been compiled into a performance, the web is
+   * drawn again from nothing in the order the player made it: this strand is
+   * withheld until `litAtSeconds` after `performanceStartedAtMs`, then strikes
+   * exactly as it first did. Both null in ordinary play, where a committed
+   * thread is simply present.
+   *
+   * The time comes from the compiler and nowhere else, and no outcome kind is
+   * read here — a documented relation, an Open Thread and an unresolved one
+   * arrive at the second they were woven at, identically (CAV-006).
+   */
+  readonly litAtSeconds?: number | null;
+  readonly performanceStartedAtMs?: number | null;
 }
 
 /**
@@ -85,6 +116,8 @@ function Ribbon({
   animateGrowth,
   threadId,
   attuned = false,
+  litAtSeconds = null,
+  performanceStartedAtMs = null,
 }: RibbonProps) {
   const theme = useCurrentTheme();
   const tier = useStore((s) => s.settings.qualityTier);
@@ -157,6 +190,31 @@ function Ribbon({
     (material.uniforms.uGrow as { value: number }).value = animateGrowth ? 0 : 1;
   }, [material, resolved, sourceId, targetId, animateGrowth]);
 
+  /**
+   * How much of this strand the conclusion has given back: 0 before its moment,
+   * eased to 1 as it strikes. 1 whenever no performance is running, so ordinary
+   * play is untouched.
+   */
+  const arrival = useRef(1);
+
+  /*
+   * A performance beginning takes the web away, once. The stroke is unwound
+   * with it — a strand does not fade in, it is drawn again — and only for
+   * strands whose moment is still ahead: one that has already passed is left
+   * exactly as it is, so a canvas that remounts mid-conclusion does not replay
+   * everything the player has already watched arrive.
+   */
+  useEffect(() => {
+    if (performanceStartedAtMs === null || litAtSeconds === null) return;
+    if ((presentationNow() - performanceStartedAtMs) / 1000 >= litAtSeconds) {
+      return;
+    }
+    arrival.current = 0;
+    if (animateGrowth) {
+      (material.uniforms.uGrow as { value: number }).value = 0;
+    }
+  }, [material, animateGrowth, performanceStartedAtMs, litAtSeconds]);
+
   const age = useRef(0);
 
   useFrame((_, rawDt) => {
@@ -164,6 +222,17 @@ function Ribbon({
     age.current += dt;
     const uniforms = material.uniforms;
     (uniforms.uTime as { value: number }).value = frameState.clock;
+
+    // Has the conclusion given this strand back yet? Read before anything is
+    // drawn, because it gates the stroke itself and not only its opacity.
+    const rebuilding =
+      performanceStartedAtMs !== null && litAtSeconds !== null;
+    const arrived =
+      !rebuilding ||
+      (presentationNow() - performanceStartedAtMs) / 1000 >= litAtSeconds;
+    arrival.current +=
+      ((arrived ? 1 : 0) - arrival.current) *
+      Math.min(1, dt / (reducedMotion ? REBUILD_EASE_REDUCED_S : REBUILD_EASE_S));
 
     const ia = frameState.beadIndex.get(sourceId);
     if (ia === undefined) return;
@@ -189,7 +258,8 @@ function Ribbon({
     (uniforms.uB.value as THREE.Vector3).copy(vEnd);
     (uniforms.uM.value as THREE.Vector3).copy(vMid);
 
-    if (animateGrowth) {
+    // A withheld strand is not a slow strand: it is not being drawn at all yet.
+    if (animateGrowth && arrived) {
       const grow = uniforms.uGrow as { value: number };
       const speed = reducedMotion ? 6 : 1.6;
       grow.value = Math.min(1, grow.value + dt * speed);
@@ -242,7 +312,8 @@ function Ribbon({
       arcPoint(vStart, vMid, vEnd, Math.max(0, Math.min(1, at)), vPoint);
       sprite.position.copy(vPoint);
       const strength = travel ? travel.strength : 0;
-      (sprite.material as THREE.SpriteMaterial).opacity = 0.55 * strength;
+      (sprite.material as THREE.SpriteMaterial).opacity =
+        0.55 * strength * arrival.current;
       sprite.scale.setScalar(0.055 + 0.035 * strength);
     }
 
@@ -250,7 +321,8 @@ function Ribbon({
     const target = attunedPresence(attuned, cycleRunning, speaking);
     presence.current +=
       (target - presence.current) * Math.min(1, dt / ATTUNED_EASE_SECONDS);
-    (uniforms.uOpacity as { value: number }).value = opacity * presence.current;
+    (uniforms.uOpacity as { value: number }).value =
+      opacity * presence.current * arrival.current;
   });
 
   return (
@@ -289,6 +361,36 @@ export function Threads() {
     domainSessionStore,
     (state) => state.session?.attunementActive ?? false
   );
+  const sessionId = useVanillaStore(domainSessionStore, (state) =>
+    state.session ? String(state.session.sessionId) : null
+  );
+
+  /**
+   * THE WEB, REBUILT IN THE ORDER IT WAS MADE (spec §14).
+   *
+   * The camera director writes the running performance here when the conclusion
+   * cue arrives (`scene/conclusionPerformance.ts`); this is the other half of
+   * executing it. Each strand is given back at the second the compiler placed
+   * its voice — the same second its line reaches the register — so the player
+   * watches their own composition assemble in their own order.
+   *
+   * Guarded by session: last Game's times may not hold this Game's web dark.
+   */
+  const running = useVanillaStore(conclusionPerformanceStore, (s) => s.running);
+  const conclusion = useMemo(
+    () => runningConclusionFor(running, sessionId),
+    [running, sessionId]
+  );
+  const litTimes = useMemo(
+    () =>
+      conclusion === null
+        ? null
+        : threadLightingTimes(
+            conclusion.performance,
+            threads.map((thread) => String(thread.id))
+          ),
+    [conclusion, threads]
+  );
 
   /**
    * Which threads have closed. Every committed thread used to be drawn as a
@@ -319,6 +421,8 @@ export function Threads() {
           resolved={closed.has(String(thread.id))}
           animateGrowth
           attuned={attuned}
+          litAtSeconds={litTimes?.get(String(thread.id)) ?? null}
+          performanceStartedAtMs={conclusion?.startedAtMs ?? null}
         />
       ))}
     </group>

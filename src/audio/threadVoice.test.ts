@@ -50,6 +50,7 @@ function harness() {
     play: () => {},
     setSpace: () => {},
     activeVoiceCount: () => 0,
+    concludeAt: () => {},
   };
   const director = createAudioDirector({ sink, lookup: CASTALIA_LOOKUP });
   director.onThreadVoice((light) => lights.push(light));
@@ -148,6 +149,7 @@ describe("the thread-voice channel", () => {
       play: () => {},
       setSpace: () => {},
       activeVoiceCount: () => 0,
+      concludeAt: () => {},
     };
     const director = createAudioDirector({ sink, lookup: CASTALIA_LOOKUP });
     const detach = director.onThreadVoice((light) => lights.push(light));

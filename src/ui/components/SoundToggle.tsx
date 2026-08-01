@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
+import { ACKNOWLEDGE_LIFT_REM, OPENING_CORNER_MS } from "@/scene/opening";
 import { GlassPanel } from "./GlassPanel";
 
 function SpeakerIcon({ muted }: { muted: boolean }) {
@@ -90,6 +91,15 @@ function Row({
  * quiet line beside the control it concerns. The honest off-switch did not
  * move: it lives in the panel, where someone bothered by beating tones will
  * look for it.
+ *
+ * AND IT LEAVES WITH THE TITLE IT BELONGS TO. On a screencast of a real press
+ * the note was still in the corner at 288 ms, by which time the arena had drawn
+ * all twelve beads — title furniture sitting on a Game that had already begun.
+ * It used to dissolve on its own clock, a plain 400 ms fade begun at the phase
+ * change; it is now carried out on the same axis and the same curve as the type
+ * (`scene/opening.ts`), so the corner is part of one departure rather than a
+ * second, slower one. It goes sooner than the block does, because it is the
+ * smallest thing on the page and the last that should still be readable.
  */
 export function SoundToggle() {
   const muted = useStore((s) => s.settings.muted);
@@ -139,7 +149,14 @@ export function SoundToggle() {
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { delay: 1.6, duration: 1.2 } }}
-            exit={{ opacity: 0, transition: { duration: 0.4 } }}
+            exit={{
+              opacity: 0,
+              y: `-${ACKNOWLEDGE_LIFT_REM}rem`,
+              transition: {
+                duration: OPENING_CORNER_MS / 1000,
+                ease: [0.32, 0, 0.24, 1],
+              },
+            }}
             className="engraved absolute bottom-3 right-14 w-52 text-right leading-relaxed"
           >
             Headphones deepen the bed

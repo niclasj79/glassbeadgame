@@ -189,7 +189,16 @@ export function AudioBridge(): null {
             stopSemanticAudio();
             seatedThreadIds = EMPTY_THREAD_IDS;
           }
-          // conclusion: ambient and bed continue under the mandala.
+          /*
+           * conclusion: the bed keeps sounding *under the performance* and is
+           * then brought to an end by the director, which is the only thing
+           * that knows when the coda speaks (`AudioSink.concludeAt`). This
+           * branch deliberately does not stop it here: cutting the loop the
+           * moment the phase changes would silence the room before the
+           * performance had played a note, and stopping it at some guessed
+           * delay afterwards would put the ending anywhere but on the last
+           * sound. The loop ends where the music ends, or not at all.
+           */
         }
       ),
 

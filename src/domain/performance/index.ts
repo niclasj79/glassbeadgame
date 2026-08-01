@@ -10,6 +10,7 @@ export {
   type EnsembleStructure,
   type IntentionTransformation,
   type PerformanceClimax,
+  type PerformanceCoda,
   type PerformanceEnsemble,
   type PerformanceEntry,
   type PerformanceVoice,

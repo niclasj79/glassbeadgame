@@ -49,14 +49,23 @@ export const VOICE_PLAN_KINDS = Object.freeze([
 export type VoicePlanKind = (typeof VOICE_PLAN_KINDS)[number];
 
 /**
- * The three epistemic states an outcome can be in (CAV-006). They differ in
+ * The four epistemic states an outcome can be in (CAV-006). They differ in
  * *resolution*, never in reward — but they are genuinely different states, and
  * a muted player must be able to tell them apart, because for them the caption
  * track is the experience.
+ *
+ * "reading" is the one the review found missing. The Game's authored material
+ * includes interpretive relations: readings it offers about two structures,
+ * which assert nothing beyond the comparison. They are documented — there is
+ * something authored to say — and they are not the record. Folding them into
+ * "documented" made the Game claim authority it does not hold; folding them into
+ * "open-thread" made it disown work it had actually done.
  */
 export const AUDIO_OUTCOME_KINDS = Object.freeze([
   /** The record carries this relation. The figure closes. */
   "documented",
+  /** A reading the Game offers. Full weight, authored, and not closed. */
+  "reading",
   /** A specific question, held open. Same weight, but unclosed. */
   "open-thread",
   /** No grounded relation yet. Quiet and short — never dim, never grey. */

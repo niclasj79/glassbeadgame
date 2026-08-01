@@ -162,6 +162,164 @@ export function acknowledgementMs(): number {
   return openingStep(0).delay * 1000;
 }
 
+/**
+ * How long the whole block takes to leave, in milliseconds: the last line's
+ * delay plus its own travel. Derived from the steps rather than written down,
+ * so a change to the stagger cannot leave this behind.
+ */
+export function openingDepartureMs(): number {
+  const last = openingStep(OPENING_LINES - 1);
+  return (last.delay + last.duration) * 1000;
+}
+
+/** The same number as a constant, for the two surfaces that wait on it. */
+export const OPENING_DEPARTURE_MS = openingDepartureMs();
+
+/**
+ * How long the title's corner note takes to leave, in milliseconds. It goes on
+ * the same axis and the same curve as the block, and sooner: it is the smallest
+ * type on the page, it is a footnote to a control rather than part of the
+ * title, and a footnote that outlasts the thing it annotates is litter.
+ */
+export const OPENING_CORNER_MS = 260;
+
+/* ------------------------------------------------- one screen at a time */
+
+/**
+ * THE OPENING WAS TWO SCREENS AT ONCE.
+ *
+ * Measured from a CDP screencast of a real BEGIN press at 1280x720 — 277 frames
+ * over 4.7 s. At 206 ms the title stood at full opacity over an empty armature.
+ * Eighty-two milliseconds later, at 288 ms, all twelve beads were at full size
+ * and full opacity, drawn straight through the letterforms of "The Glass Bead
+ * Game", with THE LENS and CONCLUDE already struck top right and the
+ * headphone note still in the corner. A DOM trace of the arena's nav pill put
+ * it at 0.144 opacity 132 ms after the press and 1.0 at 412 ms — while the
+ * title block's authored departure does not finish until `openingDepartureMs()`.
+ *
+ * Two separate faults, and they compound into one image:
+ *
+ *   THE ARENA'S CHROME DID NOT WAIT. `phase` flips to "arena" two animation
+ *   frames after the press, and the HUD faded itself up from that instant, so
+ *   the Game's own furniture was drawn over a title that was still leaving.
+ *   The chrome now waits out the departure — see `arenaChromeVisible`.
+ *
+ *   THE WORLD SWITCHED ON. `Beads.tsx` placed every bead at full scale and full
+ *   opacity on its first frame: not an arrival, a light switch. The world now
+ *   assembles — see `beadArrival`.
+ *
+ * Both halves are phrased here, beside the departure they have to clear,
+ * because a gate and a departure that live in different files drift apart.
+ */
+
+/**
+ * Whether the arena may draw its own chrome yet, given how long the arena has
+ * been mounted.
+ *
+ * The arena mounts on the session, and the session is built after the press, so
+ * the arena's own age is never *more* than the departure's — waiting the whole
+ * departure from mount can therefore be late, and can never be early. That
+ * asymmetry is the point: chrome that arrives a moment after the type has gone
+ * is a HUD receding, which is what the specification asks for anyway; chrome
+ * that arrives a moment before it is two screens at once.
+ */
+export function arenaChromeVisible(sinceArenaMs: number): boolean {
+  return sinceArenaMs >= OPENING_DEPARTURE_MS;
+}
+
+/**
+ * THE WORLD ASSEMBLES.
+ *
+ * Each bead condenses out of the room rather than being switched on, and they
+ * do it in the order the focal hierarchy already ranks them (`scene/salience.ts`)
+ * — nearest first, which is a fact about where the eye is, not about which
+ * ideas were drawn. Nothing here reads a concept, so the world still nominates
+ * nothing on the player's behalf.
+ *
+ * The whole assembly is cut to the departure it plays under, so the last bead
+ * settles about as the type finishes leaving and the chrome arrives on top of a
+ * world that is already there.
+ */
+
+/** How long one bead takes to condense, in milliseconds. */
+export const ARRIVAL_DURATION_MS = 620;
+
+/**
+ * The longest gap between one bead's arrival and the next's. A small draw uses
+ * this; a large one is compressed so the whole assembly still fits inside the
+ * departure (see `arrivalStagger`), because a world still arriving after the
+ * title has gone is a second opening rather than one.
+ */
+export const ARRIVAL_STAGGER_MS = 46;
+
+/**
+ * How far the drawn size starts from its own. Not zero: a bead that begins at
+ * nothing pops into existence on the frame it crosses the threshold, and what
+ * this is for is the opposite of a pop.
+ */
+export const ARRIVAL_SCALE = 0.2;
+
+/** How much light gathers on a bead as it condenses, at the peak. */
+export const ARRIVAL_GATHER = 0.5;
+
+export function arrivalStagger(count: number): number {
+  const spread = Math.max(0, OPENING_DEPARTURE_MS - ARRIVAL_DURATION_MS);
+  const gaps = Math.max(1, count - 1);
+  return Math.min(ARRIVAL_STAGGER_MS, spread / gaps);
+}
+
+export interface BeadArrival {
+  /**
+   * Multiplier on the bead's drawn size. Exactly 1 at every moment under
+   * reduced motion: the condensation is travel, and travel is what the
+   * preference is about.
+   */
+  readonly scale: number;
+  /**
+   * How much of its own light the bead has gathered — its tier, and with it the
+   * room's haze standing in front of it, its specular, and its name. This is
+   * the whole of the arrival under reduced motion, which is why the arrival is
+   * never removed there: it is expressed in luminance instead of in size.
+   */
+  readonly light: number;
+  /** The light condensing *into* the bead. A hump: it peaks and settles. */
+  readonly gather: number;
+}
+
+const ARRIVED: BeadArrival = Object.freeze({ scale: 1, light: 1, gather: 0 });
+
+/**
+ * Where one bead is in its arrival. `rank` is its place in the salience
+ * ordering, `count` the size of the draw, `elapsedMs` how long the world has
+ * been assembling.
+ */
+export function beadArrival(
+  rank: number,
+  count: number,
+  elapsedMs: number,
+  reducedMotion: boolean
+): BeadArrival {
+  const r = Math.max(0, Math.min(Math.max(0, count - 1), Math.round(rank)));
+  const delay = r * arrivalStagger(count);
+  const raw = (elapsedMs - delay) / ARRIVAL_DURATION_MS;
+  if (raw >= 1) return ARRIVED;
+  const p = raw < 0 ? 0 : raw;
+  // Smoothstep: no velocity at either end, so nothing starts or stops abruptly.
+  const eased = p * p * (3 - 2 * p);
+  return {
+    scale: reducedMotion ? 1 : ARRIVAL_SCALE + (1 - ARRIVAL_SCALE) * eased,
+    light: eased,
+    gather: ARRIVAL_GATHER * 4 * eased * (1 - eased),
+  };
+}
+
+/** How long a draw of this size takes to assemble, in milliseconds. */
+export function arrivalDurationMs(count: number): number {
+  return (
+    Math.max(0, count - 1) * arrivalStagger(count) + ARRIVAL_DURATION_MS
+  );
+}
+
 /* --------------------------------------------------------- the world's door */
 
 /**

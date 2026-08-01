@@ -43,6 +43,7 @@ function harness(now = 100) {
   const played: Recorded[] = [];
   const spaces: { density: number; bed: number }[] = [];
   const captions: AudioCaption[] = [];
+  const endings: { atSeconds: number; fadeSeconds: number }[] = [];
   let voices = 0;
 
   const sink: AudioSink = {
@@ -55,6 +56,9 @@ function harness(now = 100) {
       spaces.push({ density, bed });
     },
     activeVoiceCount: () => voices,
+    concludeAt: (atSeconds, fadeSeconds) => {
+      endings.push({ atSeconds, fadeSeconds });
+    },
   };
 
   const director = createAudioDirector({ sink, lookup: CASTALIA_LOOKUP });
@@ -65,6 +69,7 @@ function harness(now = 100) {
     played,
     spaces,
     captions,
+    endings,
     setVoices: (count: number) => {
       voices = count;
     },
@@ -288,11 +293,16 @@ describe("the audio director", () => {
             weight: 0.5,
             breadth: 0.5,
           },
+          outcomeKind: "documented",
+          speaksForRecord: true,
           resolved: true,
+          weight: 0.4,
+          isClimax: true,
         },
       ],
       ensembles: [],
       unresolved: [],
+      coda: null,
       totalSeconds: 6,
     };
     expect(isPerformanceScore(score)).toBe(true);
@@ -307,6 +317,109 @@ describe("the audio director", () => {
     bad.director.handleCue(cue("conclusion.perform", { performance: { oops: true } }));
     expect(bad.played).toHaveLength(0);
     expect(bad.captions.at(-1)!.text).toContain("could not be read");
+  });
+
+  /**
+   * Regression (BLOCK-2). The generative loop was never told to stop: the
+   * conclusion thinned the bed and then let it run, so the last authored sound
+   * of the performance arrived over a texture that carried on afterwards. The
+   * Game stopped instead of ending.
+   */
+  it("brings the generative loop to an end under the coda, not after it", () => {
+    const withEnding: PerformanceScore = {
+      sessionId: "s2",
+      secondsPerBeat: 0.75,
+      entries: [],
+      ensembles: [],
+      unresolved: [],
+      coda: {
+        threadId: "t1",
+        conceptIds: [FIBONACCI, COUNTERPOINT],
+        atSeconds: 30,
+        durationSeconds: 4,
+        voices: [
+          {
+            conceptId: FIBONACCI,
+            role: "ground",
+            degrees: [0],
+            rhythm: [1],
+            register: "low",
+            articulation: "sustained",
+            timbre: "gut",
+            atSeconds: 30,
+            durationSeconds: 4,
+            gain: 0.05,
+            openEnded: false,
+          },
+          {
+            conceptId: COUNTERPOINT,
+            role: "answer",
+            degrees: [7],
+            rhythm: [1],
+            register: "mid",
+            articulation: "sustained",
+            timbre: "glass",
+            atSeconds: 30.5,
+            durationSeconds: 3.5,
+            gain: 0.05,
+            openEnded: false,
+          },
+        ],
+        resolves: true,
+      },
+      totalSeconds: 34,
+    };
+
+    const { director, played, endings } = harness();
+    director.handleCue(cue("conclusion.perform", { performance: withEnding }));
+
+    const codaPlan = played.find((record) =>
+      record.plan.id.startsWith("conclusion:coda:")
+    );
+    expect(codaPlan).toBeDefined();
+    expect(endings).toHaveLength(1);
+    // The sink's own clock: quantize() + the coda's offset in the performance.
+    expect(endings[0].atSeconds).toBeCloseTo(codaPlan!.atSeconds, 9);
+    expect(endings[0].fadeSeconds).toBeGreaterThan(0);
+  });
+
+  it("asks for the ending on the captioned path too — a loop is not a caption", () => {
+    const silent = harness();
+    silent.director.setIntensity("silent");
+    silent.director.handleCue(
+      cue("conclusion.perform", {
+        performance: {
+          sessionId: "s3",
+          secondsPerBeat: 0.75,
+          entries: [],
+          ensembles: [],
+          unresolved: [],
+          coda: {
+            threadId: "t1",
+            conceptIds: [FIBONACCI, COUNTERPOINT],
+            atSeconds: 12,
+            durationSeconds: 4,
+            voices: [],
+            resolves: false,
+          },
+          totalSeconds: 16,
+        } satisfies PerformanceScore,
+      })
+    );
+    expect(silent.played).toHaveLength(0);
+    expect(silent.endings).toHaveLength(1);
+  });
+
+  it("refuses a payload that carries no ending at all", () => {
+    expect(
+      isPerformanceScore({
+        sessionId: "s",
+        totalSeconds: 4,
+        entries: [],
+        ensembles: [],
+        unresolved: [],
+      })
+    ).toBe(false);
   });
 });
 

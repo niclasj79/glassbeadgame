@@ -361,6 +361,91 @@ describe("compileConclusion — motifs, tensions, and the climax", () => {
   });
 });
 
+describe("compileConclusion — the performance ends, it does not stop", () => {
+  /**
+   * Regression (BLOCK-2). `CODA_BEATS` reserved four beats at the end of every
+   * performance and put nothing in them: no cadence, no final gesture, nothing
+   * but an unconsumed camera hint. The score therefore had no ending — it ran
+   * out of entries and the generative bed carried on underneath.
+   */
+  const settled = buildSessionFixture({
+    conceptIds: [C.fourier, C.overtones, C.standingWave],
+    threads: [
+      { a: C.fourier, b: C.overtones, intention: "echo" },
+      { a: C.overtones, b: C.standingWave, intention: "ground" },
+    ],
+  });
+  const closing = compileConclusion(settled.state, lookup);
+
+  const open = buildSessionFixture({
+    conceptIds: [C.just, C.equal, C.overtones],
+    threads: [{ a: C.just, b: C.equal, intention: "tension" }],
+  });
+  const unclosing = compileConclusion(open.state, lookup);
+
+  it("fills the reserved coda instead of leaving it empty", () => {
+    const coda = closing.coda;
+    expect(coda).not.toBeNull();
+    expect(coda?.voices).toHaveLength(2);
+    // It occupies the reserved beats exactly, and ends where the score ends.
+    expect(coda?.atBeat).toBe(closing.totalBeats - (coda?.durationBeats ?? 0));
+    expect(coda?.atBeat ?? 0).toBeGreaterThan(0);
+    for (const voice of coda?.voices ?? []) {
+      expect(voice.atBeat + voice.durationBeats).toBe(closing.totalBeats);
+      expect(voice.articulation).toBe("sustained");
+      expect(voice.degrees).toHaveLength(1);
+    }
+  });
+
+  it("builds the ending from the climax thread's own two motifs", () => {
+    const coda = closing.coda;
+    expect(coda?.threadId).toBe(closing.climax?.threadId);
+    const climaxEntry = closing.entries.find(
+      (entry) => entry.threadId === closing.climax?.threadId
+    );
+    expect(coda?.conceptIds).toEqual(climaxEntry?.conceptIds);
+    expect(new Set(coda?.voices.map((voice) => voice.conceptId))).toEqual(
+      new Set(climaxEntry?.conceptIds)
+    );
+    // The pitches are the pair's authored ones, not invented for the ending.
+    for (const voice of coda?.voices ?? []) {
+      const authored = lookup.conceptMotif(voice.conceptId).degrees;
+      expect(authored).toContain(voice.degrees[0]);
+    }
+  });
+
+  it("closes a settled web and deliberately does not close one still holding a Tension", () => {
+    expect(closing.unresolved).toEqual([]);
+    expect(closing.coda?.resolves).toBe(true);
+    expect(closing.coda?.voices.some((voice) => voice.openEnded)).toBe(false);
+
+    expect(unclosing.unresolved).toHaveLength(1);
+    expect(unclosing.coda?.resolves).toBe(false);
+    expect(unclosing.coda?.voices.some((voice) => voice.openEnded)).toBe(true);
+    expect(unclosing.coda?.reason).toContain("without closing");
+  });
+
+  it("gives both endings the same length — they differ in resolution, not reward", () => {
+    expect(unclosing.coda?.durationBeats).toBe(closing.coda?.durationBeats);
+    expect(unclosing.coda?.voices).toHaveLength(
+      closing.coda?.voices.length ?? 0
+    );
+  });
+
+  it("names the web's high point on the entry itself, exactly once", () => {
+    const marked = closing.entries.filter((entry) => entry.isClimax);
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.threadId).toBe(closing.climax?.threadId);
+  });
+
+  it("has nothing to end when nothing was woven, and invents nothing", () => {
+    const empty = buildSessionFixture({ conceptIds: [C.fourier, C.overtones] });
+    const performance = compileConclusion(empty.state, lookup);
+    expect(performance.coda).toBeNull();
+    expect(performance.entries.some((entry) => entry.isClimax)).toBe(false);
+  });
+});
+
 describe("compileConclusion — totality and determinism", () => {
   it("never throws on a session with nothing woven", () => {
     const empty = buildSessionFixture({ conceptIds: [C.fourier, C.overtones] });

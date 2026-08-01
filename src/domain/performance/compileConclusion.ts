@@ -32,6 +32,7 @@ import type {
   EnsembleStructure,
   IntentionTransformation,
   PerformanceClimax,
+  PerformanceCoda,
   PerformanceEnsemble,
   PerformanceEntry,
   PerformanceVoice,
@@ -51,7 +52,14 @@ const BASE_ENTRY_BEATS = 6;
 const UNRESOLVED_BEATS_FACTOR = 0.5;
 const UNRESOLVED_DYNAMIC = 0.35;
 const ENSEMBLE_BEATS = 8;
+/**
+ * The ending. Reserved *and filled*: `buildCoda` puts one held sonority here,
+ * made of the climax thread's own two motifs. It used to be reserved and left
+ * empty, which is why the performance stopped rather than ended.
+ */
 const CODA_BEATS = 4;
+/** How long the answering voice waits before arriving over the coda's ground. */
+const CODA_ANSWER_BEATS = 0.5;
 /** CAV-007: instability persists but its amplitude settles within ~12 seconds. */
 const TENSION_DECAY_SECONDS = 12;
 const TENSION_FLOOR_GAIN = 0.08;
@@ -439,6 +447,107 @@ function ensembleVoices(
   );
 }
 
+// ── The coda ─────────────────────────────────────────────────────────────────
+
+/**
+ * Compose the ending from the climax thread's two motifs.
+ *
+ * Two held voices and nothing else. The lower-bodied concept grounds it, one
+ * register beneath its own so the last sonority has a floor; the other arrives
+ * half a beat later on the degree its own figure was travelling toward, and
+ * either settles on it or does not. Which of the two happens is decided by the
+ * web (`resolves`), never by taste, and the two forms are the same length and
+ * the same level — the ending differs in resolution, never in reward (CAV-006).
+ *
+ * The *pitch* the answer settles on is deliberately not decided here: whether a
+ * given interval closes is a question about the world mode, which lives in the
+ * audio layer. This states which of the two the ending is; the renderer states
+ * what that sounds like.
+ */
+function buildCoda(
+  climaxEntry: PerformanceEntry,
+  lookup: RelationLookup,
+  atBeat: number,
+  resolves: boolean,
+  secondsPerBeat: number
+): PerformanceCoda {
+  const [a, b] = climaxEntry.conceptIds;
+  const motifA = lookup.conceptMotif(a);
+  const motifB = lookup.conceptMotif(b);
+  const aIsLower =
+    MOTIF_REGISTERS.indexOf(motifA.register) <=
+    MOTIF_REGISTERS.indexOf(motifB.register);
+
+  const groundId = aIsLower ? a : b;
+  const answerId = aIsLower ? b : a;
+  const groundMotif = aIsLower ? motifA : motifB;
+  const answerMotif = aIsLower ? motifB : motifA;
+
+  // The level the web's own high point was performed at. The ending is not an
+  // escalation; it is the same music, once, held.
+  const gain = climaxEntry.voices[0]?.gain ?? climaxEntry.dynamic;
+  const answerBeat = quantiseBeats(atBeat + CODA_ANSWER_BEATS);
+
+  const ground: PerformanceVoice = Object.freeze({
+    conceptId: groundId,
+    role: "ground" as const,
+    degrees: Object.freeze([groundMotif.degrees[0] ?? 0]),
+    rhythm: Object.freeze([1]),
+    register: shiftRegister(groundMotif.register, -1),
+    articulation: "sustained" as const,
+    timbre: groundMotif.timbre,
+    atBeat,
+    atSeconds: beatsToSeconds(atBeat, secondsPerBeat),
+    durationBeats: CODA_BEATS,
+    durationSeconds: beatsToSeconds(CODA_BEATS, secondsPerBeat),
+    gain,
+    openEnded: false,
+  });
+
+  const answer: PerformanceVoice = Object.freeze({
+    conceptId: answerId,
+    role: "answer" as const,
+    // The last degree of its own authored figure: the point that motif was
+    // going toward all session. Arriving on it is what closing means here.
+    degrees: Object.freeze([
+      answerMotif.degrees[answerMotif.degrees.length - 1] ?? 0,
+    ]),
+    rhythm: Object.freeze([1]),
+    register: answerMotif.register,
+    articulation: "sustained" as const,
+    timbre: answerMotif.timbre,
+    atBeat: answerBeat,
+    atSeconds: beatsToSeconds(answerBeat, secondsPerBeat),
+    durationBeats: quantiseBeats(CODA_BEATS - CODA_ANSWER_BEATS),
+    durationSeconds: beatsToSeconds(
+      quantiseBeats(CODA_BEATS - CODA_ANSWER_BEATS),
+      secondsPerBeat
+    ),
+    gain,
+    openEnded: !resolves,
+  });
+
+  return Object.freeze({
+    threadId: climaxEntry.threadId,
+    conceptIds: climaxEntry.conceptIds,
+    atBeat,
+    atSeconds: beatsToSeconds(atBeat, secondsPerBeat),
+    durationBeats: CODA_BEATS,
+    durationSeconds: beatsToSeconds(CODA_BEATS, secondsPerBeat),
+    voices: Object.freeze([ground, answer]),
+    resolves,
+    reason: resolves
+      ? `The performance closes on ${lookup.conceptName(
+          groundId
+        )} and ${lookup.conceptName(answerId)}, where the web gathers.`
+      : `The performance ends on ${lookup.conceptName(
+          groundId
+        )} and ${lookup.conceptName(
+          answerId
+        )} without closing: the web still holds a Tension nothing took hold of.`,
+  });
+}
+
 // ── Compilation ──────────────────────────────────────────────────────────────
 
 /**
@@ -463,7 +572,13 @@ export function compileConclusion(
   );
   const secondsPerBeat = quantise(60 / tempoBpm);
 
-  const entries: PerformanceEntry[] = [];
+  /*
+   * Entries are drafted first and frozen second, because `isClimax` is not a
+   * property of an entry on its own — it is a property of an entry *within this
+   * web*, and the web is not finished until the last thread has been drafted.
+   */
+  type EntryDraft = Omit<PerformanceEntry, "isClimax">;
+  const entryDrafts: EntryDraft[] = [];
   let cursor = 0;
 
   state.threads.forEach((thread, order) => {
@@ -497,7 +612,7 @@ export function compileConclusion(
      */
     const speaksForRecord = outcomeSpeaksForTheRecord(outcome);
 
-    entries.push(
+    entryDrafts.push(
       Object.freeze({
         threadId: thread.id,
         order,
@@ -527,6 +642,46 @@ export function compileConclusion(
     // A sparser web breathes more between entries; a dense one runs on.
     cursor = quantiseBeats(cursor + durationBeats + (1 - density) * 2);
   });
+
+  let climax: PerformanceClimax | null = null;
+  for (const entry of entryDrafts) {
+    if (climax === null || entry.weight >= climax.weight) {
+      const thread = state.threads[entry.order] as CommittedThreadV1;
+      const { clauses } = weighEntry(
+        thread,
+        topology,
+        steps[entry.order],
+        motifs,
+        lookup
+      );
+      climax = {
+        threadId: entry.threadId,
+        order: entry.order,
+        atBeat: entry.atBeat,
+        atSeconds: entry.atSeconds,
+        weight: entry.weight,
+        reason:
+          clauses.length === 0
+            ? `The ${INTENTION_LABELS[entry.intention]} between ${lookup.conceptName(
+                entry.conceptIds[0]
+              )} and ${lookup.conceptName(
+                entry.conceptIds[1]
+              )} carries the most of this web, quiet as it is.`
+            : `The ${INTENTION_LABELS[entry.intention]} between ${lookup.conceptName(
+                entry.conceptIds[0]
+              )} and ${lookup.conceptName(entry.conceptIds[1])} is where the web gathers: ${formatList(clauses)}.`,
+      };
+    }
+  }
+
+  const entries: readonly PerformanceEntry[] = Object.freeze(
+    entryDrafts.map((draft) =>
+      Object.freeze({
+        ...draft,
+        isClimax: climax !== null && draft.order === climax.order,
+      })
+    )
+  );
 
   const entryByThread = new Map(entries.map((entry) => [entry.threadId, entry]));
 
@@ -586,37 +741,6 @@ export function compileConclusion(
       })
   );
 
-  let climax: PerformanceClimax | null = null;
-  for (const entry of entries) {
-    if (climax === null || entry.weight >= climax.weight) {
-      const thread = state.threads[entry.order] as CommittedThreadV1;
-      const { clauses } = weighEntry(
-        thread,
-        topology,
-        steps[entry.order],
-        motifs,
-        lookup
-      );
-      climax = {
-        threadId: entry.threadId,
-        order: entry.order,
-        atBeat: entry.atBeat,
-        atSeconds: entry.atSeconds,
-        weight: entry.weight,
-        reason:
-          clauses.length === 0
-            ? `The ${INTENTION_LABELS[entry.intention]} between ${lookup.conceptName(
-                entry.conceptIds[0]
-              )} and ${lookup.conceptName(
-                entry.conceptIds[1]
-              )} carries the most of this web, quiet as it is.`
-            : `The ${INTENTION_LABELS[entry.intention]} between ${lookup.conceptName(
-                entry.conceptIds[0]
-              )} and ${lookup.conceptName(entry.conceptIds[1])} is where the web gathers: ${formatList(clauses)}.`,
-      };
-    }
-  }
-
   const lastEntry = entries[entries.length - 1];
   const lastEnsembleEnd = ensembles.reduce(
     (max, ensemble) => Math.max(max, ensemble.atBeat + ensemble.durationBeats),
@@ -628,6 +752,28 @@ export function compileConclusion(
       lastEnsembleEnd
     ) + CODA_BEATS
   );
+
+  const codaAtBeat = quantiseBeats(Math.max(0, totalBeats - CODA_BEATS));
+  const climaxEntry =
+    climax === null
+      ? undefined
+      : entries.find((entry) => entry.threadId === climax.threadId);
+  /*
+   * The ending closes unless the web still carries a Tension nothing took hold
+   * of. That is the only condition, and it is read from the web rather than
+   * chosen: `unresolved` is exactly the set of Tensions still ringing at this
+   * point, so a performance cannot come to rest over something it left open.
+   */
+  const coda =
+    climaxEntry === undefined
+      ? null
+      : buildCoda(
+          climaxEntry,
+          lookup,
+          codaAtBeat,
+          unresolved.length === 0,
+          secondsPerBeat
+        );
 
   const camera: CameraHint[] = [];
   for (const entry of entries) {
@@ -672,18 +818,14 @@ export function compileConclusion(
   }
   camera.push(
     Object.freeze({
-      atBeat: quantiseBeats(Math.max(0, totalBeats - CODA_BEATS)),
-      atSeconds: beatsToSeconds(
-        quantiseBeats(Math.max(0, totalBeats - CODA_BEATS)),
-        secondsPerBeat
-      ),
+      atBeat: codaAtBeat,
+      atSeconds: beatsToSeconds(codaAtBeat, secondsPerBeat),
       kind: "rest",
-      conceptIds: Object.freeze([]),
-      threadId: null,
-      reason:
-        unresolved.length > 0
-          ? "The performance ends without resolving what was left open."
-          : "The performance ends.",
+      // The camera settles on the pair the ending is made of, so the last thing
+      // seen and the last thing heard are the same two beads.
+      conceptIds: coda === null ? Object.freeze([]) : coda.conceptIds,
+      threadId: coda === null ? null : coda.threadId,
+      reason: coda === null ? "The performance ends." : coda.reason,
     })
   );
   camera.sort((a, b) => a.atBeat - b.atBeat);
@@ -699,6 +841,7 @@ export function compileConclusion(
     unresolved,
     camera: Object.freeze(camera),
     climax: climax === null ? null : Object.freeze(climax),
+    coda,
     totalBeats,
     totalSeconds: beatsToSeconds(totalBeats, secondsPerBeat),
   });

@@ -50,24 +50,89 @@ import type { SafeArea } from "./framing";
  *                 FABRICATED SIGNIFICANCE, and a misattributed name is a
  *                 fabricated fact about the world.
  *
+ *                 AND THE ONE NAME IT DOES NOT GOVERN. That law reads a bead as
+ *                 a *point*, which is what a bead is — except for the one the
+ *                 player is attending, which is drawn as a dial a hundred and
+ *                 forty-eight pixels across. Measured as a point it made its own
+ *                 reservation unusable: any placement clear of the dial is a
+ *                 long way from the bead's centre and a short way from
+ *                 everything else, so the law refused all four sides and the
+ *                 attended bead lost its name. The arena's answer was to offset
+ *                 that name by the glass instead, which put the frame's one
+ *                 definite subject *underneath its own instrument* — measured at
+ *                 1.5:1 against the dial's ring, while every other name in the
+ *                 same frame ran 3.3:1 or better.
+ *
+ *                 A name on the rim of an instrument is not a floating caption
+ *                 competing on proximity: it is that instrument's caption,
+ *                 exactly one bead in the frame ever wears one, and the arena
+ *                 sets it larger and on a ground of its own so that nothing
+ *                 about the drawing leaves it to proximity to say. So a name
+ *                 may be declared `anchored` to a drawn form, and the point law
+ *                 is waived for that one — and for that one only. Nothing else
+ *                 is waived: it must still be inside the page, still clear of
+ *                 every bead's own silhouette, still clear of every thread and
+ *                 every other name. A bead sitting on the caption still refuses
+ *                 it, and it is still suppressed rather than fudged.
+ *
  * Pure and allocation-free on the frame path: every array is the caller's.
  */
 
 /** Where a name sits relative to its bead. */
-export type LabelSide = "below" | "above" | "right" | "left";
+export type LabelSide =
+  | "below"
+  | "above"
+  | "right"
+  | "left"
+  | "below-right"
+  | "below-left";
 
-/** The order candidates are tried in. Below first: a caption, not a title. */
+/**
+ * The order candidates are tried in. Below first: a caption, not a title.
+ *
+ * The two diagonals are offered **only to an anchored name** (see `anchored`
+ * below), and they are the lower two because the plate's utility rail stands on
+ * the upper ones. A bead is a point, and a caption hung off a point on the
+ * diagonal reads as unattached to it — which is why the four cardinals are all
+ * an ordinary name is ever given. A dial is a circle, its rim is continuous,
+ * and a caption anywhere on that rim is plainly the dial's.
+ *
+ * It is not a nicety. Measured on a 414x896 phone with a bead attended: the
+ * dial is 350 px across on a 414 px page, so *both* horizontal placements leave
+ * the page, "above" leaves the top of the safe area, and "below" was taken by
+ * two neighbouring beads — the attended bead, the frame's one definite subject,
+ * had no name at all. The lower-left diagonal was free, on the page, and clear.
+ */
 export const LABEL_SIDES: readonly LabelSide[] = Object.freeze([
   "below",
   "above",
   "right",
   "left",
+  "below-right",
+  "below-left",
+]);
+
+/** How many of those any name may use. The rest are the dial's. */
+const FLOATING_SIDES = 4;
+
+/**
+ * The unit bearing of each side, in the solver's own axes: x across the frame,
+ * y up it. Parallel to `LABEL_SIDES`, and flat rather than a table of objects
+ * because this is read on the frame path.
+ */
+const SIDE_BEARING: readonly number[] = Object.freeze([
+  0, -1, // below
+  0, 1, // above
+  1, 0, // right
+  -1, 0, // left
+  Math.SQRT1_2, -Math.SQRT1_2, // below-right
+  -Math.SQRT1_2, -Math.SQRT1_2, // below-left
 ]);
 
 /**
  * Encoded placement, one per bead:
  *   -1  suppressed — there was nowhere legible for it to go
- *    0  below   1  above   2  right   3  left
+ *    0  below   1  above   2  right   3  left   4  below-right   5  below-left
  */
 export const SUPPRESSED = -1;
 
@@ -80,6 +145,67 @@ export function sideOf(code: number): LabelSide | null {
  * Two labels closer than this are one smudge whatever the design says.
  */
 export const LABEL_CLEARANCE = 0.012;
+
+/* ------------------------------------------------ how a name is actually set */
+
+/**
+ * HOW LEGIBLE A NAME IS, AND WHICH NAME IS THE MOST LEGIBLE.
+ *
+ * Measured on the running build at 1280x720 with the Fibonacci Sequence
+ * attended, over each name's own box — peak luminance against the ground it is
+ * standing on:
+ *
+ *   Fibonacci Sequence (attended)   peak  86   ground 29   3.0:1
+ *   Prime Numbers                   peak 183   ground 15  12.1:1
+ *   Coupled Pendulums               peak 210   ground 26   8.1:1
+ *   Anamorphosis                    peak 150   ground 15  10.2:1
+ *   Entropy                         peak 184   ground 22   8.4:1
+ *
+ * The lowest peak and the lowest contrast in the frame belonged to the one
+ * thing the player had just chosen. It was set at the same size and struck with
+ * the same hairline outline as every other name, and it was drawn *inside* the
+ * intention dial, so the dial's own engraving was its background.
+ *
+ * Attending now promotes the name instead, and does it in three registers that
+ * all survive a monochrome print: the setting, the ground, and — in
+ * `scene/Beads.tsx` — the clearance from the instrument. These live here rather
+ * than in the arena because "how a name is set" is the same question as "where
+ * a name goes", and a test can hold both.
+ */
+
+/** The hairline that keeps an ordinary name off a bright star. */
+export const NAME_OUTLINE = 0.008;
+export const NAME_OUTLINE_OPACITY = 0.92;
+
+/** How much larger the attended bead's name is set than every other name. */
+export const ATTENDED_NAME_SCALE = 1.28;
+/**
+ * The dark field the attended name is struck on, as a fraction of its em. Not
+ * a hairline: a ground, so the name is legible on whatever it stands in front
+ * of rather than only on the sky.
+ */
+export const ATTENDED_NAME_OUTLINE = 0.03;
+/** How far that field is feathered, so it is a ground and not a slab. */
+export const ATTENDED_NAME_BLUR = 0.018;
+/** And it is opaque: a field held at 0.92 is a field the horizon comes through. */
+export const ATTENDED_NAME_OUTLINE_OPACITY = 1;
+
+/**
+ * How wide the attended name may set before it wraps, in the label's own local
+ * units — narrower than every other name, which is the opposite of what a
+ * promotion sounds like and is the reason it can be promoted at all.
+ *
+ * Measured on a 414x896 phone with a bead attended: the dial is 350 px across a
+ * 414 px page, and a single-line "Fibonacci Sequence" is about 200 px. There is
+ * no side of that dial where a 200 px caption fits on the page, so the promoted
+ * name — set larger again — had nowhere legible to go and was suppressed
+ * outright. The same name over two lines is 100 px wide and hangs under the
+ * plate with room to spare. A caption block is a caption; a caption that has to
+ * be a single line is a caption that only exists on a desktop.
+ */
+export const ATTENDED_NAME_MAX_WIDTH = 0.95;
+/** What every other name may set to. Wide: one line is right for a small bead. */
+export const NAME_MAX_WIDTH = 2.1;
 
 export interface LabelRequest {
   /** Bead centres in NDC, xy interleaved. */
@@ -99,6 +225,28 @@ export interface LabelRequest {
    * belonging to whatever else is out there.
    */
   readonly ownRadius?: Float32Array;
+  /**
+   * How far the drawn form reaches *between* the cardinal directions, in NDC.
+   * Defaults to `ownRadius`, which is right for anything round.
+   *
+   * A dial is not round. Its four verbs stand on the cardinals with their
+   * engraved captions outside them, and its two utility controls stand on the
+   * upper diagonals; between all of that there is nothing but the graduated
+   * circle itself, which is a third narrower. Reserving the widest reach in
+   * every direction is what left a 414 px phone with no room at all: the plate
+   * measures 350 px across there, so a name kept 350 px clear on the diagonal
+   * as well is a name off the page.
+   */
+  readonly ownRadiusBetween?: Float32Array;
+  /**
+   * 1 for a bead whose name is anchored to something the arena actually draws
+   * around it — in practice the attended bead's intention dial, and nothing
+   * else. Such a name is that instrument's caption rather than a floating one,
+   * so the "nearest bead wins" law above does not govern it. Every other
+   * clearance still does. Absent means nothing is anchored, which is the law
+   * unchanged.
+   */
+  readonly anchored?: Float32Array;
   /** Half-width and half-height of each name's box, in NDC, xy interleaved. */
   readonly half: Float32Array;
   /** Salience tier per bead — higher is placed first. */
@@ -142,6 +290,8 @@ export function placeLabels(
 ): void {
   const { anchor, beadRadius, half, tier, hidden, count, area } = request;
   const ownRadius = request.ownRadius ?? beadRadius;
+  const ownBetween = request.ownRadiusBetween ?? ownRadius;
+  const anchored = request.anchored;
   if (count <= 0) return;
 
   // Most salient first, and among equals the nearer the top of the frame — a
@@ -170,13 +320,29 @@ export function placeLabels(
     const ay = anchor[i * 2 + 1];
     const hx = half[i * 2];
     const hy = half[i * 2 + 1];
-    const r = ownRadius[i] + LABEL_CLEARANCE;
+    const cardinal = ownRadius[i] + LABEL_CLEARANCE;
+    const between = ownBetween[i] + LABEL_CLEARANCE;
+    /** Whether this name is a caption competing on proximity. See above. */
+    const floating = !anchored || anchored[i] <= 0;
 
-    for (let s = 0; s < LABEL_SIDES.length; s++) {
-      const dx =
-        s === 2 ? r + hx : s === 3 ? -(r + hx) : 0;
-      const dy =
-        s === 0 ? -(r + hy) : s === 1 ? r + hy : 0;
+    const sides = floating ? FLOATING_SIDES : LABEL_SIDES.length;
+    /** The best placement found so far, for an anchored name. See below. */
+    let bestSide = SUPPRESSED;
+    let bestGap = Number.NEGATIVE_INFINITY;
+    let bestX = 0;
+    let bestY = 0;
+    for (let s = 0; s < sides; s++) {
+      const ux = SIDE_BEARING[s * 2];
+      const uy = SIDE_BEARING[s * 2 + 1];
+      // How far along this bearing the box's own nearest edge clears the form
+      // drawn around the bead. For a cardinal it is exactly `r + hy` or
+      // `r + hx`, which is what this used to be written as; on a diagonal it is
+      // the box's support in that direction, so the whole box is outside the
+      // circle rather than only its centre.
+      const r = s < FLOATING_SIDES ? cardinal : between;
+      const reach = r + hx * Math.abs(ux) + hy * Math.abs(uy);
+      const dx = ux * reach;
+      const dy = uy * reach;
       const cx = ax + dx;
       const cy = ay + dy;
       // How far this placement stands from the bead it belongs to. Squared,
@@ -205,8 +371,10 @@ export function placeLabels(
           blocked = true;
           break;
         }
-        const toOther = (cx - bx) * (cx - bx) + (cy - by) * (cy - by);
-        if (toOther < own) blocked = true;
+        if (floating) {
+          const toOther = (cx - bx) * (cx - bx) + (cy - by) * (cy - by);
+          if (toOther < own) blocked = true;
+        }
       }
       if (blocked) continue;
 
@@ -246,6 +414,30 @@ export function placeLabels(
       }
       if (blocked) continue;
 
+      // An anchored name does not take the first side that survives, it takes
+      // the emptiest. Proximity is waived for it, so proximity is exactly what
+      // it should spend a free choice on: of the placements that are legal, the
+      // one standing furthest from any other bead is the one nobody has to work
+      // out who it belongs to.
+      if (!floating) {
+        let nearest = Number.POSITIVE_INFINITY;
+        for (let k = 0; k < count; k++) {
+          if (k === i || hidden[k] > 0) continue;
+          const gap =
+            Math.hypot(cx - anchor[k * 2], cy - anchor[k * 2 + 1]) -
+            beadRadius[k];
+          if (gap < nearest) nearest = gap;
+        }
+        if (nearest <= bestGap) continue;
+        bestGap = nearest;
+        bestSide = s;
+        bestX = cx;
+        bestY = cy;
+        offset[i * 2] = dx;
+        offset[i * 2 + 1] = dy;
+        continue;
+      }
+
       out[i] = s;
       offset[i * 2] = dx;
       offset[i * 2 + 1] = dy;
@@ -255,6 +447,17 @@ export function placeLabels(
       boxes[placed * 4 + 3] = hy;
       placed++;
       break;
+    }
+
+    // The anchored name's chosen placement, once every side has been weighed.
+    // `offset` already holds it; only the record of it is left to write.
+    if (!floating && bestSide !== SUPPRESSED) {
+      out[i] = bestSide;
+      boxes[placed * 4] = bestX;
+      boxes[placed * 4 + 1] = bestY;
+      boxes[placed * 4 + 2] = hx;
+      boxes[placed * 4 + 3] = hy;
+      placed++;
     }
   }
 }

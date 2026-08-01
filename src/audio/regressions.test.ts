@@ -453,6 +453,7 @@ describe("defect 6 — an unresolved thread sounds like those two concepts", () 
         decayToFloorSeconds: COMFORT.tension.decayToFloorSeconds,
       },
     ],
+    coda: null,
     totalSeconds: 10,
   });
 
@@ -555,6 +556,7 @@ function harness() {
     },
     setSpace: () => {},
     activeVoiceCount: () => 0,
+    concludeAt: () => {},
   };
   const director = createAudioDirector({ sink, lookup: CASTALIA_LOOKUP });
   director.onCaption((caption) => captions.push(caption));
