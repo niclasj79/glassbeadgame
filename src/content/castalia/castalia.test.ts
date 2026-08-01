@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { RELATION_INTENTIONS, type RelationIntention } from "@/domain/events";
@@ -495,5 +498,295 @@ describe("validator rules", () => {
       draft.relations = draft.relations.slice(0, 10);
     });
     expect(warnings.some((w) => w.includes("slice target"))).toBe(true);
+  });
+});
+
+describe("facets are claims about the concept, not about the relation that needed them", () => {
+  const facetsOf = (id: string): readonly string[] => {
+    const concept = CASTALIA_PACK.concepts.find((entry) => entry.id === id);
+    expect(concept, id).toBeDefined();
+    return (concept as CastaliaPack["concepts"][number]).facets;
+  };
+
+  it("does not give Conservation of Energy a direction in time", () => {
+    /*
+     * The First Law is time-reversal symmetric — energy is conserved running the
+     * film backwards, which is exactly why the Second Law is needed to give time
+     * an arrow. The concept's own description says the principle follows from
+     * the laws being "the same today as tomorrow", and rel.conservation-entropy
+     * is titled "The Total Holds, the Direction Does Not" and says in its first
+     * clause that the first law "says nothing changes in total". The facet was
+     * asserted in the same breath as the relation denied it.
+     */
+    expect(facetsOf("matter.conservation-of-energy")).not.toContain("irreversibility");
+  });
+
+  it("does not give Just Intonation unbroken variation", () => {
+    /*
+     * Just intonation is a set of exact whole-number ratios; "every intermediate
+     * value genuinely occurs" is false of it, and rel.symmetry-just-intonation
+     * — the only relation that consumed the facet — says outright that "just
+     * intonation does not possess it".
+     */
+    expect(facetsOf("sound.just-intonation")).not.toContain("continuity");
+  });
+
+  it("writes no facet-specific prompt for a facet only one bead carries", () => {
+    // A facet one bead carries can never be shared, so a prompt keyed to it can
+    // never fire. Removing a facet without removing its prompt leaves exactly
+    // that dead template behind.
+    const carriers = new Map<string, number>();
+    for (const concept of CASTALIA_PACK.concepts) {
+      for (const facetId of concept.facets) {
+        carriers.set(facetId, (carriers.get(facetId) ?? 0) + 1);
+      }
+    }
+    for (const prompt of CASTALIA_PACK.openThreads) {
+      if (prompt.facet === undefined) continue;
+      expect(carriers.get(prompt.facet) ?? 0, prompt.id).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe("Open Thread prompts, instantiated against the pairs that can reach them", () => {
+  interface Instantiation {
+    readonly promptId: string;
+    readonly text: string;
+  }
+
+  const facetNameById = new Map(
+    CASTALIA_PACK.facets.map((facet) => [facet.id as string, facet.name])
+  );
+
+  /**
+   * Every question the pack can actually produce.
+   *
+   * A pair reaches a prompt when it has no documented relation and shares at
+   * least one facet; both orderings are generated because the pair order is the
+   * player's, not the pack's. A template that reads well in the abstract can be
+   * nonsense once real names are in it, and instantiating it is the only way to
+   * find out.
+   */
+  const INSTANTIATIONS: readonly Instantiation[] = (() => {
+    const out: Instantiation[] = [];
+    const concepts = CASTALIA_PACK.concepts;
+    for (let i = 0; i < concepts.length; i += 1) {
+      for (let j = i + 1; j < concepts.length; j += 1) {
+        const left = concepts[i] as (typeof concepts)[number];
+        const right = concepts[j] as (typeof concepts)[number];
+        if (findRelation(left.id, right.id) !== undefined) continue;
+        const shared = [...left.facets]
+          .filter((facetId) => right.facets.includes(facetId))
+          .sort();
+        if (shared.length === 0) continue;
+        for (const intention of RELATION_INTENTIONS) {
+          const prompt = openThreadPromptFor(intention, shared);
+          if (prompt === undefined) continue;
+          const facetId =
+            prompt.facet !== undefined && shared.includes(prompt.facet)
+              ? prompt.facet
+              : (shared[0] as (typeof shared)[number]);
+          const facetName = facetNameById.get(facetId as string) ?? String(facetId);
+          for (const [a, b] of [
+            [left, right],
+            [right, left],
+          ] as const) {
+            out.push({
+              promptId: prompt.id,
+              text: prompt.question
+                .split("{a}")
+                .join(a.name)
+                .split("{b}")
+                .join(b.name)
+                .split("{facet}")
+                .join(facetName),
+            });
+          }
+        }
+      }
+    }
+    return Object.freeze(out);
+  })();
+
+  it("actually produces a wide sweep of questions", () => {
+    // Guards the sweep itself: if it collapses, the rules below prove nothing.
+    expect(INSTANTIATIONS.length).toBeGreaterThan(200);
+    expect(
+      new Set(INSTANTIATIONS.map((entry) => entry.promptId)).size
+    ).toBeGreaterThan(20);
+  });
+
+  /**
+   * Each rule is a defect that has shipped in this file, restated as something a
+   * machine can check on any question the pack can produce.
+   */
+  const RULES: ReadonlyArray<{
+    readonly name: string;
+    readonly pattern: RegExp;
+    readonly why: string;
+  }> = [
+    {
+      name: "no unsubstituted placeholder",
+      pattern: /\{(?:a|b|facet)\}/,
+      why: "a placeholder reached the player",
+    },
+    {
+      name: "no bead treated as a proposition that could be false",
+      pattern: /\bwere false\b/i,
+      why: "beads include phenomena, instruments and techniques, and a phenomenon cannot be false",
+    },
+    {
+      name: "no facet made an agent carrying something between the beads",
+      pattern: /\b(?:carry|carries|bring|brings)\b[^?]*\b(?:from|into|back together)\b/i,
+      why: "a facet is a property both beads have, never a channel that moves things between them",
+    },
+    {
+      name: "no facet named twice over",
+      pattern: /\bperiod of Return\b/i,
+      why: "Return is this pack's name for periodicity, so this asks for the period of the period",
+    },
+    {
+      name: "no doubled article",
+      pattern: /\b(?:the|a|an) (?:the|a|an)\b/i,
+      why: "a name was inserted into a slot that already carried its article",
+    },
+    {
+      name: "no doubled or dangling space",
+      pattern: /\s\s|\s[,.;:?]/,
+      why: "a substitution left the spacing broken",
+    },
+  ];
+
+  for (const rule of RULES) {
+    it(rule.name, () => {
+      const failures = INSTANTIATIONS.filter((entry) => rule.pattern.test(entry.text))
+        .slice(0, 6)
+        .map((entry) => `${entry.promptId}: ${rule.why}\n  "${entry.text}"`);
+      expect(failures.join("\n")).toBe("");
+    });
+  }
+
+  it("asks a question, and only a question", () => {
+    for (const entry of INSTANTIATIONS) {
+      expect(entry.text.trimEnd().endsWith("?"), entry.promptId).toBe(true);
+      expect(entry.text.charAt(0), entry.promptId).toBe(
+        entry.text.charAt(0).toUpperCase()
+      );
+      // Two sentences at most: a setup, and the question it leads to.
+      expect(entry.text.split(/[.?]\s/).length, entry.promptId).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("names both beads in every question it produces", () => {
+    const names = CASTALIA_PACK.concepts.map((concept) => concept.name);
+    for (const entry of INSTANTIATIONS) {
+      const mentioned = names.filter((name) => entry.text.includes(name));
+      expect(
+        mentioned.length,
+        `${entry.promptId}: "${entry.text}"`
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe("the relations file introduces the pack it actually holds", () => {
+  /**
+   * The front matter of `relations.ts` states four counts in words. They were
+   * wrong — "forty-three claims", "fifteen … interpretive" against a pack of
+   * forty-four and twelve — because a number written in prose drifts the moment
+   * a relation is added and nothing fails. This is what fails.
+   */
+  const UNDER_TWENTY: readonly string[] = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+  ];
+  const TENS: readonly string[] = [
+    "",
+    "",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+  ];
+
+  const numberWord = (value: number): string => {
+    if (value < 0 || value > 99 || !Number.isInteger(value)) {
+      throw new RangeError(`no word for ${value}`);
+    }
+    if (value < 20) return UNDER_TWENTY[value] as string;
+    const tens = TENS[Math.floor(value / 10)] as string;
+    const unit = value % 10;
+    return unit === 0 ? tens : `${tens}-${UNDER_TWENTY[unit] as string}`;
+  };
+
+  /** The doc comment, with its leading asterisks and line breaks flattened. */
+  const frontMatter = (): string => {
+    const source = readFileSync(
+      fileURLToPath(new URL("./relations.ts", import.meta.url)),
+      "utf8"
+    );
+    const start = source.indexOf("/**");
+    const end = source.indexOf("*/", start);
+    expect(start, "relations.ts has no front matter").toBeGreaterThanOrEqual(0);
+    return source
+      .slice(start, end)
+      .replace(/^\s*\*/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const capitalise = (value: string): string =>
+    `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+
+  it("keeps the front matter's arithmetic true", () => {
+    const text = frontMatter();
+    const total = CASTALIA_PACK.relations.length;
+    const interpretive = CASTALIA_PACK.relations.filter(
+      (relation) => relation.evidence === "interpretive"
+    ).length;
+    const transmissions = CASTALIA_PACK.relations.filter(
+      (relation) => relation.relationType === "historical-transmission"
+    ).length;
+    const conceding = CASTALIA_PACK.relations.filter(
+      (relation) => relation.counterpoint !== undefined
+    ).length;
+
+    expect(text).toContain(
+      `${capitalise(numberWord(total))} claims about ${numberWord(
+        CASTALIA_PACK.concepts.length
+      )} beads`
+    );
+    expect(text).toContain(
+      `${capitalise(numberWord(interpretive))} relations are interpretive on purpose`
+    );
+    expect(text).toContain(
+      `Exactly ${numberWord(transmissions)} relation is typed \`historical-transmission\``
+    );
+    // Stated as "All forty-four carry a `counterpoint`" only while that is true
+    // of every one of them.
+    expect(conceding).toBe(total);
+    expect(text).toContain(`All ${numberWord(total)} carry a \`counterpoint\``);
   });
 });

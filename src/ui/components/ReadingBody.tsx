@@ -1,5 +1,6 @@
 import type { ElementType } from "react";
 import type { Reading } from "../reading";
+import { ReadingRule } from "./ReadingColumn";
 
 /**
  * ONE OUTCOME, SET ONCE.
@@ -34,16 +35,12 @@ export function ReadingBody({
 }: ReadingBodyProps) {
   return (
     <>
-      {/* The scribe's rule: the page is ruled before it is written in. Gold is
-          spent only on what is genuinely settled, so a reading the Game offers
-          rules in brass however confidently it is put. */}
-      <div
-        className={
-          "mb-3 h-px w-16 " +
-          (reading.kind === "documented" && !reading.interpretive
-            ? "bg-gold/70"
-            : "bg-brass/50")
-        }
+      {/* The scribe's rule, struck from the one definition in `ReadingColumn`
+          so the bead card, the margin and the conclusion cannot drift apart.
+          Gold is spent only on what is genuinely settled, so a reading the Game
+          offers rules in brass however confidently it is put. */}
+      <ReadingRule
+        gilt={reading.kind === "documented" && !reading.interpretive}
       />
       <p className="engraved mb-2">{reading.standing}</p>
       <Title className={titleClassName}>{reading.title}</Title>

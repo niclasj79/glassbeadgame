@@ -14,7 +14,12 @@ import {
 } from "./threading";
 import { emitBurst, frameState, frameStateStage } from "./frameState";
 import { attunementInvitation } from "@/audio/sfx";
-import { createSceneDirector } from "@/runtime/scene";
+import {
+  attachWorldDirectors,
+  createHapticsDirector,
+  createSceneDirector,
+  productionHapticsStage,
+} from "@/runtime/scene";
 import { sessionProgression } from "@/runtime/progression";
 import { currentTheme } from "@/themes/useTheme";
 import { startSession } from "@/runtime/session";
@@ -122,7 +127,10 @@ function startTestSession(picks: DisciplineId[]): TestSessionSnapshot {
   return testSnapshot();
 }
 
-const sceneDirector = createSceneDirector(frameStateStage);
+const worldDirectors = {
+  scene: createSceneDirector(frameStateStage),
+  haptics: createHapticsDirector(productionHapticsStage),
+};
 
 /**
  * THE INVITATION, IN THE WORLD.
@@ -311,18 +319,15 @@ export function ThreadingDriver() {
   }, [camera, gl]);
 
   /**
-   * The world becomes a cue subscriber.
+   * The world becomes a cue subscriber — on all three of its channels.
    *
-   * Every plan in `planCues.ts` declares a `scene` channel and, until this
-   * line, `cueBus.subscribe("scene", …)` appeared in exactly one place in the
-   * repository: a unit test. `frameState.flare` was decayed every frame and
-   * never raised, `frameState.kick` likewise, and `emitBurst` — the only way
-   * into the pooled particle system — had no callers at all.
+   * Every plan in `planCues.ts` declares `scene`, `camera` and `haptics`. Only
+   * `scene` was ever subscribed, so `frameState.kick` was decayed every frame
+   * and raised only as a side effect of the scene handler, and the haptics
+   * channel reached nothing at all. `attachWorldDirectors` takes all three at
+   * once so a channel cannot be lost by omission again.
    */
-  useEffect(
-    () => cueBus.subscribe("scene", (cue) => sceneDirector.handleCue(cue)),
-    []
-  );
+  useEffect(() => attachWorldDirectors(cueBus, worldDirectors), []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {

@@ -14,7 +14,11 @@ import {
   formatList,
   quantise,
 } from "../outcomes/prose";
-import { resolveSessionOutcomes } from "../outcomes/resolveThreadOutcome";
+import {
+  outcomeIsInterpretiveReading,
+  outcomeSpeaksForTheRecord,
+  resolveSessionOutcomes,
+} from "../outcomes/resolveThreadOutcome";
 import type { ThreadOutcomeResolution } from "../outcomes/types";
 import {
   MOTIF_REGISTERS,
@@ -151,7 +155,16 @@ function draftVoices(
   const [a, b] = thread.pair;
   const motifA = lookup.conceptMotif(a);
   const motifB = lookup.conceptMotif(b);
-  const openEnded = outcome.kind === "open-thread";
+  /*
+   * An Open Thread is left open, and so is a reading the Game merely offers:
+   * neither has a record behind it to settle on. The gain and the duration are
+   * untouched either way (CAV-006) — only the last degree of the answering line
+   * differs, which is the one thing "does not close" can honestly mean here.
+   * An unresolved thread is left exactly as it was: it is already short and
+   * quiet, and hanging it open as well would read as a penalty.
+   */
+  const openEnded =
+    outcome.kind === "open-thread" || outcomeIsInterpretiveReading(outcome);
 
   // A documented direction overrides pair order; otherwise the attended bead
   // is the source, because that is the bead the player reached out from.
@@ -473,6 +486,16 @@ export function compileConclusion(
 
     const drafts = draftVoices(thread, outcome, lookup, phrasing);
     const { weight } = weighEntry(thread, topology, step, motifs, lookup);
+    /*
+     * Closing is a claim. `outcome.kind === "documented"` includes every
+     * interpretive relation in the pack, so the score used to bring a reading
+     * the Game merely offers to rest exactly as it brings a record to rest —
+     * and the audio caption assembled from this flag then told the player "The
+     * Game has a record for this pair". A reading is not a weaker outcome and
+     * gets the same duration and the same gain; it simply does not settle, so
+     * it does not close.
+     */
+    const speaksForRecord = outcomeSpeaksForTheRecord(outcome);
 
     entries.push(
       Object.freeze({
@@ -495,7 +518,8 @@ export function compileConclusion(
         dynamic,
         density,
         phrasing,
-        resolved: outcome.kind === "documented" && thread.intention !== "tension",
+        speaksForRecord,
+        resolved: speaksForRecord && thread.intention !== "tension",
         weight,
       })
     );

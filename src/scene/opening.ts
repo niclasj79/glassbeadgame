@@ -52,6 +52,47 @@ export const ACKNOWLEDGE_MS = 120;
 export const ACKNOWLEDGE_FRAMES = 2;
 
 /**
+ * THE ACKNOWLEDGEMENT IS AN ANIMATION, NOT A TRANSITION — AND IT ANSWERS THE
+ * PRESS, NOT THE RELEASE.
+ *
+ * Traced on the running build, from `pointerdown` on BEGIN, at both quality
+ * tiers:
+ *
+ *     0 ms    pointerdown
+ *     4 ms    frame painted — the rule is still `scaleX(0)`, opacity 0
+ *   227 ms    pointerup, then click; the style write finally lands
+ *   236 ms    frame painted — computed transform still `scaleX(0)`
+ *   467 ms    frame painted — computed transform still `scaleX(0)`
+ *   860 ms    the rule is at last visibly moving
+ *
+ * Two separate faults, and each alone would have lost the press. The
+ * acknowledgement hung off `click`, which cannot fire until the finger comes
+ * *up* — a fifth of a second gone before anything had even been asked for. And
+ * what it then asked for was a CSS **transition**, which is started by the main
+ * thread during a rendering update: the same main thread `startSession` takes
+ * for the whole of the arena build. Two painted frames went by with the style
+ * committed and the transition not yet begun.
+ *
+ * Both are answered by issuing the acknowledgement imperatively from
+ * `pointerdown` with `Element.animate()`. A Web Animation on `transform` and
+ * `opacity` is handed to the compositor and timed from its own start, so it is
+ * running before the draw is built and keeps running while the draw is built.
+ */
+
+/** How long the rule under the door takes to be struck, in milliseconds. */
+export const STRIKE_MS = 460;
+/** How long it takes to come up to full strength. Shorter: light, then travel. */
+export const STRIKE_FADE_MS = 220;
+/** The strike's curve — fast away from the press, long settle. */
+export const STRIKE_EASING = "cubic-bezier(.22,1,.36,1)";
+/** The title block's own curve, shared with the per-line departure below. */
+export const DEPARTURE_EASING = "cubic-bezier(.32,0,.24,1)";
+/** How far the whole block lifts as the acknowledgement, in rem. */
+export const ACKNOWLEDGE_LIFT_REM = 1.1;
+/** And how much it grows, as though it had begun to pass the lens. */
+export const ACKNOWLEDGE_SCALE = 1.014;
+
+/**
  * How far round the instrument stands before the press, in radians. A third of
  * a right angle: enough that the near colure crosses the frame during the move
  * and the lattice visibly assembles, and not so much that the arena arrives

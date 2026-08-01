@@ -59,11 +59,16 @@ describe("the inspection card", () => {
   });
 
   it("cuts neither the description nor the name", () => {
+    // Tag-agnostic: the card is set in the reading column's type system now
+    // (IMP-5), so the title is the same `h2` the margin's reading carries. What
+    // must never come back is a clamp, whatever element it is put on.
+    const description = /<\w+ [^>]*data-testid="bead-description"[^>]*>/;
+    const name = /<\w+ [^>]*data-testid="bead-name"[^>]*>/;
     const html = render("measure.fibonacci-sequence");
-    const description = /<p [^>]*data-testid="bead-description"[^>]*>/.exec(html)![0];
-    const name = /<h3 [^>]*data-testid="bead-name"[^>]*>/.exec(html)![0];
-    for (const element of [description, name]) {
-      const classes = /class="([^"]*)"/.exec(element)![1].split(/\s+/);
+    for (const pattern of [description, name]) {
+      const element = pattern.exec(html);
+      expect(element).not.toBeNull();
+      const classes = /class="([^"]*)"/.exec(element![0])![1].split(/\s+/);
       expect(classes.filter((c) => c.startsWith("line-clamp"))).toEqual([]);
       expect(classes).not.toContain("truncate");
       expect(classes).not.toContain("text-ellipsis");

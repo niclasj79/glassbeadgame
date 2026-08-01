@@ -22,7 +22,7 @@ import type {
   MotifRegister,
   TimbreId,
 } from "@/content/castalia/schema";
-import { CASTALIA_MODE, degreeFrequency, shiftRegister } from "./mode";
+import { CASTALIA_MODE, degreeFrequency } from "./mode";
 
 /** Resolve a semitone degree in a register through the world mode. */
 export function modeFreq(degree: number, register: MotifRegister): number {
@@ -49,56 +49,13 @@ export function beadVoice(id: string): BeadVoice | null {
   return concept ? voiceOf(concept) : null;
 }
 
-export interface ChordNote {
-  readonly freq: number;
-  readonly timbre: TimbreId;
-  readonly gain: number;
-  /** Seconds after chord start (the strum). */
-  readonly delay: number;
-}
-
 /**
- * The second step of a bead's motif, lifted a register — the pair's own
- * contour widening, rather than a supporting tone the audio layer picked.
+ * `chordForPair` and its `secondStep` helper were removed here.
+ *
+ * They voiced a pair by `tier` — wider and brighter for a higher-tier
+ * discovery — which is a reward gradient expressed in harmony, and their one
+ * caller (`sfx.discoveryChord`) read `session.discoveries`, a projection
+ * published empty since the legacy scoring model was retired. A relation is now
+ * voiced by the intention the player declared, in `audio/grammar.ts`, at the
+ * same weight whatever its epistemic status (CAV-006).
  */
-function secondStep(concept: CastaliaConcept, gain: number, delay: number): ChordNote {
-  const { degrees, register, timbre } = concept.motif;
-  return {
-    freq: modeFreq(degrees[1] ?? degrees[0] ?? 0, shiftRegister(register, 1)),
-    timbre,
-    gain,
-    delay,
-  };
-}
-
-/**
- * The discovery chord: both beads' identity notes over the world's ground,
- * voiced wider with tier and staggered like a harp strum.
- */
-export function chordForPair(
-  aId: string,
-  bId: string,
-  tier: 0 | 1 | 2 | 3
-): ChordNote[] {
-  const a = castaliaConceptById.get(aId);
-  const b = castaliaConceptById.get(bId);
-  if (!a || !b) return [];
-  const va = voiceOf(a);
-  const vb = voiceOf(b);
-
-  const notes: ChordNote[] = [
-    { freq: modeFreq(0, "low"), timbre: "glass", gain: 0.16, delay: 0 },
-    { freq: modeFreq(7, "low"), timbre: "glass", gain: 0.1, delay: 0.05 },
-    { freq: va.freq, timbre: va.timbre, gain: 0.24, delay: 0.09 },
-    { freq: vb.freq, timbre: vb.timbre, gain: 0.24, delay: 0.16 },
-  ];
-
-  if (tier >= 2) {
-    notes.push(secondStep(a, 0.14, 0.24), secondStep(b, 0.12, 0.32));
-  }
-  if (tier >= 3) {
-    notes.push({ freq: modeFreq(2, "air"), timbre: "glass", gain: 0.1, delay: 0.44 });
-    notes.push({ freq: modeFreq(0, "air"), timbre: "glass", gain: 0.08, delay: 0.58 });
-  }
-  return notes;
-}

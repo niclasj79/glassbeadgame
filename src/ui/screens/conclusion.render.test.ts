@@ -8,6 +8,7 @@ import { buildSessionFixture } from "@/domain/outcomes/testing/buildSessionFixtu
 import { buildPortrait } from "@/domain/portrait";
 import { castaliaLookup } from "@/runtime/content/castaliaLookup";
 import { installMotionDomStubs } from "../testing/domStubs";
+import type { RevealState } from "./conclusionReveal";
 import { ConclusionReading } from "./ConclusionScreen";
 import { threadRegister } from "./threadRegister";
 
@@ -53,23 +54,35 @@ const FIXTURE = buildSessionFixture({
   concluded: true,
 });
 
+const PORTRAIT = buildPortrait(FIXTURE.state, castaliaLookup);
+const ANNOTATION = buildAnnotation(FIXTURE.state, castaliaLookup);
+const THREADS = threadRegister(
+  resolveSessionOutcomes(FIXTURE.state, castaliaLookup)
+);
+
+const render = (
+  reveal: RevealState | null,
+  onTakeWhole?: () => void
+): string =>
+  renderToStaticMarkup(
+    createElement(ConclusionReading, {
+      portrait: PORTRAIT,
+      annotation: ANNOTATION,
+      threadCount: FIXTURE.state.threads.length,
+      threads: THREADS,
+      reveal,
+      onTakeWhole,
+      onAnother: () => undefined,
+      onLeave: () => undefined,
+    })
+  );
+
 let html = "";
 
 describe("the conclusion", () => {
   beforeAll(() => {
     installMotionDomStubs();
-    html = renderToStaticMarkup(
-      createElement(ConclusionReading, {
-        portrait: buildPortrait(FIXTURE.state, castaliaLookup),
-        annotation: buildAnnotation(FIXTURE.state, castaliaLookup),
-        threadCount: FIXTURE.state.threads.length,
-        threads: threadRegister(
-          resolveSessionOutcomes(FIXTURE.state, castaliaLookup)
-        ),
-        onAnother: () => undefined,
-        onLeave: () => undefined,
-      })
-    );
+    html = render(null);
   });
 
   it("reads against ground, not against the arena (B3)", () => {
@@ -146,5 +159,81 @@ describe("the conclusion", () => {
     expect(new Set(entries).size).toBe(1);
     // No ordinal, no total, no per-thread number of any kind.
     expect(html).not.toMatch(/thread-reading[^>]*>\s*<[^>]*>\s*\d+\s*\./);
+  });
+
+  /**
+   * GAP-14. Six filled arcs struck at one radius on one shared circular track
+   * are a comparable scale however the header disclaims one: the eye reads six
+   * values against each other and ranks them, which is exactly the
+   * cross-dimension comparison `Portrait` carries no total in order to prevent.
+   * The phrases and the evidence lines are the reading; the gauge was a picture
+   * of a number.
+   */
+  it("draws no dial, and keeps the evidence (GAP-14)", () => {
+    const readings = [
+      ...html.matchAll(/<div [^>]*data-testid="portrait-reading"[^>]*>/g),
+    ].map((match) => /class="([^"]*)"/.exec(match[0])![1]);
+    expect(readings).toHaveLength(PORTRAIT.dimensions.length);
+    // Set identically, like the register's entries: no dimension is drawn
+    // larger, fuller, or further along anything than another.
+    expect(new Set(readings).size).toBe(1);
+
+    // The arc and its track. Nothing on this plate may draw either again.
+    expect(html).not.toMatch(/stroke-dasharray/i);
+    expect(html).not.toMatch(/<circle/i);
+
+    // The evidence survives, verbatim and checkable.
+    for (const dimension of PORTRAIT.dimensions) {
+      expect(html).toContain(dimension.phrase);
+      for (const line of dimension.evidence) expect(html).toContain(line);
+    }
+    expect(PORTRAIT.dimensions.some((d) => d.evidence.length > 0)).toBe(true);
+  });
+
+  /**
+   * GAP-4. The reading is assembled by the compiled performance rather than
+   * stamped complete at t = 0, so a partial state has to render a partial page
+   * — the first thread on the glass, the second still to come, and the web not
+   * yet characterised.
+   */
+  it("writes only what the performance has reached (GAP-4)", () => {
+    const partial: RevealState = {
+      sentences: 1,
+      threads: 1,
+      readings: 0,
+      closed: false,
+    };
+    const page = render(partial, () => undefined);
+    expect(page).toContain("Fibonacci Sequence · Echo · Counterpoint");
+    expect(page).not.toContain("Prime Numbers · Tension · Polyrhythm");
+    expect(page).toContain(ANNOTATION.sentences[0]);
+    expect(page).not.toContain(ANNOTATION.sentences[1]);
+    expect(page).not.toContain('data-testid="portrait-reading"');
+    expect(page).not.toContain("six readings, no total");
+    // One line per compiled entry, never a hole waiting to be filled.
+    expect([...page.matchAll(/data-testid="thread-reading"/g)]).toHaveLength(1);
+  });
+
+  /**
+   * GAP-4, the other half: a reading that assembles over its own performance
+   * must never become a cutscene. The way out stands from the first frame, and
+   * the whole reading is one control away for as long as there is more to come.
+   */
+  it("never withholds the way out while it is still being written (GAP-4)", () => {
+    const partial: RevealState = {
+      sentences: 0,
+      threads: 0,
+      readings: 0,
+      closed: false,
+    };
+    const page = render(partial, () => undefined);
+    expect(page).toContain("Another Game");
+    expect(page).toContain("Leave");
+    expect(page).toContain('data-testid="conclusion-take-whole"');
+
+    // And it stops offering it once there is nothing left to skip.
+    expect(html).not.toContain('data-testid="conclusion-take-whole"');
+    expect(html).toContain("Another Game");
+    expect(html).toContain("Leave");
   });
 });

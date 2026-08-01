@@ -3,6 +3,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cueBus } from "@/runtime/cues";
 import { useStore } from "@/state/store";
 import { ReadingBody } from "../components/ReadingBody";
+import { inspectedConcept } from "../components/inspection";
+import {
+  QUIET_CONTROL,
+  READING_MEASURE,
+  READING_PLATE,
+  ReadingColumn,
+} from "../components/ReadingColumn";
 import { entranceMs, type Note } from "./marginaliaNote";
 import {
   EMPTY_MARGIN,
@@ -77,55 +84,15 @@ import {
  * control inside a hidden subtree is a defect; the note's prose reaches assistive
  * technology twice over — live through `CueCaptions` as it happens, and as
  * static text here for anyone who wants to go back to it.
+ *
+ * THE COLUMN IS NOT THE MARGIN'S PRIVATE PROPERTY.
+ *
+ * The page, the measure, the rule and the quiet controls now come from
+ * `components/ReadingColumn`, which the bead inspection card is set in too. The
+ * margin used to own all four, which is how the other surface that reads
+ * authored prose at length ended up pinned over the instrument in a rounded
+ * glass panel at 10px while this column stood empty in the same frame (IMP-5).
  */
-
-const MEASURE = "m-0 w-full px-6 pb-20 pt-7 md:px-0 md:py-0 md:pl-10 md:pr-8";
-
-/** The recessed marks: engraved, faint, and never competing with the world. */
-const QUIET_CONTROL =
-  "engraved pointer-events-auto rounded-full border border-line/40 px-3 py-1.5 normal-case tracking-[0.12em] transition-colors hover:border-brass/60 hover:text-vellum";
-
-function Ground({ open }: { open: boolean }) {
-  /* THE PAGE BENEATH THE MARGIN.
-
-     Without it the note competes with the arena for the same pixels and both
-     become unreadable — a margin is only a margin if something is holding it.
-     It rises from the foot of a phone and in from the side of a desktop: the
-     same gesture against the two different edges the note is written along.
-
-     Two grounds rather than one gradient with a direction swapped. The note is
-     roughly 430px tall on a phone and roughly 300px on a desktop margin, so a
-     single ramp that reads correctly across a narrow column reaches barely a
-     third of the way up a tall sheet — which is how bead labels ended up
-     running straight through "your reading runs with the record". Each edge
-     gets stops chosen for the run it actually has. */
-  return (
-    <>
-      <div
-        aria-hidden="true"
-        className={
-          "absolute inset-0 -z-10 backdrop-blur-[2px] transition-opacity duration-700 md:hidden " +
-          (open ? "opacity-100" : "opacity-0")
-        }
-        style={{
-          background:
-            "linear-gradient(to top, hsl(var(--void)) 0%, hsl(var(--void) / 0.97) 68%, hsl(var(--void) / 0.72) 88%, hsl(var(--void) / 0) 100%)",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className={
-          "absolute inset-0 -z-10 hidden transition-opacity duration-700 md:block " +
-          (open ? "opacity-100" : "opacity-0")
-        }
-        style={{
-          background:
-            "linear-gradient(to left, hsl(var(--void)) 0%, hsl(var(--void) / 0.92) 55%, hsl(var(--void) / 0) 100%)",
-        }}
-      />
-    </>
-  );
-}
 
 /**
  * How a reading is named in the index. Never a count, never a rank, and never
@@ -173,14 +140,8 @@ export function MarginSurface({
   };
 
   return (
-    <div
-      role="region"
-      aria-label="The margin"
-      data-testid="marginalia"
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end md:inset-y-0 md:left-auto md:right-0 md:w-[min(27rem,32vw)] md:items-center"
-    >
-      <Ground open={note !== null} />
-      <div className="w-full">
+    <ReadingColumn label="The margin" testId="marginalia" lit={note !== null}>
+      <>
         <AnimatePresence mode="wait">
           {note && (
             <motion.figure
@@ -207,7 +168,7 @@ export function MarginSurface({
                  to clear it before they could arm anything. Half a screen
                  leaves the world's working half alone, and the citations
                  scroll inside the half they have. */
-              className={`pointer-events-auto max-h-[50vh] overflow-y-auto overscroll-contain md:max-h-full ${MEASURE}`}
+              className={`${READING_PLATE} ${READING_MEASURE}`}
             >
               <div onClick={dismissOnClick}>
                 <ReadingBody
@@ -266,7 +227,7 @@ export function MarginSurface({
             return to, naming the reading it will bring back rather than
             counting anything. */}
         {!note && last && (
-          <div className={`flex justify-start ${MEASURE}`}>
+          <div className={`flex justify-start ${READING_MEASURE}`}>
             <button
               type="button"
               data-testid="margin-reopen"
@@ -277,14 +238,30 @@ export function MarginSurface({
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </>
+    </ReadingColumn>
   );
 }
 
 export function Marginalia() {
   const [state, setState] = useState<MarginState>(EMPTY_MARGIN);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  /*
+   * ONE READING IN THE COLUMN AT A TIME (IMP-5).
+   *
+   * The bead card is set in the same column now, and two plates in one column
+   * is one plate over another. The arbitration is `inspectedConcept`, asked
+   * here and by the card itself, so the two can never disagree about who holds
+   * the column and leave it empty between them.
+   *
+   * Nothing is lost by standing down: this returns null, which keeps the
+   * component mounted, so the cue subscription stays live, every reading is
+   * still kept, and closing the card puts the margin back exactly as it was.
+   * `marginState` is not consulted or mutated here — the rule that a reading
+   * closes only when the player closes it is still the only rule it has.
+   */
+  const pinned = useStore((s) => s.pinnedInspectId);
+  const inspecting = inspectedConcept(pinned) !== null;
 
   useEffect(
     () => cueBus.subscribe("ui", (cue) => setState((prev) => receive(prev, cue))),
@@ -303,6 +280,8 @@ export function Marginalia() {
     () => setState((prev) => toggleIndex(prev)),
     []
   );
+
+  if (inspecting) return null;
 
   return (
     <MarginSurface

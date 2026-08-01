@@ -6,11 +6,20 @@ import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
 import type { CommittedThreadV1, ThreadOutcomeV1 } from "@/domain/model";
 import { useCurrentTheme } from "@/themes/useTheme";
+import { audio } from "@/audio/engine";
 import { frameState } from "./frameState";
 import { intentionArcMid } from "./curves";
 import { presentationProfile } from "./quality";
 import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./ribbon";
 import { threadForm, unrestAmplitude } from "./threadGrammar";
+import {
+  ATTUNED_EASE_SECONDS,
+  ATTUNED_HOLD_SECONDS,
+  attunedPresence,
+  mirrorTravel,
+  voiceTravel,
+} from "./Attunement";
+import { getHaloTexture } from "./textures";
 
 const EMPTY_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
 const EMPTY_OUTCOMES: readonly ThreadOutcomeV1[] = Object.freeze([]);
@@ -18,6 +27,27 @@ const EMPTY_OUTCOMES: readonly ThreadOutcomeV1[] = Object.freeze([]);
 const vStart = new THREE.Vector3();
 const vEnd = new THREE.Vector3();
 const vMid = new THREE.Vector3();
+const vPoint = new THREE.Vector3();
+
+/** Two lights is the most any grammar asks for — Echo's mirrored pair. */
+const MAX_VOICE_LIGHTS = 2;
+
+/** Quadratic Bézier, the same curve the ribbon's vertex shader evaluates. */
+function arcPoint(
+  a: THREE.Vector3,
+  m: THREE.Vector3,
+  b: THREE.Vector3,
+  t: number,
+  out: THREE.Vector3
+): THREE.Vector3 {
+  const it = 1 - t;
+  out.set(
+    it * it * a.x + 2 * it * t * m.x + t * t * b.x,
+    it * it * a.y + 2 * it * t * m.y + t * t * b.y,
+    it * it * a.z + 2 * it * t * m.z + t * t * b.z
+  );
+  return out;
+}
 
 interface RibbonProps {
   readonly sourceId: string;
@@ -32,6 +62,13 @@ interface RibbonProps {
   readonly resolved: boolean;
   /** Committed threads grow once and stay; a preview is always fully drawn. */
   readonly animateGrowth: boolean;
+  /**
+   * The committed thread this ribbon draws, where there is one. A draft has no
+   * identity yet, so it neither lights nor recedes.
+   */
+  readonly threadId?: string;
+  /** Whether the world is currently in the held state of Attunement. */
+  readonly attuned?: boolean;
 }
 
 /**
@@ -46,6 +83,8 @@ function Ribbon({
   opacity,
   resolved,
   animateGrowth,
+  threadId,
+  attuned = false,
 }: RibbonProps) {
   const theme = useCurrentTheme();
   const tier = useStore((s) => s.settings.qualityTier);
@@ -73,6 +112,41 @@ function Ribbon({
     [theme, form, sourceId, targetId, opacity, profile.reducedMotion]
   );
   useEffect(() => () => material.dispose(), [material]);
+
+  /**
+   * THE VOICE LIGHT.
+   *
+   * `frameState.pulses` carries "this thread is sounding, from this audio-clock
+   * moment, for this long" — written by the ambient choir and by the audio
+   * director, and until now read by nothing at all. These sprites are its one
+   * consumer: a relation lights while its own voice speaks, so the note in the
+   * ear and the light on the strand are the same event rather than two
+   * approximations of it (ARCHITECTURE §10).
+   *
+   * Bounded: two sprites per ribbon, allocated once, never per frame.
+   */
+  const lights = useRef<(THREE.Sprite | null)[]>([]);
+  const lightMaterials = useMemo(() => {
+    const ink = threadInk(theme, sourceId, targetId ?? sourceId);
+    return Array.from({ length: MAX_VOICE_LIGHTS }, () =>
+      new THREE.SpriteMaterial({
+        map: getHaloTexture(),
+        color: new THREE.Color(theme.palette.vellum).lerp(ink, 0.35),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      })
+    );
+  }, [theme, sourceId, targetId]);
+  useEffect(
+    () => () => lightMaterials.forEach((m) => m.dispose()),
+    [lightMaterials]
+  );
+
+  /** Eased presence: 1 ordinarily, receding toward the floor in Attunement. */
+  const presence = useRef(1);
 
   useEffect(() => {
     (material.uniforms.uResolved as { value: number }).value = resolved ? 1 : 0;
@@ -131,15 +205,72 @@ function Ribbon({
       1,
       age.current / (reducedMotion ? 0.2 : 1.4)
     );
+
+    // ── Is this thread's own voice sounding right now? ──────────────────────
+    let progress = -1;
+    let fromFarEnd = false;
+    // Whether *any* thread has spoken recently. Without it, a session whose
+    // audio context was never unlocked would enter Attunement and simply dim.
+    let cycleRunning = false;
+    if (threadId !== undefined) {
+      const now = audio.now();
+      for (const pulse of frameState.pulses) {
+        if (pulse.duration <= 0) continue;
+        const elapsed = now - pulse.atAudioTime;
+        if (elapsed < 0 || elapsed > pulse.duration + ATTUNED_HOLD_SECONDS) continue;
+        cycleRunning = true;
+        if (pulse.threadId !== threadId || elapsed > pulse.duration) continue;
+        progress = elapsed / pulse.duration;
+        // The choir alternates which bead speaks first; the light walks from
+        // whichever one is actually sounding.
+        fromFarEnd = pulse.flip;
+      }
+    }
+    const speaking = progress >= 0;
+
+    let travel = speaking ? voiceTravel(intention, progress) : null;
+    if (travel !== null && fromFarEnd) travel = mirrorTravel(travel);
+    for (let i = 0; i < MAX_VOICE_LIGHTS; i++) {
+      const sprite = lights.current[i];
+      if (!sprite) continue;
+      const at = travel?.positions[i];
+      if (at === undefined) {
+        sprite.visible = false;
+        continue;
+      }
+      sprite.visible = true;
+      arcPoint(vStart, vMid, vEnd, Math.max(0, Math.min(1, at)), vPoint);
+      sprite.position.copy(vPoint);
+      const strength = travel ? travel.strength : 0;
+      (sprite.material as THREE.SpriteMaterial).opacity = 0.55 * strength;
+      sprite.scale.setScalar(0.055 + 0.035 * strength);
+    }
+
+    // ── Attunement: one thread at a time becomes individually present ───────
+    const target = attunedPresence(attuned, cycleRunning, speaking);
+    presence.current +=
+      (target - presence.current) * Math.min(1, dt / ATTUNED_EASE_SECONDS);
+    (uniforms.uOpacity as { value: number }).value = opacity * presence.current;
   });
 
   return (
-    <mesh
-      geometry={geometry}
-      material={material}
-      frustumCulled={false}
-      renderOrder={2}
-    />
+    <group>
+      <mesh
+        geometry={geometry}
+        material={material}
+        frustumCulled={false}
+        renderOrder={2}
+      />
+      {lightMaterials.map((lightMaterial, i) => (
+        <sprite
+          key={i}
+          ref={(el) => (lights.current[i] = el)}
+          material={lightMaterial}
+          visible={false}
+          renderOrder={3}
+        />
+      ))}
+    </group>
   );
 }
 
@@ -153,6 +284,10 @@ export function Threads() {
   const outcomes = useVanillaStore(
     domainSessionStore,
     (state) => state.session?.outcomes ?? EMPTY_OUTCOMES
+  );
+  const attuned = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.attunementActive ?? false
   );
 
   /**
@@ -176,12 +311,14 @@ export function Threads() {
       {threads.map((thread) => (
         <Ribbon
           key={thread.id}
+          threadId={String(thread.id)}
           sourceId={String(thread.pair[0])}
           targetId={String(thread.pair[1])}
           intention={thread.intention}
           opacity={0.9}
           resolved={closed.has(String(thread.id))}
           animateGrowth
+          attuned={attuned}
         />
       ))}
     </group>

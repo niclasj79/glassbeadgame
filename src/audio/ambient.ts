@@ -8,7 +8,7 @@ import { runtimeRandom } from "@/runtime/testMode";
 import { currentTheme } from "@/themes/useTheme";
 import { SCORE } from "./score";
 import type { TimbreId } from "@/content/castalia/schema";
-import type { MotifAward } from "@/state/types";
+import type { MotifKind } from "@/domain/motifs";
 
 /**
  * The generative soundtrack that grows with the web.
@@ -30,6 +30,12 @@ const LOOKAHEAD_S = 1.2;
 /** Default slot ≈ half a "bar" at largo; each world sets its own tempo. */
 const DEFAULT_SLOT_S = 2.0;
 const MAX_ACTIVE_MOTIFS = 6;
+/**
+ * Completed motifs are permanent, but the ensemble is not unbounded: a long
+ * session can complete many, and every seated voice speaks against the same
+ * bed. The oldest seats retire so the piece thickens without turning to mud.
+ */
+const MAX_MOTIF_PATTERNS = 4;
 
 interface Motif {
   threadId: string;
@@ -58,8 +64,12 @@ class AmbientEngine {
   private droneGain = 0.14;
   private motifBias = 1;
   /** Completed-motif ensemble voices — each motif joins the piece forever. */
-  private motifPatterns: { kind: MotifAward["motifId"]; freqs: number[]; rng: () => number }[] =
-    [];
+  private motifPatterns: {
+    key: string;
+    kind: MotifKind;
+    freqs: number[];
+    rng: () => number;
+  }[] = [];
   /** The harmonic journey: which semitone of the mode grounds the drone now. */
   private rootDegree = 0;
   /** Space the semantic layer has asked for: density and bed multipliers. */
@@ -94,6 +104,11 @@ class AmbientEngine {
     }
     this.running = false;
     this.motifs = [];
+    // A previous session's completed motifs may not keep their seats in the
+    // next one. `start()` already resets them, but a session that never reaches
+    // `start()` — no audio context yet — would otherwise inherit an ensemble
+    // from a composition the player has left.
+    this.motifPatterns = [];
     frameState.pulses.length = 0;
     this.stopAirBed();
     // Long-tailed voices fade out on their own envelopes.
@@ -179,13 +194,25 @@ class AmbientEngine {
     );
   }
 
-  /** A completed motif takes a permanent seat in the ensemble. */
-  addMotifPattern(kind: MotifAward["motifId"], beadIds: string[]): void {
-    if (this.motifPatterns.some((p) => p.kind === kind)) return;
+  /**
+   * A completed motif takes a permanent seat in the ensemble.
+   *
+   * The three families are the domain's own (`domain/motifs`): a Dialectic is a
+   * Tension held by a third concept, a Canon is a facet recurring transformed
+   * across the web, a Bridge is the joint two regions hang on. Each is voiced
+   * with the beads that formed it and nothing else — no new material is
+   * invented, because a motif is a recognition of what the player already built.
+   *
+   * Keyed by the completion, not by the family, so a second Canon on a
+   * different facet is a second voice rather than a silently dropped one.
+   */
+  addMotifPattern(key: string, kind: MotifKind, beadIds: string[]): void {
+    if (this.motifPatterns.some((p) => p.key === key)) return;
     let freqs: number[] = [];
-    if (kind === "symposium") {
-      // The council chord: one tonic per faculty present, sounded in the
-      // register the first bead of that faculty actually speaks in.
+    if (kind === "dialectic") {
+      // The held chord: one tonic per faculty present, sounded in the register
+      // the first bead of that faculty actually speaks in. A Dialectic that
+      // crosses faculties therefore sounds as more than one body at once.
       const seen = new Set<string>();
       for (const id of beadIds) {
         const concept = castaliaConceptById.get(id);
@@ -194,19 +221,37 @@ class AmbientEngine {
         freqs.push(modeFreq(0, concept.motif.register));
         if (freqs.length >= 3) break;
       }
+      if (freqs.length < 2) {
+        freqs = beadIds
+          .map((id) => beadVoice(id))
+          .filter((v): v is NonNullable<typeof v> => !!v)
+          .map((v) => v.freq)
+          .slice(0, 3);
+      }
     } else {
       freqs = beadIds
         .map((id) => beadVoice(id))
         .filter((v): v is NonNullable<typeof v> => !!v)
         .map((v) => v.freq);
-      if (kind === "triad") freqs = freqs.slice(0, 3);
+      // A Bridge is the joint, not the whole province: three voices state the
+      // crossing without turning the bed into a roll call.
+      if (kind === "bridge") freqs = freqs.slice(0, 3);
     }
     if (freqs.length < 2) return;
     this.motifPatterns.push({
+      key,
       kind,
       freqs,
-      rng: mulberry32(hashString(`motif-${kind}`)),
+      rng: mulberry32(hashString(`motif-${key}`)),
     });
+    if (this.motifPatterns.length > MAX_MOTIF_PATTERNS) {
+      this.motifPatterns.splice(0, this.motifPatterns.length - MAX_MOTIF_PATTERNS);
+    }
+  }
+
+  /** Completed-motif voices currently seated. Read by tests and the scene. */
+  motifPatternCount(): number {
+    return this.motifPatterns.length;
   }
 
   addThreadVoice(threadId: string, aId: string, bId: string): void {
@@ -304,20 +349,22 @@ class AmbientEngine {
     for (const p of this.motifPatterns) {
       if (p.rng() > SCORE.motifVoices.speakProbability) continue;
       const start = t + p.rng() * (this.slotS * 0.4);
-      if (p.kind === "triad") {
+      if (p.kind === "bridge") {
+        // The joint: the crossing stated as an arpeggio, one voice at a time.
         p.freqs.forEach((f, i) =>
           playNote(ctx, ground, "voice", f, {
-            gain: SCORE.motifVoices.triadGain,
+            gain: SCORE.motifVoices.bridgeGain,
             at: start + i * 0.09,
             attack: 0.4,
             hold: 0.8,
             release: 2.2,
           })
         );
-      } else if (p.kind === "symposium") {
+      } else if (p.kind === "dialectic") {
+        // The held chord: the poles and the third that holds them, together.
         p.freqs.forEach((f) =>
           playNote(ctx, ground, "voice", f, {
-            gain: SCORE.motifVoices.symposiumGain,
+            gain: SCORE.motifVoices.dialecticGain,
             at: start,
             attack: 1.6,
             hold: 1.8,
@@ -325,11 +372,11 @@ class AmbientEngine {
           })
         );
       } else {
-        // The fugue subject: its beads' notes as a walking line.
-        const step = this.slotS / SCORE.motifVoices.fugueStepDivisor;
+        // The Canon's subject: its beads' notes as a walking line, recurring.
+        const step = this.slotS / SCORE.motifVoices.canonStepDivisor;
         p.freqs.forEach((f, i) =>
           playNote(ctx, bus, "gut", f, {
-            gain: SCORE.motifVoices.fugueGain,
+            gain: SCORE.motifVoices.canonGain,
             at: start + i * step,
             release: 0.9,
           })

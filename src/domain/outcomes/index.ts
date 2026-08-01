@@ -22,9 +22,13 @@ export {
 } from "./prose";
 export {
   indexOutcomesByThread,
+  isInterpretive,
+  outcomeIsInterpretiveReading,
+  outcomeSpeaksForTheRecord,
   resolveSessionOutcomes,
   resolveThreadOutcome,
   sharedFacetsOf,
+  speaksForTheRecord,
   stanceForFit,
 } from "./resolveThreadOutcome";
 export {

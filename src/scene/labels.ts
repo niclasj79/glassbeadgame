@@ -33,6 +33,23 @@ import type { SafeArea } from "./framing";
  *                 lost — the name is on the inspect card, in the caption stream,
  *                 and one turn of the arena away.
  *
+ * And one law over all three, added after the solver was measured against a
+ * real frame rather than a synthetic one:
+ *
+ *   WHOSE NAME IT IS.  A name is read as belonging to whichever bead it is
+ *                 nearest, and nothing else about the drawing says otherwise —
+ *                 there is no leader, and there should not be one. On a
+ *                 1280x720 frame with the Fibonacci Sequence attended, its own
+ *                 name was placed 166 px below it (the attended bead reserves
+ *                 the intention plate's radius, not its glass) and landed 73 px
+ *                 from Anamorphosis — better than twice as close to a bead that
+ *                 is not its own. The frame's one definite subject was
+ *                 mislabelled, and a neighbour was given a name it does not
+ *                 have. A placement that would do that is now refused, and if
+ *                 no side survives the name is suppressed: SILENCE BEATS
+ *                 FABRICATED SIGNIFICANCE, and a misattributed name is a
+ *                 fabricated fact about the world.
+ *
  * Pure and allocation-free on the frame path: every array is the caller's.
  */
 
@@ -67,8 +84,21 @@ export const LABEL_CLEARANCE = 0.012;
 export interface LabelRequest {
   /** Bead centres in NDC, xy interleaved. */
   readonly anchor: Float32Array;
-  /** Screen radius of each bead's own glass, in NDC. */
+  /**
+   * The radius every *other* name must keep clear of this bead, in NDC. It is
+   * not always the glass: an attended bead reserves the whole intention plate,
+   * because the plate is what a neighbouring name would actually collide with.
+   */
   readonly beadRadius: Float32Array;
+  /**
+   * The radius a bead's *own* name is offset by, in NDC. Defaults to
+   * `beadRadius`, which is right for every bead that draws nothing but its own
+   * glass — and wrong for the one that does, which is why the two are separable
+   * at all: a bead is not further from its own name because there is an
+   * instrument around it, and a name pushed out to the plate's radius reads as
+   * belonging to whatever else is out there.
+   */
+  readonly ownRadius?: Float32Array;
   /** Half-width and half-height of each name's box, in NDC, xy interleaved. */
   readonly half: Float32Array;
   /** Salience tier per bead — higher is placed first. */
@@ -111,6 +141,7 @@ export function placeLabels(
   offset: Float32Array
 ): void {
   const { anchor, beadRadius, half, tier, hidden, count, area } = request;
+  const ownRadius = request.ownRadius ?? beadRadius;
   if (count <= 0) return;
 
   // Most salient first, and among equals the nearer the top of the frame — a
@@ -139,7 +170,7 @@ export function placeLabels(
     const ay = anchor[i * 2 + 1];
     const hx = half[i * 2];
     const hy = half[i * 2 + 1];
-    const r = beadRadius[i] + LABEL_CLEARANCE;
+    const r = ownRadius[i] + LABEL_CLEARANCE;
 
     for (let s = 0; s < LABEL_SIDES.length; s++) {
       const dx =
@@ -148,6 +179,9 @@ export function placeLabels(
         s === 0 ? -(r + hy) : s === 1 ? r + hy : 0;
       const cx = ax + dx;
       const cy = ay + dy;
+      // How far this placement stands from the bead it belongs to. Squared,
+      // because nothing here needs the distance itself.
+      const own = dx * dx + dy * dy;
 
       // Inside the page. A name that crosses the ruling is the defect.
       if (
@@ -159,7 +193,8 @@ export function placeLabels(
         continue;
       }
 
-      // Clear of every bead, including its own neighbours' glass.
+      // Clear of every bead, including its own neighbours' glass — and nearer
+      // to the bead it names than to any of them, or it names the wrong one.
       let blocked = false;
       for (let k = 0; k < count && !blocked; k++) {
         if (k === i || hidden[k] > 0) continue;
@@ -168,7 +203,10 @@ export function placeLabels(
         const br = beadRadius[k] + LABEL_CLEARANCE;
         if (Math.abs(cx - bx) < hx + br && Math.abs(cy - by) < hy + br) {
           blocked = true;
+          break;
         }
+        const toOther = (cx - bx) * (cx - bx) + (cy - by) * (cy - by);
+        if (toOther < own) blocked = true;
       }
       if (blocked) continue;
 

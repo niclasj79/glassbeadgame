@@ -59,9 +59,17 @@ function recorder(): { stage: SceneStage; log: Recorded } {
   return { stage, log };
 }
 
-function deliver(plan: CuePlan, stage: SceneStage): void {
+/**
+ * Both world channels, the way the bus delivers them. Every plan declares
+ * `scene` and `camera`, so a test that only exercised one would let a CAV-006
+ * inequality hide in the other.
+ */
+function deliverAll(plan: CuePlan, stage: SceneStage): void {
   const director = createSceneDirector(stage);
-  for (const cue of plan.cues) director.handleCue(cue);
+  for (const cue of plan.cues) {
+    director.handleScene(cue);
+    director.handleCamera(cue);
+  }
 }
 
 const relation: DocumentedRelation = Object.freeze({
@@ -136,7 +144,9 @@ describe("createSceneDirector", () => {
     ];
     for (const cue of moments) {
       const { stage, log } = recorder();
-      createSceneDirector(stage).handleCue(cue);
+      const director = createSceneDirector(stage);
+      director.handleScene(cue);
+      director.handleCamera(cue);
       const wrote =
         log.flare.length +
         log.kick.length +
@@ -150,18 +160,18 @@ describe("createSceneDirector", () => {
   it("keeps the player's presence known while they compose", () => {
     const { stage, log } = recorder();
     const director = createSceneDirector(stage);
-    director.handleCue(planAttention({ conceptId: a, candidates: [] }, null).cues[0]);
-    director.handleCue(planAttentionCleared().cues[0]);
+    director.handleScene(planAttention({ conceptId: a, candidates: [] }, null).cues[0]);
+    director.handleScene(planAttentionCleared().cues[0]);
     expect(log.touched).toBe(2);
   });
 
   it("gives a latch a world response distinct from arming", () => {
     const { stage: armStage, log: armLog } = recorder();
-    createSceneDirector(armStage).handleCue(
+    createSceneDirector(armStage).handleScene(
       planIntentionArmed({ conceptId: a, intention: "echo" }).cues[0]
     );
     const { stage: latchStage, log: latchLog } = recorder();
-    createSceneDirector(latchStage).handleCue(
+    createSceneDirector(latchStage).handleScene(
       planCandidateLatched({ pair: [a, b], intention: "echo" }).cues[0]
     );
     // Arming answers at the attended bead; latching answers at the candidate.
@@ -177,7 +187,7 @@ describe("createSceneDirector", () => {
   it("spends exactly the same light on every epistemic outcome", () => {
     const spend = (kind: "documented" | "open-thread" | "unresolved") => {
       const { stage, log } = recorder();
-      deliver(commitPlan(kind), stage);
+      deliverAll(commitPlan(kind), stage);
       return {
         flare: log.flare,
         particles: log.bursts.reduce((sum, entry) => sum + entry.count, 0),
@@ -205,7 +215,7 @@ describe("createSceneDirector", () => {
   it("draws no epistemic distinction of its own", () => {
     const calls = (kind: "documented" | "open-thread" | "unresolved") => {
       const { stage, log } = recorder();
-      deliver(commitPlan(kind), stage);
+      deliverAll(commitPlan(kind), stage);
       return JSON.stringify(log);
     };
     expect(calls("open-thread")).toBe(calls("documented"));
@@ -215,14 +225,14 @@ describe("createSceneDirector", () => {
   it("holds the world in Attunement and releases it again", () => {
     const { stage, log } = recorder();
     const director = createSceneDirector(stage);
-    director.handleCue(planAttunement({ active: true }, eventId).cues[0]);
-    director.handleCue(planAttunement({ active: false }, eventId).cues[0]);
+    director.handleScene(planAttunement({ active: true }, eventId).cues[0]);
+    director.handleScene(planAttunement({ active: false }, eventId).cues[0]);
     expect(log.attuned).toEqual([true, false]);
   });
 
   it("answers a motif at every bead that formed it", () => {
     const { stage, log } = recorder();
-    createSceneDirector(stage).handleCue(
+    createSceneDirector(stage).handleScene(
       planMotifCompleted(
         {
           motifKindId: toMotifKindId("motif.triangle"),

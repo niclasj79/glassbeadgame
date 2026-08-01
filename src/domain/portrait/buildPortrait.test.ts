@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  outcomeIsInterpretiveReading,
+  outcomeSpeaksForTheRecord,
+  resolveSessionOutcomes,
+} from "../outcomes";
 import { buildSessionFixture } from "../outcomes/testing/buildSessionFixture";
 import { C, createFixtureLookup } from "../outcomes/testing/fixtureContent";
 import { buildPortrait } from "./buildPortrait";
@@ -110,11 +115,13 @@ describe("buildPortrait — dimensions read the actual session", () => {
     expect(portrait.byId.range.phrase).toBe(
       "Measure, Sound, Matter, and Image all answered. Four of your eight threads crossed between faculties."
     );
+    // The counts are unchanged; only the framing is. See "evidence lines are
+    // counts, not progress toward a total" below for why "2 of 3" had to go.
     expect([...portrait.byId.range.evidence]).toEqual([
-      "Measure: 2 of 3 woven",
-      "Sound: 4 of 4 woven",
-      "Matter: 1 of 1 woven",
-      "Image: 2 of 2 woven",
+      "Measure: 2 woven, 1 left dark",
+      "Sound: 4 woven, none left dark",
+      "Matter: 1 woven, none left dark",
+      "Image: 2 woven, none left dark",
     ]);
   });
 
@@ -350,5 +357,114 @@ describe("buildPortrait — totality and replay stability", () => {
       expect(dimension.phrase.trim()).not.toBe("");
       expect(dimension.phrase.trim().endsWith(".")).toBe(true);
     }
+  });
+});
+
+describe("buildPortrait — Depth separates a record from a reading", () => {
+  /**
+   * Regression (GAP-1). Depth counted every documented outcome under "met
+   * documented material", and `outcome.kind` is "documented" for an interpretive
+   * relation too. So a session was told it had met documented material where the
+   * Game had only offered a reading of its own.
+   */
+  const outcomes = resolveSessionOutcomes(wide.state, lookup);
+  const records = outcomes.filter(outcomeSpeaksForTheRecord);
+  const readings = outcomes.filter(outcomeIsInterpretiveReading);
+  const portrait = buildPortrait(wide.state, lookup);
+
+  it("builds a web that genuinely mixes records and readings", () => {
+    expect(records.length).toBe(4);
+    expect(readings.length).toBe(2);
+    expect(outcomes.length).toBe(8);
+  });
+
+  it("counts only the records as documented material", () => {
+    expect(portrait.byId.depth.phrase).toContain(
+      "Four of your eight threads met documented material"
+    );
+  });
+
+  it("gives the readings a clause of their own", () => {
+    expect(portrait.byId.depth.phrase).toContain("two met a reading the Game offers");
+  });
+
+  it("says it in the singular too, where the whole web is one reading", () => {
+    const one = buildSessionFixture({
+      conceptIds: [C.fibonacci, C.counterpoint],
+      threads: [{ a: C.fibonacci, b: C.counterpoint, intention: "echo" }],
+    });
+    expect(buildPortrait(one.state, lookup).byId.depth.phrase).toBe(
+      "Your one thread met a reading the Game offers rather than a record."
+    );
+  });
+
+  it("gives the readings a count of their own in the evidence line", () => {
+    expect(portrait.byId.depth.evidence).toContain(
+      "4 documented, 2 read by the Game, 1 open, 1 unresolved"
+    );
+  });
+
+  it("does not make a reading count for less than a record", () => {
+    /*
+     * CAV-006: the two kinds differ in resolution, never in reward. Splitting
+     * the *prose* must not quietly turn Depth into a preference for records.
+     *
+     * Both webs are two disjoint edges over four beads, so every topological
+     * term in Depth is identical and the evidence class is the only difference
+     * between them.
+     */
+    const twoRecords = buildSessionFixture({
+      conceptIds: [C.fourier, C.overtones, C.primes, C.polyrhythm],
+      threads: [
+        { a: C.fourier, b: C.overtones, intention: "echo" },
+        { a: C.primes, b: C.polyrhythm, intention: "echo" },
+      ],
+    });
+    const aRecordAndAReading = buildSessionFixture({
+      conceptIds: [C.fourier, C.overtones, C.fibonacci, C.counterpoint],
+      threads: [
+        { a: C.fourier, b: C.overtones, intention: "echo" },
+        { a: C.fibonacci, b: C.counterpoint, intention: "echo" },
+      ],
+    });
+
+    expect(
+      resolveSessionOutcomes(twoRecords.state, lookup).filter(outcomeSpeaksForTheRecord)
+    ).toHaveLength(2);
+    expect(
+      resolveSessionOutcomes(aRecordAndAReading.state, lookup).filter(
+        outcomeIsInterpretiveReading
+      )
+    ).toHaveLength(1);
+
+    expect(buildPortrait(aRecordAndAReading.state, lookup).byId.depth.value).toBe(
+      buildPortrait(twoRecords.state, lookup).byId.depth.value
+    );
+  });
+});
+
+describe("buildPortrait — evidence lines are counts, not progress toward a total", () => {
+  /**
+   * Regression (GAP-14). Five evidence lines read "X of Y", which is the shape
+   * of a completion meter: it names a maximum and how far short of it you fell.
+   * ADR-010 removed the number precisely so the next Game is not an attempt to
+   * beat this one. The facts are worth keeping; the framing is not, so each line
+   * now states both parts of the partition instead of a part over a whole.
+   */
+  const portrait = buildPortrait(wide.state, lookup);
+
+  it("states no evidence line as a fraction of a maximum", () => {
+    for (const entry of portrait.dimensions) {
+      for (const line of entry.evidence) {
+        expect(line, `${entry.id}: ${line}`).not.toMatch(/\b\d+ of \d+\b/);
+      }
+    }
+  });
+
+  it("keeps the facts those lines carried", () => {
+    const all = portrait.dimensions.flatMap((entry) => [...entry.evidence]).join(" | ");
+    expect(all).toContain("woven");
+    expect(all).toContain("Tension");
+    expect(all).toContain("cycle");
   });
 });

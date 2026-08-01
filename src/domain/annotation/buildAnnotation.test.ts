@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildTopology } from "../graph/buildTopology";
 import { detectMotifs } from "../motifs/detectMotifs";
+import {
+  outcomeIsInterpretiveReading,
+  outcomeSpeaksForTheRecord,
+  resolveSessionOutcomes,
+} from "../outcomes";
 import { buildSessionFixture } from "../outcomes/testing/buildSessionFixture";
 import { C, createFixtureLookup } from "../outcomes/testing/fixtureContent";
 import { buildAnnotation } from "./buildAnnotation";
@@ -151,6 +156,53 @@ describe("buildAnnotation — a different web reads differently", () => {
         expect(text.toLowerCase()).not.toContain(forbidden);
       }
     }
+  });
+});
+
+describe("buildAnnotation — a reading the Game offers is not a record", () => {
+  /**
+   * The coda's opening sentence branched on `outcome.kind === "documented"`,
+   * which is true of every interpretive relation in the pack as well as of every
+   * recorded one. So a session that opened on a reading — asserting nothing
+   * beyond the two structures compared — was told in its first sentence that
+   * "Castalia had a record to set beside it", which is an authority the content
+   * model deliberately does not hold.
+   */
+  const openedOnAReading = buildSessionFixture({
+    conceptIds: CONCEPTS,
+    threads: [
+      { a: C.fibonacci, b: C.counterpoint, intention: "echo" },
+      { a: C.just, b: C.equal, intention: "tension" },
+    ],
+  });
+
+  it("builds a web whose first thread really is documented but interpretive", () => {
+    // If this stops holding, the sentence assertions below prove nothing.
+    const [first] = resolveSessionOutcomes(openedOnAReading.state, lookup);
+    expect(first?.kind).toBe("documented");
+    expect(first === undefined ? false : outcomeIsInterpretiveReading(first)).toBe(true);
+    expect(first === undefined ? true : outcomeSpeaksForTheRecord(first)).toBe(false);
+  });
+
+  it("never calls that opening a record", () => {
+    const [opening] = buildAnnotation(openedOnAReading.state, lookup).sentences;
+    expect(opening).not.toMatch(/\brecord\b/i);
+    expect(opening).not.toMatch(/\bdocumented\b/i);
+  });
+
+  it("says instead, in the Game's own voice, what it actually had", () => {
+    const [opening] = buildAnnotation(openedOnAReading.state, lookup).sentences;
+    expect(opening).toBe(
+      "You opened with Fibonacci Sequence and Counterpoint, read as Echo, and Castalia had a reading of its own to set beside it: The Spiral Canon."
+    );
+  });
+
+  it("still says record where the record is genuinely there", () => {
+    const [first] = resolveSessionOutcomes(argument.state, lookup);
+    expect(first === undefined ? false : outcomeSpeaksForTheRecord(first)).toBe(true);
+    expect(buildAnnotation(argument.state, lookup).sentences[0]).toContain(
+      "Castalia had a record to set beside it"
+    );
   });
 });
 

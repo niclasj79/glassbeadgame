@@ -64,7 +64,7 @@ class AudioEngine {
   /** Multiplier the attention and attunement states apply to the bed. */
   private bedScale = 1;
   /** Sits between ambientBus and master — the Breath modulates it alone,
-   *  so it never fights setAmbientIntensity over the same AudioParam. */
+   *  so it never fights setAmbientReach over the same AudioParam. */
   private breathGain: GainNode | null = null;
   /** Pad/drone lowpass whose cutoff the Breath sweeps. */
   breathFilter: BiquadFilterNode | null = null;
@@ -181,10 +181,19 @@ class AudioEngine {
     this.master.gain.setTargetAtTime(muted ? 0 : AudioEngine.MASTER_LEVEL, t, 0.05);
   }
 
-  /** Gentle ambient swell as the web grows; capped, never dominant. */
-  setAmbientIntensity(score: number): void {
+  /**
+   * Gentle ambient swell as the web is *carried*; capped, never dominant.
+   *
+   * The argument used to be the legacy score, divided by 400 — so the room got
+   * louder as the player accumulated points, which is a completion meter wearing
+   * an atmosphere. ADR-010 replaced the number with the portrait, and the bed
+   * now follows topology instead: `reach` is 0..1, the fraction of the arena the
+   * largest connected region of the composition spans. It rises when threads
+   * join and cannot be raised by finding anything.
+   */
+  setAmbientReach(reach: number): void {
     if (!this.ctx || !this.ambientBus) return;
-    this.ambientSwell = 0.9 + Math.min(0.35, score / 400);
+    this.ambientSwell = 0.9 + 0.35 * Math.max(0, Math.min(1, reach));
     this.ambientBus.gain.setTargetAtTime(
       this.ambientSwell * this.bedScale,
       this.ctx.currentTime,
@@ -197,7 +206,7 @@ class AudioEngine {
   /**
    * The bed recedes so something else can be heard — attention leaving space,
    * Attunement dropping the floor beneath individual threads. Separate from
-   * `setAmbientIntensity` so the web's growth and the current state of attention
+   * `setAmbientReach` so the web's growth and the current state of attention
    * never fight over the same AudioParam.
    */
   setBedScale(scale: number): void {

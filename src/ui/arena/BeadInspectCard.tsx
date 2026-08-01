@@ -1,11 +1,17 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { castaliaConceptById } from "@/content/castalia";
+import { motion } from "framer-motion";
 import { facetById } from "@/content/castalia/facets";
 import { facultyById } from "@/content/castalia/faculties";
 import type { CastaliaConcept } from "@/content/castalia/schema";
 import { useStore } from "@/state/store";
 import { productionInterpretation } from "@/runtime/interpretation";
-import { GlassPanel } from "../components/GlassPanel";
+import { inspectedConcept } from "../components/inspection";
+import {
+  QUIET_CONTROL,
+  READING_MEASURE,
+  READING_PLATE,
+  ReadingColumn,
+  ReadingRule,
+} from "../components/ReadingColumn";
 
 /**
  * THE INSPECTION CARD — what a bead will say when it is asked directly.
@@ -34,6 +40,19 @@ import { GlassPanel } from "../components/GlassPanel";
  * are authored to a 700-character ceiling and currently run 233–307, so there
  * was nothing to save: the clamp cost the game its own honesty and bought about
  * two lines of card.
+ *
+ * AND IT IS READ WHERE READING HAPPENS (IMP-5).
+ *
+ * The card used to be a rounded glass panel pinned to the lower left, over the
+ * instrument, at 10–12px — while the reserved column on the right, built for
+ * exactly this content and ruled for it, stood empty in the same frame. Two
+ * surfaces of the same class obeyed two different layout laws, and the one that
+ * fires first destroyed the world it describes: the panel crossed outside the
+ * page's inner rule and clipped the bead's own label to a fragment.
+ *
+ * It is set in `components/ReadingColumn` now, in the margin's measure, on the
+ * margin's page, under the margin's rule, at the margin's type sizes. The only
+ * thing that distinguishes it from an outcome reading is what it says.
  */
 export interface BeadDetailsProps {
   readonly concept: CastaliaConcept;
@@ -49,66 +68,106 @@ export interface BeadDetailsProps {
 export function BeadDetails({ concept, lensActive, onClose }: BeadDetailsProps) {
   const faculty = facultyById.get(concept.faculty);
   return (
-    /* The ceiling is insurance, not a clamp: at the authored maximum this card
-       is well inside a phone viewport, and it exists only so a future long
-       description scrolls rather than running off the top of the screen where
-       nothing could reach it. */
-    <GlassPanel className="max-h-[80vh] overflow-y-auto overscroll-contain bg-void/70 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-ui text-[10px] uppercase tracking-[0.32em] text-dim">
-            {lensActive ? "Lens focus" : "Bead"}
-          </p>
-          <h3
-            data-testid="bead-name"
-            className="mt-1.5 font-display text-2xl font-medium leading-tight text-bright"
-          >
-            {concept.name}
-          </h3>
-          <p
-            className="mt-0.5 font-ui text-[11px] uppercase tracking-[0.22em]"
-            style={{ color: faculty?.ink }}
-          >
-            {faculty?.name ?? "Unattributed"} · {concept.kind}
-          </p>
-        </div>
-        <button
-          onClick={onClose}
-          aria-label="Close bead focus"
-          className="rounded-full border border-line/50 px-2 py-1 font-ui text-[10px] uppercase tracking-[0.18em] text-dim transition-colors hover:border-line hover:text-bright"
-        >
-          Close
-        </button>
-      </div>
+    <>
+      {/* Brass, not gold: a bead is authored material, not a settled claim
+          about two things at once. Gold is spent only on the record. */}
+      <ReadingRule />
+      <p className="engraved mb-2">
+        {lensActive ? "Lens focus" : "Bead"} ·{" "}
+        {/* The faculty is named as well as inked. A faculty told in colour
+            alone is a faculty a monochrome screenshot does not carry. */}
+        <span style={{ color: faculty?.ink }}>
+          {faculty?.name ?? "Unattributed"}
+        </span>{" "}
+        · {concept.kind}
+      </p>
+      <h2
+        data-testid="bead-name"
+        className="font-display text-title font-medium leading-tight text-vellum"
+      >
+        {concept.name}
+      </h2>
 
-      <p className="mt-3 font-ui text-[12px] leading-relaxed text-vellum">
+      <p className="prose-castalia mt-2 max-w-none text-body leading-relaxed">
         {concept.caption}
       </p>
       <p
         data-testid="bead-description"
-        className="mt-2 font-ui text-[12px] leading-relaxed text-dim"
+        className="prose-castalia mt-2 max-w-none text-body leading-relaxed"
       >
         {concept.description}
       </p>
 
-      {/* The facets, named as the pack names them. These are the handles a
-          connection can actually be built from, so they are the last thing read
-          before the player goes back to the arena. */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {concept.facets.map((facetId) => (
-          <span
-            key={String(facetId)}
-            className="rounded-full border border-line/40 bg-surface/45 px-2.5 py-1 font-ui text-[10px] text-dim"
-          >
-            {facetById.get(facetId)?.name ?? String(facetId)}
-          </span>
-        ))}
-      </div>
+      {/* The facets, named as the pack names them, set as the register sets a
+          reading: an engraved run, not a row of filled chips. These are the
+          handles a connection can actually be built from, so they are the last
+          thing read before the player goes back to the arena. */}
+      {concept.facets.length > 0 && (
+        <p
+          data-testid="bead-facets"
+          className="engraved mt-4 normal-case tracking-[0.12em] text-dim"
+        >
+          {concept.facets
+            .map((facetId) => facetById.get(facetId)?.name ?? String(facetId))
+            .join(" · ")}
+        </p>
+      )}
 
-      <p className="engraved mt-3 normal-case tracking-[0.12em] text-faint">
+      <p className="engraved mt-2 normal-case tracking-[0.12em] text-faint">
         {concept.era}
       </p>
-    </GlassPanel>
+
+      {/* The same control row, in the same place, as the margin's "Set aside". */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="bead-close"
+          onClick={onClose}
+          aria-label="Close bead focus"
+          className={QUIET_CONTROL}
+        >
+          Set aside
+        </button>
+      </div>
+    </>
+  );
+}
+
+export interface BeadPlateProps extends BeadDetailsProps {
+  readonly reducedMotion: boolean;
+}
+
+/**
+ * The card in the column, with no store attached, so the layout law it obeys
+ * can be compared directly against the margin's — which is the whole of IMP-5
+ * and was untestable while the only surface carrying it needed the store.
+ *
+ * Closing is immediate rather than animated out: the player asked for the world
+ * back, and an exit that outlived the state change would put two reading
+ * columns on the glass while it played.
+ */
+export function BeadPlate({
+  concept,
+  lensActive,
+  onClose,
+  reducedMotion,
+}: BeadPlateProps) {
+  return (
+    <ReadingColumn label="The bead" testId="bead-inspect" lit>
+      <motion.figure
+        key={concept.id}
+        data-testid="bead-plate"
+        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: reducedMotion ? 0.14 : 0.28,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        className={`${READING_PLATE} ${READING_MEASURE}`}
+      >
+        <BeadDetails concept={concept} lensActive={lensActive} onClose={onClose} />
+      </motion.figure>
+    </ReadingColumn>
   );
 }
 
@@ -116,33 +175,30 @@ export function BeadInspectCard() {
   const pinned = useStore((s) => s.pinnedInspectId);
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   // Inspection is deliberate: long-press or the semantic Details action pins
   // it. Ordinary hover/focus never places a card over the arena.
-  const concept = pinned ? castaliaConceptById.get(pinned) : undefined;
+  const concept = inspectedConcept(pinned);
   const close = () => {
     productionInterpretation.closeInspection();
     setFocusedBead(null);
   };
 
+  /*
+   * The column is rendered only while a bead is inspected, and `Marginalia`
+   * yields its own column on the same condition in the same store update, so
+   * there is exactly one reading column on the page at any moment and its page
+   * is never drawn twice.
+   */
+  if (concept === null) return null;
+
   return (
-    <AnimatePresence>
-      {concept && (
-        <motion.div
-          key={concept.id}
-          className="pointer-events-auto absolute bottom-5 left-5 w-[min(350px,calc(100vw-2.5rem))]"
-          initial={{ opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.985 }}
-          transition={{ duration: 0.28 }}
-        >
-          <BeadDetails
-            concept={concept}
-            lensActive={lensActive}
-            onClose={close}
-          />
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <BeadPlate
+      concept={concept}
+      lensActive={lensActive}
+      onClose={close}
+      reducedMotion={reducedMotion}
+    />
   );
 }

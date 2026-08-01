@@ -68,6 +68,7 @@ import {
 } from "./mode";
 import {
   makeVoicePlan,
+  planDurationSeconds,
   type AudioOutcomeKind,
   type PlannedNote,
   type VoicePlan,
@@ -119,6 +120,27 @@ export interface AudioCaption {
 
 export type AudioCaptionListener = (caption: AudioCaption) => void;
 
+/**
+ * ONE THREAD, SPEAKING, AT A KNOWN MOMENT.
+ *
+ * The scene has no way of its own to know *which* relation the music is
+ * sounding right now, and the whole of Attunement's first clause — "threads
+ * become individually audible" (spec §13) — is only legible if the world can
+ * show you the one you are hearing. This is that channel, and it carries the
+ * sink's own clock so the light on the strand and the note in the ear are the
+ * same event rather than two approximations of it (ARCHITECTURE §10).
+ *
+ * It asserts nothing. It reports what the director already decided to play.
+ */
+export interface ThreadVoiceLight {
+  readonly threadId: string;
+  /** Absolute time in the sink's clock at which the thread's voice begins. */
+  readonly atSeconds: number;
+  readonly durationSeconds: number;
+}
+
+export type ThreadVoiceListener = (light: ThreadVoiceLight) => void;
+
 export interface AudioDirectorOptions {
   readonly sink: AudioSink;
   readonly lookup: AudioContentLookup;
@@ -134,6 +156,11 @@ export interface AudioDirector {
   readonly setIntensity: (intensity: AudioIntensity) => void;
   readonly intensity: () => AudioIntensity;
   readonly onCaption: (listener: AudioCaptionListener) => () => void;
+  /**
+   * Subscribe to "this thread is sounding, from this moment, for this long".
+   * The scene uses it to light the strand in time with its own voice.
+   */
+  readonly onThreadVoice: (listener: ThreadVoiceListener) => () => void;
   /** The last caption emitted, for a caption region that renders on mount. */
   readonly lastCaption: () => AudioCaption | null;
   /** Threads the director has heard about, in creation order. */
@@ -336,6 +363,21 @@ export function createAudioDirector(
   let lastCaption: AudioCaption | null = null;
   const threads: AttunementThread[] = [];
   const captionListeners = new Set<AudioCaptionListener>();
+  const voiceListeners = new Set<ThreadVoiceListener>();
+
+  const lightThread = (
+    threadId: string,
+    atSeconds: number,
+    durationSeconds: number
+  ): void => {
+    if (durationSeconds <= 0) return;
+    const light: ThreadVoiceLight = Object.freeze({
+      threadId,
+      atSeconds,
+      durationSeconds,
+    });
+    for (const listener of [...voiceListeners]) listener(light);
+  };
 
   const source = (id: string): MotifSource => ({
     conceptId: id,
@@ -429,6 +471,17 @@ export function createAudioDirector(
       outcome,
     });
 
+  /**
+   * Play a relation and light its strand over the same span. One call, so a
+   * later outcome kind cannot be added that sounds without showing which
+   * thread sounded.
+   */
+  const playRelation = (threadId: string, plan: VoicePlan): void => {
+    const at = sink.quantize();
+    emit(plan, at);
+    lightThread(threadId, at, planDurationSeconds(plan.notes, plan.beatings));
+  };
+
   const handleAttention = (
     conceptId: string
   ): AttentionSpacePlan => {
@@ -474,6 +527,15 @@ export function createAudioDirector(
     for (const channel of plan.channels) {
       const rendered = applyIntensity(channel.plan, intensity);
       if (rendered.notes.length > 0) sink.play(rendered, start + channel.atSeconds);
+      // Spec §13's first clause, made visible: the world can now show which
+      // single thread is speaking, because the director says so on the same
+      // clock it scheduled the notes on. Published even at silent intensity —
+      // the captioned player still sees the web take its turns.
+      lightThread(
+        channel.threadId,
+        start + channel.atSeconds,
+        channel.spanSeconds
+      );
     }
     return plan;
   };
@@ -555,15 +617,19 @@ export function createAudioDirector(
       case "weave.released":
       case "thread.woven": {
         const [a, b] = cue.payload.pair;
-        emit(
-          planLanding(
-            `woven:${String(cue.payload.threadId)}`,
-            mode,
-            source(String(a)),
-            source(String(b)),
-            ambientGain()
-          ),
-          sink.quantize()
+        const plan = planLanding(
+          `woven:${String(cue.payload.threadId)}`,
+          mode,
+          source(String(a)),
+          source(String(b)),
+          ambientGain()
+        );
+        const at = sink.quantize();
+        emit(plan, at);
+        lightThread(
+          String(cue.payload.threadId),
+          at,
+          planDurationSeconds(plan.notes, plan.beatings)
         );
         break;
       }
@@ -577,9 +643,9 @@ export function createAudioDirector(
         // A documented relation closes — except a Tension, which the grammar
         // refuses to close whatever the record says.
         rememberThread(threadId, pair, cue.payload.intention, true);
-        emit(
-          relation(threadId, pair, cue.payload.intention, "documented"),
-          sink.quantize()
+        playRelation(
+          threadId,
+          relation(threadId, pair, cue.payload.intention, "documented")
         );
         break;
       }
@@ -595,9 +661,9 @@ export function createAudioDirector(
         // caption names it as an Open Thread, which is the only way a muted
         // player can tell it from a weak outcome.
         rememberThread(threadId, pair, cue.payload.intention, false);
-        emit(
-          relation(threadId, pair, cue.payload.intention, "open-thread"),
-          sink.quantize()
+        playRelation(
+          threadId,
+          relation(threadId, pair, cue.payload.intention, "open-thread")
         );
         break;
       }
@@ -617,7 +683,11 @@ export function createAudioDirector(
           plan,
           intensity === "silent" ? "silent" : "reduced"
         );
-        if (thinned.notes.length > 0) sink.play(thinned, sink.quantize());
+        const at = sink.quantize();
+        if (thinned.notes.length > 0) sink.play(thinned, at);
+        // The strand lights for the same span as any other outcome. An
+        // Unresolved thread is quieter, never dimmer (CAV-006).
+        lightThread(threadId, at, planDurationSeconds(plan.notes, plan.beatings));
         break;
       }
 
@@ -661,6 +731,10 @@ export function createAudioDirector(
     onCaption: (listener) => {
       captionListeners.add(listener);
       return () => captionListeners.delete(listener);
+    },
+    onThreadVoice: (listener) => {
+      voiceListeners.add(listener);
+      return () => voiceListeners.delete(listener);
     },
     lastCaption: () => lastCaption,
     threads: () => Object.freeze([...threads]),

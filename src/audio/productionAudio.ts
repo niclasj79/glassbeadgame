@@ -20,6 +20,7 @@ import {
   type AudioCaptionListener,
   type AudioDirector,
   type AudioSink,
+  type ThreadVoiceListener,
 } from "./director";
 import { audio } from "./engine";
 import { CASTALIA_MODE } from "./mode";
@@ -100,6 +101,14 @@ export function onAudioCaption(listener: AudioCaptionListener): () => void {
 /** The most recent caption, or null before anything has been said. */
 export function lastAudioCaption(): AudioCaption | null {
   return audioDirector.lastCaption();
+}
+
+/**
+ * Subscribe to "this thread is sounding now". The scene lights the strand from
+ * it; nothing else in the game may read it as a claim about the relation.
+ */
+export function onThreadVoice(listener: ThreadVoiceListener): () => void {
+  return audioDirector.onThreadVoice(listener);
 }
 
 /** Stop the semantic scheduler and drop everything pending. */

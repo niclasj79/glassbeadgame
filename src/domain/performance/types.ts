@@ -110,7 +110,20 @@ export interface PerformanceEntry {
   /** Web density at the moment this thread entered, 0–1. */
   readonly density: number;
   readonly phrasing: PhrasingProfile;
-  /** The entry closes. Open Threads and Tensions do not. */
+  /**
+   * True when the authored material behind this entry speaks for the record.
+   *
+   * `outcomeKind === "documented"` does not answer this: an interpretive
+   * relation is documented — the Game has something authored to say — but it is
+   * the Game's own reading and asserts nothing beyond the two structures
+   * compared. A surface that prints "the record" or "documented" must read this,
+   * not the kind.
+   */
+  readonly speaksForRecord: boolean;
+  /**
+   * The entry closes. Open Threads, Tensions, and readings the Game merely
+   * offers do not — closing is a claim that the record settled the matter.
+   */
   readonly resolved: boolean;
   /** Structural weight in the final web. The climax is the maximum. */
   readonly weight: number;

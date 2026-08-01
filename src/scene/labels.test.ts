@@ -42,7 +42,10 @@ interface Chord {
 interface Bead {
   readonly x: number;
   readonly y: number;
+  /** What every *other* name must keep clear of. */
   readonly r?: number;
+  /** What this bead's *own* name is offset by. Defaults to `r`. */
+  readonly own?: number;
   readonly w?: number;
   readonly h?: number;
   readonly tier?: number;
@@ -57,6 +60,7 @@ function solve(
   const count = beads.length;
   const anchor = new Float32Array(count * 2);
   const beadRadius = new Float32Array(count);
+  const ownRadius = new Float32Array(count);
   const half = new Float32Array(count * 2);
   const tier = new Float32Array(count);
   const hidden = new Float32Array(count);
@@ -64,6 +68,7 @@ function solve(
     anchor[i * 2] = bead.x;
     anchor[i * 2 + 1] = bead.y;
     beadRadius[i] = bead.r ?? 0.05;
+    ownRadius[i] = bead.own ?? bead.r ?? 0.05;
     half[i * 2] = bead.w ?? 0.12;
     half[i * 2 + 1] = bead.h ?? 0.03;
     tier[i] = bead.tier ?? 0;
@@ -82,6 +87,7 @@ function solve(
     {
       anchor,
       beadRadius,
+      ownRadius,
       half,
       tier,
       hidden,
@@ -248,6 +254,56 @@ describe("the label placement solver", () => {
     const solved = solve([{ x: 0, y: 0.4, r: plate }]);
     expect(solved.code[0]).not.toBe(SUPPRESSED);
     expect(Math.hypot(solved.offset[0], solved.offset[1])).toBeGreaterThan(plate);
+  });
+
+  it("never places a name nearer another bead than the one it names", () => {
+    // GAP-8, measured on a 1280x720 frame with Fibonacci Sequence attended: its
+    // own name was hung 166 px below it — the attended bead reserves the
+    // intention plate's radius, not its glass — and landed 73 px from
+    // Anamorphosis. Better than twice as close to a bead that is not its own,
+    // with no leader and nothing else in the drawing to say otherwise. The
+    // frame's one definite subject was mislabelled and a neighbour was given a
+    // name it does not have.
+    const beads = [
+      { x: 0, y: 0.3, r: 0.36, w: 0.16, h: 0.03 },
+      { x: 0.02, y: -0.25, w: 0.16, h: 0.03 },
+    ];
+    const solved = solve(beads);
+    for (let i = 0; i < beads.length; i++) {
+      if (solved.code[i] === SUPPRESSED) continue;
+      const box = solved.box(i);
+      const own = Math.hypot(
+        box.cx - solved.anchor[i * 2],
+        box.cy - solved.anchor[i * 2 + 1]
+      );
+      for (let k = 0; k < beads.length; k++) {
+        if (k === i) continue;
+        const other = Math.hypot(
+          box.cx - solved.anchor[k * 2],
+          box.cy - solved.anchor[k * 2 + 1]
+        );
+        expect(other).toBeGreaterThanOrEqual(own - 1e-9);
+      }
+    }
+    // …and it is the neighbour doing the work: alone, the same name hangs
+    // below exactly where it now refuses to go.
+    const alone = solve([beads[0]]);
+    expect(sideOf(alone.code[0])).toBe("below");
+  });
+
+  it("offsets a name by its own bead, not by what other names must avoid", () => {
+    // The two radii are different things and were one number. A bead is not
+    // further from its own name because there is an instrument drawn around it.
+    const solved = solve([{ x: 0, y: 0.3, r: 0.36, own: 0.05 }]);
+    expect(solved.code[0]).not.toBe(SUPPRESSED);
+    const drop = Math.hypot(solved.offset[0], solved.offset[1]);
+    expect(drop).toBeLessThan(0.12);
+    // And with no own radius given, the reserved one still governs — the
+    // default is the old behaviour, so no caller changes meaning by accident.
+    const reserved = solve([{ x: 0, y: 0.3, r: 0.36 }]);
+    expect(
+      Math.hypot(reserved.offset[0], reserved.offset[1])
+    ).toBeGreaterThan(0.36);
   });
 
   it("places nothing for a bead that is not on the screen", () => {

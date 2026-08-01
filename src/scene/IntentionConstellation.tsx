@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import type * as THREE from "three";
@@ -37,6 +37,25 @@ import {
  * area this plate needs, so the camera can compose a pose the plate fits in.
  * A narrow viewport now opens the plate instead of shrinking it: small screen,
  * same fingers.
+ *
+ * THE PLATE OPENS IN THE POSE IT WILL BE AIMED AT. Attending performs a camera
+ * lean, and the plate is anchored to a bead in the world, so for as long as the
+ * lean is in flight the plate is a moving target. Measured on the running
+ * build: the plate appeared 18 ms after the press at (170, 201), was carried to
+ * (-18, 258) — more than half of it off the left edge of the viewport — and
+ * only came to rest at (423, 293), 294 px away, after three and a half seconds.
+ * Everything the player could aim at was travelling for the whole of that.
+ * So the plate now waits for the pose: the press is answered instantly by the
+ * world (the bead takes light, the resonance bands publish, the instrument
+ * turns), and the plate opens where it will stay.
+ *
+ * THE PLATE HAS A GROUND. The graduated circle used to be struck straight over
+ * whatever beads happened to lie inside it — on a 1280x720 frame the Prime
+ * Numbers bead sat 53 px from the attended bead, directly under the Ground
+ * station, and the ring's engraving ran through it. The plate now dims its own
+ * footprint: an annulus of the world's own ground colour, transparent at the
+ * centre so the attended bead is untouched and transparent again at the rim so
+ * the plate has no edge.
  *
  * Every `data-testid`, element id, ARIA role and keyboard behaviour here is
  * part of the accepted interaction contract asserted by
@@ -99,6 +118,27 @@ function station(bearing: number, radius: number): React.CSSProperties {
   };
 }
 
+/** The gradient the plate's ground is painted with. One plate, one id. */
+const PLATE_GROUND_ID = "intention-plate-ground-fill";
+
+/**
+ * Consecutive frames the camera must report itself settled before the plate is
+ * allowed to open. Two, because `frameState.cameraSettled` is written by
+ * `CameraRig`'s frame callback and this component's runs first: on the frame an
+ * attend is committed the flag still carries the previous frame's answer.
+ */
+const POSE_SETTLE_FRAMES = 2;
+
+/**
+ * The index rail's two controls. The hit box keeps the fingertip minimum the
+ * clearance law is measured against; the drawn mark is deliberately of another
+ * class — smaller, unfilled, unshadowed — because these are not verbs.
+ */
+const UTILITY_TARGET =
+  "pointer-events-auto absolute grid place-items-center rounded-full bg-transparent text-dim/70 transition-colors hover:text-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow";
+const UTILITY_MARK =
+  "grid h-[26px] w-[26px] place-items-center rounded-full border border-line/35 bg-void/45 text-[13px] leading-none";
+
 const LABEL_PLACEMENT: Readonly<
   Record<(typeof PLATE_STATIONS)[PlateStation]["labelPlacement"], string>
 > = Object.freeze({
@@ -121,11 +161,13 @@ function Plate({
   armed,
   brass,
   gold,
+  ground,
   plate,
 }: {
   armed: boolean;
   brass: string;
   gold: string;
+  ground: string;
   plate: PlateGeometry;
 }) {
   const graduations = Array.from({ length: 48 }, (_, i) => i);
@@ -140,6 +182,24 @@ function Plate({
       viewBox={`${-box / 2} ${-box / 2} ${box} ${box}`}
       className="pointer-events-none absolute inset-0 h-full w-full"
     >
+      {/* The plate's own ground: it clears a radius for the instrument by
+          sinking whatever the arena has left inside the ring. Transparent at
+          the centre — the attended bead is there and must not be dimmed — and
+          transparent again at the rim, so the plate is a face and not a disc. */}
+      <defs>
+        <radialGradient id={PLATE_GROUND_ID}>
+          <stop offset="0%" stopColor={ground} stopOpacity={0} />
+          <stop offset="26%" stopColor={ground} stopOpacity={0} />
+          <stop offset="52%" stopColor={ground} stopOpacity={0.62} />
+          <stop offset="92%" stopColor={ground} stopOpacity={0.62} />
+          <stop offset="100%" stopColor={ground} stopOpacity={0} />
+        </radialGradient>
+      </defs>
+      <circle
+        data-testid="intention-plate-ground"
+        r={radius}
+        fill={`url(#${PLATE_GROUND_ID})`}
+      />
       <circle r={radius} fill="none" stroke={rule} strokeOpacity={0.75} strokeWidth={1} />
       <circle
         r={radius - 8}
@@ -198,8 +258,28 @@ export function IntentionConstellation() {
   const attendedId =
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
 
+  /**
+   * Whether the pose this plate will be aimed at has arrived. Latched: once the
+   * plate is open, a later phrase — the breath on arming, a reveal — must never
+   * take it away again, and it is reset only when attention moves to another
+   * bead, which is the one case where the plate genuinely has to be re-placed.
+   */
+  const [posed, setPosed] = useState(false);
+  const settledFrames = useRef(0);
+  useEffect(() => {
+    settledFrames.current = 0;
+    setPosed(false);
+  }, [attendedId]);
+
   useFrame(() => {
-    if (!anchor.current || draft.stage === "inactive") return;
+    if (draft.stage === "inactive") return;
+    if (!posed) {
+      settledFrames.current = frameState.cameraSettled
+        ? settledFrames.current + 1
+        : 0;
+      if (settledFrames.current >= POSE_SETTLE_FRAMES) setPosed(true);
+    }
+    if (!anchor.current) return;
     const index = frameState.beadIndex.get(String(draft.attendedConceptId));
     if (index === undefined) return;
     const rendered = frameState.rendered;
@@ -223,6 +303,11 @@ export function IntentionConstellation() {
      * This used to call `focus()` once the element existed and return whether
      * or not the focus had been taken, so a keyboard player whose plate was one
      * frame behind was simply left on the bead they had just opened.
+     *
+     * The bound is generous rather than tight because the plate now waits for
+     * the attend pose to arrive, which is a whole camera phrase: sixty frames
+     * expired long before the plate existed and put the keyboard player back
+     * where the old bug had left them.
      */
     const focusWhenProjected = (): void => {
       const control = document.getElementById("intention-control-echo");
@@ -231,7 +316,7 @@ export function IntentionConstellation() {
         if (document.activeElement === control) return;
       }
       attempts += 1;
-      if (attempts < 60) request = window.requestAnimationFrame(focusWhenProjected);
+      if (attempts < 420) request = window.requestAnimationFrame(focusWhenProjected);
     };
     request = window.requestAnimationFrame(focusWhenProjected);
     return () => window.cancelAnimationFrame(request);
@@ -263,6 +348,10 @@ export function IntentionConstellation() {
       ?.focus();
   };
 
+  // The anchor group is always here so the plate has a world position the
+  // instant it is allowed to open; only the plate itself waits for the pose.
+  if (!posed) return <group ref={anchor} />;
+
   return (
     <group ref={anchor}>
       <Html center style={{ pointerEvents: "none" }} zIndexRange={[18, 12]}>
@@ -275,6 +364,7 @@ export function IntentionConstellation() {
             armed={selectedOption !== undefined}
             brass={theme.palette.brass}
             gold={theme.palette.gold}
+            ground={theme.palette.ground}
             plate={plate}
           />
 
@@ -365,7 +455,16 @@ export function IntentionConstellation() {
 
           {/* The index rail: outside the graduated circle, on the upper
               diagonals, clear of every verb station and every engraved label
-              by the clearance law in scene/framing.ts. */}
+              by the clearance law in scene/framing.ts.
+
+              A SECOND REGISTER HAS TO LOOK LIKE ONE. These two used to be
+              44 px chips against the verbs' 48 px, with the same rule, the
+              same fill, the same blur — six near-identical discs of which four
+              were the interpretation and two were housekeeping. The *target*
+              is still a fingertip (framing.UTILITY_SIZE, and the clearance law
+              is measured against it); what is drawn inside it is now a mark
+              little more than half the size, with no fill of its own and no
+              shadow, so the eye reads four verbs and two indices. */}
           <button
             type="button"
             data-testid="world-cancel-interpretation"
@@ -376,9 +475,11 @@ export function IntentionConstellation() {
             }}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={() => productionInterpretation.cancel()}
-            className="pointer-events-auto absolute grid place-items-center rounded-full border border-line/50 bg-void/70 font-ui text-base leading-none text-dim/85 backdrop-blur-[2px] transition-colors hover:border-line hover:text-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow"
+            className={UTILITY_TARGET}
           >
-            <span aria-hidden="true">×</span>
+            <span aria-hidden="true" className={`${UTILITY_MARK} font-ui`}>
+              ×
+            </span>
           </button>
           <button
             type="button"
@@ -392,9 +493,11 @@ export function IntentionConstellation() {
             onClick={() =>
               productionInterpretation.inspect(draft.attendedConceptId)
             }
-            className="pointer-events-auto absolute grid place-items-center rounded-full border border-line/50 bg-void/70 font-display text-base italic leading-none text-dim/85 backdrop-blur-[2px] transition-colors hover:border-line hover:text-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow"
+            className={UTILITY_TARGET}
           >
-            <span aria-hidden="true">i</span>
+            <span aria-hidden="true" className={`${UTILITY_MARK} font-display italic`}>
+              i
+            </span>
           </button>
         </div>
       </Html>

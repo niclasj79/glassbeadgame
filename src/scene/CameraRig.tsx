@@ -207,6 +207,36 @@ function applyLensShift(
   );
 }
 
+/**
+ * THE CAMERA IS ONLY EVER *AIMED* BY THE CONTROLS.
+ *
+ * `OrbitControls.update()` is the one thing in the whole scene that calls
+ * `camera.lookAt(target)`, and drei runs it from a frame callback guarded by
+ * `if (controls.enabled)`. Every scene gesture disables the controls for its
+ * whole duration (`threading.beginGesture`), so any pose written between the
+ * press and the release *translates* the camera without re-aiming it.
+ *
+ * Measured on the running build, pressing a bead and dragging 40 px: the camera
+ * was teleported from (0.02, 0.94, 11.14) to (12.25, 4.29, -2.17) — a hundred
+ * degrees round the instrument — while still facing the way it had been. All
+ * twelve beads left the frame, the intention plate's element went to 0x0
+ * because drei hides an `Html` whose anchor is behind the lens, and
+ * `elementFromPoint` under the finger was the bare canvas. It came back on
+ * release only because `endGesture` re-enables the controls and the next
+ * `update()` re-aims. A drag from empty sky never did this: there the controls
+ * stay enabled, so the camera is still being aimed.
+ *
+ * So the camera is *held* for as long as the gesture owns it. This is the same
+ * hold the weaving branch has always taken through `frameState.aim.active`,
+ * stated once and applied to every gesture — and a pose queued during the hold
+ * is abandoned rather than deferred, because the answer to "the player is
+ * pulling on this bead" is to open the plate in the pose the camera already has,
+ * not to move the world out from under the finger and then move it back.
+ */
+function cameraIsHeld(controlsEnabled: boolean, aiming: boolean): boolean {
+  return !controlsEnabled || aiming;
+}
+
 const beadVec = new THREE.Vector3();
 const screenVec = new THREE.Vector3();
 
@@ -459,11 +489,17 @@ export function CameraRig() {
       cam.updateProjectionMatrix();
     }
 
-    // Directional weaving owns the sightline until release; suspending the
-    // move keeps a latched bead from drifting out from under a finger. A
-    // weaving gesture deliberately freezes the sightline, so it counts as
-    // settled for anything measuring the arena.
-    if (frameState.aim.active) {
+    // A gesture owns the sightline until release: suspending the move keeps a
+    // latched bead from drifting out from under a finger, and — see
+    // `cameraIsHeld` — moving the camera while the controls are off moves it
+    // without aiming it. A held sightline is deliberately frozen, so it counts
+    // as settled for anything measuring the arena.
+    if (cameraIsHeld(ctl.enabled, frameState.aim.active)) {
+      if (!ctl.enabled) {
+        // The plate opens in the pose the camera already has.
+        goal.current = null;
+        transitAge.current = 0;
+      }
       ctl.autoRotate = false;
       frameState.cameraSettled = true;
       return;

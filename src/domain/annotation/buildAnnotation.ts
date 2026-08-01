@@ -14,7 +14,10 @@ import {
   formatList,
   pluralise,
 } from "../outcomes/prose";
-import { resolveSessionOutcomes } from "../outcomes/resolveThreadOutcome";
+import {
+  outcomeSpeaksForTheRecord,
+  resolveSessionOutcomes,
+} from "../outcomes/resolveThreadOutcome";
 import type { ThreadOutcomeResolution } from "../outcomes/types";
 import { FACULTY_IDS, type FacetId, type FacultyId } from "@/content/castalia/schema";
 import type { Annotation, AnnotationReferences } from "./types";
@@ -70,8 +73,17 @@ function openingFragment(inputs: AnnotationInputs): Fragment | null {
   const opening = `You opened with ${aName} and ${bName}, read as ${INTENTION_LABELS[first.intention]}`;
 
   if (first.kind === "documented") {
+    /*
+     * "Castalia had a record" is only true when the relation speaks for one.
+     * Twelve of the pack's relations are interpretive — the Game's own reading,
+     * asserting nothing beyond the two structures compared — and this sentence
+     * is the first thing a player reads at the end of a Game, so getting it
+     * wrong here invents an authority in the most prominent place available.
+     */
     return {
-      text: `${opening}, and Castalia had a record to set beside it: ${first.relation.title}.`,
+      text: outcomeSpeaksForTheRecord(first)
+        ? `${opening}, and Castalia had a record to set beside it: ${first.relation.title}.`
+        : `${opening}, and Castalia had a reading of its own to set beside it: ${first.relation.title}.`,
       conceptIds: [first.pair[0], first.pair[1]],
       threadIds: [first.threadId],
     };

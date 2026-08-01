@@ -212,7 +212,16 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     caption: "Intervals as exact whole-number ratios",
     description:
       "Tune a fifth to exactly 3:2 and a major third to exactly 5:4, and the intervals lock — their partials coincide and the beating stops. The cost is that the tuning is anchored to one key, and a passage that travels far from home goes audibly out of tune.",
-    facets: f("proportion", "invariance", "continuity"),
+    // NOT `continuity`. Just intonation is a set of exact whole-number ratios;
+    // "unbroken variation, where every intermediate value genuinely occurs" is
+    // false of it, and it is the more discretely specified of the two tunings,
+    // not the less. It carried the facet only so that the opposition with
+    // Continuous Symmetry — whose insight says outright that "just intonation
+    // does not possess it" — had a second facet to declare as shared.
+    //
+    // `invariance` stays, in the sense the concept actually holds it: the ratios
+    // are kept exact, which is what it sacrifices free modulation for.
+    facets: f("proportion", "invariance"),
     era: "ancient; theorised by Ptolemy, 2nd century",
     motif: {
       degrees: [0, 7, 4, 12],
@@ -295,7 +304,17 @@ export const CASTALIA_CONCEPTS: readonly CastaliaConcept[] = Object.freeze([
     caption: "A total that never changes, whatever happens",
     description:
       "Energy moves between forms — kinetic, potential, thermal — but an isolated system's total stays fixed. The principle is not an observation that happens to hold; it follows from the fact that the laws governing the system are the same today as tomorrow.",
-    facets: f("invariance", "irreversibility"),
+    // NOT `irreversibility`. The First Law is time-reversal symmetric: run the
+    // film backwards and energy is still conserved, which is precisely why the
+    // Second Law is needed to give time a direction at all. The facet was here
+    // to give `rel.conservation-entropy` something to declare as shared — and
+    // that relation is titled "The Total Holds, the Direction Does Not", so the
+    // pack asserted the shared property in the same breath as denying it.
+    //
+    // `decomposition` replaces it because the sentence above already states it:
+    // the total resolves without remainder into kinetic, potential and thermal,
+    // and that is what Parseval's theorem says of a Fourier expansion too.
+    facets: f("invariance", "decomposition"),
     era: "unified as a principle in the 1840s",
     motif: {
       degrees: [0, 0, 0, 0],

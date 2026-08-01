@@ -21,7 +21,24 @@ import { toFacetId, type OpenThreadPrompt } from "./schema";
  *    praises the player for finding it.
  *
  * Facets carried by only one bead (orientation, imitation, entrainment,
- * optical-mixture, compromise) can never be *shared*, so they get no prompt.
+ * optical-mixture, compromise, irreversibility) can never be *shared*, so they
+ * get no prompt.
+ *
+ * TWO RULES THAT ONLY SHOW UP WHEN A TEMPLATE IS INSTANTIATED.
+ *
+ * A template that reads well in the abstract can be nonsense once `{a}`, `{b}`
+ * and `{facet}` hold real names, so `castalia.test.ts` fills every one of these
+ * against every pair that can actually reach it. Two shapes failed that way and
+ * must not come back:
+ *
+ *  - **A bead is not a proposition.** "Which claim in {b} would fail if {a} were
+ *    false" is fine for a theorem and meaningless for a phenomenon or an
+ *    instrument: Coupled Pendulums cannot be false. Ask what is taken from what.
+ *  - **A facet is not an agent.** A facet is a property both beads carry, never
+ *    a channel between them, so nothing may "carry information from {a} into
+ *    {b}" or "bring {a} and {b} back together". And `{facet}` renders as the
+ *    facet's *display* name — `periodicity` prints "Return" — so a slot that
+ *    presumes a bare abstract noun produces "the period of Return".
  */
 const prompt = (
   id: string,
@@ -55,7 +72,7 @@ export const CASTALIA_OPEN_THREADS: readonly OpenThreadPrompt[] = Object.freeze(
   prompt(
     "thread.fallback.ground",
     "ground",
-    "Which claim in {b} would fail if {a} were false, and can that dependence be stated precisely enough to test?"
+    "What exactly does {b} take from {a}, and what in it would stop working if that support were withdrawn?"
   ),
 
   // ── threshold ───────────────────────────────────────────────────────────
@@ -148,19 +165,19 @@ export const CASTALIA_OPEN_THREADS: readonly OpenThreadPrompt[] = Object.freeze(
   prompt(
     "thread.periodicity.echo",
     "echo",
-    "{a} and {b} both return. Is the period of {facet} fixed by measurement in one and by decision in the other?",
+    "{a} and {b} both show {facet}. Is the period fixed by measurement in one of them and by decision in the other?",
     "periodicity"
   ),
   prompt(
     "thread.periodicity.tension",
     "tension",
-    "What would have to be true for {facet} to bring {a} and {b} back together, and what in either of them resists that return?",
+    "{a} and {b} both show {facet}, each on its own count. What would have to be true for the two periods to coincide, and what resists it?",
     "periodicity"
   ),
   prompt(
     "thread.periodicity.passage",
     "passage",
-    "Could the way {a} handles {facet} have been carried into {b}, and would a shared period count as evidence or as coincidence?",
+    "Could the treatment of {facet} in {a} have reached {b}, and would a shared period count as evidence or as coincidence?",
     "periodicity"
   ),
 
@@ -250,7 +267,7 @@ export const CASTALIA_OPEN_THREADS: readonly OpenThreadPrompt[] = Object.freeze(
   prompt(
     "thread.projection.passage",
     "passage",
-    "Does {facet} carry information from {a} into {b}, and what is lost in the crossing that no later step can recover?",
+    "{facet} is where a passage from {a} to {b} would show. What is lost in that crossing, and could any later step recover it?",
     "projection"
   ),
   prompt(
@@ -275,16 +292,19 @@ export const CASTALIA_OPEN_THREADS: readonly OpenThreadPrompt[] = Object.freeze(
   ),
 
   // ── incommensurability ──────────────────────────────────────────────────
+  // `{facet}` prints "No Common Measure" here, which cannot stand as the subject
+  // of a verb — "Does No Common Measure make them…" is not English. Both prompts
+  // therefore name the facet and then refer back to it.
   prompt(
     "thread.incommensurability.tension",
     "tension",
-    "{a} and {b} share no common measure. Does {facet} make them merely slow to align, or unable to align at all?",
+    "{a} and {b} have {facet} between them. Does that make them merely slow to align, or unable to align at all?",
     "incommensurability"
   ),
   prompt(
     "thread.incommensurability.echo",
     "echo",
-    "Is {facet} the same failure to divide in {a} and {b}, and what unit would have to exist for both of them to line up?",
+    "{a} and {b} both carry {facet}. Is it the same failure to divide in each, and what unit would have to exist for them to line up?",
     "incommensurability"
   ),
 
@@ -315,10 +335,8 @@ export const CASTALIA_OPEN_THREADS: readonly OpenThreadPrompt[] = Object.freeze(
     "Is {facet} imposed on {a} by a boundary and on {b} by a decision, and what evidence would distinguish the two cases?",
     "quantisation"
   ),
-  prompt(
-    "thread.irreversibility.ground",
-    "ground",
-    "What gives {facet} its direction in {a}, and would {b} still run one way if that source of asymmetry were removed?",
-    "irreversibility"
-  ),
+  // `thread.irreversibility.ground` was removed with the facet it was keyed to.
+  // Conservation of Energy no longer claims Irreversibility — the First Law is
+  // time-reversal symmetric — so Entropy is the only bead that carries it, the
+  // facet can never be shared, and the prompt could never have fired again.
 ]);

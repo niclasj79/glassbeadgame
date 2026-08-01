@@ -133,10 +133,10 @@ export const SCORE = {
   /** The motif voices — each completed motif joins the ensemble forever. */
   motifVoices: {
     speakProbability: 0.11, // chance per slot that a motif's voice enters
-    triadGain: 0.05, // the triangle's three-note strum
-    symposiumGain: 0.045, // the council chord
-    fugueGain: 0.062, // the five-note subject
-    fugueStepDivisor: 8, // subject note spacing = slot / this (6–10)
+    bridgeGain: 0.05, // the joint's arpeggio, crossing the two regions
+    dialecticGain: 0.045, // the held chord: two poles and the third that holds them
+    canonGain: 0.062, // the recurring subject, walking
+    canonStepDivisor: 8, // subject note spacing = slot / this (6–10)
   },
 
   /** High shimmer that enters when the session is nearly fully awakened. */

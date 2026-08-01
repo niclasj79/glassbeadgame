@@ -15,7 +15,11 @@ import {
   pluralise,
   quantise,
 } from "../outcomes/prose";
-import { resolveSessionOutcomes } from "../outcomes/resolveThreadOutcome";
+import {
+  outcomeIsInterpretiveReading,
+  outcomeSpeaksForTheRecord,
+  resolveSessionOutcomes,
+} from "../outcomes/resolveThreadOutcome";
 import type { ThreadOutcomeResolution } from "../outcomes/types";
 import { FACULTY_IDS, type FacetId, type FacultyId } from "@/content/castalia/schema";
 import {
@@ -119,9 +123,21 @@ function buildRange(inputs: PortraitInputs): PortraitDimension {
     )} threads crossed between faculties.`;
   }
 
+  /*
+   * "Sound: 2 of 4 woven" names a maximum and how far short of it you fell,
+   * which is a completion meter however carefully the header disclaims one
+   * (ADR-010). The fact is worth keeping — it is checkable, and it is the only
+   * place the portrait says which beads answered — so the line states both parts
+   * of the partition instead of a part over a whole.
+   */
   const evidence = FACULTY_IDS.filter((faculty) => sessionByFaculty[faculty] > 0).map(
-    (faculty) =>
-      `${facultyLabel(faculty)}: ${spread.wovenByFaculty[faculty]} of ${sessionByFaculty[faculty]} woven`
+    (faculty) => {
+      const wovenHere = spread.wovenByFaculty[faculty];
+      const dark = sessionByFaculty[faculty] - wovenHere;
+      return `${facultyLabel(faculty)}: ${wovenHere} woven, ${
+        dark === 0 ? "none" : dark
+      } left dark`;
+    }
   );
 
   return dimension("range", value, phrase, evidence);
@@ -132,16 +148,27 @@ function buildRange(inputs: PortraitInputs): PortraitDimension {
 function buildDepth(inputs: PortraitInputs): PortraitDimension {
   const { topology, outcomes, lookup } = inputs;
   const total = outcomes.length;
-  const documented = outcomes.filter((outcome) => outcome.kind === "documented").length;
+  /*
+   * "Documented" is two different claims wearing one word. `outcome.kind` is
+   * "documented" the moment an authored relation exists, whatever its evidence
+   * class, so counting it directly told a player they had "met documented
+   * material" where the Game had only offered a reading of its own. The two are
+   * counted apart for the prose and together for the value: they differ in
+   * resolution, never in reward (CAV-006), and a reading that scored lower than
+   * a record would teach the player to prefer one kind of truth.
+   */
+  const record = outcomes.filter(outcomeSpeaksForTheRecord).length;
+  const reading = outcomes.filter(outcomeIsInterpretiveReading).length;
+  const authored = record + reading;
   const open = outcomes.filter((outcome) => outcome.kind === "open-thread").length;
   const unresolved = outcomes.filter((outcome) => outcome.kind === "unresolved").length;
 
   const wovenCount = topology.wovenConceptIds.length;
   const revisited = topology.nodes.filter((node) => node.threadCount >= 2).length;
-  const documentedShare = total === 0 ? 0 : documented / total;
+  const authoredShare = total === 0 ? 0 : authored / total;
   const revisitShare = wovenCount === 0 ? 0 : revisited / wovenCount;
   const reach = clamp01((topology.maxDegree - 1) / 3);
-  const value = 0.45 * documentedShare + 0.35 * revisitShare + 0.2 * reach;
+  const value = 0.45 * authoredShare + 0.35 * revisitShare + 0.2 * reach;
 
   if (total === 0) {
     return dimension("depth", 0, "Nothing has been gone into yet.", []);
@@ -158,17 +185,29 @@ function buildDepth(inputs: PortraitInputs): PortraitDimension {
   let phrase: string;
   if (total === 1) {
     phrase =
-      documented === 1
+      record === 1
         ? "Your one thread met documented material."
-        : open === 1
-          ? "Your one thread opened a question rather than meeting documented material."
-          : "Your one thread found nothing documented to stand on.";
+        : reading === 1
+          ? "Your one thread met a reading the Game offers rather than a record."
+          : open === 1
+            ? "Your one thread opened a question rather than meeting documented material."
+            : "Your one thread found nothing documented to stand on.";
   } else {
     const clauses: string[] = [
-      `${capitalise(countWord(documented))} of your ${countWord(
+      `${capitalise(countWord(record))} of your ${countWord(
         total
       )} threads met documented material`,
     ];
+    if (reading > 0) {
+      /*
+       * No "rather than a record" here. The clause is often preceded by "None of
+       * your N threads met documented material", and a contrast hanging off a
+       * negated quantifier attaches to nothing — the same defect the property
+       * sweep already forbids in Return's zero case. The leading clause carries
+       * the contrast; this one only has to name what was met.
+       */
+      clauses.push(`${countWord(reading)} met a reading the Game offers`);
+    }
     if (open > 0) {
       clauses.push(
         `${countWord(open)} ${open === 1 ? "opened a question" : "opened questions"}`
@@ -194,8 +233,16 @@ function buildDepth(inputs: PortraitInputs): PortraitDimension {
   }
 
   return dimension("depth", value, phrase, [
-    `${documented} documented, ${open} open, ${unresolved} unresolved`,
-    `${revisited} of ${wovenCount} woven concepts carry more than one thread`,
+    `${record} documented, ${reading} read by the Game, ${open} open, ${unresolved} unresolved`,
+    `${revisited} woven ${pluralise(
+      revisited,
+      "concept carries",
+      "concepts carry"
+    )} more than one thread, ${wovenCount - revisited} ${pluralise(
+      wovenCount - revisited,
+      "carries",
+      "carry"
+    )} one`,
   ]);
 }
 
@@ -243,7 +290,11 @@ function buildTension(inputs: PortraitInputs): PortraitDimension {
   }
 
   return dimension("tension", topology.tensionLoad, phrase, [
-    `${tensions.length} of ${topology.threadCount} threads were declared as Tension`,
+    `${tensions.length} ${pluralise(
+      tensions.length,
+      "thread",
+      "threads"
+    )} declared as Tension, ${topology.threadCount - tensions.length} otherwise`,
     `${dialectics.length} Dialectic ${pluralise(dialectics.length, "motif", "motifs")} completed`,
   ]);
 }
@@ -391,8 +442,16 @@ function buildReturn(inputs: PortraitInputs): PortraitDimension {
   }
 
   return dimension("return", value, phrase, [
-    `${closing} of ${total} threads joined two already-woven concepts`,
-    `${recurring.length} of ${carriers.size} facets appear in more than one woven concept`,
+    `${closing} ${pluralise(
+      closing,
+      "thread",
+      "threads"
+    )} joined two already-woven concepts, ${total - closing} reached outward`,
+    `${recurring.length} ${pluralise(
+      recurring.length,
+      "facet appears",
+      "facets appear"
+    )} in more than one woven concept, ${carriers.size - recurring.length} in only one`,
     `${topology.circuitRank} independent ${pluralise(topology.circuitRank, "cycle", "cycles")}`,
   ]);
 }

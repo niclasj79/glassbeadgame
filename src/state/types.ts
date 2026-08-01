@@ -15,14 +15,35 @@ export type ArenaMode = "idle" | "pressed" | "threading" | "reveal" | "concludin
  *
  * Everything below `Settings` is a *view*, not a source of truth. The canonical
  * session is the replayed event log in `state/domainSession`; these shapes exist
- * only because the scene and the audio engine still read
- * `useStore().session` for bead ids, quality, framing and the ambient bed.
+ * only because the scene still reads `useStore().session` for bead ids, quality
+ * and framing.
  *
- * Nothing writes to `threads`, `discoveries`, `motifs` or `score` any more —
- * the actions that did (`addThread`, `addDiscovery`, `consecrateThreads`,
- * `spendInsight`) left with the legacy scoring model. They stay declared, and
- * are published empty by `applySessionStart`, because `src/scene/**` and
- * `src/audio/**` still read them defensively and cannot be edited here.
+ * ── `threads`, `discoveries`, `motifs`, `score`: dead, and now unread ────────
+ *
+ * Nothing has written to these four since the legacy scoring model left with
+ * `addThread`, `addDiscovery`, `consecrateThreads` and `spendInsight`. They are
+ * published empty by `applySessionStart`, and until recently five live
+ * subscribers read them and therefore did nothing at all: the ambient choir
+ * (`ambient.addThreadVoice`), the completed-motif ensemble
+ * (`ambient.addMotifPattern`), the discovery chord and faint dyad, the bed's
+ * swell (`audio.setAmbientIntensity`), and `scene/MotifMarks`. Every one of
+ * those has been cut over to the canonical session or deleted outright.
+ *
+ * What still touches them, and what a deletion would therefore have to change
+ * in one commit — recorded here because it spans files this module may not
+ * reach on its own:
+ *
+ *   src/state/store.ts                     `applySessionStart` copies all four
+ *   src/runtime/session/startSession.ts    builds the projection literal
+ *   src/scene/ThreadingDriver.tsx          `testSnapshot` reports score,
+ *                                          threads and discoveries
+ *   src/runtime/testMode.ts                `TestSessionSnapshot` declares them
+ *   tests/browser/deterministic-mode.spec  asserts all three are empty/zero
+ *   src/scene/Membranes.tsx                reads `session.threads`; the module
+ *                                          has no importer at all and should
+ *                                          go with them
+ *
+ * `MotifAward` in particular now has no reader anywhere outside this file.
  */
 
 export interface Thread {
@@ -46,6 +67,14 @@ export interface Discovery {
   points: number;
 }
 
+/**
+ * Retired. `motifId` names the prototype's three families; the domain has
+ * detected `dialectic`, `canon` and `bridge` for a long time
+ * (`domain/motifs/types.ts`), so even a populated `motifs` array would have
+ * fallen through every branch that switched on this. The world's persistent
+ * marks are `scene/motifMarkPlan.ts` now, and the ensemble voices are seated
+ * from `SessionStateV1.completedMotifs`.
+ */
 export interface MotifAward {
   motifId: "triad" | "symposium" | "fugue";
   at: number;

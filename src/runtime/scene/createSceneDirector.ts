@@ -15,6 +15,15 @@
  * documented relation flare the sky exactly as much as an Open Thread" a unit
  * test rather than a screenshot argument.
  *
+ * ── One director, one handler per channel ───────────────────────────────────
+ * `handleScene` and `handleCamera` are separate entry points *because the bus
+ * dispatches per channel*. A single handler subscribed to both would answer
+ * every cue twice, and a `camera` channel that is declared by every plan and
+ * subscribed by nobody is worse than one that does not exist — it is a contract
+ * advertising a director that never ran. The split is the whole point: light
+ * belongs to the scene, impact belongs to the camera, and each arrives because
+ * its own channel was declared.
+ *
  * ── The one rule that governs the numbers below (CAV-006) ───────────────────
  * Documented, Open Thread and Unresolved get the SAME flare and the SAME
  * quantity of particles — identically, with no branch between them. They are
@@ -58,7 +67,10 @@ export interface SceneStage {
 }
 
 export interface SceneDirector {
-  readonly handleCue: (cue: PresentationCue) => void;
+  /** The `scene` channel: light, particles, held time, presence. */
+  readonly handleScene: (cue: PresentationCue) => void;
+  /** The `camera` channel: impact, and nothing else. */
+  readonly handleCamera: (cue: PresentationCue) => void;
 }
 
 /**
@@ -88,7 +100,7 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
     stage.burst(b, RESPONSE.outcome.count, RESPONSE.outcome.speed);
   };
 
-  const handleCue = (cue: PresentationCue): void => {
+  const handleScene = (cue: PresentationCue): void => {
     switch (cue.type) {
       case "attention.enter":
       case "attention.clear":
@@ -99,7 +111,6 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
 
       case "intention.armed": {
         stage.touch();
-        stage.kick(RESPONSE.arm.kick);
         stage.burst(
           String(cue.payload.conceptId),
           RESPONSE.arm.count,
@@ -110,7 +121,6 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
 
       case "candidate.latched": {
         stage.touch();
-        stage.kick(RESPONSE.latch.kick);
         stage.burst(
           String(cue.payload.pair[1]),
           RESPONSE.latch.count,
@@ -122,7 +132,6 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
       case "weave.released":
       case "thread.woven": {
         stage.touch();
-        stage.kick(RESPONSE.woven.kick);
         stage.burst(
           String(cue.payload.pair[0]),
           RESPONSE.woven.count,
@@ -147,7 +156,6 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
 
       case "motif.completed": {
         stage.flare(RESPONSE.motif.flare);
-        stage.kick(RESPONSE.motif.kick);
         for (const conceptId of cue.payload.conceptIds) {
           stage.burst(
             String(conceptId),
@@ -170,7 +178,6 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
       case "conclusion.perform":
         stage.setAttuned(false);
         stage.flare(RESPONSE.conclusion.flare);
-        stage.kick(RESPONSE.conclusion.kick);
         break;
 
       default:
@@ -178,5 +185,37 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
     }
   };
 
-  return Object.freeze({ handleCue });
+  /**
+   * The `camera` channel. Impact only — every one of these numbers used to be
+   * spent from the scene handler, which meant the channel every plan declares
+   * had no subscriber and the camera answered by coincidence rather than by
+   * contract.
+   */
+  const handleCamera = (cue: PresentationCue): void => {
+    switch (cue.type) {
+      case "intention.armed":
+        stage.kick(RESPONSE.arm.kick);
+        break;
+      case "candidate.latched":
+        stage.kick(RESPONSE.latch.kick);
+        break;
+      case "weave.released":
+      case "thread.woven":
+        stage.kick(RESPONSE.woven.kick);
+        break;
+      case "motif.completed":
+        stage.kick(RESPONSE.motif.kick);
+        break;
+      case "conclusion.perform":
+        stage.kick(RESPONSE.conclusion.kick);
+        break;
+      default:
+        // Outcomes deliberately do not kick. CAV-006: the three epistemic
+        // states must cost the camera exactly the same, and the cheapest way
+        // to guarantee that is to spend nothing on any of them.
+        break;
+    }
+  };
+
+  return Object.freeze({ handleScene, handleCamera });
 }

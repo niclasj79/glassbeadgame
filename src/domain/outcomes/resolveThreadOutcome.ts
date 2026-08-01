@@ -95,8 +95,42 @@ export function stanceForFit(fit: IntentionFit): IntentionStance {
  * So an interpretive relation speaks in the Game's own voice, never in the
  * record's. It is not a weaker outcome; it is a different kind of claim.
  */
-function speaksForTheRecord(evidence: EvidenceClass): boolean {
+export function speaksForTheRecord(evidence: EvidenceClass): boolean {
   return evidence !== "interpretive";
+}
+
+/** The same question asked the other way round, for surfaces that read better so. */
+export function isInterpretive(evidence: EvidenceClass): boolean {
+  return !speaksForTheRecord(evidence);
+}
+
+/**
+ * THE ONE TEST A SURFACE MUST APPLY BEFORE IT SAYS "RECORD".
+ *
+ * `outcome.kind === "documented"` is *not* that test, and every surface that
+ * used it as one was wrong: `kind` is set to "documented" by `resolveDocumented`
+ * the instant an authored relation exists, whatever its evidence class, so it
+ * includes all twelve interpretive relations by construction. The coda, the
+ * portrait and the conclusion score each independently rediscovered that mistake
+ * and each printed a record the pack does not hold.
+ *
+ * There is therefore exactly one definition here, and it reads the evidence.
+ */
+export function outcomeSpeaksForTheRecord(outcome: ThreadOutcomeResolution): boolean {
+  return outcome.kind === "documented" && speaksForTheRecord(outcome.relation.evidence);
+}
+
+/**
+ * An authored outcome that is the Game's own reading rather than a record.
+ *
+ * Deliberately not the negation of `outcomeSpeaksForTheRecord`: an Open Thread
+ * and an unresolved thread are neither a record nor a reading, and folding them
+ * in would let a surface count a silence as an interpretation.
+ */
+export function outcomeIsInterpretiveReading(
+  outcome: ThreadOutcomeResolution
+): boolean {
+  return outcome.kind === "documented" && isInterpretive(outcome.relation.evidence);
 }
 
 function documentedStatement(

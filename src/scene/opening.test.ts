@@ -44,31 +44,71 @@ describe("the opening", () => {
     expect(openingStep(OPENING_LINES - 1).delay * 1000).toBeLessThan(200);
   });
 
-  it("answers the press from the DOM, not from a scheduler", () => {
-    // Measured four ways against the running build, every route through React
-    // or the motion library lost the frame: scheduling `startSession` from the
-    // handler answered after 741 ms, deferring two frames 725 ms, and waiting
-    // for the library's own Web Animation 600 ms — because the animation is
-    // created on a frame the session build is already sitting in.
-    //
-    // The answer is a style write in the handler itself, on an element the
-    // motion library does not own, with a CSS transition on it. That starts at
-    // the next style flush and runs on the compositor, and nothing on the main
-    // thread afterwards can delay it.
+  it("answers the press on the way down, not on the release", () => {
+    // Traced on the running build: `pointerdown` at 0 ms, a frame painted at
+    // 4 ms with nothing changed, and `click` — which cannot be dispatched until
+    // the finger comes up — not until 227 ms. A fifth of a second of silence in
+    // answer to a decision the player had already made.
     const source = titleSource();
-    expect(source).toContain('rule.style.transform = "scaleX(1)"');
+    expect(source).toMatch(/onPointerDown=\{[\s\S]{0,200}answer\(\)/);
+    // The keyboard's door is still the click, and arriving twice is a no-op.
+    expect(source).toContain("onClick={answer}");
+    expect(source).toContain("if (pressed.current) return;");
+  });
+
+  it("answers it with an animation the compositor owns, not a transition", () => {
+    // Measured six ways against the running build, and every route through
+    // React, the motion library, or a CSS transition lost the frame: scheduling
+    // `startSession` from the handler answered after 741 ms, deferring two
+    // frames 725 ms, waiting for the library's own Web Animation 600 ms — and a
+    // plain inline-style transition committed alongside `setOpening(true)` had
+    // *still not started* two painted frames and 467 ms after the style landed,
+    // because a transition is begun by the main thread during a rendering
+    // update and the rendering update is what the session build is standing on.
+    //
+    // `Element.animate()` is timed from the moment it is created and handed to
+    // the compositor, so it is already running before the draw is built.
+    const source = titleSource();
     expect(source).toContain("strike.current");
-    // The write comes before the state change, and the draw comes after both.
-    const write = source.indexOf("rule.style.transform");
-    const flip = source.indexOf("setOpening(true)");
-    const build = source.indexOf("startSession()");
-    expect(write).toBeGreaterThan(-1);
-    expect(flip).toBeGreaterThan(write);
+    expect(source).toMatch(/element\.animate\(/);
+    // Nothing that answers the press may be a style React commits: no inline
+    // transition anywhere, and no `willChange` left behind to imply one.
+    expect(source).not.toMatch(/transition:\s*[`"']transform/);
+    expect(source).not.toContain("willChange");
+    // The answer comes before the state change, and the draw comes after both.
+    // Measured against the code and not the commentary, which names all three.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "");
+    const ack = code.indexOf("strikeNow(strike.current)");
+    const flip = code.indexOf("setOpening(true)");
+    const build = code.indexOf("startSession()");
+    expect(ack).toBeGreaterThan(-1);
+    expect(flip).toBeGreaterThan(ack);
     expect(build).toBeGreaterThan(flip);
     // …and the draw is still deferred behind a paint, so the departure of the
     // type is under way before the main thread is taken.
     expect(source).toContain("requestAnimationFrame");
     expect(source).not.toMatch(/onClick=\{\(\) => startSession\(\)\}/);
+  });
+
+  it("starts that animation at the press rather than at the next commit", () => {
+    // A new Web Animation is *pending* until the compositor takes it, and until
+    // then it has no start time and contributes nothing. Traced on the running
+    // build: two frames painted, at 8 ms and 257 ms, with both animations
+    // `running` and `startTime: null` — they were only started around 475 ms,
+    // when the main thread came back from building the draw. Anchoring the
+    // start time resolves the pending play at once, and the first frame painted
+    // after the press then showed the rule already 96% struck.
+    const source = titleSource();
+    expect(source).toContain("document.timeline.currentTime");
+    expect(source).toContain("animation.startTime = now");
+  });
+
+  it("degrades to silence where there is no animation to give", () => {
+    // A refusal, not a throw: `Element.animate` is absent in more places than
+    // it is worth pretending otherwise, and an acknowledgement that crashes the
+    // door is worse than one that does not appear.
+    const source = titleSource();
+    expect(source).toContain('typeof element.animate !== "function"');
   });
 
   it("carries the type out instead of dissolving it", () => {

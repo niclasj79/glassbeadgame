@@ -1,10 +1,8 @@
 import { audio } from "./engine";
-import { ambient } from "./ambient";
 import { playNote, noiseSource } from "./voices";
-import { beadVoice, chordForPair, modeFreq } from "./theory";
+import { beadVoice, modeFreq } from "./theory";
 import { clampBeatingHz } from "./comfort";
 import { centsForBeatingHz, transposeCents } from "./mode";
-import type { Discovery } from "@/state/types";
 import { presentationNow } from "@/runtime/testMode";
 
 let lastHoverAt = 0;
@@ -187,6 +185,17 @@ export function updateSilk(speed: number): void {
  * material already draws an Open Thread as a figure that does not close, and it
  * does so at *solved* equal coverage (`scene/resolution.ts`), so a second mark
  * would have re-introduced the reward gradient that module exists to remove.
+ *
+ * `discoveryChord`, `faintDyad` and `conclusionCadence` have now gone the same
+ * way. All three took a `Discovery` — the legacy record that carried `tier` and
+ * `points` — and the first two were literally voiced *by tier*, which is a
+ * reward gradient in sound. Their only callers read `session.discoveries`, a
+ * projection published empty since the legacy scoring model was removed, so
+ * none of them had sounded in a long time. What replaced them is not a
+ * substitute chord: it is `audio/grammar.ts`, where a relation is voiced by the
+ * intention the player declared, and `audio/conclusion.ts`, where the closing
+ * performance is compiled from the event log. Both are epistemically flat by
+ * construction (CAV-006).
  */
 
 // A sustained, quiet, slightly tense dyad while a thread is being aimed.
@@ -249,66 +258,3 @@ export function cancelGliss(): void {
   osc.stop(t + 0.4);
 }
 
-/** The discovery chord — a strum voiced by tier, guaranteed consonant,
- *  landing on the world's rhythmic grid like a note that belongs. */
-export function discoveryChord(discovery: Discovery): void {
-  const ctx = audio.ensure();
-  if (!ctx || !audio.sfxBus) return;
-  const notes = chordForPair(discovery.a, discovery.b, discovery.tier);
-  const t0 = ambient.quantize();
-  const tierGain = discovery.tier >= 3 ? 1.15 : discovery.tier === 2 ? 1.0 : 0.9;
-  const release = discovery.tier >= 3 ? 3.2 : 2.2;
-  for (const n of notes) {
-    playNote(ctx, audio.sfxBus, n.timbre, n.freq, {
-      gain: n.gain * tierGain,
-      at: t0 + n.delay,
-      release,
-    });
-  }
-}
-
-/** Faint resonance: two quiet plucks a fifth apart. Honest, small. */
-export function faintDyad(discovery: Discovery): void {
-  const ctx = audio.get();
-  if (!ctx || !audio.sfxBus) return;
-  const a = beadVoice(discovery.a);
-  const b = beadVoice(discovery.b);
-  if (!a || !b) return;
-  const t0 = ambient.quantize();
-  playNote(ctx, audio.sfxBus, "gut", a.freq, { gain: 0.07, at: t0, release: 0.8 });
-  playNote(ctx, audio.sfxBus, "gut", b.freq * 1.5, {
-    gain: 0.055,
-    at: t0 + 0.13,
-    release: 0.8,
-  });
-}
-
-/** The conclusion cadence: every discovered pitch, resolving onto low C. */
-export function conclusionCadence(pitches: number[]): void {
-  const ctx = audio.ensure();
-  const bus = audio.sfxBus;
-  if (!ctx || !bus) return;
-  const t0 = ctx.currentTime + 0.05;
-  const unique = [...new Set(pitches)].slice(0, 10);
-  unique.forEach((freq, i) => {
-    playNote(ctx, bus, "glass", freq, {
-      gain: 0.08,
-      at: t0 + i * 0.14,
-      release: 2.8,
-    });
-  });
-  const tEnd = t0 + unique.length * 0.14 + 0.5;
-  playNote(ctx, bus, "glass", modeFreq(0, "low"), {
-    gain: 0.3,
-    at: tEnd,
-    attack: 0.3,
-    hold: 1.6,
-    release: 4,
-  });
-  playNote(ctx, bus, "voice", modeFreq(7, "mid"), {
-    gain: 0.16,
-    at: tEnd + 0.1,
-    hold: 1.4,
-    release: 3.6,
-  });
-}

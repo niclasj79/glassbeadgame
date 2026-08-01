@@ -3,8 +3,14 @@ import { toFacetId, type DocumentedRelation, type FacetId } from "./schema";
 /**
  * THE DOCUMENTED RELATIONS OF CASTALIA
  *
- * Forty-three claims about twenty-four beads, each one obliged by the schema to
+ * Forty-four claims about twenty-four beads, each one obliged by the schema to
  * say what kind of claim it is making and how well that claim is evidenced.
+ *
+ * Every count in this comment is checked against the array below by
+ * `castalia.test.ts` ("keeps the front matter's arithmetic true"). It said
+ * forty-three claims and fifteen interpretive ones for as long as it took a
+ * critic to count, because a number written in prose drifts the moment a
+ * relation is added and nothing fails.
  *
  * Three authoring rules governed this file, in this order of priority:
  *
@@ -18,10 +24,10 @@ import { toFacetId, type DocumentedRelation, type FacetId } from "./schema";
  *
  *  2. **`interpretive` is not a demotion.** Where no citation could be verified,
  *     the relation either became interpretive — which asserts nothing beyond the
- *     two structures compared — or was dropped. Fifteen relations are
+ *     two structures compared — or was dropped. Twelve relations are
  *     interpretive on purpose; several of them are the best writing here.
  *
- *  3. **Every relation admits something.** All but a handful carry a
+ *  3. **Every relation admits something.** All forty-four carry a
  *     `counterpoint`, because a relation that concedes nothing is nearly always
  *     overstated. Where a reading genuinely fails, `fit` says `unsupported`
  *     rather than inventing support; that grade is what turns the reading into a
@@ -106,7 +112,11 @@ export const CASTALIA_RELATIONS: readonly DocumentedRelation[] = Object.freeze([
     fit: { tension: "primary", ground: "supported", echo: "partial", passage: "unsupported" },
     insight:
       "Pitch can be shifted by any amount at all, and under that continuous symmetry the intervals of a melody survive untouched. Just intonation does not possess it. Its ratios are fixed against one tonic, so moving the music moves the tuning with it, and a passage that travels far enough arrives audibly wrong — which is the whole reason temperament exists.",
-    sharedFacets: f("invariance", "continuity"),
+    // `continuity` used to be declared here as well, and the insight above says
+    // in its second sentence that just intonation does not have it. A shared
+    // facet is a claim that *both* concepts carry the property; an opposition
+    // stages a disagreement over a property, which is not the same thing.
+    sharedFacets: f("invariance"),
     counterpoint:
       "Absolute pitch is not symmetric in practice either. Instrument bodies, string lengths and voices all have preferred registers, so transposition is never quite the free operation the geometry describes.",
     sources: ["src.barbour-1951", "src.helmholtz-1863"],
@@ -617,7 +627,13 @@ export const CASTALIA_RELATIONS: readonly DocumentedRelation[] = Object.freeze([
     fit: { tension: "primary", ground: "supported", echo: "partial", passage: "unsupported" },
     insight:
       "Clausius stated both laws together in 1865: the energy of the universe is constant, its entropy tends to a maximum. The first says nothing changes in total, the second says everything changes in one direction, and they are not in conflict — energy is conserved while becoming progressively less able to do work.",
-    sharedFacets: f("irreversibility"),
+    // `irreversibility` was declared here, which required Conservation of Energy
+    // to carry a facet the insight above denies it in its own second clause.
+    // What the two laws genuinely share is the bookkeeping: a total resolved
+    // without remainder into its parts — forms of energy on one side, arrangements
+    // of the system on the other. The direction is what they do *not* share, and
+    // that is the whole content of the relation.
+    sharedFacets: f("decomposition"),
     counterpoint:
       "Conservation is exact and entropy increase is statistical. A fluctuation reducing entropy is allowed and vanishingly improbable, so the two laws do not have the same standing.",
     sources: ["src.clausius-1865"],

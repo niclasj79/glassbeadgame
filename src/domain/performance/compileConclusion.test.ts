@@ -406,3 +406,55 @@ describe("compileConclusion — totality and determinism", () => {
     }
   });
 });
+
+describe("compileConclusion — a reading does not close on a record", () => {
+  /**
+   * Regression (GAP-1). `resolved` was `outcome.kind === "documented"`, and
+   * `kind` is "documented" for an interpretive relation too — a reading the Game
+   * offers, asserting nothing beyond the two structures compared. The score
+   * therefore closed a reading exactly as it closes a record, and the audio
+   * caption built from `resolved` said "The Game has a record for this pair".
+   *
+   * Each web is a single thread so that density, phrasing and gain are identical
+   * across the two, and the evidence class is the only difference between them.
+   */
+  const alone = (a: (typeof C)[keyof typeof C], b: (typeof C)[keyof typeof C]) =>
+    compileConclusion(
+      buildSessionFixture({
+        conceptIds: [a, b],
+        threads: [{ a, b, intention: "echo", gesture: KEYBOARD }],
+      }).state,
+      lookup
+    ).entries[0];
+
+  const record = alone(C.fourier, C.overtones);
+  const reading = alone(C.fibonacci, C.counterpoint);
+
+  it("treats both as documented outcomes", () => {
+    expect(record?.outcomeKind).toBe("documented");
+    expect(reading?.outcomeKind).toBe("documented");
+  });
+
+  it("says on the entry itself which of the two it is", () => {
+    expect(record?.speaksForRecord).toBe(true);
+    expect(reading?.speaksForRecord).toBe(false);
+  });
+
+  it("closes the record and does not close the reading", () => {
+    expect(record?.resolved).toBe(true);
+    expect(reading?.resolved).toBe(false);
+  });
+
+  it("leaves the reading's answering line unclosed, in the notes as well as the flag", () => {
+    expect(record?.voices.some((voice) => voice.openEnded)).toBe(false);
+    expect(reading?.voices.some((voice) => voice.openEnded)).toBe(true);
+  });
+
+  it("gives them exactly the same weight of sound (CAV-006)", () => {
+    expect(reading?.durationBeats).toBe(record?.durationBeats);
+    expect(reading?.dynamic).toBe(record?.dynamic);
+    expect(reading?.voices.map((voice) => voice.gain)).toEqual(
+      record?.voices.map((voice) => voice.gain)
+    );
+  });
+});

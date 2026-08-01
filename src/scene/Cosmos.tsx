@@ -15,6 +15,7 @@ import { LensAxes } from "./LensAxes";
 import { Bursts } from "./Bursts";
 import { Beads } from "./Beads";
 import { Threads } from "./Threads";
+import { MotifMarks } from "./MotifMarks";
 import { ThreadPreview } from "./ThreadPreview";
 import { IntentionConstellation } from "./IntentionConstellation";
 import { ThreadingDriver } from "./ThreadingDriver";
@@ -185,6 +186,10 @@ export function Cosmos() {
       <Beads />
       <IntentionConstellation />
       <Threads />
+      {/* Completed motifs leave a permanent mark on the world (spec §12).
+          `MotifMarks` existed but was mounted nowhere, so completion changed
+          nothing that could be seen. */}
+      <MotifMarks />
       <Bursts />
       <ThreadPreview />
       <ThreadingDriver />
