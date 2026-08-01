@@ -2,7 +2,9 @@
 
 ## Status
 
-Director decisions CAV-001 through CAV-004 are accepted. CAV-005 through CAV-010 remain pending before their named M3/M4/content-production boundaries.
+Director decisions CAV-001 through CAV-010 are accepted. CAV-009 clears content
+*authoring* only; factual sign-off remains a human gate that no automated check
+and no assistant may mark complete.
 
 This is a working reference set, not the final content pack and not a source of accepted factual claims. Existing prototype copy is used only to identify promising examples. Every documented relation still requires normalized facets, a reviewed relation type, evidence class, and at least one verified source under the later content task.
 
@@ -241,43 +243,57 @@ This pair illustrates an outcome that may be interpretable without an accepted d
 
 - **Question:** Which broad prototype concepts must be replaced by specific works, techniques, phenomena, or defined ideas?
 - **Recommended default:** Review at least Renaissance, Abstract Algebra, Consonance, and Dissonance against the granularity rule before freezing the 24-concept pack.
-- **Director answer:** _Pending._
-- **Blocks:** M3 content-pack migration.
+- **Director answer:** Accepted, and made structural. Every Castalia concept declares a `kind` drawn from theorem, technique, work, phenomenon, instrument, formation, pattern, or defined idea; the validator rejects a pack containing a whole field or a whole era. Concretely: *Renaissance* is replaced by the specific technique and the specific work that carry the claim; *Abstract Algebra* is replaced by *Continuous Symmetry*; *Consonance* and *Dissonance* are not separate beads, because two mutually defining terms make a tautology rather than a Tension — the slice instead carries *Just Intonation* and *Equal Temperament*, which are genuinely opposed, historically documented, and acoustically demonstrable.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge.
+- **Clears:** M3 content-pack migration and the 24-concept freeze.
 
 ### CAV-006 — Audiovisual intensity hierarchy
 
 - **Question:** How should documented, Open Thread, and weak/unresolved outcomes differ in intensity without implying that only documented threads matter?
 - **Recommended default:** Documented = precise and source-bearing; Open = specific but suspended; weak = sparse and honest. Differentiate clarity and epistemic status, not player worth or score.
-- **Director answer:** _Pending._
-- **Blocks:** M4 reveal hierarchy.
+- **Director answer:** Accepted, with the differentiating axis named explicitly: outcomes differ in **resolution**, not in **reward**. A documented relation resolves — its figure completes, its motif closes, its citation is available. An Open Thread is rendered at the same brightness and the same musical weight but stays *unclosed*: the figure holds an open terminal, the motif ends on an unresolved degree, the thread's ink stays wet. A weak outcome is quiet and short, never dim or grey. No outcome type may be given more bloom, more gain, or more camera than another; the player must never learn to prefer one kind of truth because it pays better.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge.
+- **Clears:** M4 reveal hierarchy.
 
 ### CAV-007 — Tension comfort envelope
 
 - **Question:** What bounds apply to dissonance, flicker, torsion, camera movement, and unresolved duration?
 - **Recommended default:** No rapid flicker; bounded gain/voice count; reduced-motion equivalent; controllable intensity; tension may remain unresolved harmonically but must remain physically comfortable.
-- **Director answer:** _Pending._
-- **Blocks:** Tension grammar acceptance and performance budgets.
+- **Director answer:** Accepted with measurable bounds, encoded in one shared constant table so that no scene, shader, or audio path can exceed them locally:
+  - **Beating rate** 0.8–6.5 Hz, never above 7 Hz, and never a flicker of luminance above 3 Hz at any amplitude.
+  - **Dissonant simultaneity** at most three sounding voices in a tense interval class at any instant, with the tense pair's summed gain capped below the ambient bed.
+  - **Torsion** bounded to ±14° of counter-rotation with continuous easing; no snapping, no strobing dash phase.
+  - **Duration:** instability is allowed to persist indefinitely as a musical and visual fact, but its *amplitude* decays to a low sustained floor within roughly twelve seconds, so an unresolved thread remains legible without becoming an irritant.
+  - **Reduced-motion and reduced-bloom** paths express Tension through pattern, phase text, and stereo width instead of movement and glare — never by removing the Tension.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge.
+- **Clears:** Tension grammar acceptance and performance budgets.
 
 ### CAV-008 — Concept musical identity
 
 - **Question:** How authored must each concept motif be before M4 testing—procedural placeholder, composed motif, or recorded asset?
 - **Recommended default:** Deterministic procedural/composed placeholders with stable motif, rhythm, register, and articulation through M4; reserve recorded assets/final production for M8 unless a concept requires them to test meaning.
-- **Director answer:** _Pending._
-- **Blocks:** M4 audio-production scope.
+- **Director answer:** Accepted, resolved toward the composed end. Each concept carries an authored `ConceptMotif` — a real contour of two to five scale degrees, an aligned rhythm, a register, an articulation, and a timbre body. This is content data, not code, so it is tunable by ear without touching the engine. No recorded assets ship in the slice; `playVoice()` remains the single place a note is born, so recordings can replace synthesis later without any content change.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge.
+- **Clears:** M4 audio-production scope.
 
 ### CAV-009 — Source-review authority
 
 - **Question:** Who approves the factual and interpretive claims in the reference set and final content pack?
 - **Recommended default:** Named subject-matter review for each domain plus director acceptance; existing prototype copy is never grandfathered merely because it shipped.
-- **Director answer:** _Pending._
-- **Blocks:** M3 documented-relation acceptance.
+- **Director answer:** Accepted, with the boundary made structural rather than procedural, because a promise to review carefully is not a mechanism. Three rules now hold:
+  1. **The schema forces the claim to be declared.** `relationType` distinguishes a correspondence the Game *notices* from a transmission it *asserts*. `historical-transmission` is the only type that asserts influence, and the validator refuses to build one without a non-interpretive source and an explicit direction.
+  2. **Interpretive is a first-class, honourable class**, not a consolation. The slice deliberately weights toward structural correspondence, because a structural reading is something the Game can offer honestly under its own authority, whereas an influence claim requires evidence the Game does not itself possess.
+  3. **Authoring is never acceptance.** Content produced in this campaign is *candidate* content. Every `established`, `attested`, and `contested` relation carries a citation the director can check, and the campaign leaves a verification checklist rather than a claim of completed review. No automated check, and no assistant, may mark factual review as done.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge. Item 3 is a standing constraint, not a task.
+- **Clears:** M3 documented-relation authoring. It explicitly does **not** clear factual sign-off, which remains a human gate.
 
 ### CAV-010 — Golden-path identity
 
 - **Question:** Is the binding Fibonacci/Counterpoint/Bartók sequence final, including which entities are beads versus revealed context?
 - **Recommended default:** Preserve the golden path for M2/M3 fixtures, but decide before content freeze whether Bartók is a concept, a documented relation subject, or sourced revelation context.
-- **Director answer:** _Pending._
-- **Blocks:** Golden-path content schema and final overture staging.
+- **Director answer:** The golden path is preserved; Bartók is **not** a bead. A composer is not the same kind of object as a formal pattern, and mixing people with patterns in one draw breaks the granularity rule that CAV-005 just made structural. Bartók appears as sourced revelation context inside a documented relation — which also confines the most citation-sensitive claim in the slice to exactly one reviewable place. The golden path's opening pair remains Fibonacci Sequence ↔ Counterpoint with Echo as the reference intention.
+- **Status:** Accepted by the game design director on 2026-07-31; effective after reviewed merge.
+- **Clears:** Golden-path content schema and final overture staging.
 
 ## Acceptance use
 

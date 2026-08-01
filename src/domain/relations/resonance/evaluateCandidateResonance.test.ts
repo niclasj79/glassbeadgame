@@ -129,7 +129,8 @@ describe("evaluateCandidateResonance", () => {
     [0, 0, 0, false, "weak"],
     [1, 0, 0, false, "weak"],
     [2, 0, 0, false, "medium"],
-    [1, 1, 1, false, "medium"],
+    // Topology support is present, so structure the player built decides it.
+    [1, 1, 1, false, "high"],
     [2, 1, 1, false, "high"],
     [0, 0, 0, true, "weak"],
     [1, 0, 0, true, "medium"],

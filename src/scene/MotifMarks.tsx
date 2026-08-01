@@ -3,16 +3,41 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
 import type { Line2 } from "three-stdlib";
-import { useStore } from "@/state/store";
-import type { MotifAward } from "@/state/types";
+import { useStore as useVanillaStore } from "zustand";
+import { domainSessionStore } from "@/state/domainSession";
+import type { CompletedMotifV1 } from "@/domain/model";
+import { planMotifMarks } from "./motifMarkPlan";
 import { frameState } from "./frameState";
 import { getHaloTexture } from "./textures";
 
 /**
- * Persistent audiovisual marks for the session's completed motifs.
- * The triad already lives as a membrane; here the symposium earns its
- * slowly turning circle, and the fugue its comet forever walking the
- * subject's path. Their voices live in the ambient engine.
+ * PERSISTENT MARKS FOR THE SESSION'S COMPLETED MOTIFS.
+ *
+ * Spec §12: "Completion changes the score and world, not merely a badge." This
+ * is the world half of that sentence, and until now it was unreachable — the
+ * component read `useStore().session.motifs`, the legacy presentation
+ * projection, which is published empty and has had no writer since the legacy
+ * scoring model was removed. Completing a motif therefore left no mark at all.
+ *
+ * It reads the canonical session now, and it draws the domain's own three
+ * families rather than the prototype's `triad / symposium / fugue`, which no
+ * detector has produced for a long time:
+ *
+ *   dialectic  a Tension held by a third concept → the three are drawn as a
+ *              closed figure. The mark *is* the holding: a circuit that does not
+ *              come apart, breathing with the room.
+ *   canon      a facet recurring, transformed → a light forever walking the
+ *              carriers' path. Recurrence, said as motion rather than as a
+ *              label.
+ *   bridge     the joint two regions hang on → a slowly turning ring about the
+ *              whole span, so the region reads as one thing held.
+ *
+ * None of them is colour-only, none is a badge, none carries a number, and each
+ * one keeps working in a greyscale print: a closed circuit, a travelling light,
+ * a turning ring are three different *constructions*.
+ *
+ * Their voices live in the ambient engine (`audio/ambient.ts`), seated by the
+ * same completions.
  */
 
 const vCentroid = new THREE.Vector3();
@@ -27,8 +52,33 @@ function circlePoints(segments = 64): [number, number, number][] {
   return pts;
 }
 
-/** The Symposium's mark: a golden circle slowly turning about the council. */
-function SymposiumRing({ beads }: { beads: string[] }) {
+/** The centroid and radius of a set of beads, from this frame's positions. */
+function gatherSpan(beads: readonly string[]): number {
+  vCentroid.set(0, 0, 0);
+  const r = frameState.rendered;
+  let n = 0;
+  for (const id of beads) {
+    const i = frameState.beadIndex.get(id);
+    if (i === undefined) continue;
+    vCentroid.x += r[i * 3];
+    vCentroid.y += r[i * 3 + 1];
+    vCentroid.z += r[i * 3 + 2];
+    n++;
+  }
+  if (n === 0) return 0;
+  vCentroid.multiplyScalar(1 / n);
+  let maxD = 0.6;
+  for (const id of beads) {
+    const i = frameState.beadIndex.get(id);
+    if (i === undefined) continue;
+    vTmp.set(r[i * 3], r[i * 3 + 1], r[i * 3 + 2]).sub(vCentroid);
+    maxD = Math.max(maxD, vTmp.length());
+  }
+  return maxD;
+}
+
+/** The Bridge's mark: a ring slowly turning about the span the joint holds. */
+function SpanRing({ beads }: { beads: readonly string[] }) {
   const group = useRef<THREE.Group>(null);
   const line = useRef<Line2>(null);
   const points = useMemo(() => circlePoints(), []);
@@ -36,27 +86,8 @@ function SymposiumRing({ beads }: { beads: string[] }) {
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
-    // Centroid + spread of the council, followed softly.
-    const r = frameState.rendered;
-    vCentroid.set(0, 0, 0);
-    let n = 0;
-    for (const id of beads) {
-      const i = frameState.beadIndex.get(id);
-      if (i === undefined) continue;
-      vCentroid.x += r[i * 3];
-      vCentroid.y += r[i * 3 + 1];
-      vCentroid.z += r[i * 3 + 2];
-      n++;
-    }
-    if (n === 0) return;
-    vCentroid.multiplyScalar(1 / n);
-    let maxD = 0.6;
-    for (const id of beads) {
-      const i = frameState.beadIndex.get(id);
-      if (i === undefined) continue;
-      vTmp.set(r[i * 3], r[i * 3 + 1], r[i * 3 + 2]).sub(vCentroid);
-      maxD = Math.max(maxD, vTmp.length());
-    }
+    const maxD = gatherSpan(beads);
+    if (maxD === 0) return;
     g.position.lerp(vCentroid, Math.min(1, dt * 3));
     const scale = maxD * 1.18;
     g.scale.setScalar(g.scale.x + (scale - g.scale.x) * Math.min(1, dt * 3));
@@ -89,8 +120,69 @@ function SymposiumRing({ beads }: { beads: string[] }) {
   );
 }
 
-/** The Fugue's mark: a comet forever walking the subject's path. */
-function FugueComet({ beads }: { beads: string[] }) {
+/**
+ * The Dialectic's mark: the three concepts drawn as a closed circuit.
+ *
+ * The figure follows the beads, so it stays true as the arena breathes and as
+ * the Lens morphs the layout. It closes, and that is the whole statement — an
+ * opposition that a third concept holds is a circuit rather than a line with two
+ * ends.
+ */
+function HeldFigure({ beads }: { beads: readonly string[] }) {
+  const geometry = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(beads.length * 3), 3)
+    );
+    // The vertices are written from world positions every frame, so bounds
+    // computed from the initial zeros would cull the figure entirely.
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4);
+    return g;
+  }, [beads.length]);
+
+  const material = useMemo(
+    () =>
+      new THREE.LineBasicMaterial({
+        color: new THREE.Color("#c9d6f2"),
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    []
+  );
+
+  useFrame(() => {
+    const attribute = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const array = attribute.array as Float32Array;
+    const r = frameState.rendered;
+    let written = 0;
+    for (const id of beads) {
+      const i = frameState.beadIndex.get(id);
+      if (i === undefined) continue;
+      array[written * 3] = r[i * 3];
+      array[written * 3 + 1] = r[i * 3 + 1];
+      array[written * 3 + 2] = r[i * 3 + 2];
+      written += 1;
+    }
+    if (written < 2) {
+      geometry.setDrawRange(0, 0);
+      return;
+    }
+    geometry.setDrawRange(0, written);
+    attribute.needsUpdate = true;
+    material.opacity =
+      0.2 + 0.07 * Math.sin(frameState.breathPhase) * frameState.breathDepth;
+  });
+
+  return (
+    <lineLoop geometry={geometry} material={material} frustumCulled={false} />
+  );
+}
+
+/** The Canon's mark: a light forever walking the recurring subject's path. */
+function RecurrenceLight({ beads }: { beads: readonly string[] }) {
   const head = useRef<THREE.Sprite>(null);
   const trail = useRef<(THREE.Sprite | null)[]>([]);
   const progress = useRef(0);
@@ -155,21 +247,28 @@ function FugueComet({ beads }: { beads: string[] }) {
   );
 }
 
+const EMPTY_MOTIFS: readonly CompletedMotifV1[] = Object.freeze([]);
+
 export function MotifMarks() {
-  const motifs = useStore((s) => s.session?.motifs ?? null);
-  if (!motifs || motifs.length === 0) return null;
-  const symposium = motifs.find(
-    (m): m is MotifAward & { beads: string[] } =>
-      m.motifId === "symposium" && !!m.beads && m.beads.length >= 3
+  const completed = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.completedMotifs ?? EMPTY_MOTIFS
   );
-  const fugue = motifs.find(
-    (m): m is MotifAward & { beads: string[] } =>
-      m.motifId === "fugue" && !!m.beads && m.beads.length >= 2
-  );
+
+  const marks = useMemo(() => planMotifMarks(completed), [completed]);
+
+  if (marks.length === 0) return null;
   return (
     <group>
-      {symposium && <SymposiumRing beads={symposium.beads} />}
-      {fugue && <FugueComet beads={fugue.beads} />}
+      {marks.map((mark) => {
+        if (mark.kind === "bridge") {
+          return <SpanRing key={mark.key} beads={mark.beads} />;
+        }
+        if (mark.kind === "canon") {
+          return <RecurrenceLight key={mark.key} beads={mark.beads} />;
+        }
+        return <HeldFigure key={mark.key} beads={mark.beads} />;
+      })}
     </group>
   );
 }

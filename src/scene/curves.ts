@@ -1,18 +1,25 @@
 import * as THREE from "three";
+import type { RelationIntention } from "@/domain/events";
+import { threadForm } from "./threadGrammar";
 
-/** How far a thread's arc midpoint bulges beyond the sphere. */
+/** Default bulge of a thread's arc midpoint beyond the armillary. */
 const ARC_LIFT = 1.16;
 
 const vPerp = new THREE.Vector3();
 
-/** Arc midpoint pushed radially outward; stable even for near-antipodal pairs. */
+/**
+ * Arc midpoint pushed radially by `lift`; stable even for near-antipodal
+ * pairs. A lift below 1 sends the arc *inside* the armillary, which is what
+ * makes a Ground thread pass beneath the surface rather than over it.
+ */
 export function arcMid(
   start: THREE.Vector3,
   end: THREE.Vector3,
-  out: THREE.Vector3
+  out: THREE.Vector3,
+  lift = ARC_LIFT
 ): THREE.Vector3 {
   out.copy(start).add(end).multiplyScalar(0.5);
-  const targetLen = Math.max(start.length(), end.length()) * ARC_LIFT;
+  const targetLen = Math.max(start.length(), end.length()) * lift;
   if (out.lengthSq() < 0.2) {
     // Nearly antipodal: bulge sideways along a stable perpendicular.
     vPerp.copy(start).cross(end);
@@ -22,4 +29,14 @@ export function arcMid(
     out.normalize().multiplyScalar(targetLen);
   }
   return out;
+}
+
+/** The same arc, lifted by the intention's own form (see threadGrammar). */
+export function intentionArcMid(
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  intention: RelationIntention,
+  out: THREE.Vector3
+): THREE.Vector3 {
+  return arcMid(start, end, out, threadForm(intention).arcLift);
 }

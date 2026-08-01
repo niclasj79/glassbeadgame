@@ -2,10 +2,9 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
 import type { Thread } from "@/state/types";
 import { frameState } from "./frameState";
+import { beadIdentity } from "./identity";
 
 /**
  * Triad membranes — when three beads close a triangle, a faint iridescent
@@ -43,9 +42,11 @@ function Membrane({ ids }: { ids: [string, string, string] }) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
     const colors = new Float32Array(9);
+    // Each corner takes its bead's faculty ink, so the film across a triangle
+    // is a blend of the faculties that made it — and an unattributed corner
+    // contributes the world's neutral engraving ink rather than a guess.
     ids.forEach((id, i) => {
-      const disc = disciplineById.get(conceptById.get(id)?.discipline ?? "mathematics");
-      const c = new THREE.Color(disc?.color ?? "#8888aa");
+      const c = new THREE.Color(beadIdentity(id).ink);
       colors[i * 3] = c.r;
       colors[i * 3 + 1] = c.g;
       colors[i * 3 + 2] = c.b;

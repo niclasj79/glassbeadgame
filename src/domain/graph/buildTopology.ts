@@ -1,0 +1,756 @@
+import { RELATION_INTENTIONS, type RelationIntention } from "../events";
+import type { ConceptId, ThreadId } from "../ids";
+import type { SessionStateV1 } from "../model/sessionState";
+import type { FacultyLookup } from "../outcomes/lookup";
+import { clamp01, quantise } from "../outcomes/prose";
+import { FACULTY_IDS, relationKey, type FacultyId } from "@/content/castalia/schema";
+import type {
+  ConceptComponent,
+  ConceptCycle,
+  ConceptNodeTopology,
+  ConceptTriad,
+  FacultySpread,
+  IntentionMix,
+  SessionTopology,
+  ThreadEdgeTopology,
+  WebAccretionStep,
+} from "./types";
+
+/**
+ * Canonical unordered key for a pair of concepts. Delegates to the content
+ * pack's `relationKey` so the domain and the authored relations agree on one
+ * spelling of "this pair" rather than two that happen to coincide.
+ */
+export function pairKey(a: ConceptId, b: ConceptId): string {
+  return relationKey(a, b);
+}
+
+interface EdgeRecord {
+  readonly u: number;
+  readonly v: number;
+  readonly threadIds: ThreadId[];
+}
+
+interface Skeleton {
+  readonly conceptIds: readonly ConceptId[];
+  readonly indexOf: ReadonlyMap<ConceptId, number>;
+  readonly edges: readonly EdgeRecord[];
+  readonly edgeIndexByKey: ReadonlyMap<string, number>;
+  /** Neighbour indices in ascending session order. */
+  readonly adjacency: readonly (readonly number[])[];
+  /** Edge indices incident to each concept. */
+  readonly incident: readonly (readonly number[])[];
+  readonly threadIdsByConcept: readonly (readonly ThreadId[])[];
+  readonly woven: readonly number[];
+}
+
+function buildSkeleton(state: SessionStateV1): Skeleton {
+  const conceptIds = state.conceptIds;
+  const indexOf = new Map<ConceptId, number>();
+  conceptIds.forEach((id, index) => indexOf.set(id, index));
+
+  const edges: EdgeRecord[] = [];
+  const edgeIndexByKey = new Map<string, number>();
+  const neighbourSets = conceptIds.map(() => new Set<number>());
+  const incidentSets = conceptIds.map(() => new Set<number>());
+  const threadIdsByConcept: ThreadId[][] = conceptIds.map(() => []);
+
+  for (const thread of state.threads) {
+    const u = indexOf.get(thread.pair[0]);
+    const v = indexOf.get(thread.pair[1]);
+    if (u === undefined || v === undefined) continue;
+
+    threadIdsByConcept[u]?.push(thread.id);
+    if (u !== v) threadIdsByConcept[v]?.push(thread.id);
+    if (u === v) continue;
+
+    const key = pairKey(thread.pair[0], thread.pair[1]);
+    const existing = edgeIndexByKey.get(key);
+    if (existing === undefined) {
+      const record: EdgeRecord = {
+        u: Math.min(u, v),
+        v: Math.max(u, v),
+        threadIds: [thread.id],
+      };
+      edgeIndexByKey.set(key, edges.length);
+      incidentSets[u]?.add(edges.length);
+      incidentSets[v]?.add(edges.length);
+      edges.push(record);
+    } else {
+      edges[existing]?.threadIds.push(thread.id);
+    }
+
+    neighbourSets[u]?.add(v);
+    neighbourSets[v]?.add(u);
+  }
+
+  const adjacency = neighbourSets.map((set) => [...set].sort((a, b) => a - b));
+  const incident = incidentSets.map((set) => [...set].sort((a, b) => a - b));
+  const woven: number[] = [];
+  adjacency.forEach((neighbours, index) => {
+    if (neighbours.length > 0) woven.push(index);
+  });
+
+  return {
+    conceptIds,
+    indexOf,
+    edges,
+    edgeIndexByKey,
+    adjacency,
+    incident,
+    threadIdsByConcept,
+    woven,
+  };
+}
+
+/** BFS component labelling restricted to `allowed`, visiting in session order. */
+function labelComponents(
+  skeleton: Skeleton,
+  allowed: ReadonlySet<number>
+): { readonly labels: ReadonlyMap<number, number>; readonly count: number } {
+  const labels = new Map<number, number>();
+  let count = 0;
+
+  for (const start of skeleton.woven) {
+    if (!allowed.has(start) || labels.has(start)) continue;
+    const queue: number[] = [start];
+    labels.set(start, count);
+    while (queue.length > 0) {
+      const current = queue.shift() as number;
+      for (const neighbour of skeleton.adjacency[current] ?? []) {
+        if (!allowed.has(neighbour) || labels.has(neighbour)) continue;
+        labels.set(neighbour, count);
+        queue.push(neighbour);
+      }
+    }
+    count += 1;
+  }
+
+  return { labels, count };
+}
+
+/** Are `from` and `to` connected when `excludedEdge` is removed? */
+function connectedWithout(
+  skeleton: Skeleton,
+  from: number,
+  to: number,
+  excludedEdge: number
+): boolean {
+  const seen = new Set<number>([from]);
+  const queue: number[] = [from];
+  while (queue.length > 0) {
+    const current = queue.shift() as number;
+    if (current === to) return true;
+    for (const edgeIndex of skeleton.incident[current] ?? []) {
+      if (edgeIndex === excludedEdge) continue;
+      const edge = skeleton.edges[edgeIndex];
+      if (edge === undefined) continue;
+      const next = edge.u === current ? edge.v : edge.u;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
+}
+
+function brandesBetweenness(skeleton: Skeleton): ReadonlyMap<number, number> {
+  const scores = new Map<number, number>();
+  for (const index of skeleton.woven) scores.set(index, 0);
+  const n = skeleton.woven.length;
+  if (n < 3) return scores;
+
+  for (const source of skeleton.woven) {
+    const stack: number[] = [];
+    const predecessors = new Map<number, number[]>();
+    const sigma = new Map<number, number>();
+    const distance = new Map<number, number>();
+    for (const index of skeleton.woven) {
+      predecessors.set(index, []);
+      sigma.set(index, 0);
+      distance.set(index, -1);
+    }
+    sigma.set(source, 1);
+    distance.set(source, 0);
+
+    const queue: number[] = [source];
+    while (queue.length > 0) {
+      const current = queue.shift() as number;
+      stack.push(current);
+      for (const neighbour of skeleton.adjacency[current] ?? []) {
+        if ((distance.get(neighbour) ?? -1) < 0) {
+          distance.set(neighbour, (distance.get(current) ?? 0) + 1);
+          queue.push(neighbour);
+        }
+        if (distance.get(neighbour) === (distance.get(current) ?? 0) + 1) {
+          sigma.set(neighbour, (sigma.get(neighbour) ?? 0) + (sigma.get(current) ?? 0));
+          predecessors.get(neighbour)?.push(current);
+        }
+      }
+    }
+
+    const delta = new Map<number, number>();
+    for (const index of skeleton.woven) delta.set(index, 0);
+    while (stack.length > 0) {
+      const w = stack.pop() as number;
+      for (const v of predecessors.get(w) ?? []) {
+        const share = (sigma.get(v) ?? 0) / (sigma.get(w) ?? 1);
+        delta.set(v, (delta.get(v) ?? 0) + share * (1 + (delta.get(w) ?? 0)));
+      }
+      if (w !== source) scores.set(w, (scores.get(w) ?? 0) + (delta.get(w) ?? 0));
+    }
+  }
+
+  // Every undirected pair is counted from both endpoints.
+  const normaliser = ((n - 1) * (n - 2)) / 2;
+  const normalised = new Map<number, number>();
+  for (const [index, value] of scores) {
+    normalised.set(index, quantise(clamp01(value / 2 / normaliser)));
+  }
+  return normalised;
+}
+
+function findCycles(skeleton: Skeleton): readonly ConceptCycle[] {
+  const parent = new Map<number, number>();
+  const parentEdge = new Map<number, number>();
+  const depth = new Map<number, number>();
+  const treeEdges = new Set<number>();
+  const seen = new Set<number>();
+
+  for (const root of skeleton.woven) {
+    if (seen.has(root)) continue;
+    seen.add(root);
+    depth.set(root, 0);
+    const queue: number[] = [root];
+    while (queue.length > 0) {
+      const current = queue.shift() as number;
+      for (const edgeIndex of skeleton.incident[current] ?? []) {
+        const edge = skeleton.edges[edgeIndex];
+        if (edge === undefined) continue;
+        const next = edge.u === current ? edge.v : edge.u;
+        if (seen.has(next)) continue;
+        seen.add(next);
+        parent.set(next, current);
+        parentEdge.set(next, edgeIndex);
+        depth.set(next, (depth.get(current) ?? 0) + 1);
+        treeEdges.add(edgeIndex);
+        queue.push(next);
+      }
+    }
+  }
+
+  const pathToRoot = (start: number, stopAt: number): number[] => {
+    const path: number[] = [start];
+    let current = start;
+    while (current !== stopAt) {
+      const next = parent.get(current);
+      if (next === undefined) break;
+      path.push(next);
+      current = next;
+    }
+    return path;
+  };
+
+  const lowestCommonAncestor = (a: number, b: number): number => {
+    let left = a;
+    let right = b;
+    while ((depth.get(left) ?? 0) > (depth.get(right) ?? 0)) {
+      left = parent.get(left) ?? left;
+    }
+    while ((depth.get(right) ?? 0) > (depth.get(left) ?? 0)) {
+      right = parent.get(right) ?? right;
+    }
+    while (left !== right) {
+      const nextLeft = parent.get(left);
+      const nextRight = parent.get(right);
+      if (nextLeft === undefined || nextRight === undefined) break;
+      left = nextLeft;
+      right = nextRight;
+    }
+    return left;
+  };
+
+  const canonical = new Map<string, number[]>();
+  skeleton.edges.forEach((edge, edgeIndex) => {
+    if (treeEdges.has(edgeIndex)) return;
+    const ancestor = lowestCommonAncestor(edge.u, edge.v);
+    const left = pathToRoot(edge.u, ancestor);
+    const right = pathToRoot(edge.v, ancestor);
+    const walk = [...left, ...right.slice(0, -1).reverse()];
+    if (walk.length < 3) return;
+
+    let minPosition = 0;
+    walk.forEach((value, position) => {
+      if (value < (walk[minPosition] as number)) minPosition = position;
+    });
+    const rotated = [...walk.slice(minPosition), ...walk.slice(0, minPosition)];
+    const reversed = [rotated[0] as number, ...rotated.slice(1).reverse()];
+    const forwardKey = rotated.join(",");
+    const reverseKey = reversed.join(",");
+    const chosen = forwardKey <= reverseKey ? rotated : reversed;
+    canonical.set(forwardKey <= reverseKey ? forwardKey : reverseKey, chosen);
+  });
+
+  return Object.freeze(
+    [...canonical.entries()]
+      .sort((a, b) => {
+        if (a[1].length !== b[1].length) return a[1].length - b[1].length;
+        return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+      })
+      .map(([, walk]) =>
+        Object.freeze({
+          conceptIds: Object.freeze(
+            walk.map((index) => skeleton.conceptIds[index] as ConceptId)
+          ),
+          length: walk.length,
+        })
+      )
+  );
+}
+
+function findTriads(skeleton: Skeleton): readonly ConceptTriad[] {
+  const triads: ConceptTriad[] = [];
+  for (const edge of skeleton.edges) {
+    const left = new Set(skeleton.adjacency[edge.u] ?? []);
+    for (const third of skeleton.adjacency[edge.v] ?? []) {
+      if (third <= edge.v || !left.has(third)) continue;
+      triads.push(
+        Object.freeze({
+          conceptIds: Object.freeze([
+            skeleton.conceptIds[edge.u] as ConceptId,
+            skeleton.conceptIds[edge.v] as ConceptId,
+            skeleton.conceptIds[third] as ConceptId,
+          ]) as readonly [ConceptId, ConceptId, ConceptId],
+        })
+      );
+    }
+  }
+  triads.sort((a, b) => {
+    const left = a.conceptIds.join(",");
+    const right = b.conceptIds.join(",");
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+  return Object.freeze(triads);
+}
+
+function emptyFacultyRecord(): Record<FacultyId, number> {
+  const record = {} as Record<FacultyId, number>;
+  for (const faculty of FACULTY_IDS) record[faculty] = 0;
+  return record;
+}
+
+function normalisedEntropy(counts: readonly number[], slots: number): number {
+  const total = counts.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || slots < 2) return 0;
+  let entropy = 0;
+  for (const value of counts) {
+    if (value <= 0) continue;
+    const p = value / total;
+    entropy -= p * Math.log(p);
+  }
+  return quantise(clamp01(entropy / Math.log(slots)));
+}
+
+function buildFacultySpread(
+  skeleton: Skeleton,
+  lookup: FacultyLookup,
+  edges: readonly ThreadEdgeTopology[]
+): FacultySpread {
+  const wovenByFaculty = emptyFacultyRecord();
+  const threadsByFaculty = emptyFacultyRecord();
+
+  for (const index of skeleton.woven) {
+    const faculty = lookup.conceptFaculty(skeleton.conceptIds[index] as ConceptId);
+    wovenByFaculty[faculty] += 1;
+  }
+
+  let crossingThreadCount = 0;
+  for (const edge of edges) {
+    const a = lookup.conceptFaculty(edge.pair[0]);
+    const b = lookup.conceptFaculty(edge.pair[1]);
+    threadsByFaculty[a] += 1;
+    if (a !== b) {
+      threadsByFaculty[b] += 1;
+      crossingThreadCount += 1;
+    }
+  }
+
+  const present = FACULTY_IDS.filter((faculty) => wovenByFaculty[faculty] > 0);
+
+  return Object.freeze({
+    presentFaculties: Object.freeze([...present]),
+    wovenByFaculty: Object.freeze(wovenByFaculty),
+    threadsByFaculty: Object.freeze(threadsByFaculty),
+    crossingThreadCount,
+    crossingShare:
+      edges.length === 0 ? 0 : quantise(crossingThreadCount / edges.length),
+    spread: normalisedEntropy(
+      FACULTY_IDS.map((faculty) => wovenByFaculty[faculty]),
+      FACULTY_IDS.length
+    ),
+  });
+}
+
+function buildIntentionMix(edges: readonly ThreadEdgeTopology[]): IntentionMix {
+  const counts = {} as Record<RelationIntention, number>;
+  const shares = {} as Record<RelationIntention, number>;
+  for (const intention of RELATION_INTENTIONS) {
+    counts[intention] = 0;
+    shares[intention] = 0;
+  }
+  for (const edge of edges) counts[edge.intention] += 1;
+
+  const total = edges.length;
+  for (const intention of RELATION_INTENTIONS) {
+    shares[intention] = total === 0 ? 0 : quantise(counts[intention] / total);
+  }
+
+  let dominant: RelationIntention | null = null;
+  let dominantIsTied = false;
+  if (total > 0) {
+    let best = -1;
+    for (const intention of RELATION_INTENTIONS) {
+      if (counts[intention] > best) {
+        best = counts[intention];
+        dominant = intention;
+        dominantIsTied = false;
+      } else if (counts[intention] === best) {
+        dominantIsTied = true;
+      }
+    }
+  }
+
+  return Object.freeze({
+    counts: Object.freeze(counts),
+    shares: Object.freeze(shares),
+    distinctCount: RELATION_INTENTIONS.filter((intention) => counts[intention] > 0)
+      .length,
+    dominant,
+    dominantIsTied,
+    balance: normalisedEntropy(
+      RELATION_INTENTIONS.map((intention) => counts[intention]),
+      RELATION_INTENTIONS.length
+    ),
+  });
+}
+
+/**
+ * Tension load: how much declared opposition the web is carrying that no third
+ * concept has taken hold of. A Tension triangulated by a concept joined to both
+ * of its endpoints through something other than more Tension counts as held —
+ * which is the topological shadow of the Dialectic motif, computed here without
+ * touching content so the world and the camera can read it every frame.
+ */
+function tensionLoadOf(
+  skeleton: Skeleton,
+  edges: readonly ThreadEdgeTopology[]
+): number {
+  if (edges.length === 0) return 0;
+  const tensions = edges.filter(
+    (edge) => edge.intention === "tension" && !edge.isSelfPair
+  );
+  if (tensions.length === 0) return 0;
+
+  const intentionsByPair = new Map<string, Set<RelationIntention>>();
+  for (const edge of edges) {
+    const key = pairKey(edge.pair[0], edge.pair[1]);
+    const found = intentionsByPair.get(key);
+    if (found === undefined) {
+      intentionsByPair.set(key, new Set([edge.intention]));
+    } else {
+      found.add(edge.intention);
+    }
+  }
+
+  const isHeldOnlyByTension = (a: ConceptId, b: ConceptId): boolean => {
+    const set = intentionsByPair.get(pairKey(a, b));
+    return set !== undefined && set.size === 1 && set.has("tension");
+  };
+
+  let unheld = 0;
+  for (const tension of tensions) {
+    const u = skeleton.indexOf.get(tension.pair[0]);
+    const v = skeleton.indexOf.get(tension.pair[1]);
+    if (u === undefined || v === undefined) {
+      unheld += 1;
+      continue;
+    }
+    const neighbours = new Set(skeleton.adjacency[u] ?? []);
+    let held = false;
+    for (const third of skeleton.adjacency[v] ?? []) {
+      if (!neighbours.has(third)) continue;
+      const thirdId = skeleton.conceptIds[third] as ConceptId;
+      if (
+        isHeldOnlyByTension(thirdId, tension.pair[0]) &&
+        isHeldOnlyByTension(thirdId, tension.pair[1])
+      ) {
+        continue;
+      }
+      held = true;
+      break;
+    }
+    if (!held) unheld += 1;
+  }
+
+  const tensionShare = tensions.length / edges.length;
+  const unheldRatio = unheld / tensions.length;
+  return quantise(clamp01(tensionShare * (0.5 + 0.5 * unheldRatio)));
+}
+
+/**
+ * Build the full topology of a session's web.
+ *
+ * Pure and total. An empty session yields every field at its identity value
+ * rather than an exception, because the world reads this before the first
+ * thread exists.
+ */
+export function buildTopology(
+  state: SessionStateV1,
+  lookup: FacultyLookup
+): SessionTopology {
+  const skeleton = buildSkeleton(state);
+  const wovenSet = new Set(skeleton.woven);
+  const { labels, count: componentCount } = labelComponents(skeleton, wovenSet);
+  const betweenness = brandesBetweenness(skeleton);
+
+  const cutEdges = new Set<number>();
+  skeleton.edges.forEach((edge, edgeIndex) => {
+    if (!connectedWithout(skeleton, edge.u, edge.v, edgeIndex)) {
+      cutEdges.add(edgeIndex);
+    }
+  });
+
+  const articulation = new Set<number>();
+  for (const candidate of skeleton.woven) {
+    const remaining = new Set(skeleton.woven.filter((index) => index !== candidate));
+    if (remaining.size === 0) continue;
+    const { count } = labelComponents(skeleton, remaining);
+    if (count > componentCount) articulation.add(candidate);
+  }
+
+  const seenPairs = new Set<string>();
+  const edges: ThreadEdgeTopology[] = state.threads.map((thread, order) => {
+    const key = pairKey(thread.pair[0], thread.pair[1]);
+    const isSelfPair = thread.pair[0] === thread.pair[1];
+    const isParallel = !isSelfPair && seenPairs.has(key);
+    if (!isSelfPair) seenPairs.add(key);
+
+    let isGraphBridge = false;
+    if (!isSelfPair) {
+      const edgeIndex = skeleton.edgeIndexByKey.get(key);
+      const record = edgeIndex === undefined ? undefined : skeleton.edges[edgeIndex];
+      isGraphBridge =
+        edgeIndex !== undefined &&
+        cutEdges.has(edgeIndex) &&
+        (record?.threadIds.length ?? 0) === 1;
+    }
+
+    return Object.freeze({
+      threadId: thread.id,
+      pair: thread.pair,
+      intention: thread.intention,
+      order,
+      sequence: thread.sequence,
+      isFacultyCrossing:
+        !isSelfPair &&
+        lookup.conceptFaculty(thread.pair[0]) !== lookup.conceptFaculty(thread.pair[1]),
+      isGraphBridge,
+      isParallel,
+      isSelfPair,
+    });
+  });
+
+  const wovenCount = skeleton.woven.length;
+  const nodes: ConceptNodeTopology[] = skeleton.conceptIds.map((conceptId, index) => {
+    const neighbours = skeleton.adjacency[index] ?? [];
+    const faculties = new Set<FacultyId>();
+    for (const neighbour of neighbours) {
+      faculties.add(
+        lookup.conceptFaculty(skeleton.conceptIds[neighbour] as ConceptId)
+      );
+    }
+    const degreeCentrality =
+      wovenCount < 2 ? 0 : quantise(clamp01(neighbours.length / (wovenCount - 1)));
+    const between = betweenness.get(index) ?? 0;
+
+    return Object.freeze({
+      conceptId,
+      faculty: lookup.conceptFaculty(conceptId),
+      degree: neighbours.length,
+      threadCount: (skeleton.threadIdsByConcept[index] ?? []).length,
+      neighbourIds: Object.freeze(
+        neighbours.map((neighbour) => skeleton.conceptIds[neighbour] as ConceptId)
+      ),
+      threadIds: Object.freeze([...(skeleton.threadIdsByConcept[index] ?? [])]),
+      neighbourFaculties: Object.freeze(
+        FACULTY_IDS.filter((faculty) => faculties.has(faculty))
+      ),
+      componentIndex: labels.get(index) ?? -1,
+      degreeCentrality,
+      betweenness: between,
+      centrality: quantise(clamp01(0.4 * degreeCentrality + 0.6 * between)),
+      isArticulation: articulation.has(index),
+    });
+  });
+
+  const components: ConceptComponent[] = [];
+  for (let index = 0; index < componentCount; index += 1) {
+    const memberIndices = skeleton.woven.filter(
+      (member) => labels.get(member) === index
+    );
+    const memberSet = new Set(memberIndices);
+    const componentEdges = skeleton.edges.filter(
+      (edge) => memberSet.has(edge.u) && memberSet.has(edge.v)
+    );
+    const faculties = new Set<FacultyId>();
+    for (const member of memberIndices) {
+      faculties.add(lookup.conceptFaculty(skeleton.conceptIds[member] as ConceptId));
+    }
+    const threadIds = edges
+      .filter(
+        (edge) =>
+          memberSet.has(skeleton.indexOf.get(edge.pair[0]) ?? -1) &&
+          memberSet.has(skeleton.indexOf.get(edge.pair[1]) ?? -1)
+      )
+      .map((edge) => edge.threadId);
+
+    components.push(
+      Object.freeze({
+        index,
+        conceptIds: Object.freeze(
+          memberIndices.map((member) => skeleton.conceptIds[member] as ConceptId)
+        ),
+        threadIds: Object.freeze(threadIds),
+        faculties: Object.freeze(FACULTY_IDS.filter((faculty) => faculties.has(faculty))),
+        circuitRank: componentEdges.length - memberIndices.length + 1,
+      })
+    );
+  }
+
+  const untouched = skeleton.conceptIds.filter(
+    (_, index) => !wovenSet.has(index)
+  );
+  const edgeCount = skeleton.edges.length;
+  const circuitRank = edgeCount - wovenCount + componentCount;
+  const leaves = skeleton.woven.filter(
+    (index) => (skeleton.adjacency[index] ?? []).length === 1
+  ).length;
+
+  const connectedness =
+    wovenCount < 2 ? 0 : (wovenCount - componentCount) / (wovenCount - 1);
+  const closure =
+    circuitRank <= 0 ? 0 : circuitRank / (circuitRank + Math.max(1, componentCount));
+  const density =
+    wovenCount < 2 ? 0 : edgeCount / ((wovenCount * (wovenCount - 1)) / 2);
+  const openness =
+    wovenCount === 0
+      ? skeleton.conceptIds.length === 0
+        ? 0
+        : 1
+      : 0.6 * (leaves / wovenCount) +
+        0.4 * (untouched.length / Math.max(1, skeleton.conceptIds.length));
+
+  return Object.freeze({
+    conceptIds: skeleton.conceptIds,
+    wovenConceptIds: Object.freeze(
+      skeleton.woven.map((index) => skeleton.conceptIds[index] as ConceptId)
+    ),
+    untouchedConceptIds: Object.freeze([...untouched]),
+    nodes: Object.freeze(nodes),
+    edges: Object.freeze(edges),
+    components: Object.freeze(components),
+    componentCount,
+    cycles: findCycles(skeleton),
+    triads: findTriads(skeleton),
+    facultySpread: buildFacultySpread(skeleton, lookup, edges),
+    intentionMix: buildIntentionMix(edges),
+    threadCount: edges.length,
+    edgeCount,
+    maxDegree: nodes.reduce((max, node) => Math.max(max, node.degree), 0),
+    circuitRank: Math.max(0, circuitRank),
+    density: quantise(clamp01(density)),
+    coherence: quantise(clamp01(0.7 * connectedness + 0.3 * closure)),
+    openness: quantise(clamp01(openness)),
+    tensionLoad: tensionLoadOf(skeleton, edges),
+  });
+}
+
+/**
+ * The web's growth, one thread at a time.
+ *
+ * Union-find over the threads in creation order: O(T·α) rather than rebuilding
+ * the full topology per prefix. This is what the conclusion compiler uses to
+ * shape density and to notice the moment two regions became one.
+ */
+export function accreteWeb(
+  state: SessionStateV1,
+  lookup: FacultyLookup
+): readonly WebAccretionStep[] {
+  const parent = new Map<ConceptId, ConceptId>();
+  const find = (id: ConceptId): ConceptId => {
+    let current = id;
+    let next = parent.get(current);
+    while (next !== undefined && next !== current) {
+      current = next;
+      next = parent.get(current);
+    }
+    return current;
+  };
+
+  const woven = new Set<ConceptId>();
+  const seenPairs = new Set<string>();
+  let componentCount = 0;
+  let edgeCount = 0;
+
+  const steps: WebAccretionStep[] = [];
+  state.threads.forEach((thread, order) => {
+    const [a, b] = thread.pair;
+    const aWasWoven = woven.has(a);
+    const bWasWoven = woven.has(b);
+
+    for (const id of [a, b]) {
+      if (!woven.has(id)) {
+        woven.add(id);
+        parent.set(id, id);
+        componentCount += 1;
+      }
+    }
+
+    const key = pairKey(a, b);
+    const isNewPair = a !== b && !seenPairs.has(key);
+    if (isNewPair) {
+      seenPairs.add(key);
+      edgeCount += 1;
+    }
+
+    const rootA = find(a);
+    const rootB = find(b);
+    const joinedComponents = a !== b && rootA !== rootB;
+    if (joinedComponents) {
+      parent.set(rootB, rootA);
+      componentCount -= 1;
+    }
+
+    const wovenCount = woven.size;
+    steps.push(
+      Object.freeze({
+        threadId: thread.id,
+        order,
+        sequence: thread.sequence,
+        wovenCount,
+        edgeCount,
+        componentCount,
+        density: quantise(
+          clamp01(wovenCount === 0 ? 0 : edgeCount / wovenCount / 1.5)
+        ),
+        joinedComponents,
+        closedCycle: a !== b && !joinedComponents && isNewPair,
+        bothEndpointsAlreadyWoven: aWasWoven && bWasWoven,
+        isFacultyCrossing:
+          a !== b && lookup.conceptFaculty(a) !== lookup.conceptFaculty(b),
+      })
+    );
+  });
+
+  return Object.freeze(steps);
+}

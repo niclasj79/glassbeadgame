@@ -1,112 +1,227 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
+import { motion } from "framer-motion";
+import { facetById } from "@/content/castalia/facets";
+import { facultyById } from "@/content/castalia/faculties";
+import type { CastaliaConcept } from "@/content/castalia/schema";
 import { useStore } from "@/state/store";
 import { productionInterpretation } from "@/runtime/interpretation";
-import { GlassPanel } from "../components/GlassPanel";
+import { inspectedConcept } from "../components/inspection";
+import {
+  QUIET_CONTROL,
+  READING_MEASURE,
+  READING_PLATE,
+  ReadingColumn,
+  ReadingRule,
+} from "../components/ReadingColumn";
 
-const AXES = [
-  { label: "True", index: 0 },
-  { label: "Beautiful", index: 1 },
-  { label: "Good", index: 2 },
-] as const;
+/**
+ * THE INSPECTION CARD — what a bead will say when it is asked directly.
+ *
+ * Every line here is authored content read verbatim: the caption, the
+ * description, the facets the concept genuinely carries, and where it sits in
+ * time. Nothing is computed, scored, or ranked.
+ *
+ * It used to read the prototype pack, which meant it also drew three meters —
+ * True, Beautiful, Good — from an authored coordinate triple. Those are gone
+ * with that pack, and they are not replaced: the Game has no standing to tell a
+ * player how good an idea is, and a bar chart saying so was the loudest place
+ * it claimed otherwise. The facets took their place because a facet is a
+ * structural property two concepts can actually be shown to share, which is
+ * what the player is about to do with this bead.
+ *
+ * READ VERBATIM MEANS READ IN FULL.
+ *
+ * This is the only surface in the game that renders a concept description, and
+ * it used to clamp that description to four lines and truncate the title, with
+ * no expand control anywhere. What the clamp cut was not filler. Fibonacci's
+ * description ended "…arrangements in plants. It …", and the sentence behind
+ * the ellipsis is "It is also badly over-claimed, which makes it a good test of
+ * how carefully one is willing to look" — the caveat, which is exactly the
+ * sentence a pack that refuses to overstate cannot afford to hide. Descriptions
+ * are authored to a 700-character ceiling and currently run 233–307, so there
+ * was nothing to save: the clamp cost the game its own honesty and bought about
+ * two lines of card.
+ *
+ * AND IT IS READ WHERE READING HAPPENS (IMP-5).
+ *
+ * The card used to be a rounded glass panel pinned to the lower left, over the
+ * instrument, at 10–12px — while the reserved column on the right, built for
+ * exactly this content and ruled for it, stood empty in the same frame. Two
+ * surfaces of the same class obeyed two different layout laws, and the one that
+ * fires first destroyed the world it describes: the panel crossed outside the
+ * page's inner rule and clipped the bead's own label to a fragment.
+ *
+ * It is set in `components/ReadingColumn` now, in the margin's measure, on the
+ * margin's page, under the margin's rule, at the margin's type sizes. The only
+ * thing that distinguishes it from an outcome reading is what it says.
+ */
+export interface BeadDetailsProps {
+  readonly concept: CastaliaConcept;
+  readonly lensActive: boolean;
+  readonly onClose: () => void;
+}
 
-function axisPercent(value: number): number {
-  return Math.max(0, Math.min(100, ((value + 1) / 2) * 100));
+/**
+ * The card with no store attached, so what it prints of a concept can be
+ * asserted directly. The clamp was invisible to every test in the suite because
+ * the only surface that carried it could not be rendered without the store.
+ */
+export function BeadDetails({ concept, lensActive, onClose }: BeadDetailsProps) {
+  const faculty = facultyById.get(concept.faculty);
+  return (
+    <>
+      {/* Brass, not gold: a bead is authored material, not a settled claim
+          about two things at once. Gold is spent only on the record. */}
+      <ReadingRule />
+      <p className="engraved mb-2">
+        {lensActive ? "Lens focus" : "Bead"} ·{" "}
+        {/* The faculty is named as well as inked. A faculty told in colour
+            alone is a faculty a monochrome screenshot does not carry. */}
+        <span style={{ color: faculty?.ink }}>
+          {faculty?.name ?? "Unattributed"}
+        </span>{" "}
+        · {concept.kind}
+      </p>
+      <h2
+        data-testid="bead-name"
+        className="font-display text-title font-medium leading-tight text-vellum"
+      >
+        {concept.name}
+      </h2>
+
+      <p className="prose-castalia mt-2 max-w-none text-body leading-relaxed">
+        {concept.caption}
+      </p>
+      <p
+        data-testid="bead-description"
+        className="prose-castalia mt-2 max-w-none text-body leading-relaxed"
+      >
+        {concept.description}
+      </p>
+
+      {/* The facets, named as the pack names them, set as the register sets a
+          reading: an engraved run, not a row of filled chips. These are the
+          handles a connection can actually be built from, so they are the last
+          thing read before the player goes back to the arena. */}
+      {/*
+        A facet name alone is a word the player has no way to look up. "No
+        Common Measure" and "Return" are precise and completely opaque on first
+        contact, and the pack already writes a one-clause gloss for every one of
+        them — it was simply never shown. Each name now carries its own gloss on
+        hover and on focus, and the gloss is in the accessible name too, so the
+        keyboard and screen-reader routes learn the same thing the pointer does.
+      */}
+      {concept.facets.length > 0 && (
+        <p
+          data-testid="bead-facets"
+          className="engraved mt-4 normal-case tracking-[0.12em] text-dim"
+        >
+          {concept.facets.map((facetId, index) => {
+            const facet = facetById.get(facetId);
+            const name = facet?.name ?? String(facetId);
+            return (
+              <span key={String(facetId)}>
+                {index > 0 && <span aria-hidden="true"> · </span>}
+                <abbr
+                  data-testid={`facet-${String(facetId)}`}
+                  title={facet ? `${name} — ${facet.gloss}` : name}
+                  aria-label={facet ? `${name}. ${facet.gloss}` : name}
+                  tabIndex={0}
+                  className="cursor-help border-b border-dotted border-line/60 no-underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/70"
+                >
+                  {name}
+                </abbr>
+              </span>
+            );
+          })}
+        </p>
+      )}
+
+      <p className="engraved mt-2 normal-case tracking-[0.12em] text-faint">
+        {concept.era}
+      </p>
+
+      {/* The same control row, in the same place, as the margin's "Set aside". */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="bead-close"
+          onClick={onClose}
+          aria-label="Close bead focus"
+          className={QUIET_CONTROL}
+        >
+          Set aside
+        </button>
+      </div>
+    </>
+  );
+}
+
+export interface BeadPlateProps extends BeadDetailsProps {
+  readonly reducedMotion: boolean;
+}
+
+/**
+ * The card in the column, with no store attached, so the layout law it obeys
+ * can be compared directly against the margin's — which is the whole of IMP-5
+ * and was untestable while the only surface carrying it needed the store.
+ *
+ * Closing is immediate rather than animated out: the player asked for the world
+ * back, and an exit that outlived the state change would put two reading
+ * columns on the glass while it played.
+ */
+export function BeadPlate({
+  concept,
+  lensActive,
+  onClose,
+  reducedMotion,
+}: BeadPlateProps) {
+  return (
+    <ReadingColumn label="The bead" testId="bead-inspect" lit>
+      <motion.figure
+        key={concept.id}
+        data-testid="bead-plate"
+        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: reducedMotion ? 0.14 : 0.28,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        className={`${READING_PLATE} ${READING_MEASURE}`}
+      >
+        <BeadDetails concept={concept} lensActive={lensActive} onClose={onClose} />
+      </motion.figure>
+    </ReadingColumn>
+  );
 }
 
 export function BeadInspectCard() {
   const pinned = useStore((s) => s.pinnedInspectId);
   const lensActive = useStore((s) => s.lensActive);
   const setFocusedBead = useStore((s) => s.setFocusedBead);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
 
   // Inspection is deliberate: long-press or the semantic Details action pins
   // it. Ordinary hover/focus never places a card over the arena.
-  const id = pinned;
-  const concept = id ? conceptById.get(id) : undefined;
-  const discipline = concept ? disciplineById.get(concept.discipline) : undefined;
+  const concept = inspectedConcept(pinned);
   const close = () => {
     productionInterpretation.closeInspection();
     setFocusedBead(null);
   };
 
+  /*
+   * The column is rendered only while a bead is inspected, and `Marginalia`
+   * yields its own column on the same condition in the same store update, so
+   * there is exactly one reading column on the page at any moment and its page
+   * is never drawn twice.
+   */
+  if (concept === null) return null;
+
   return (
-    <AnimatePresence>
-      {concept && discipline && (
-        <motion.div
-          key={concept.id}
-          className="pointer-events-auto absolute bottom-5 left-5 w-[min(350px,calc(100vw-2.5rem))]"
-          initial={{ opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.985 }}
-          transition={{ duration: 0.28 }}
-        >
-          <GlassPanel className="bg-void/70 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-ui text-[10px] uppercase tracking-[0.32em] text-dim">
-                  {lensActive ? "Lens focus" : "Bead"}
-                </p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <span className="font-display text-2xl leading-none" style={{ color: discipline.color }}>
-                    {discipline.glyph}
-                  </span>
-                  <h3 className="truncate font-display text-2xl font-medium text-bright">
-                    {concept.name}
-                  </h3>
-                </div>
-                <p className="mt-0.5 font-ui text-[11px] uppercase tracking-[0.22em] text-dim/80">
-                  {discipline.name}
-                </p>
-              </div>
-              <button
-                onClick={close}
-                aria-label="Close bead focus"
-                className="rounded-full border border-line/50 px-2 py-1 font-ui text-[10px] uppercase tracking-[0.18em] text-dim transition-colors hover:border-line hover:text-bright"
-              >
-                Close
-              </button>
-            </div>
-
-            <p className="mt-3 line-clamp-4 font-ui text-[12px] leading-relaxed text-dim">
-              {concept.description}
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {concept.keywords.map((keyword) => (
-                <span
-                  key={keyword}
-                  className="rounded-full border border-line/40 bg-surface/45 px-2.5 py-1 font-ui text-[10px] text-dim"
-                >
-                  {keyword}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {AXES.map((axis) => {
-                const value = concept.tbg[axis.index];
-                return (
-                  <div key={axis.label} className="grid grid-cols-[5.8rem_1fr_2.2rem] items-center gap-2">
-                    <span className="font-ui text-[10px] uppercase tracking-[0.2em] text-dim/70">
-                      {axis.label}
-                    </span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-line/45">
-                      <span
-                        className="block h-full rounded-full bg-glow/70"
-                        style={{ width: `${axisPercent(value)}%` }}
-                      />
-                    </span>
-                    <span className="text-right font-ui text-[10px] tabular-nums text-dim/70">
-                      {value.toFixed(2)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </GlassPanel>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <BeadPlate
+      concept={concept}
+      lensActive={lensActive}
+      onClose={close}
+      reducedMotion={reducedMotion}
+    />
   );
 }

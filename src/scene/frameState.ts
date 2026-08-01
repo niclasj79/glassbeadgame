@@ -1,4 +1,7 @@
+import type { SceneStage } from "@/runtime/scene";
 import { presentationNow } from "@/runtime/testMode";
+import { useStore } from "@/state/store";
+import { currentTheme } from "@/themes/useTheme";
 
 /**
  * Per-frame mutable state shared across scene components, deliberately outside
@@ -30,16 +33,8 @@ export const frameState = {
   hoveredId: null as string | null,
   /** Bead currently magnetized as the thread's landing candidate. */
   snapId: null as string | null,
-  /** Thread to flash (duplicate weave attempt) + when the flash began. */
-  pulseThreadId: null as string | null,
-  pulseAt: 0,
   /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */
   pulses: [] as { threadId: string; atAudioTime: number; duration: number; flip: boolean }[],
-  /** Sympathetic-resonance candidate while threading: the bead that would
-   *  form an undiscovered luminous connection with the origin. */
-  sympathy: null as { id: string; strength: number; panX: number } | null,
-  /** An active Illumination: the Game briefly showing where light hides. */
-  illumination: null as { a: string; b: string; until: number } | null,
   /** Pending particle-burst spawn requests, consumed by scene/Bursts. */
   bursts: [] as {
     x: number;
@@ -61,6 +56,21 @@ export const frameState = {
   recenter: false,
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
+  /**
+   * False while a scripted camera transit is in flight, and from the moment a
+   * new layout is published until the first frame has been drawn with it. A
+   * bead's screen position is meaningless before then — it would be reported
+   * from a camera that is about to be replaced — so the test adapter reports
+   * such a bead as off screen rather than lying about where to click it.
+   */
+  cameraSettled: false,
+  /**
+   * Frames drawn since the current bead layout was published. Positions exist
+   * in these arrays the instant the layout is computed, but nothing can be
+   * pointed at until the scene has actually drawn with them — so the test
+   * adapter waits for a few real frames before answering "where is this bead".
+   */
+  framesSinceLayout: 0,
 };
 
 export function initFramePositions(beadIds: string[], initial: Float32Array): void {
@@ -75,6 +85,13 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.clock = 0;
   frameState.hoveredId = null;
   frameState.aim.active = false;
+  // A previous Game's answer may not bleed into this one: the sky, the camera
+  // and the particle queue all start silent.
+  frameState.flare = 0;
+  frameState.kick = 0;
+  frameState.bursts.length = 0;
+  frameState.cameraSettled = false;
+  frameState.framesSinceLayout = 0;
   frameState.idleSince = presentationNow();
 }
 
@@ -99,3 +116,69 @@ export function beadPosition(id: string): [number, number, number] | null {
   const p = frameState.positions;
   return [p[i * 3], p[i * 3 + 1], p[i * 3 + 2]];
 }
+
+/**
+ * Where a bead is actually being *drawn* — positions plus this frame's bob.
+ * A burst spawned from `beadPosition` starts a visible distance from the sphere
+ * it is supposed to be leaving.
+ */
+function renderedPosition(id: string): [number, number, number] | null {
+  const i = frameState.beadIndex.get(id);
+  if (i === undefined) return null;
+  const r = frameState.rendered;
+  if (r.length < (i + 1) * 3) return null;
+  return [r[i * 3], r[i * 3 + 1], r[i * 3 + 2]];
+}
+
+/**
+ * THE WORLD, AS THE SCENE DIRECTOR SEES IT.
+ *
+ * `runtime/scene` decides *how much* the world answers and keeps that decision
+ * pure and testable; this is the only place that knows the answer is written
+ * into a Float32Array, read from a theme, or throttled by a comfort setting.
+ *
+ * Reduced motion is honoured here rather than in the director for the same
+ * reason: it is a property of this player's browser, not of the moment.
+ * Brightness survives it — a flare is light, not movement — while the camera
+ * impact is removed outright and particles are slowed, because those are the
+ * two that are felt in the inner ear.
+ */
+const ATTUNED_TIME_SCALE = 0.55;
+
+function reducedMotion(): boolean {
+  return useStore.getState().settings.reducedMotion;
+}
+
+export const frameStateStage: SceneStage = Object.freeze({
+  flare: (amount: number) => {
+    frameState.flare = Math.min(1, frameState.flare + Math.max(0, amount));
+  },
+
+  kick: (amount: number) => {
+    if (reducedMotion()) return;
+    frameState.kick = Math.min(1, frameState.kick + Math.max(0, amount));
+  },
+
+  burst: (conceptId: string, count: number, speed: number) => {
+    const at = renderedPosition(conceptId);
+    if (!at) return;
+    const gentle = reducedMotion();
+    emitBurst(
+      at,
+      currentTheme().palette.gold,
+      gentle ? Math.ceil(count * 0.5) : count,
+      gentle ? speed * 0.45 : speed
+    );
+  },
+
+  setAttuned: (active: boolean) => {
+    // The world is held rather than decorated: time itself thins, which every
+    // shader, every drift and every particle already reads through
+    // `frameState.clock`. Nothing new is drawn to say Attunement is on.
+    frameState.timeScaleTarget = active ? ATTUNED_TIME_SCALE : 1;
+  },
+
+  touch: () => {
+    frameState.idleSince = presentationNow();
+  },
+});

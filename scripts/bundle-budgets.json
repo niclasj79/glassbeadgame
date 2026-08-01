@@ -1,7 +1,8 @@
 {
-  "totalRawBytes": 2550000,
-  "totalGzipBytes": 1350000,
-  "javascriptRawBytes": 1700000,
-  "javascriptGzipBytes": 500000,
+  "_note": "Regression ceilings, not targets: they exist to catch growth nobody decided on. Raised twice during the Castalia completion campaign, and the second time is worth being uncomfortable about — a ceiling raised whenever it is hit is not a ceiling. Both raises are recorded rather than quietly applied, and both were preceded by a real attempt to meet the existing number. First raise (2026-07-31): the pre-campaign numbers predated the refraction pass, the scene cue director, Attunement, the reading surfaces and the citations; drei deep imports were tried and returned 92 bytes, and code splitting does not help a metric that measures total JavaScript rather than the initial chunk. Second raise (2026-08-01): the conclusion is now performed by the scene rather than compiled and discarded, which cost about 2 kB gzip; the owning change first cut its own module by 25 percent minified and got 190 bytes of gzip back for it, so the remainder could not be found without deleting the feature. If a third raise is ever proposed, the right answer is probably to make the metric measure the initial chunk and let the conclusion load with the conclusion.",
+  "totalRawBytes": 2620000,
+  "totalGzipBytes": 1380000,
+  "javascriptRawBytes": 1760000,
+  "javascriptGzipBytes": 524000,
   "largestAssetRawBytes": 720000
 }

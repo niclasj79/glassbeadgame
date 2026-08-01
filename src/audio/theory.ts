@@ -1,80 +1,61 @@
-import type { Concept, Discipline } from "@/content/types";
-import { disciplineById } from "@/content/disciplines";
-import { conceptById } from "@/content/concepts";
+/**
+ * ONE PITCH AND ONE BODY PER BEAD.
+ *
+ * The presentation layer — hover, selection, the thread choir, the discovery
+ * chord — needs a single note and a single instrument for a bead, not a whole
+ * rendered motif. Both are authored: `motif.degrees[0]` is the bead's identity
+ * note, `motif.register` places it, and `motif.timbre` names the body that
+ * plays it. This module is the only place those fields become frequencies.
+ *
+ * This file used to be the bridge to the prototype's content pack, which
+ * authored a pentatonic degree per concept and a timbre per discipline. That
+ * pack is gone, and with it the last private tuning system: every pitch here
+ * resolves through the world mode (`mode.ts`) and every body through the six in
+ * `voices.ts`.
+ *
+ * Code that needs a bead's whole motif rather than its first note should use
+ * `renderMotif` in `motif.ts`.
+ */
+import { castaliaConceptById } from "@/content/castalia";
+import type {
+  CastaliaConcept,
+  MotifRegister,
+  TimbreId,
+} from "@/content/castalia/schema";
+import { CASTALIA_MODE, degreeFrequency } from "./mode";
+
+/** Resolve a semitone degree in a register through the world mode. */
+export function modeFreq(degree: number, register: MotifRegister): number {
+  return degreeFrequency(CASTALIA_MODE, degree, register);
+}
+
+export interface BeadVoice {
+  readonly freq: number;
+  readonly timbre: TimbreId;
+}
+
+function voiceOf(concept: CastaliaConcept): BeadVoice {
+  const { degrees, register, timbre } = concept.motif;
+  return { freq: modeFreq(degrees[0] ?? 0, register), timbre };
+}
 
 /**
- * One shared pitch space: C major pentatonic (C D E G A) across four octaves.
- * Any subset of it is consonant, so every possible discovery chord is
- * guaranteed pleasant — this is the fix for v1's cross-discipline clashes.
+ * A bead's identity note and body, straight from its authored motif. `null` for
+ * an id the pack does not know — callers fall silent rather than substitute a
+ * pitch no one wrote.
  */
-const GAMUT_SEMITONES = [0, 2, 4, 7, 9]; // C D E G A
-
-const REGISTER_OCTAVE: Record<Discipline["register"], number> = {
-  low: 2,
-  mid: 3,
-  high: 4,
-};
-
-export function degreeToFreq(degree: number, octave: number): number {
-  const midi = 12 * (octave + 1) + GAMUT_SEMITONES[((degree % 5) + 5) % 5];
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-/** A concept's identity note: its pitch degree in its discipline's register. */
-export function noteForConcept(concept: Concept): number {
-  const disc = disciplineById.get(concept.discipline);
-  const octave = disc ? REGISTER_OCTAVE[disc.register] : 3;
-  return degreeToFreq(concept.pitchDegree, octave);
-}
-
-export interface ChordNote {
-  freq: number;
-  timbre: Discipline["timbre"];
-  gain: number;
-  /** Seconds after chord start (the strum). */
-  delay: number;
+export function beadVoice(id: string): BeadVoice | null {
+  const concept = castaliaConceptById.get(id);
+  return concept ? voiceOf(concept) : null;
 }
 
 /**
- * The discovery chord: both concepts' identity notes plus supporting tones,
- * voiced wider and richer with tier. Staggered like a harp strum.
+ * `chordForPair` and its `secondStep` helper were removed here.
+ *
+ * They voiced a pair by `tier` — wider and brighter for a higher-tier
+ * discovery — which is a reward gradient expressed in harmony, and their one
+ * caller (`sfx.discoveryChord`) read `session.discoveries`, a projection
+ * published empty since the legacy scoring model was retired. A relation is now
+ * voiced by the intention the player declared, in `audio/grammar.ts`, at the
+ * same weight whatever its epistemic status (CAV-006).
  */
-export function chordForPair(aId: string, bId: string, tier: 0 | 1 | 2 | 3): ChordNote[] {
-  const a = conceptById.get(aId);
-  const b = conceptById.get(bId);
-  if (!a || !b) return [];
-  const da = disciplineById.get(a.discipline)!;
-  const db = disciplineById.get(b.discipline)!;
-  const octA = REGISTER_OCTAVE[da.register];
-  const octB = REGISTER_OCTAVE[db.register];
-
-  const notes: ChordNote[] = [
-    // Grounding root + fifth, always low, always quiet.
-    { freq: degreeToFreq(0, 2), timbre: "drone", gain: 0.16, delay: 0 },
-    { freq: degreeToFreq(3, 2), timbre: "drone", gain: 0.1, delay: 0.05 },
-    // The two voices themselves.
-    { freq: noteForConcept(a), timbre: da.timbre, gain: 0.24, delay: 0.09 },
-    { freq: noteForConcept(b), timbre: db.timbre, gain: 0.24, delay: 0.16 },
-  ];
-
-  if (tier >= 2) {
-    notes.push({
-      freq: degreeToFreq(da.degrees[1], octA + 1),
-      timbre: da.timbre,
-      gain: 0.14,
-      delay: 0.24,
-    });
-    notes.push({
-      freq: degreeToFreq(db.degrees[1], Math.min(octB + 1, 5)),
-      timbre: db.timbre,
-      gain: 0.12,
-      delay: 0.32,
-    });
-  }
-  if (tier >= 3) {
-    // The floated ninth — a high D that makes profound discoveries shimmer.
-    notes.push({ freq: degreeToFreq(1, 5), timbre: "bell", gain: 0.1, delay: 0.44 });
-    notes.push({ freq: degreeToFreq(0, 5), timbre: "bell", gain: 0.08, delay: 0.58 });
-  }
-  return notes;
-}
