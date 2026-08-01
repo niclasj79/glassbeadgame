@@ -7,10 +7,12 @@ import type { NormalizedGestureSample } from "../gestureProfile";
 import type { CuePlan } from "../cues";
 import { planAttention, planAttentionCleared, planIntentionArmed } from "../cues";
 import type { InterpretationDraft } from "../interactionDraft";
-import { createInterpretationAttentionCoordinator } from "./createInterpretationAttentionCoordinator";
+import {
+  createInterpretationAttentionCoordinator,
+  type ResolveCandidateEvidence,
+} from "./createInterpretationAttentionCoordinator";
 import { createInterpretationCommitCoordinator } from "./createInterpretationCommitCoordinator";
 import { createInterpretationThreadId } from "./createInterpretationThreadId";
-import type { ResolveProvisionalCandidateEvidence } from "./resolveProvisionalCandidateEvidence";
 
 const MAX_GESTURE_SAMPLES = 128;
 
@@ -32,7 +34,7 @@ export interface ProductionInterpretationDependencies {
   readonly draftStore: InterpretationDraftStore;
   readonly presentationStore: InterpretationPresentationStore;
   readonly now: () => number;
-  readonly resolveCandidateEvidence: ResolveProvisionalCandidateEvidence;
+  readonly resolveCandidateEvidence: ResolveCandidateEvidence;
   readonly setInspection: (conceptId: ConceptId | null) => void;
   /**
    * Stages one coordinated response for a draft transition.

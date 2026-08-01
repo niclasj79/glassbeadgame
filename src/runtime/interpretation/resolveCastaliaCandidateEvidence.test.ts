@@ -4,6 +4,8 @@ import type { SessionStateV1 } from "../../domain/model";
 import { evaluateCandidateResonance } from "../../domain/relations/resonance";
 import type { FacetId } from "../../content/castalia/schema";
 import { toFacetId } from "../../content/castalia/schema";
+import { CASTALIA_PACK } from "../../content/castalia";
+import { castaliaResonanceLookup } from "../content/castaliaLookup";
 import {
   createCastaliaCandidateEvidenceResolver,
   type CastaliaResonanceLookup,
@@ -233,8 +235,134 @@ describe("Castalia candidate evidence", () => {
         observed.add(band);
       }
     }
+    // High now requires topology support, which the woven fixtures supply.
     expect(observed).toContain("weak");
     expect(observed).toContain("medium");
-    expect(observed).toContain("high");
+  });
+});
+
+describe("the high band is not a rendering of the answer key", () => {
+  /**
+   * The test I should have written the first time.
+   *
+   * The original suite asserted that all three bands were *reachable*. They
+   * were — and the high band was still, in effect, the documented-relation
+   * table drawn on the arena: measured on the golden draw, five pairs reached
+   * high, four of them documented, precision 0.80 against a base rate of 0.121.
+   * Reachability was the wrong property. What matters is whether the strongest
+   * signal in the world predicts the answer key.
+   *
+   * These run against the REAL Castalia pack, because a synthetic fixture
+   * cannot tell you what the shipped content does.
+   */
+  const sweep = () => {
+    const ids = CASTALIA_PACK.concepts.map((c) => toConceptId(c.id));
+    const state = {
+      conceptIds: ids,
+      threads: [],
+    } as unknown as SessionStateV1;
+    const resolve = createCastaliaCandidateEvidenceResolver(castaliaResonanceLookup);
+    const seen = new Map<string, { band: string; documented: boolean }>();
+    for (const attended of ids) {
+      const evidence = resolve({ session: state, attendedConceptId: attended });
+      const bands = evaluateCandidateResonance({
+        sessionConceptIds: ids,
+        attendedConceptId: attended,
+        candidates: evidence,
+      });
+      for (const result of bands) {
+        const [x, y] = [String(attended), String(result.candidateId)].sort();
+        seen.set(`${x}~${y}`, {
+          band: result.band,
+          documented: castaliaResonanceLookup.hasDocumentedRelation(
+            attended,
+            result.candidateId
+          ),
+        });
+      }
+    }
+    return [...seen.values()];
+  };
+
+  it("decides high from structure alone, never from the documented bit", () => {
+    // The mechanical guarantee. Flipping the documented flag must not be able to
+    // move any pair into or out of the high band.
+    const levels = [0, 1, 2] as const;
+    for (const facetSupport of levels) {
+      for (const topologySupport of levels) {
+        for (const contextSupport of levels) {
+          const base = {
+            candidateId: toConceptId("x"),
+            facetSupport,
+            topologySupport,
+            contextSupport,
+          };
+          const band = (documentedRelationPresent: boolean) =>
+            evaluateCandidateResonance({
+              sessionConceptIds: [toConceptId("a"), toConceptId("x")],
+              attendedConceptId: toConceptId("a"),
+              candidates: [{ ...base, documentedRelationPresent }],
+            })[0].band;
+          const without = band(false);
+          const withFlag = band(true);
+          expect(withFlag === "high").toBe(without === "high");
+        }
+      }
+    }
+  });
+
+  it("singles nothing out before the player has woven anything", () => {
+    // The opening must not be farmable. Measured over all 276 pairs on an empty
+    // web, every reachable structural threshold predicts an authored relation
+    // well above chance — 2.68x at "shares any structure", 4.60x at the
+    // strictest — because relations were authored where structure is rich. That
+    // correlation cannot be tuned away, so the arena withholds its strongest
+    // signal until the player's own web is part of the reason for it.
+    const pairs = sweep();
+    expect(pairs.filter((p) => p.band === "high")).toHaveLength(0);
+    expect(pairs.filter((p) => p.band === "medium").length).toBeGreaterThan(0);
+    expect(pairs.filter((p) => p.band === "weak").length).toBeGreaterThan(0);
+  });
+
+  it("cannot reach high without the player's web supplying the reason", () => {
+    const levels = [0, 1, 2] as const;
+    for (const facetSupport of levels) {
+      for (const contextSupport of levels) {
+        const band = evaluateCandidateResonance({
+          sessionConceptIds: [toConceptId("a"), toConceptId("x")],
+          attendedConceptId: toConceptId("a"),
+          candidates: [
+            {
+              candidateId: toConceptId("x"),
+              facetSupport,
+              contextSupport,
+              topologySupport: 0,
+              documentedRelationPresent: true,
+            },
+          ],
+        })[0].band;
+        expect(band).not.toBe("high");
+      }
+    }
+  });
+
+  it("opens the high band once a web exists, on what the web makes true", () => {
+    // The counterweight: withholding the signal early must not mute the arena
+    // forever. Topology support comes from a shared neighbour or from two
+    // regions a commitment would join — facts about the player's composition.
+    const band = evaluateCandidateResonance({
+      sessionConceptIds: [toConceptId("a"), toConceptId("x")],
+      attendedConceptId: toConceptId("a"),
+      candidates: [
+        {
+          candidateId: toConceptId("x"),
+          facetSupport: 2,
+          contextSupport: 0,
+          topologySupport: 1,
+          documentedRelationPresent: false,
+        },
+      ],
+    })[0].band;
+    expect(band).toBe("high");
   });
 });
