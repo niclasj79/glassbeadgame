@@ -21,11 +21,18 @@ import {
   dampAngle,
   dampOrbitToward,
   dampScalar,
+  ABANDONED_FILL,
+  INSTRUMENT_EDGE_CLEARANCE,
   MARGIN_RESERVE,
+  REST_SUBJECT_BOX,
   WORLD_SAFE_CLEARANCE,
+  axesAgree,
   compositionBox,
   frameRuleNdc,
   homeComposition,
+  marginReserve,
+  restFrame,
+  titleComposition,
   horizonNdcY,
   maxTargetOffset,
   orbitFromPosition,
@@ -570,6 +577,109 @@ describe("the composed home frame", () => {
     }
   });
 
+  /**
+   * B5 — THE RESTING FRAME ABANDONED THE RIGHT 40 PERCENT.
+   *
+   * Measured on the running build at 1440x810, golden seed: the instrument's
+   * silhouette stood between screen x 143 and 847 — the left 59% of the page —
+   * with 25 px between its lowest brass and the bottom edge of the viewport,
+   * and 40% of the width carrying two nav pills, a mute button and the page's
+   * rule. Scaled to the frame's height, seated at its left.
+   *
+   * Two of the three faults are properties of the fit and are held here. The
+   * third — that the width the composition *reserved* stood empty — is a
+   * property of a rendered frame, and is held in `tests/browser/rest-frame`.
+   */
+  it("seats the subject inside the stated box on every viewport", () => {
+    for (const viewport of VIEWPORTS) {
+      const rest = restFrame(viewport);
+      const box =
+        viewport.width / viewport.height < PORTRAIT_ASPECT
+          ? REST_SUBJECT_BOX.portrait
+          : REST_SUBJECT_BOX.landscape;
+      const inside =
+        rest.centre.x >= box.minX &&
+        rest.centre.x <= box.maxX &&
+        rest.centre.y >= box.minY &&
+        rest.centre.y <= box.maxY;
+      expect(
+        `${viewport.name} ${inside ? "seated" : `at ${rest.centre.x.toFixed(3)}, ${rest.centre.y.toFixed(3)}`}`
+      ).toBe(`${viewport.name} seated`);
+    }
+  });
+
+  it("never crops one axis while abandoning the other", () => {
+    for (const viewport of VIEWPORTS) {
+      const rest = restFrame(viewport);
+      // The silhouette may cross the page's *ruling* — that is the
+      // composition — but it may never reach the page.
+      for (const edge of ["left", "right", "top", "bottom"] as const) {
+        expect(
+          `${viewport.name} ${edge} ${rest.clearance[edge] >= INSTRUMENT_EDGE_CLEARANCE / 2 - 1e-9 ? "clear" : rest.clearance[edge].toFixed(4)}`
+        ).toBe(`${viewport.name} ${edge} clear`);
+      }
+      // And neither axis is abandoned by the subject that fills the other.
+      expect(
+        `${viewport.name} ${Math.min(rest.fill.x, rest.fill.y) >= ABANDONED_FILL ? "filled" : `${Math.min(rest.fill.x, rest.fill.y).toFixed(3)}`}`
+      ).toBe(`${viewport.name} filled`);
+      expect(axesAgree(rest)).toBe(true);
+    }
+  });
+
+  /**
+   * VC-05 — THE TITLE'S TWO HALVES SEESAWED.
+   *
+   * Measured on the running build: the landscape title's luminance centroid sat
+   * at 55.4% of the width, with two thirds of its energy right of centre, while
+   * the armillary behind it centred at about 34% — image and wordmark pulling
+   * opposite ways with a collision in the middle. The cause was that the title
+   * used the arena's composition, and the arena leans off centre because a
+   * column is held down its right for readings the title does not have.
+   */
+  it("composes the title concentrically, and the arena off centre", () => {
+    for (const viewport of VIEWPORTS) {
+      const title = titleComposition(viewport);
+      const arena = homeComposition(viewport);
+      expect(`${viewport.name} ${title.centre.x} ${title.centre.y}`).toBe(
+        `${viewport.name} 0 0`
+      );
+      expect(title.viewOffset).toEqual({ x: 0, y: 0 });
+      // The fit is untouched: only where the frame is carried to differs, so
+      // the opening move keeps the dolly `scene/opening.ts` authored.
+      expect(title.distance).toBe(arena.distance);
+      expect(title.instrument).toEqual(arena.instrument);
+      // And the arena is still not concentric — which is the whole reason the
+      // title could not go on using it.
+      expect(Math.hypot(arena.centre.x, arena.centre.y)).toBeGreaterThan(0.2);
+    }
+  });
+
+  it("shows the defect: the frame it replaced was fitted to one axis and left of the other", () => {
+    // The old law, restated: a flat 0.36 reserve on every viewport, and the
+    // instrument centred in whatever box that left. Both numbers here are the
+    // shipped ones, so this fails the moment the composition drifts back.
+    const OLD_RESERVE = 0.36;
+    for (const viewport of VIEWPORTS) {
+      const aspect = viewport.width / viewport.height;
+      if (aspect < PORTRAIT_ASPECT) continue;
+      const safe = worldSafeArea(aspect);
+      const oldCentreX = (safe.minX + (1 - 2 * OLD_RESERVE)) / 2;
+      const rest = restFrame(viewport);
+      // The instrument used to be seated further from the page's centre than
+      // it is now, on every wide page — and on 1440x810 it stood at 34.4%.
+      expect(Math.abs(oldCentreX)).toBeGreaterThan(
+        Math.abs(2 * rest.centre.x - 1) - 1e-9
+      );
+      expect(restFrame(viewport).centre.x).toBeGreaterThan((1 + oldCentreX) / 2);
+    }
+    // The reserve the DOM actually takes, which the flat constant overstated
+    // by 13.5 points on a 1920 desktop and by 19 on an ultrawide.
+    expect(marginReserve({ width: 1920, height: 1080 })).toBeCloseTo(0.225, 6);
+    expect(marginReserve({ width: 2560, height: 1080 })).toBeCloseTo(0.16875, 6);
+    expect(marginReserve({ width: 1024, height: 768 })).toBeCloseTo(0.32, 6);
+    expect(marginReserve({ width: 414, height: 896 })).toBeCloseTo(0.3, 6);
+  });
+
   it("breaks the ruling with the silhouette instead of floating clear of it", () => {
     for (const viewport of VIEWPORTS) {
       const aspect = viewport.width / viewport.height;
@@ -614,9 +724,13 @@ describe("the composed home frame", () => {
     for (const viewport of VIEWPORTS) {
       const home = homeComposition(viewport);
       expect(home.broken).not.toContain(home.margin);
-      // `ui/arena/Marginalia` takes min(27rem, 32vw) of the width in landscape
-      // and the foot of the page in portrait. The composition reserves it
-      // whether or not anything is written there.
+      // `ui/components/ReadingColumn` takes min(27rem, 32vw) of the width in
+      // landscape and min-h-[30vh] at the foot of a portrait page. The
+      // composition reserves *that*, on this viewport, rather than a flat
+      // constant that was the right answer on one tablet and 13.5 points too
+      // much on a 1920 desktop — which is what pushed the instrument off to the
+      // left of a frame nothing else was standing in (B5).
+      expect(home.reserve).toBeGreaterThanOrEqual(marginReserve(viewport) - 1e-9);
       expect(home.reserve).toBeGreaterThanOrEqual(MARGIN_RESERVE - 1e-9);
     }
   });
@@ -707,18 +821,29 @@ describe("the composed home frame", () => {
       const home = homeComposition(viewport);
       const aspect = viewport.width / viewport.height;
       const safe = worldSafeArea(aspect);
-      const box = compositionBox(aspect);
-      // Whichever side the fit is tight against, it is tight to the pixel: the
-      // distance is solved from the frame, not chosen and then defended.
+      const box = compositionBox(viewport);
+      // Whichever law the fit is tight against, it is tight to the pixel: the
+      // distance is solved from the frame, not chosen and then defended. Three
+      // laws can bind, and `home.against` names which one did, so this reads
+      // the composition rather than re-deriving it.
       const slack =
-        home.tight === home.margin
+        home.against === "margin"
           ? aspect < PORTRAIT_ASPECT
             ? home.centre.y - home.instrument.y - box.minY
             : box.maxX - (home.centre.x + home.instrument.x)
-          : Math.min(
-              safe.maxY - (Math.abs(home.centre.y) + home.beads.y),
-              safe.maxX - (Math.abs(home.centre.x) + home.beads.x)
-            );
+          : home.against === "page"
+            ? Math.min(
+                1 -
+                  INSTRUMENT_EDGE_CLEARANCE -
+                  (Math.abs(home.centre.y) + home.instrument.y),
+                1 -
+                  INSTRUMENT_EDGE_CLEARANCE -
+                  (Math.abs(home.centre.x) + home.instrument.x)
+              )
+            : Math.min(
+                safe.maxY - (Math.abs(home.centre.y) + home.beads.y),
+                safe.maxX - (Math.abs(home.centre.x) + home.beads.x)
+              );
       expect(`${viewport.name} ${slack < 1e-9 ? "tight" : "slack"}`).toBe(
         `${viewport.name} tight`
       );

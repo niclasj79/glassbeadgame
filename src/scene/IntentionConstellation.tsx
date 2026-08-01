@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { Html } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import type * as THREE from "three";
+import * as THREE from "three";
 import { useStore as useVanillaStore } from "zustand";
 import type { RelationIntention } from "@/domain/events";
 import { isCoarsePointer } from "@/lib/device";
@@ -38,16 +43,29 @@ import {
  * A narrow viewport now opens the plate instead of shrinking it: small screen,
  * same fingers.
  *
- * THE PLATE OPENS IN THE POSE IT WILL BE AIMED AT. Attending performs a camera
- * lean, and the plate is anchored to a bead in the world, so for as long as the
- * lean is in flight the plate is a moving target. Measured on the running
- * build: the plate appeared 18 ms after the press at (170, 201), was carried to
- * (-18, 258) — more than half of it off the left edge of the viewport — and
- * only came to rest at (423, 293), 294 px away, after three and a half seconds.
- * Everything the player could aim at was travelling for the whole of that.
- * So the plate now waits for the pose: the press is answered instantly by the
- * world (the bead takes light, the resonance bands publish, the instrument
- * turns), and the plate opens where it will stay.
+ * THE PLATE OPENS IN THE POSE IT WILL BE AIMED AT — AND IT OPENS AT THE PRESS.
+ *
+ * Attending performs a camera lean, and the plate is anchored to a bead in the
+ * world, so for as long as the lean is in flight the plate is a moving target.
+ * Measured on the running build: the plate appeared 18 ms after the press at
+ * (170, 201), was carried to (-18, 258) — more than half of it off the left
+ * edge of the viewport — and only came to rest at (423, 293), 294 px away,
+ * after three and a half seconds. Everything the player could aim at was
+ * travelling for the whole of that.
+ *
+ * Waiting for the pose fixed the travelling and produced something worse: a
+ * click set attention, the live region said "Choose an intention", and for
+ * about three and a half seconds there was nothing on screen to choose from.
+ *
+ * Both are answered by the same law, and it is the world's own: a press holds
+ * the sightline (`threading.beginGesture`), a held camera is a settled camera,
+ * and a pose queued while the camera is held is abandoned rather than
+ * performed. So attention is set on the way *down*, and the plate opens around
+ * the bead under the finger — measured at 115 ms — in the pose the press was
+ * made in, and then does not move. What the lean used to buy, the plate now
+ * does for itself: it slides, by the least it can, to stay on the page.
+ * A keyboard attend still performs the whole lean, and its plate still waits
+ * for the pose to arrive, because nobody is aiming a pointer at it.
  *
  * THE PLATE HAS A GROUND. The graduated circle used to be struck straight over
  * whatever beads happened to lie inside it — on a 1280x720 frame the Prime
@@ -128,6 +146,69 @@ const PLATE_GROUND_ID = "intention-plate-ground-fill";
  * attend is committed the flag still carries the previous frame's answer.
  */
 const POSE_SETTLE_FRAMES = 2;
+
+/**
+ * …AND THE OTHER WAY THE POSE CAN ARRIVE.
+ *
+ * `cameraSettled` is `goal.current === null`, and a scripted move gives up its
+ * goal either on arrival or after a 3.5 s timeout. A move whose pose the orbit
+ * clamps cannot arrive: the camera comes to a complete stop within a second or
+ * so and the flag stays false for the whole of the timeout, which is why a
+ * keyboard attend left the plate unopened for three and a half seconds with
+ * nothing moving on the screen at all.
+ *
+ * So the plate also opens when *the thing it is anchored to* has stopped. This
+ * is the property that actually matters — the plate must open where it will
+ * stay — and it is measured directly, in pixels, on the anchor itself. The
+ * bound is tight on purpose: at a damped stop, a frame that moves less than
+ * this has less than a handful of pixels of travel left in it.
+ */
+const STILL_PX = 0.14;
+const STILL_FRAMES = 4;
+
+/** The band an engraved station name occupies beyond its own station. */
+const LABEL_BAND = 18;
+
+/** How long an armed intention waits before it begins to insist. */
+export const INSIST_AFTER_SECONDS = 9;
+/** And how long it then takes to reach its full, still-quiet depth. */
+export const INSIST_RAMP_SECONDS = 5;
+/** How deep the insistence breathes. Light only, and bounded well short of a blink. */
+export const INSIST_DEPTH = 0.34;
+
+/** Scratch for the once-per-frame projection. Nothing here allocates. */
+const screen = new THREE.Vector3();
+
+/**
+ * Has the pose this plate will be aimed at arrived?
+ *
+ * `last` carries the previous frame's anchor point and whether there was one:
+ * three numbers in an array the caller owns, so asking the question costs no
+ * allocation on the frame path.
+ */
+function poseArrived(
+  settledFrames: MutableRefObject<number>,
+  stillFrames: MutableRefObject<number>,
+  last: MutableRefObject<Float32Array>,
+  x: number,
+  y: number
+): boolean {
+  settledFrames.current = frameState.cameraSettled
+    ? settledFrames.current + 1
+    : 0;
+  const previous = last.current;
+  stillFrames.current =
+    previous[2] > 0 && Math.hypot(x - previous[0], y - previous[1]) < STILL_PX
+      ? stillFrames.current + 1
+      : 0;
+  previous[0] = x;
+  previous[1] = y;
+  previous[2] = 1;
+  return (
+    settledFrames.current >= POSE_SETTLE_FRAMES ||
+    stillFrames.current >= STILL_FRAMES
+  );
+}
 
 /**
  * The index rail's two controls. The hit box keeps the fingertip minimum the
@@ -245,9 +326,67 @@ function Plate({
   );
 }
 
+/**
+ * How far the plate may slide to stay on the page, and what it protects first.
+ *
+ * The plate is anchored to a bead, and a bead near an edge is a plate over the
+ * edge. The camera used to solve this by leaning until the plate fitted, and
+ * paid for it with three and a half seconds in which the press that demanded
+ * the plate was answered by nothing at all. The plate now opens where the bead
+ * is and slides — by the least it can — until it is on the page.
+ *
+ * When the page is too small to hold the whole plate at all (a phone is), what
+ * is protected is the four verbs and their engraved names; the index rail's two
+ * marks may clip, because they are not verbs. That is the same order of
+ * degradation `framing.plateSafeArea` already applies to the camera.
+ */
+function slide(centre: number, extent: number, size: number): number {
+  // Nothing can be done for a page this small, and a correction that cannot
+  // succeed would only carry the plate off the opposite edge.
+  if (extent * 2 > size) return 0;
+  if (centre - extent < 0) return extent - centre;
+  if (centre + extent > size) return size - (centre + extent);
+  return 0;
+}
+
+/**
+ * How much of that slide the plate may actually take.
+ *
+ * It stops when the attended bead would leave the ring drawn around it — a
+ * plate that is not visibly *this bead's* plate is worse than a plate with a
+ * clipped corner — and gives that bound up only for the one thing that may
+ * never happen, which is a verb station over the edge of the page.
+ */
+function bounded(whole: number, verbs: number, ring: number): number {
+  const limit = Math.max(ring, Math.abs(verbs));
+  return Math.max(-limit, Math.min(limit, whole));
+}
+
+/**
+ * How hard an armed intention nobody has drawn is insisting, 0 to 1.
+ *
+ * Measured naive: the ring was still open ninety seconds after the intention
+ * was chosen, sixty-five of them after the last release, with no thread woven
+ * and nothing on the screen changing. There is no timer in this Game and no
+ * failure, so the intention is not taken away — it is still theirs, and they
+ * have done nothing wrong. It says so instead, and it takes its time saying it.
+ */
+function insistence(armedSeconds: number): number {
+  const over = (armedSeconds - INSIST_AFTER_SECONDS) / INSIST_RAMP_SECONDS;
+  return over < 0 ? 0 : over > 1 ? 1 : over;
+}
+
+/**
+ * The plate's three placement laws, gathered so a test can measure them
+ * without standing up a renderer. They are pure; the component below is the
+ * only thing that applies them.
+ */
+export const PLATE_PLACEMENT = Object.freeze({ slide, bounded, insistence });
+
 /** A temporary world-bound intention plate; it is never a persistent HUD. */
 export function IntentionConstellation() {
   const anchor = useRef<THREE.Group>(null);
+  const pane = useRef<HTMLDivElement>(null);
   const theme = useCurrentTheme();
   const viewportWidth = useThree((s) => s.size.width);
   const plate = plateGeometry(
@@ -265,29 +404,91 @@ export function IntentionConstellation() {
    * bead, which is the one case where the plate genuinely has to be re-placed.
    */
   const [posed, setPosed] = useState(false);
+  const armedMark = useRef<HTMLDivElement>(null);
+  const armedSeconds = useRef(0);
   const settledFrames = useRef(0);
+  const stillFrames = useRef(0);
+  const lastScreen = useRef(new Float32Array(3));
   useEffect(() => {
     settledFrames.current = 0;
+    stillFrames.current = 0;
+    lastScreen.current[2] = 0;
     setPosed(false);
   }, [attendedId]);
 
-  useFrame(() => {
-    if (draft.stage === "inactive") return;
-    if (!posed) {
-      settledFrames.current = frameState.cameraSettled
-        ? settledFrames.current + 1
-        : 0;
-      if (settledFrames.current >= POSE_SETTLE_FRAMES) setPosed(true);
+  useFrame((three, rawDt) => {
+    if (draft.stage === "inactive") {
+      armedSeconds.current = 0;
+      return;
     }
-    if (!anchor.current) return;
+    const dt = Math.min(rawDt, 1 / 20);
+
+    /**
+     * AN ARMED INTENTION THAT NOBODY DRAWS MUST NOT SIT THERE FOR EVER.
+     *
+     * Measured naive: the ring was still open ninety seconds after the
+     * intention was chosen, sixty-five of them after the last release, with no
+     * thread woven and nothing on the screen changing. The Game has no timers
+     * and no failure, so the answer is not to take the intention away — the
+     * player has not done anything wrong and it is still theirs. It *insists*
+     * instead: after a while the armed mark begins to breathe, on the world's
+     * own breath, bounded, in light rather than travel, so it is legible under
+     * reduced motion and cannot become a flash. It says "this is still held",
+     * which is the truth, and it never says it faster.
+     */
+    if (draft.stage === "armed" && !frameState.aim.active) {
+      armedSeconds.current += dt;
+    } else {
+      armedSeconds.current = 0;
+    }
+    const mark = armedMark.current;
+    if (mark) {
+      const insist = insistence(armedSeconds.current);
+      const breath = (1 - Math.cos(frameState.breathPhase)) / 2;
+      mark.style.opacity = String(1 - insist * INSIST_DEPTH * breath);
+    }
     const index = frameState.beadIndex.get(String(draft.attendedConceptId));
     if (index === undefined) return;
     const rendered = frameState.rendered;
-    anchor.current.position.set(
-      rendered[index * 3],
-      rendered[index * 3 + 1],
-      rendered[index * 3 + 2]
+    if (anchor.current) {
+      anchor.current.position.set(
+        rendered[index * 3],
+        rendered[index * 3 + 1],
+        rendered[index * 3 + 2]
+      );
+    }
+
+    // Where the plate's anchor actually lands on the page, this frame.
+    screen
+      .set(rendered[index * 3], rendered[index * 3 + 1], rendered[index * 3 + 2])
+      .project(three.camera);
+    const x = ((screen.x + 1) / 2) * three.size.width;
+    const y = ((1 - screen.y) / 2) * three.size.height;
+
+    if (!posed) {
+      if (poseArrived(settledFrames, stillFrames, lastScreen, x, y)) {
+        setPosed(true);
+      }
+      return;
+    }
+
+    // The plate keeps itself on the page. A ref write, never React state: this
+    // is solved on every frame and must not re-render the arena.
+    const element = pane.current;
+    if (!element) return;
+    const verb = plate.ring + plate.station / 2 + LABEL_BAND;
+    const dx = bounded(
+      slide(x, plate.extentSide, three.size.width),
+      slide(x, verb, three.size.width),
+      plate.ring
     );
+    const dy = bounded(
+      slide(y, Math.max(plate.extentUp, plate.extentDown), three.size.height),
+      slide(y, verb, three.size.height),
+      plate.ring
+    );
+    element.style.transform =
+      dx === 0 && dy === 0 ? "" : `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
   });
 
   useEffect(() => {
@@ -356,6 +557,7 @@ export function IntentionConstellation() {
     <group ref={anchor}>
       <Html center style={{ pointerEvents: "none" }} zIndexRange={[18, 12]}>
         <div
+          ref={pane}
           data-testid="intention-constellation"
           className="relative touch-none text-bright"
           style={{ width: plate.box, height: plate.box }}
@@ -436,6 +638,7 @@ export function IntentionConstellation() {
             </div>
           ) : selectedOption ? (
             <div
+              ref={armedMark}
               aria-hidden="true"
               data-testid="armed-intention"
               title={`${selectedOption.label} armed`}

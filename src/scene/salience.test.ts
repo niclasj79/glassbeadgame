@@ -1,11 +1,17 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  INVITATION_REACH,
   MID_FRACTION,
   NEAR_CAP,
+  SEPARATION_CLEARANCE,
+  SEPARATION_LIMIT,
   TIER_FAR,
   TIER_MID,
   TIER_NEAR,
   assignSalience,
+  invitationWeights,
+  separateOnScreen,
   tierCounts,
   tierWeights,
 } from "./salience";
@@ -137,5 +143,204 @@ describe("the focal hierarchy", () => {
   it("answers safely for an empty draw", () => {
     expect(() => tiers([])).not.toThrow();
     expect(tierCounts(0)).toEqual({ near: 0, mid: 0, far: 0 });
+  });
+});
+
+/**
+ * B1 — TWO BEADS RENDERED AS ONE OBJECT
+ *
+ * Measured on the running build at the composed home pose, seed
+ * castalia-golden-001: Coupled Pendulums and Diffraction stood 19.7 px apart on
+ * 1280x720 (17.8 at 1024x768, 18.5 at 768x900, 18.4 at 414x896, 24.6 at
+ * 1600x900) with a drawn bead radius of about 19 px. One silhouette, two
+ * concepts. The occluded one had no name and could not be pointed at, on the
+ * first frame of every session, at every supported viewport.
+ */
+const geometry = (
+  points: readonly (readonly [number, number])[],
+  radius: number | readonly number[] = 0.05,
+  hidden: readonly boolean[] = []
+) => {
+  const count = points.length;
+  const anchor = new Float32Array(count * 2);
+  const radii = new Float32Array(count);
+  const hide = new Float32Array(count);
+  points.forEach(([x, y], i) => {
+    anchor[i * 2] = x;
+    anchor[i * 2 + 1] = y;
+    radii[i] = typeof radius === "number" ? radius : radius[i];
+    hide[i] = hidden[i] ? 1 : 0;
+  });
+  const push = new Float32Array(count * 2);
+  const overlapping = separateOnScreen(anchor, radii, hide, count, push);
+  const at = (i: number): [number, number] => [
+    anchor[i * 2] + push[i * 2],
+    anchor[i * 2 + 1] + push[i * 2 + 1],
+  ];
+  const gap = (i: number, j: number): number =>
+    Math.hypot(at(i)[0] - at(j)[0], at(i)[1] - at(j)[1]);
+  return { push, overlapping, at, gap, radii };
+};
+
+describe("no two beads may read as one", () => {
+  it("opens a pair that the layout drew inside one silhouette", () => {
+    // The measured case: two beads a fifth of a diameter apart.
+    const r = 0.05;
+    const solved = geometry([
+      [0, 0],
+      [0.02, 0],
+    ], r);
+    expect(solved.overlapping).toBe(1);
+    expect(solved.gap(0, 1)).toBeGreaterThanOrEqual(
+      2 * r * (1 + SEPARATION_CLEARANCE) - 1e-6
+    );
+  });
+
+  it("moves both of them by the same amount, because neither is the real one", () => {
+    const solved = geometry([
+      [0, 0],
+      [0.03, 0],
+    ]);
+    const a = Math.hypot(solved.push[0], solved.push[1]);
+    const b = Math.hypot(solved.push[2], solved.push[3]);
+    expect(Math.abs(a - b)).toBeLessThan(1e-6);
+    // …along the line between them, so the pair opens where the eye is looking.
+    expect(solved.push[1]).toBeCloseTo(0, 6);
+    expect(solved.push[3]).toBeCloseTo(0, 6);
+    expect(solved.push[0]).toBeLessThan(0);
+    expect(solved.push[2]).toBeGreaterThan(0);
+  });
+
+  it("separates exactly coincident beads deterministically", () => {
+    // No line to push along. The answer has to exist, and it has to be the same
+    // answer on the next frame, or the pair vibrates.
+    const first = geometry([
+      [0.2, -0.1],
+      [0.2, -0.1],
+    ]);
+    const second = geometry([
+      [0.2, -0.1],
+      [0.2, -0.1],
+    ]);
+    expect(first.gap(0, 1)).toBeGreaterThan(0.09);
+    expect([...first.push]).toEqual([...second.push]);
+  });
+
+  it("leaves a draw that is already legible completely alone", () => {
+    const points: [number, number][] = [
+      [-0.6, 0.4],
+      [0, 0.2],
+      [0.55, -0.3],
+      [-0.2, -0.5],
+    ];
+    const solved = geometry(points);
+    expect(solved.overlapping).toBe(0);
+    expect([...solved.push].every((v) => v === 0)).toBe(true);
+  });
+
+  it("opens a cluster of three without leaving any pair overlapping", () => {
+    const r = 0.05;
+    const solved = geometry([
+      [0, 0],
+      [0.01, 0.01],
+      [-0.01, 0.008],
+    ], r);
+    const wanted = 2 * r * (1 + SEPARATION_CLEARANCE);
+    for (const [i, j] of [[0, 1], [0, 2], [1, 2]]) {
+      // A pile of three cannot be solved exactly in a bounded number of sweeps,
+      // but every pair must clear the glass it is drawn with.
+      expect(solved.gap(i, j)).toBeGreaterThan(2 * r);
+      expect(solved.gap(i, j)).toBeGreaterThan(wanted * 0.9);
+    }
+  });
+
+  it("never carries a bead far enough to become a second layout", () => {
+    // Twelve beads piled on one point: the cap is what keeps the armillary's
+    // geography — which the eye learns — from being rewritten by a crowd.
+    const r = 0.05;
+    const solved = geometry(
+      Array.from({ length: 12 }, (_, i) => [i * 0.001, 0] as [number, number]),
+      r
+    );
+    for (let i = 0; i < 12; i++) {
+      const moved = Math.hypot(solved.push[i * 2], solved.push[i * 2 + 1]);
+      expect(moved).toBeLessThanOrEqual(r * SEPARATION_LIMIT + 1e-6);
+    }
+  });
+
+  it("ignores beads that are not on the frame at all", () => {
+    const solved = geometry(
+      [
+        [0, 0],
+        [0.005, 0],
+      ],
+      0.05,
+      [false, true]
+    );
+    expect(solved.overlapping).toBe(0);
+    expect([...solved.push].every((v) => v === 0)).toBe(true);
+  });
+
+  it("is what the arena actually draws with", () => {
+    const source = readFileSync(new URL("./Beads.tsx", import.meta.url), "utf8");
+    expect(source).toContain("separateOnScreen(");
+    // The displacement reaches the glass, the hit target and the name, because
+    // all three read the same rendered position.
+    expect(source).toContain("focal.pushEased");
+    expect(source).toContain("rendered[index * 3] = x;");
+  });
+});
+
+/**
+ * VC-02 — THE WORLD NEVER SAID WHAT TO DO
+ *
+ * Sampled on a fresh profile at 5, 10, 15, 25 and 40 s: the only text on screen
+ * was "The Lens" and "Conclude"; every instruction the build owns was placed at
+ * x = -1 for assistive technology; and hovering a 56 px bead grew it about
+ * eight per cent. The invitation has to be made by the instrument itself.
+ */
+describe("the invitation", () => {
+  it("makes one bead reach, unmissably, while the rest settle back", () => {
+    const offered = invitationWeights(1, 1);
+    expect(offered.reach - 1).toBeGreaterThanOrEqual(0.2);
+    expect(offered.reach - 1).toBe(INVITATION_REACH);
+    // The others recede, but a long way less: this is one bead coming forward,
+    // not the draw being dimmed.
+    expect(offered.recede).toBeLessThan(1);
+    expect(1 - offered.recede).toBeLessThan(INVITATION_REACH / 3);
+    expect(offered.light).toBe(1);
+  });
+
+  it("ends for good on first contact, and is silent between kindlings", () => {
+    // Accepted: the world stops offering, completely.
+    expect(invitationWeights(1, 0)).toEqual({ reach: 1, recede: 1, light: 0 });
+    // Between the idle score's events there is nothing to see either — a world
+    // that is always reaching is decorated, not inhabited.
+    expect(invitationWeights(0, 1)).toEqual({ reach: 1, recede: 1, light: 0 });
+  });
+
+  it("lets go continuously, so acceptance is not a pop", () => {
+    let previous = invitationWeights(1, 1).reach;
+    for (let step = 24; step >= 0; step--) {
+      const now = invitationWeights(1, step / 25).reach;
+      expect(previous - now).toBeLessThan(0.02);
+      expect(now).toBeLessThanOrEqual(previous + 1e-9);
+      previous = now;
+    }
+    expect(previous).toBe(1);
+  });
+
+  it("is carried by the instrument, and answers a hover past the noise", () => {
+    const source = readFileSync(new URL("./Beads.tsx", import.meta.url), "utf8");
+    expect(source).toContain("invitationWeights(");
+    // A hover measured at eight per cent is inside the noise of a bead that is
+    // already bobbing and breathing.
+    const hover = /HOVER_SCALE = ([\d.]+)/.exec(source);
+    expect(hover).not.toBeNull();
+    expect(Number(hover![1]) - 1).toBeGreaterThanOrEqual(0.2);
+    // …and it is not size alone: the glass takes light, and the name arrives.
+    const emphasis = /HOVER_EMPHASIS = ([\d.]+)/.exec(source);
+    expect(emphasis).not.toBeNull();
+    expect(Number(emphasis![1])).toBeGreaterThan(0.5);
   });
 });

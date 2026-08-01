@@ -4,8 +4,15 @@ import type { ReactNode } from "react";
  * THE READING COLUMN — one law for anything that is read.
  *
  * The composition already reserves a column for reading: `scene/framing.ts`
- * holds `MARGIN_RESERVE` of the page clear of the instrument "whether or not
- * anything is written there", and the arena is seated off-centre because of it.
+ * holds a margin clear of the instrument "whether or not anything is written
+ * there", and the arena is seated off-centre because of it. That reserve is
+ * derived from *this file's* measure now — `framing.marginReserve` computes
+ * `min(27rem, 32vw)` down a wide page and `30vh` at the foot of a narrow one,
+ * which are the two numbers below — so widening the column steps the world
+ * aside by exactly that much and no more. It used to be a flat 0.36 on every
+ * viewport, which reserved 87 px that belonged to nobody at 1440 and 13.5
+ * points too much at 1920 (B5).
+ *
  * Two things were wrong with what the DOM then did with that bargain.
  *
  * TWO SURFACES, TWO LAWS (IMP-5). The margin took the reserved column and set
@@ -133,9 +140,18 @@ function Page({ lit }: { readonly lit: boolean }) {
         style={{ background: STANDING_TINT_SIDE }}
       />
 
-      {/* The gutter rule: across the head of the foot on a narrow page, down
-          the column's inner edge on a wide one, struck between the page's own
-          rules on both. */}
+      {/* THE GUTTER RULE, DOUBLED.
+          Across the head of the foot on a narrow page, down the column's inner
+          edge on a wide one, struck between the page's own rules on both — and
+          struck *twice*, five pixels apart, at a strength that falls off with
+          the second stroke.
+
+          One hairline is a divider; a divider is what a panel has. Two rules a
+          few points apart is a ruled margin, which is what a manuscript has,
+          and it is the difference between a column that is *waiting to be
+          written in* and a column that is empty. B5 measured the empty
+          version: the right 40% of the page carrying "two nav pills, a mute
+          button, the border rule and three stray light streaks". */}
       <div
         aria-hidden="true"
         data-testid="reading-column-gutter"
@@ -144,7 +160,18 @@ function Page({ lit }: { readonly lit: boolean }) {
           left: FRAME_RULE_GAP,
           right: FRAME_RULE_GAP,
           background:
-            "linear-gradient(90deg, transparent, hsl(var(--line) / 0.85) 22%, hsl(var(--line) / 0.85) 78%, transparent)",
+            "linear-gradient(90deg, transparent, hsl(var(--line) / 0.9) 22%, hsl(var(--line) / 0.9) 78%, transparent)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        data-testid="reading-column-gutter-companion"
+        className="absolute top-[5px] -z-20 h-px md:hidden"
+        style={{
+          left: `calc(${FRAME_RULE_GAP} + 3rem)`,
+          right: `calc(${FRAME_RULE_GAP} + 3rem)`,
+          background:
+            "linear-gradient(90deg, transparent, hsl(var(--line) / 0.4) 26%, hsl(var(--line) / 0.4) 74%, transparent)",
         }}
       />
       <div
@@ -154,7 +181,17 @@ function Page({ lit }: { readonly lit: boolean }) {
           top: FRAME_RULE_GAP,
           bottom: FRAME_RULE_GAP,
           background:
-            "linear-gradient(180deg, transparent, hsl(var(--line) / 0.85) 16%, hsl(var(--line) / 0.85) 84%, transparent)",
+            "linear-gradient(180deg, transparent, hsl(var(--line) / 0.9) 16%, hsl(var(--line) / 0.9) 84%, transparent)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute left-[5px] -z-20 hidden w-px md:block"
+        style={{
+          top: `calc(${FRAME_RULE_GAP} + 3rem)`,
+          bottom: `calc(${FRAME_RULE_GAP} + 3rem)`,
+          background:
+            "linear-gradient(180deg, transparent, hsl(var(--line) / 0.4) 20%, hsl(var(--line) / 0.4) 80%, transparent)",
         }}
       />
 

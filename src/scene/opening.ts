@@ -1,3 +1,5 @@
+import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
+
 /**
  * THE OPENING
  *
@@ -159,3 +161,113 @@ export function openingStep(index: number): OpeningStep {
 export function acknowledgementMs(): number {
   return openingStep(0).delay * 1000;
 }
+
+/* --------------------------------------------------------- the world's door */
+
+/**
+ * THE WORLD IS BUILT WHILE THE PLAYER IS READING.
+ *
+ * The acknowledgement above answered the press. It did not make the press
+ * *work*: measured on a cold profile, headed, on a GTX 1080 Ti, the worst frame
+ * gap after the first BEGIN was 2236 ms, 1956 ms and 2140 ms over three cold
+ * runs, beginning about 140 ms after the press. In a warm browser process the
+ * same press costs 33 ms. So the two seconds are the first-time player's, and
+ * nobody else's — which is the one player whose next decision is whether to
+ * continue at all.
+ *
+ * Instrumenting `WebGLRenderingContext` on a cold profile named it exactly.
+ * Four programs are linked in answer to the press, and the second of them —
+ * the bead glass, whose fragment shader solves a sphere, marches a refracted
+ * chord through it and draws an authored figure inside — blocks the main thread
+ * for **1914 ms** inside `getProgramInfoLog`. That is three.js, at the first
+ * draw, waiting for a link the driver has not finished. Everything else in the
+ * press is noise beside it: 29 ms, 8 ms, 27 ms.
+ *
+ * A link cannot be made cheaper and cannot be split across frames. It can only
+ * be moved. `KHR_parallel_shader_compile` lets the driver link on its own
+ * thread while the main thread carries on, so the whole build — the glass, the
+ * label's derived material, and the glyph atlas the names are drawn from — is
+ * started when the title appears and waited for with `compileAsync`, which
+ * polls `COMPLETION_STATUS_KHR` instead of blocking on it.
+ *
+ * And then the door waits for it. A press that cannot be honoured is worse than
+ * a door that arrives a second late, and the title has an epigraph to read: the
+ * hold is silent, has no progress bar and no spinner, and on any warm load it
+ * is not there at all. `ArenaCanvas` builds the world and opens this gate;
+ * `TitleScreen` holds the door on it.
+ */
+
+/**
+ * How long the door will wait for a world that never says it is ready, in
+ * milliseconds. This is not a budget — it is the failure case. A gate that can
+ * jam is a gate that can lock the player out of the Game entirely, so it opens
+ * anyway, and the worst that costs is the freeze this whole mechanism exists to
+ * remove.
+ *
+ * It is deliberately far longer than the wait it is insuring against, because
+ * firing early is not a safety net — it is the freeze, back again, on exactly
+ * the slow devices that can least afford it. Measured from the title's first
+ * paint, cold profile, GTX 1080 Ti: the world was ready in 3.4, 3.7 and 4.8
+ * seconds; on a warm load, in 0.85 and 1.3, which is inside the title's own
+ * stagger and therefore not a wait at all. Twelve seconds leaves room for a
+ * device several times slower than this one and still bounds the pathological
+ * case — a font that never arrives, a renderer that never answers.
+ */
+export const OPENING_DOOR_DEADLINE_MS = 12_000;
+
+/** Where the door falls in the title's own stagger, in seconds. */
+export const OPENING_DOOR_DELAY_S = 0.75;
+
+/**
+ * EVERY LETTER THE WORLD MAY HAVE TO DRAW.
+ *
+ * The names are drawn from a signed-distance atlas troika fills a glyph at a
+ * time, and a name whose glyphs are not in it yet does not render as nothing —
+ * it renders as the wrong pixels. That is what the first live arena frame
+ * showed: one bead captioned with garbage, because the atlas was half built
+ * when the frame it was read for was drawn.
+ *
+ * Which names a Game needs is not known until the draw exists, and the draw
+ * does not exist until BEGIN is pressed — so the atlas is filled with the whole
+ * pack's alphabet instead of one draw's. It is derived rather than written out
+ * because the pack has an ö in it, and the next concept added may have
+ * something else; a hand-kept list would be wrong the first time it mattered
+ * and silently so.
+ */
+export const OPENING_ALPHABET: string = Array.from(
+  new Set(CASTALIA_CONCEPTS.flatMap((concept) => Array.from(concept.name)))
+)
+  .sort()
+  .join("");
+
+type OpeningListener = () => void;
+
+let worldReady = false;
+const openingListeners = new Set<OpeningListener>();
+
+/**
+ * Whether the world behind the title has been built. One boolean, no payload:
+ * there is nothing to report and nothing to draw about it.
+ */
+export const openingWorld = {
+  isReady(): boolean {
+    return worldReady;
+  },
+  /** Idempotent: a canvas that remounts does not re-open an open door. */
+  open(): void {
+    if (worldReady) return;
+    worldReady = true;
+    for (const listener of [...openingListeners]) listener();
+  },
+  subscribe(listener: OpeningListener): () => void {
+    openingListeners.add(listener);
+    return () => {
+      openingListeners.delete(listener);
+    };
+  },
+  /** Tests only. Nothing in the running build ever shuts this again. */
+  reset(): void {
+    worldReady = false;
+    openingListeners.clear();
+  },
+};

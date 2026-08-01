@@ -132,6 +132,15 @@ describe("the reading column", () => {
     expect(html).toContain('data-testid="reading-column-standing"');
     expect(html).toContain('data-testid="reading-column-gutter"');
 
+    // Ruled *twice* (B5). One hairline is a divider, and a divider is what a
+    // panel has; two rules a few points apart is a ruled margin, which is what
+    // tells the eye the right of the page is waiting to be written in rather
+    // than left over. The companion is struck at less than half the weight —
+    // a second stroke, not a second rule.
+    expect(html).toContain('data-testid="reading-column-gutter-companion"');
+    expect(html).toContain("hsl(var(--line) / 0.9)");
+    expect(html).toContain("hsl(var(--line) / 0.4)");
+
     // The rule is the page's own rule. `min(1vw,1vh)` is one percent of the
     // viewport's short side, which is the unit `scene/framing.frameRuleShared`
     // measures the manuscript's inner ruling in — so the gutter is struck

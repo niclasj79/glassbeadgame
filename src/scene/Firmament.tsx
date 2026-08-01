@@ -12,6 +12,12 @@ import { idleClock, travellingLight } from "./idle";
 import { presentationProfile } from "./quality";
 import { getHaloTexture } from "./textures";
 import { glslFloat, VAULT } from "./firmamentGeometry";
+import {
+  LEVEL_COLATITUDE,
+  LEVEL_WIDTH,
+  WALL_FOOT,
+  floorCourses,
+} from "./firmamentRoom";
 
 /**
  * THE FIRMAMENT
@@ -67,6 +73,27 @@ const SKY_RADIUS = 48;
  */
 const LINE_OPACITY = 0.26;
 const LINE_BREATH = 0.05;
+
+/**
+ * ── THE ROOM WHERE THE INSTRUMENT IS NOT ────────────────────────────────────
+ *
+ * B5, measured at 1440x810 on the golden seed: the instrument's silhouette
+ * stood in the left 59% of the page and the remaining 40% carried two nav
+ * pills, a mute button, the page's rule "and three stray light streaks". The
+ * streaks were this shader: two transverse courses and the impost, arriving at
+ * a strength the eye reads as lens flare because *nothing else in that part of
+ * the frame was drawn*. A sphere fitted to the ruled height of a 16:9 page
+ * covers 44% of its width and no framing decision changes that (see
+ * `framing.REST_SUBJECT_BOX`), so the width the instrument cannot fill has to
+ * be filled by the room — or it is a hole, which is what a stranger judged.
+ *
+ * The level, the floor and the wall's foot are stated in `firmamentRoom.ts`,
+ * next to the vault's own geometry and under the same discipline: the
+ * description the tests measure is the description that renders. What is
+ * decided *here* is how hard each of them is struck, and every one of those
+ * numbers used to resolve below the level a floor-subtracted luminance
+ * measurement can see.
+ */
 
 
 /**
@@ -132,19 +159,49 @@ void main() {
    */
   float above = smoothstep(${glslFloat(VAULT.springing)}, ${glslFloat(VAULT.crown)}, colat);
 
-  // Primary ribs: meridians rising to the boss.
+  /*
+   * The wall the ribs stand on. The ramp above opens at the springing line,
+   * which is where the *vault* begins; a rib that only exists above it is a
+   * rib with nothing under it, and at the level itself that ramp was at 18%.
+   * The ribs run from below the frame's own floor now, so the room has
+   * verticals standing on horizontals (B5).
+   */
+  float wall = smoothstep(${glslFloat(WALL_FOOT)}, ${glslFloat(VAULT.crown)}, colat);
+
+  // Primary ribs: meridians rising from the floor to the boss.
   float ribs = gbgLine(
-    fract(lon * ${glslFloat(VAULT.ribs)} / GBG_TAU) - 0.5, 0.010) * above;
+    fract(lon * ${glslFloat(VAULT.ribs)} / GBG_TAU) - 0.5, 0.010) * wall;
+
+  /*
+   * The minor order. Twelve ribs put one meridian every 30 degrees, and the
+   * arena's field of view is 66 wide — so the wall the instrument does not
+   * cover carried two verticals and nothing between them. A wall with a major
+   * and a minor order is the oldest way of giving a plain surface a rhythm,
+   * and it is the one mark in this room that reads at every orbit rather than
+   * only where a course happens to cross the frame.
+   */
+  float minorRibs = gbgLine(
+    fract(lon * ${glslFloat(VAULT.ribs * 2)} / GBG_TAU) - 0.5, 0.006) * wall;
 
   // The impost course, struck once across the room at the height the vault
   // springs from. One drawn rule is what tells the eye it is indoors.
   float impost = gbgLine(colat - ${glslFloat(VAULT.impost)}, ${glslFloat(VAULT.impostWidth)});
 
-  // The well below: graduated courses receding into the dye. Brought up from
-  // colatitude 1.75 so the floor of the room is inside the frame too.
-  float below = smoothstep(${glslFloat(VAULT.wellStart)}, ${glslFloat(VAULT.wellEnd)}, colat);
-  float floorCourses =
-    gbgLine(fract(colat * 3.2 / GBG_PI) - 0.5, 0.02) * below;
+  // THE LEVEL. The one rule the whole composition is measured from: the
+  // instrument's own horizon, struck rather than glowed, and reaching the side
+  // of the page the instrument never gets to.
+  float level = gbgLine(colat - ${glslFloat(Number(LEVEL_COLATITUDE.toFixed(5)))}, ${glslFloat(LEVEL_WIDTH)});
+
+  // THE FLOOR. Courses receding on a plane one eye-height below the level.
+  float floorCourses = 0.0;
+${floorCourses()
+  .map(
+    (course) =>
+      `  floorCourses = max(floorCourses, gbgLine(colat - ${glslFloat(
+        course.colatitude
+      )}, ${glslFloat(course.width)}) * ${glslFloat(course.weight)});`
+  )
+  .join("\n")}
 
   /*
    * The engraved room, kept out of the GBG_TRACERY gate on purpose.
@@ -155,10 +212,22 @@ void main() {
    * is made of", never remove it. The ribs, the impost and the floor courses
    * are the room's identity; the tracery, the rose and the boss are its
    * ornament, and only the ornament is a budget decision.
+   *
+   * THE STRENGTHS. Every one of these used to resolve below the level a
+   * floor-subtracted luminance measurement can see: the ribs peaked at 16% of
+   * the engraving colour and the floor at 4% of it once its presence ramp was
+   * counted — about 47 and 10 of 255, over a ground that already sits near 20.
+   * Drawn architecture that cannot be told from its own background is not
+   * architecture; it is the "stray light streaks" B5 measured. They are struck
+   * at the strength a fine line on dark vellum is actually struck at — and no
+   * higher: the instrument is still the brightest thing in the room, and the
+   * room is still behind everything.
    */
-  vec3 ink = uEngraving * ribs * 0.5 * 0.32;
-  ink += mix(uEngraving, uGold, 0.3) * impost * 0.1;
-  ink += uEngraving * floorCourses * 0.09;
+  vec3 ink = uEngraving * ribs * 0.32;
+  ink += uEngraving * minorRibs * 0.13;
+  ink += mix(uEngraving, uBrass, 0.5) * impost * 0.14;
+  ink += mix(uEngraving, uBrass, 0.55) * level * 0.34;
+  ink += mix(uEngraving, uBrass, 0.4) * floorCourses * 0.22;
 
 #if GBG_TRACERY
   float tracery = 0.0;
@@ -187,7 +256,13 @@ void main() {
     rose = max(max(mullion, rings), foil);
   }
 
-  ink += uEngraving * tracery * 0.42 * 0.32;
+  // The vault's courses, quieter than they were. These are the "three stray
+  // light streaks" B5 saw in the empty right of the frame: at 0.134 of the
+  // engraving colour, and with nothing else drawn anywhere near them, two long
+  // shallow arcs across an empty sky read as lens flare rather than as a
+  // ceiling. They are part of a room now — a level, a floor, ribs and an impost
+  // — and a part is allowed to be quieter than a solo.
+  ink += uEngraving * tracery * 0.10;
   ink += mix(uEngraving, uGold, 0.45) * rose * 0.3;
   // The boss: a single point of gold leaf directly overhead.
   ink += uGold * smoothstep(0.09, 0.0, colat) * 0.28;

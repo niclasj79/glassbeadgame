@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { CASTALIA_CONCEPTS } from "@/content/castalia/concepts";
 import {
   ACKNOWLEDGE_FRAMES,
   ACKNOWLEDGE_MS,
   HOME_ELEVATION,
+  OPENING_ALPHABET,
+  OPENING_DOOR_DEADLINE_MS,
   OPENING_DURATION_MS,
   OPENING_LINES,
   TITLE_AZIMUTH,
@@ -11,6 +14,7 @@ import {
   TITLE_ELEVATION,
   acknowledgementMs,
   openingStep,
+  openingWorld,
 } from "./opening";
 
 /**
@@ -29,6 +33,15 @@ const read = (file: string): string =>
 const appSource = (): string => read("../App.tsx");
 const titleSource = (): string => read("../ui/screens/TitleScreen.tsx");
 const rigSource = (): string => read("./CameraRig.tsx");
+const canvasSource = (): string => read("./ArenaCanvas.tsx");
+
+/**
+ * Source with its commentary removed. These files explain themselves at
+ * length and name every mistake they were written to answer, so a test that
+ * greps the raw text is testing the prose. (`[^:]` so a URL survives.)
+ */
+const stripComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 
 describe("the opening", () => {
   it("answers the press well inside the window a player allows", () => {
@@ -165,5 +178,134 @@ describe("the opening", () => {
     // Long enough to be a move, short enough that the arena is not waited for.
     expect(OPENING_DURATION_MS).toBeGreaterThan(500);
     expect(OPENING_DURATION_MS).toBeLessThan(1200);
+  });
+});
+
+/**
+ * B4 — THE FIRST PRESS FROZE THE MAIN THREAD FOR TWO SECONDS
+ *
+ * An in-page rAF recorder on a cold profile, headed, on a GTX 1080 Ti: the
+ * worst frame gap after the first BEGIN was 2236, 1956 and 2140 ms across three
+ * cold runs, beginning about 140 ms after the press. In a warm browser process
+ * the same press costs 33 ms, so this was precisely and only the first-time
+ * player's experience — the one whose next decision is whether to continue.
+ *
+ * Instrumenting the GL context named it exactly: four programs are linked in
+ * answer to the press, and the bead glass blocks for 1914 ms inside
+ * `getProgramInfoLog` — three.js at the first draw, waiting for a link the
+ * driver has not finished. A link cannot be made cheaper or split across
+ * frames. It can only be started earlier, and then waited for.
+ */
+describe("the world behind the door", () => {
+  afterEach(() => openingWorld.reset());
+
+  it("starts shut, opens once, and stays open", () => {
+    openingWorld.reset();
+    expect(openingWorld.isReady()).toBe(false);
+
+    let opened = 0;
+    const stop = openingWorld.subscribe(() => {
+      opened += 1;
+    });
+    openingWorld.open();
+    expect(openingWorld.isReady()).toBe(true);
+    expect(opened).toBe(1);
+
+    // A canvas that remounts after a lost context must not re-announce a door
+    // the player has already been given.
+    openingWorld.open();
+    expect(opened).toBe(1);
+
+    stop();
+    openingWorld.reset();
+    openingWorld.open();
+    expect(opened).toBe(1);
+  });
+
+  it("cuts every letter the pack can ask for before any name needs one", () => {
+    // The first live arena frame captioned one bead with garbage, because the
+    // glyph atlas was half built when the frame was drawn. The draw is not
+    // known until BEGIN is pressed, so the whole pack's alphabet is preloaded.
+    for (const concept of CASTALIA_CONCEPTS) {
+      for (const character of concept.name) {
+        expect(OPENING_ALPHABET).toContain(character);
+      }
+    }
+    // Derived, not hand-kept: the pack has an ö in it and the next concept
+    // added may have something else.
+    expect(OPENING_ALPHABET).toContain("ö");
+    expect(new Set(OPENING_ALPHABET).size).toBe(OPENING_ALPHABET.length);
+    expect(canvasSource()).toContain("OPENING_ALPHABET");
+  });
+
+  it("builds the glass and the label while the title is up", () => {
+    const source = canvasSource();
+    // The two expensive constructions, made here rather than at the press.
+    expect(source).toContain("createBeadGlassMaterial");
+    expect(source).toContain("compileAsync");
+    expect(source).toMatch(/<Text[\s\S]{0,400}characters=\{OPENING_ALPHABET\}/);
+    // And the gate is opened from here, once a frame has actually been drawn
+    // with them — a link that has never been used has not been paid for.
+    expect(source).toContain("openingWorld.open()");
+    expect(source).toContain("useFrame");
+  });
+
+  it("compiles under the conditions the frame is actually drawn in", () => {
+    // three keys its program cache on `parameters.outputColorSpace`, which is
+    // the renderer's own when drawing to the canvas and linear when drawing to
+    // a render target — and the composer owns the frame, so the arena is always
+    // drawn to a target. Traced with the compile unbound: the glass was linked
+    // at 3119 ms, `compileAsync` waited 2.8 s for it, and the first draw then
+    // linked the glass a *second* time and blocked 1985 ms doing it.
+    const source = stripComments(canvasSource());
+    const bind = source.indexOf("gl.setRenderTarget(asIfComposed)");
+    const compile = source.indexOf("gl.compileAsync(");
+    const restore = source.indexOf("gl.setRenderTarget(previous)");
+    expect(bind).toBeGreaterThan(-1);
+    expect(compile).toBeGreaterThan(bind);
+    expect(restore).toBeGreaterThan(compile);
+  });
+
+  it("does not draw the warm-up until the link is finished", () => {
+    // A draw is the blocking call being avoided; drawing before the wait moves
+    // the freeze into the title instead of removing it.
+    const source = stripComments(canvasSource());
+    expect(source).toContain('visible={stage === "drawing"}');
+    // Drawable only downstream of the compile: one place arms it, and it is
+    // after the wait rather than beside it.
+    const arm = source.indexOf('setStage("drawing")');
+    expect(arm).toBeGreaterThan(source.indexOf("Promise.all([compileInto()"));
+    expect(source.lastIndexOf('setStage("drawing")')).toBe(arm);
+    // Off-stage rather than hidden: an invisible object is never drawn, and a
+    // program that is never drawn with is never paid for.
+    expect(source).toContain("OFF_STAGE");
+    expect(source).toContain("frustumCulled={false}");
+  });
+
+  it("holds the door on the world, without saying so", () => {
+    const source = titleSource();
+    expect(source).toContain("useDoorArmed");
+    expect(source).toContain("openingWorld.subscribe");
+    expect(source).toContain("disabled={!armed}");
+    // Out of the accessibility tree while it is not a door, so nothing offers
+    // the player a control that cannot answer.
+    expect(source).toContain("aria-hidden={armed ? undefined : true}");
+    // The block keeps its place in the layout, so nothing above it moves when
+    // the world finishes building.
+    expect(source).not.toMatch(/\{armed &&/);
+    // And nothing tells the player they are waiting: no spinner, no progress,
+    // no word for it. SILENCE BEATS FABRICATED SIGNIFICANCE.
+    expect(stripComments(source)).not.toMatch(
+      /loading|Loading|progress|spinner|Preparing/
+    );
+  });
+
+  it("insures the door without reintroducing the freeze on slow hardware", () => {
+    // The deadline is the failure case, not a budget: firing early is the
+    // freeze back again, on the devices that can least afford it. Measured
+    // from the title's first paint on a cold profile: ready in 3.4, 3.7 and
+    // 4.8 s; warm, 0.85 and 1.3 s.
+    expect(OPENING_DOOR_DEADLINE_MS).toBeGreaterThanOrEqual(10_000);
+    expect(titleSource()).toContain("OPENING_DOOR_DEADLINE_MS");
   });
 });

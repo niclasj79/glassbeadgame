@@ -433,12 +433,35 @@ export function withinSafeArea(
 export const PORTRAIT_ASPECT = 1;
 
 /**
- * How much of the page is held for the margin the readings are written into.
- * `ui/arena/Marginalia` takes `min(27rem, 32vw)` down the right in landscape
- * and the foot of the page in portrait; this is the composition's side of that
- * bargain, and it is honoured whether or not anything is written there.
+ * THE MARGIN IS THE COLUMN'S REAL WIDTH, NOT A ROUND NUMBER.
+ *
+ * `ui/components/ReadingColumn` takes `min(27rem, 32vw)` down the right of a
+ * wide page and `min-h-[30vh]` at the foot of a narrow one. The composition
+ * used to answer that with the flat constant 0.36 on every viewport, which is
+ * the right reserve on a 1024-wide tablet and 13.5 points too much on a 1920
+ * desktop — measured at 1440x810 the composition held back to NDC 0.28 (screen
+ * x 921) while the column's own edge stands at 1008, so 87 px belonged to
+ * nobody and the instrument stood off further left than anything asked it to.
+ *
+ * The reserve is derived from the column's own rule now, so the two cannot
+ * drift: widen the column and the world steps aside by exactly that much.
  */
-export const MARGIN_RESERVE = 0.36;
+export const READING_COLUMN_REM = 27;
+export const READING_COLUMN_MAX_VW = 0.32;
+export const READING_FOOT_VH = 0.3;
+/** The root font size the column's `rem` measure is set in. */
+export const ROOT_FONT_PX = 16;
+
+/** The smallest reserve any page keeps, whatever its width. */
+export const MARGIN_RESERVE = READING_FOOT_VH;
+
+/** What the reading column actually takes on this page, as a fraction of it. */
+export function marginReserve(viewport: Viewport): number {
+  const width = Math.max(1, viewport.width);
+  const height = Math.max(1, viewport.height);
+  if (width / height < PORTRAIT_ASPECT) return READING_FOOT_VH;
+  return Math.min(READING_COLUMN_MAX_VW, (READING_COLUMN_REM * ROOT_FONT_PX) / width);
+}
 
 /**
  * Where the instrument is seated inside its box, measured down from the box's
@@ -446,6 +469,35 @@ export const MARGIN_RESERVE = 0.36;
  * and a form seated exactly halfway reads as having been dropped there.
  */
 export const INSTRUMENT_SEAT = 0.54;
+
+/**
+ * HOW FAR OFF THE PAGE'S CENTRE THE INSTRUMENT IS SEATED — AUTHORED, NOT
+ * LEFT OVER.
+ *
+ * The seat used to be *whatever fell out of* centring the instrument in the
+ * box left after the margin, so its character changed with every viewport: on
+ * 1024x768 it was a lead room, on 2560x1080 it was a rounding error, and on
+ * 1920x1080 it would have been small enough to read as an unsuccessful centring
+ * rather than as a decision. The instrument is now seated at least this far
+ * toward the page's spine, and further only when the margin genuinely needs the
+ * room. The reading is written on the other side of it.
+ */
+export const INSTRUMENT_LEAD = 0.24;
+
+/**
+ * How much of the half-frame the instrument's silhouette must leave between
+ * itself and the viewport's own edge, on every axis.
+ *
+ * Breaking the page's *ruling* is the composition (see `broken` below): the
+ * silhouette sits on the page rather than inside a box drawn on it. Reaching
+ * the viewport edge is not that — it is a crop. At 1440x810 the rest pose put
+ * the instrument's lowest brass 25 px off the bottom edge of an 810 px frame,
+ * with no rule saying it had to and nothing red if it went further; on a phone
+ * the same fit left 33 px at each side. This is the demand that stops it: the
+ * silhouette keeps 4% of the frame — 32 px on an 810 px page — between itself
+ * and every edge, on every axis, and the fit stands back until it can.
+ */
+export const INSTRUMENT_EDGE_CLEARANCE = 0.08;
 
 /**
  * How far inside the ruling the bead shell must stay. A bead tangent to the
@@ -469,14 +521,24 @@ export function worldSafeArea(aspect: number): SafeArea {
 export type FrameEdge = "left" | "right" | "top" | "bottom";
 
 /**
+ * The three laws the rest fit can be tight against.
+ *
+ *   shell   the bead shell reached the page's ruling — no bead may cross it;
+ *   margin  the silhouette reached the column the readings are written in;
+ *   page    the silhouette reached the clearance it keeps from the viewport.
+ */
+export type FitLaw = "shell" | "margin" | "page";
+
+/**
  * The region of the page the instrument is composed into: the safe area on
  * three sides, and the margin on the fourth. This box, and not the frame, is
  * what the arena is centred in — which is the whole of why the arena stops
  * being centred in the frame.
  */
-export function compositionBox(aspect: number): SafeArea {
+export function compositionBox(viewport: Viewport): SafeArea {
+  const aspect = Math.max(0.1, Math.max(1, viewport.width) / Math.max(1, viewport.height));
   const safe = worldSafeArea(aspect);
-  const edge = -1 + 2 * MARGIN_RESERVE;
+  const edge = -1 + 2 * marginReserve(viewport);
   return aspect < PORTRAIT_ASPECT
     ? { ...safe, minY: edge }
     : { ...safe, maxX: -edge };
@@ -501,6 +563,12 @@ export interface HomeComposition {
   readonly broken: readonly FrameEdge[];
   /** The one side the fit is tight against — the fit is a solve, not a guess. */
   readonly tight: FrameEdge;
+  /**
+   * Which of the three laws that side is tight against, so a reader — and a
+   * test — can tell "the bead shell reached the ruling" from "the silhouette
+   * reached the page" without re-deriving the solve.
+   */
+  readonly against: FitLaw;
   /** The side the margin runs along. The instrument never enters it. */
   readonly margin: FrameEdge;
   /**
@@ -535,34 +603,56 @@ export function homeComposition(
   const aspect = Math.max(0.1, width / height);
   const portrait = aspect < PORTRAIT_ASPECT;
   const safe = worldSafeArea(aspect);
-  const box = compositionBox(aspect);
+  const box = compositionBox(viewport);
 
-  const centre = {
-    x: (box.minX + box.maxX) / 2,
-    y: box.maxY - INSTRUMENT_SEAT * (box.maxY - box.minY),
-  };
+  // The seat is authored on the margin's axis and solved on the other: at
+  // least INSTRUMENT_LEAD toward the spine, and further only where the margin
+  // genuinely needs the room.
+  const boxCentreX = (box.minX + box.maxX) / 2;
+  const boxCentreY = box.maxY - INSTRUMENT_SEAT * (box.maxY - box.minY);
+  const centre = portrait
+    ? { x: boxCentreX, y: Math.max(boxCentreY, INSTRUMENT_LEAD) }
+    : { x: Math.min(boxCentreX, -INSTRUMENT_LEAD), y: boxCentreY };
 
   const room = (a: number, b: number): number => Math.max(0.05, Math.min(a, b));
   const beadRoomX = room(centre.x - safe.minX, safe.maxX - centre.x);
   const beadRoomY = room(centre.y - safe.minY, safe.maxY - centre.y);
   const marginRoom = portrait ? centre.y - box.minY : box.maxX - centre.x;
+  // The silhouette may cross the page's ruling; it may never reach the page.
+  const edgeRoomX = room(
+    1 - INSTRUMENT_EDGE_CLEARANCE + centre.x,
+    1 - INSTRUMENT_EDGE_CLEARANCE - centre.x
+  );
+  const edgeRoomY = room(
+    1 - INSTRUMENT_EDGE_CLEARANCE + centre.y,
+    1 - INSTRUMENT_EDGE_CLEARANCE - centre.y
+  );
 
-  const demands: readonly (readonly [FrameEdge, number])[] = [
-    [centre.y > 0 ? "bottom" : "top", MAX_BEAD_EXTENT / beadRoomY],
-    [centre.x > 0 ? "left" : "right", MAX_BEAD_EXTENT / beadRoomX / aspect],
+  const demands: readonly (readonly [FrameEdge, FitLaw, number])[] = [
+    [centre.y > 0 ? "bottom" : "top", "shell", MAX_BEAD_EXTENT / beadRoomY],
+    [centre.x > 0 ? "left" : "right", "shell", MAX_BEAD_EXTENT / beadRoomX / aspect],
     [
       portrait ? "bottom" : "right",
+      "margin",
       INSTRUMENT_HALF_SPAN /
         Math.max(0.05, marginRoom) /
         (portrait ? 1 : aspect),
     ],
+    [centre.y > 0 ? "bottom" : "top", "page", INSTRUMENT_HALF_SPAN / edgeRoomY],
+    [
+      centre.x > 0 ? "left" : "right",
+      "page",
+      INSTRUMENT_HALF_SPAN / edgeRoomX / aspect,
+    ],
   ];
   let tight: FrameEdge = demands[0][0];
+  let against: FitLaw = demands[0][1];
   let halfH = 0;
-  for (const [edge, demand] of demands) {
+  for (const [edge, law, demand] of demands) {
     if (demand > halfH) {
       halfH = demand;
       tight = edge;
+      against = law;
     }
   }
   const halfW = halfH * aspect;
@@ -589,11 +679,181 @@ export function homeComposition(
     beads,
     broken,
     tight,
+    against,
     margin: portrait ? "bottom" : "right",
     reserve: portrait
       ? (1 + (centre.y - instrument.y)) / 2
       : (1 - (centre.x + instrument.x)) / 2,
   };
+}
+
+/**
+ * THE TITLE IS A PLATE, NOT A PAGE.
+ *
+ * VC-05: the landscape title measured a luminance centroid at 55.4% of the
+ * width — two thirds of its energy right of centre — while the armillary
+ * behind it centred at about 34%. The two halves seesawed, with a collision in
+ * the middle and 1100 px of nothing on the right, and the reason was one line
+ * of code: the title used the *arena's* composition. The arena is seated off
+ * the page's centre because a column down its right is held for the readings.
+ * The title has no readings, no column, and nothing to lean away from — so it
+ * inherited a lead room that answers a question it is not being asked.
+ *
+ * The title is composed concentrically instead, which is what the portrait
+ * title already does and what makes it work: the wordmark is a plate set in the
+ * middle of the instrument's own rings. The *fit* is untouched — same distance,
+ * so the opening move keeps the dolly `scene/opening.ts` authored — and only
+ * the lens shift differs, which `CameraRig` racks over the opening phrase
+ * rather than cutting.
+ *
+ * `ui/screens/TitleScreen` has to meet it: the wordmark block is centred on the
+ * page, so with the world centred on the page too, the two agree by
+ * construction on every viewport instead of by two numbers that were never
+ * compared.
+ */
+export function titleComposition(
+  viewport: Viewport,
+  fov: number = ARENA_FOV
+): HomeComposition {
+  const home = homeComposition(viewport, fov);
+  const aspect = Math.max(0.1, Math.max(1, viewport.width) / Math.max(1, viewport.height));
+  const rule = frameRuleNdc(aspect);
+  const broken: FrameEdge[] = [];
+  if (home.instrument.x > rule.x) broken.push("left", "right");
+  if (home.instrument.y > rule.y) broken.push("top", "bottom");
+  return {
+    ...home,
+    centre: { x: 0, y: 0 },
+    viewOffset: { x: 0, y: 0 },
+    broken,
+    reserve: (1 - home.instrument.x) / 2,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────── *
+ * 2b. THE REST FRAME, AS A MEASURABLE OBJECT
+ * ────────────────────────────────────────────────────────────────────── */
+
+/**
+ * WHAT THE REST FRAME OWES A STRANGER.
+ *
+ * B5: at 1440x810 the instrument's silhouette stood between screen x 143 and
+ * 847 — the left 59% of the page — with 25 px between its lowest brass and the
+ * bottom edge of the viewport. Scaled to the frame's *height*, seated at its
+ * *left*, and the remaining 40% of the width carrying two nav pills, a mute
+ * button and the page's rule. Both faults were invisible to the tests, because
+ * the composition only ever asserted things about *edges it was tight against*
+ * and never about the frame as a whole.
+ *
+ * `restFrame` states the frame as numbers a test can hold: where the subject
+ * sits, how much of each axis it spans, how far past the page's ruling it
+ * reaches, and how near the page's own edge it comes. Frame fractions with +y
+ * *down*, which is how a frame is measured off a screenshot, so what a critic
+ * measures and what a test asserts are in the same units.
+ */
+export interface FrameBox {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
+export interface RestFrame {
+  /** The instrument's silhouette, in frame fractions. */
+  readonly silhouette: FrameBox;
+  /** The widest the bead shell ever reaches, in frame fractions. */
+  readonly shell: FrameBox;
+  /** Centre of the silhouette, in frame fractions. */
+  readonly centre: { readonly x: number; readonly y: number };
+  /** How much of each axis the silhouette spans. */
+  readonly fill: { readonly x: number; readonly y: number };
+  /** How far past the page's ruling the silhouette reaches, per edge. 0 when clear. */
+  readonly bleed: Readonly<Record<FrameEdge, number>>;
+  /** How much frame is left between the silhouette and the viewport, per edge. */
+  readonly clearance: Readonly<Record<FrameEdge, number>>;
+}
+
+/** NDC to frame fraction; y is flipped, because a frame is measured downward. */
+const frameX = (ndc: number): number => (1 + ndc) / 2;
+const frameY = (ndc: number): number => (1 - ndc) / 2;
+
+export function restFrame(viewport: Viewport, fov: number = ARENA_FOV): RestFrame {
+  const home = homeComposition(viewport, fov);
+  const aspect = Math.max(0.1, Math.max(1, viewport.width) / Math.max(1, viewport.height));
+  const rule = frameRuleNdc(aspect);
+  const box = (half: { readonly x: number; readonly y: number }): FrameBox => ({
+    minX: frameX(home.centre.x - half.x),
+    maxX: frameX(home.centre.x + half.x),
+    minY: frameY(home.centre.y + half.y),
+    maxY: frameY(home.centre.y - half.y),
+  });
+  const silhouette = box(home.instrument);
+  const past = (over: number): number => Math.max(0, over) / 2;
+  return {
+    silhouette,
+    shell: box(home.beads),
+    centre: { x: frameX(home.centre.x), y: frameY(home.centre.y) },
+    fill: { x: home.instrument.x, y: home.instrument.y },
+    bleed: {
+      left: past(-rule.x - (home.centre.x - home.instrument.x)),
+      right: past(home.centre.x + home.instrument.x - rule.x),
+      top: past(home.centre.y + home.instrument.y - rule.y),
+      bottom: past(-rule.y - (home.centre.y - home.instrument.y)),
+    },
+    clearance: {
+      left: silhouette.minX,
+      right: 1 - silhouette.maxX,
+      top: silhouette.minY,
+      bottom: 1 - silhouette.maxY,
+    },
+  };
+}
+
+/**
+ * WHERE THE SUBJECT MAY SIT, AND HOW SMALL IT MAY GET.
+ *
+ * Two laws, stated here rather than discovered from a screenshot.
+ *
+ *   THE SUBJECT BOX. The instrument's centre must land inside this, on every
+ *   supported viewport. It is deliberately *not* the middle of the frame — the
+ *   reading is written to one side of the instrument and the composition leans
+ *   the other way — and it is deliberately not the far third either, which is
+ *   what B5 measured.
+ *
+ *   THE FLOOR ON FILL. No axis may be abandoned: whatever the aspect, the
+ *   silhouette spans at least this much of both. A wide page cannot be filled
+ *   by a sphere — at 21:9 a sphere fitted to the ruled height covers 37% of the
+ *   width and no framing decision changes that — so the *room* has to carry the
+ *   rest of the page. That is `scene/Firmament.tsx`'s side of this bargain, and
+ *   it is measured where it can only be measured: on a rendered frame.
+ */
+export const REST_SUBJECT_BOX: Readonly<Record<"landscape" | "portrait", FrameBox>> =
+  Object.freeze({
+    landscape: Object.freeze({ minX: 0.34, maxX: 0.45, minY: 0.48, maxY: 0.58 }),
+    portrait: Object.freeze({ minX: 0.44, maxX: 0.56, minY: 0.32, maxY: 0.44 }),
+  });
+
+/** No axis may be abandoned by the subject that fills the other one. */
+export const ABANDONED_FILL = 0.34;
+
+/**
+ * The law B5 asked for, in one predicate: an axis may never be *both* crowded
+ * to the page's own edge and paired with an axis the subject has abandoned.
+ * The edge clearance is a demand inside `homeComposition`, so the first half is
+ * structural; the second is a floor the fit has to keep.
+ */
+export function axesAgree(rest: RestFrame): boolean {
+  const nearest = Math.min(
+    rest.clearance.left,
+    rest.clearance.right,
+    rest.clearance.top,
+    rest.clearance.bottom
+  );
+  const emptiest = Math.min(rest.fill.x, rest.fill.y);
+  return (
+    nearest >= INSTRUMENT_EDGE_CLEARANCE / 2 - 1e-9 &&
+    emptiest >= ABANDONED_FILL - 1e-9
+  );
 }
 
 /**

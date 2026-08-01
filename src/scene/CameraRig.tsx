@@ -20,15 +20,18 @@ import {
   ARENA_FOV,
   PORTRAIT_ASPECT,
   attendedFraming,
+  createDamped,
   createOrbitDamper,
   createOrbitPose,
   dampOrbitToward,
+  dampScalar,
   homeComposition,
   orbitFromPosition,
   phraseSmoothTime,
   plateGeometry,
   plateSafeArea,
   positionFromOrbit,
+  titleComposition,
   unshiftArea,
   unshiftNdc,
   type CameraPhrase,
@@ -178,33 +181,33 @@ function phasePose(
  * actually changes. `setViewOffset` re-derives the projection itself, and the
  * offset survives every later `updateProjectionMatrix` — including the impact
  * kick's FOV punch — because three keeps it on the camera.
+ *
+ * It takes a *centre* rather than a composition, because the centre is now
+ * something that moves: the title is composed concentrically and the arena is
+ * composed off-centre (VC-05, `framing.titleComposition`), so the shift is
+ * racked between them over the opening phrase instead of cutting.
  */
 function applyLensShift(
   camera: THREE.Camera,
-  home: HomeComposition,
+  centre: { readonly x: number; readonly y: number },
   width: number,
   height: number
 ): void {
   const cam = camera as THREE.PerspectiveCamera;
   if (!cam.isPerspectiveCamera) return;
+  const offsetX = (-centre.x * width) / 2;
+  const offsetY = (centre.y * height) / 2;
   const view = cam.view;
   if (
     view?.enabled &&
     view.fullWidth === width &&
     view.fullHeight === height &&
-    Math.abs(view.offsetX - home.viewOffset.x) < 0.01 &&
-    Math.abs(view.offsetY - home.viewOffset.y) < 0.01
+    Math.abs(view.offsetX - offsetX) < 0.01 &&
+    Math.abs(view.offsetY - offsetY) < 0.01
   ) {
     return;
   }
-  cam.setViewOffset(
-    width,
-    height,
-    home.viewOffset.x,
-    home.viewOffset.y,
-    width,
-    height
-  );
+  cam.setViewOffset(width, height, offsetX, offsetY, width, height);
 }
 
 /**
@@ -273,14 +276,39 @@ export function CameraRig() {
     [viewportWidth, viewportHeight]
   );
 
+  /**
+   * THE TITLE IS COMPOSED CONCENTRICALLY; THE ARENA IS NOT.
+   *
+   * The arena leans off the page's centre because a column down its right is
+   * held for the readings. The title has no column, and inheriting the arena's
+   * lead room is what made its two halves seesaw — the wordmark centred on the
+   * page, the armillary at 34% of it, and a collision between them (VC-05).
+   * The fit is the same on both; only where the frame is *carried to* differs,
+   * and that is racked below rather than cut.
+   */
+  const title = useMemo(
+    () => titleComposition({ width: viewportWidth, height: viewportHeight }),
+    [viewportWidth, viewportHeight]
+  );
+  const composed = phase === "title" || phase === "setup" ? title : home;
+  const wantedShift = useRef({ x: composed.centre.x, y: composed.centre.y });
+  wantedShift.current.x = composed.centre.x;
+  wantedShift.current.y = composed.centre.y;
+  const shift = useRef<{ x: number; y: number } | null>(null);
+  const shiftDamper = useRef({ x: createDamped(), y: createDamped() });
+
   // A layout effect, so the very first frame is already composed: applying the
-  // shift from the frame loop would publish one centred frame first.
+  // shift from the frame loop would publish one centred frame first. It is
+  // deliberately *not* keyed on the composition — a phase change racks the
+  // shift in the frame loop, and only a resize re-strikes it at once.
   useLayoutEffect(() => {
-    applyLensShift(camera, home, viewportWidth, viewportHeight);
+    const at = wantedShift.current;
+    shift.current = { x: at.x, y: at.y };
+    applyLensShift(camera, shift.current, viewportWidth, viewportHeight);
     return () => {
       (camera as THREE.PerspectiveCamera).clearViewOffset?.();
     };
-  }, [camera, home, viewportWidth, viewportHeight]);
+  }, [camera, viewportWidth, viewportHeight]);
 
   /**
    * Every scripted move enters here. One door, so a move is always a named
@@ -476,9 +504,43 @@ export function CameraRig() {
    */
   const dragging = useRef(false);
 
+  /**
+   * THE SHIFT RACK. One phrase, in the same tempo as everything else the
+   * camera does — the composition changing is a move, not a property change,
+   * and a 182 px jump in the projection at the title's exit would be a cut.
+   * Reduced motion arrives instantly, exactly as every other pose does.
+   */
+  const rackShift = useCallback(
+    (cam: THREE.Camera, dt: number, instant: boolean): boolean => {
+      const at = shift.current;
+      if (!at) return true;
+      const want = wantedShift.current;
+      if (Math.abs(at.x - want.x) < 2e-4 && Math.abs(at.y - want.y) < 2e-4) {
+        at.x = want.x;
+        at.y = want.y;
+        return true;
+      }
+      if (instant) {
+        at.x = want.x;
+        at.y = want.y;
+      } else {
+        const smoothTime = phraseSmoothTime("settle");
+        shiftDamper.current.x.value = at.x;
+        shiftDamper.current.y.value = at.y;
+        at.x = dampScalar(shiftDamper.current.x, want.x, smoothTime, dt);
+        at.y = dampScalar(shiftDamper.current.y, want.y, smoothTime, dt);
+      }
+      applyLensShift(cam, at, viewportWidth, viewportHeight);
+      return false;
+    },
+    [viewportWidth, viewportHeight]
+  );
+
   useFrame((state, dt) => {
     const ctl = controls.current;
     if (!ctl) return;
+
+    const racked = rackShift(state.camera, dt, reducedMotion);
 
     // Impact kick: a quick FOV punch, no position meddling, so OrbitControls
     // never fights it.
@@ -551,8 +613,10 @@ export function CameraRig() {
 
     // Everything that measures the arena needs to know whether the camera it
     // is measuring from is the final one. A move still easing toward its pose
-    // is not: anything measured from it is already out of date.
-    frameState.cameraSettled = goal.current === null;
+    // is not: anything measured from it is already out of date — and neither
+    // is a projection whose shift is still racking, because the shift moves
+    // every bead on the screen without moving the camera at all.
+    frameState.cameraSettled = goal.current === null && racked;
 
     const mode = useStore.getState().session?.interaction.mode ?? "idle";
     const idle = presentationNow() - frameState.idleSince > IDLE_ORBIT_AFTER_MS;

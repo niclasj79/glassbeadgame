@@ -1,16 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { motion } from "framer-motion";
 import { startSession } from "@/runtime/session";
 import {
   ACKNOWLEDGE_LIFT_REM,
   ACKNOWLEDGE_SCALE,
   DEPARTURE_EASING,
+  OPENING_DOOR_DEADLINE_MS,
+  OPENING_DOOR_DELAY_S,
   OPENING_DURATION_MS,
   OPENING_LINES,
   STRIKE_EASING,
   STRIKE_FADE_MS,
   STRIKE_MS,
   openingStep,
+  openingWorld,
 } from "@/scene/opening";
 import { Button } from "../components/Button";
 import { TITLE_EPIGRAPH } from "./titleEpigraph";
@@ -121,11 +130,52 @@ function liftNow(element: HTMLElement | null): boolean {
   return true;
 }
 
+/**
+ * THE DOOR WAITS FOR THE WORLD BEHIND IT.
+ *
+ * The acknowledgement above answers the press; it does not make the press work.
+ * On a cold profile the first BEGIN still took the main thread for about two
+ * seconds while the driver linked the bead glass — every frame of the opening
+ * lost, and with it the only thing the arena had to say for itself. That build
+ * has been moved into the title (`scene/ArenaCanvas.tsx`), and this is the
+ * other half: the door is not offered until there is something behind it.
+ *
+ * It holds silently. There is no progress bar, no spinner and no word for it —
+ * the door simply arrives with the rest of the title's stagger, a little later
+ * than the epigraph on a cold load and not noticeably later on a warm one, and
+ * a player reading Hesse does not experience the wait as one. What they would
+ * experience is a press that did nothing, which is what this refuses.
+ *
+ * And it cannot jam shut. A world that never reports ready opens the door on a
+ * deadline anyway: the worst that costs is the freeze, and a title screen with
+ * no way into the Game is worse than any freeze.
+ */
+function useDoorArmed(): boolean {
+  const ready = useSyncExternalStore(
+    openingWorld.subscribe,
+    openingWorld.isReady,
+    openingWorld.isReady
+  );
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const timer = window.setTimeout(
+      () => setExpired(true),
+      OPENING_DOOR_DEADLINE_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+  return ready || expired;
+}
+
 export function TitleScreen() {
   const [opening, setOpening] = useState(false);
   const pressed = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const strike = useRef<HTMLDivElement>(null);
+  const armed = useDoorArmed();
+  const mountedAt = useRef(0);
+  if (mountedAt.current === 0) mountedAt.current = performance.now();
 
   /**
    * THE PRESS IS ANSWERED ON THE WAY DOWN, BY THE COMPOSITOR.
@@ -176,11 +226,23 @@ export function TitleScreen() {
     };
   }, [opening]);
 
-  const line = (index: number, delay: number) => ({
+  const line = (index: number, delay: number, held = false) => ({
     ...enter,
-    animate: opening ? leaving(index) : enter.animate,
+    animate: opening ? leaving(index) : held ? enter.initial : enter.animate,
     transition: { duration: 0.9, delay },
   });
+
+  /**
+   * The door keeps its place in the stagger when the world was ready before the
+   * title finished arriving, and takes none of it when the world was not: a
+   * cold load has already spent the delay waiting, and spending it twice would
+   * make the hold visible, which is the one thing it must not be.
+   */
+  const doorDelay = (): number =>
+    Math.max(
+      0,
+      OPENING_DOOR_DELAY_S - (performance.now() - mountedAt.current) / 1000
+    );
 
   return (
     <motion.div
@@ -228,13 +290,18 @@ export function TitleScreen() {
         </footer>
       </motion.blockquote>
 
+      {/* The block keeps its place in the layout whether or not the door is
+          open, so nothing above it moves when the world finishes building. */}
       <motion.div
-        {...line(OPENING_LINES - 1, 0.75)}
+        {...line(OPENING_LINES - 1, doorDelay(), !armed)}
         className="mt-12 flex flex-col items-center"
       >
         {/* The press is taken on the way down; the click is the keyboard's
             door, and the ref above makes the second arrival a no-op. */}
         <Button
+          disabled={!armed}
+          tabIndex={armed ? undefined : -1}
+          aria-hidden={armed ? undefined : true}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             answer();

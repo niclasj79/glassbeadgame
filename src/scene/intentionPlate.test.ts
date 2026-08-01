@@ -1,6 +1,33 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { STATION_SIZE, UTILITY_SIZE, plateGeometry } from "./framing";
+
+/**
+ * The plate's own geometry is pure and is tested as such — but the module it
+ * lives in pulls in three and drei, which read a browser out of the global
+ * scope as they load. The unit environment here is node with a hand-built
+ * `navigator`, so it is completed before the module is asked for.
+ */
+const browserish = {
+  hardwareConcurrency: 8,
+  userAgent: "vitest",
+  maxTouchPoints: 0,
+};
+Object.defineProperty(globalThis, "navigator", {
+  configurable: true,
+  value: browserish,
+});
+Object.assign(globalThis.window as unknown as Record<string, unknown>, {
+  navigator: browserish,
+  devicePixelRatio: 1,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+});
+
+let plateModule: typeof import("./IntentionConstellation");
+beforeAll(async () => {
+  plateModule = await import("./IntentionConstellation");
+});
 
 /**
  * GAP-12 and IMP-3 — WHAT THE PLATE IS AIMED AT, AND WHAT IT SITS ON
@@ -46,6 +73,89 @@ describe("the intention plate", () => {
     const text = source();
     expect(text).toMatch(/POSE_SETTLE_FRAMES = ([2-9]|\d\d)/);
     expect(text).toContain("settledFrames.current >= POSE_SETTLE_FRAMES");
+  });
+
+  /**
+   * B2. The press that demands the plate was answered by nothing for about
+   * three and a half seconds, because the plate waited for a camera lean whose
+   * whole purpose was to make room for it. The press now holds the sightline
+   * and the plate opens in place — so keeping it on the page is the plate's own
+   * job, and it has to be able to do it on a phone, where the page is smaller
+   * than the plate.
+   */
+  describe("the plate keeps itself on the page", () => {
+    const plate = plateGeometry(414, true);
+
+    it("slides by the least it can, and not at all when it fits", () => {
+      expect(plateModule.PLATE_PLACEMENT.slide(640, 157, 1280)).toBe(0);
+      // A bead 149 px from the top of a 720 px page: the measured Fibonacci
+      // case, 8 px of plate over the edge.
+      expect(plateModule.PLATE_PLACEMENT.slide(149, 157, 720)).toBeCloseTo(8, 6);
+      expect(plateModule.PLATE_PLACEMENT.slide(644, 157, 720)).toBeCloseTo(-81, 6);
+      // A page that cannot hold the plate on this axis at all is not made worse
+      // by carrying it off the opposite edge.
+      expect(plateModule.PLATE_PLACEMENT.slide(200, 300, 414)).toBe(0);
+    });
+
+    it("stops at the ring, so the plate is still visibly this bead's", () => {
+      // 130 px of correction wanted, on a plate whose ring is 80.
+      expect(plateModule.PLATE_PLACEMENT.bounded(130, 0, plate.ring)).toBe(plate.ring);
+      expect(plateModule.PLATE_PLACEMENT.bounded(-130, 0, plate.ring)).toBe(-plate.ring);
+      expect(plateModule.PLATE_PLACEMENT.bounded(12, 0, plate.ring)).toBe(12);
+    });
+
+    it("gives that bound up only for a verb over the edge of the page", () => {
+      // The one thing that may never happen: a station off the page is a verb
+      // the player cannot reach.
+      expect(plateModule.PLATE_PLACEMENT.bounded(130, 104, plate.ring)).toBe(104);
+      expect(plateModule.PLATE_PLACEMENT.bounded(130, -104, plate.ring)).toBe(104);
+    });
+
+    it("keeps every verb on a phone, for a bead pressed against the edge", () => {
+      const width = 414;
+      const verb = plate.ring + plate.station / 2 + 18;
+      for (let x = 8; x < width; x += 7) {
+        const dx = plateModule.PLATE_PLACEMENT.bounded(
+          plateModule.PLATE_PLACEMENT.slide(x, plate.extentSide, width),
+          plateModule.PLATE_PLACEMENT.slide(x, verb, width),
+          plate.ring
+        );
+        const centre = x + dx;
+        expect(centre - verb).toBeGreaterThanOrEqual(-1e-6);
+        expect(centre + verb).toBeLessThanOrEqual(width + 1e-6);
+      }
+    });
+  });
+
+  /**
+   * …and the other half of B2: at T+90.7 the ring was still open, sixty-five
+   * seconds after the release, with no thread woven and nothing changing.
+   */
+  describe("an armed intention that nobody draws", () => {
+    it("says nothing at all for a good while", () => {
+      expect(plateModule.PLATE_PLACEMENT.insistence(0)).toBe(0);
+      expect(plateModule.PLATE_PLACEMENT.insistence(plateModule.INSIST_AFTER_SECONDS - 0.01)).toBe(0);
+      // No timer, no countdown, no failure: the wait is long enough that a
+      // player who is thinking is never interrupted.
+      expect(plateModule.INSIST_AFTER_SECONDS).toBeGreaterThanOrEqual(8);
+    });
+
+    it("then insists, continuously, and never becomes a flash", () => {
+      expect(plateModule.PLATE_PLACEMENT.insistence(plateModule.INSIST_AFTER_SECONDS + 2.5)).toBeCloseTo(0.5, 6);
+      expect(plateModule.PLATE_PLACEMENT.insistence(1000)).toBe(1);
+      let previous = 0;
+      for (let t = 0; t <= 30; t += 0.25) {
+        const now = plateModule.PLATE_PLACEMENT.insistence(t);
+        expect(now).toBeGreaterThanOrEqual(previous);
+        expect(now - previous).toBeLessThan(0.1);
+        previous = now;
+      }
+      // Light, bounded, on the world's own breath — not a blink.
+      expect(plateModule.INSIST_DEPTH).toBeLessThan(0.5);
+      const text = source();
+      expect(text).toContain("frameState.breathPhase");
+      expect(text).toContain("mark.style.opacity");
+    });
   });
 
   it("clears a radius rather than being struck over the beads inside it", () => {

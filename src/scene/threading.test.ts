@@ -146,6 +146,64 @@ describe("threading — the primary verb", () => {
   });
 
   /**
+   * B2. Timed on the running build with a fresh profile and no test mode: a
+   * click at T+20.6 s set attention and the live region said "Attention set.
+   * Choose an intention." — and no intention affordance appeared on screen for
+   * about three and a half seconds, because attention was set on the way *up*,
+   * the attend phrase then re-framed the camera, and the plate waits for the
+   * pose. The press is the attending, and the press is what the plate opens in
+   * the pose of.
+   */
+  it("opens the bead on the way down, before the hand comes back up", () => {
+    const source = beadIds[0];
+    expect(interpretationDraftStore.getState().draft.stage).toBe("inactive");
+
+    beadPointerHandlers(source).onPointerDown(
+      threeEvent({ clientX: 400, clientY: 400 })
+    );
+
+    // No move, no release: the world has already answered.
+    expect(interpretationDraftStore.getState().draft).toMatchObject({
+      stage: "attending",
+      attendedConceptId: toConceptId(source),
+    });
+
+    handlePointerUp(domEvent({ clientX: 400, clientY: 400 }));
+    expect(interpretationDraftStore.getState().draft.stage).toBe("attending");
+  });
+
+  /**
+   * …and the other half of the same defect. `CameraRig` abandons a queued
+   * camera phrase only from a *frame* callback and only while the controls are
+   * held. The commit that queues the attend lean is flushed at default priority
+   * — traced at 28 ms, well after a click has ended — so handing the controls
+   * back on release let the world lean away from the plate it had just opened.
+   */
+  it("keeps the sightline held for frames after the hand lets go", () => {
+    const controls = { enabled: true };
+    threadingEnv.controls = controls;
+    try {
+      const source = beadIds[0];
+      beadPointerHandlers(source).onPointerDown(
+        threeEvent({ clientX: 400, clientY: 400 })
+      );
+      expect(controls.enabled).toBe(false);
+
+      handlePointerUp(domEvent({ clientX: 400, clientY: 400 }));
+      // Released — and still held, because the pose has not been refused yet.
+      expect(controls.enabled).toBe(false);
+
+      // Several frames of the world, which is the unit the promise is made in.
+      for (let frame = 0; frame < 3; frame += 1) advanceRecoil(1 / 60);
+      expect(controls.enabled).toBe(false);
+      for (let frame = 0; frame < 8; frame += 1) advanceRecoil(1 / 60);
+      expect(controls.enabled).toBe(true);
+    } finally {
+      threadingEnv.controls = null;
+    }
+  });
+
+  /**
    * GAP-B3, second half. A released weave that misses was as silent as an
    * unarmed drag: `commitDirectionalWeave` was skipped, `cancelWeave()` dropped
    * the capture, and the preview disappeared between two frames. `cancelGliss`

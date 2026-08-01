@@ -31,7 +31,12 @@ import {
   placeLabels,
   type LabelScratch,
 } from "./labels";
-import { assignSalience, tierWeights } from "./salience";
+import {
+  assignSalience,
+  invitationWeights,
+  separateOnScreen,
+  tierWeights,
+} from "./salience";
 
 export const BEAD_RADIUS = 0.15;
 /**
@@ -46,6 +51,35 @@ const BOB_AMPLITUDE = 0.03;
 const GLASS_SCALE = 1.72;
 /** How far under an attended bead its label hangs, clear of the plate. */
 const ATTENDED_LABEL_DROP_PX = 148;
+
+/**
+ * WHAT A BEAD DOES WHEN THE POINTER ARRIVES.
+ *
+ * Measured A/B at 2x on the running build with a fresh profile: hovering a
+ * 56 px bead grew it by about **eight per cent** and brightened it slightly.
+ * That is inside the noise of a bead that is already bobbing and breathing —
+ * a player cannot tell whether the world answered, and five critic passes in a
+ * row reported that nothing on screen said what to do.
+ *
+ * A hover is now a full quarter larger, with the glass taking real light and
+ * the bead's own name arriving with it (three channels, none of them colour).
+ * These are exported because they are a product commitment, not a taste: a
+ * test asserts the floor rather than a screenshot.
+ */
+export const HOVER_SCALE = 1.28;
+/** Emphasis handed to the material on hover — light, not just size. */
+export const HOVER_EMPHASIS = 0.82;
+/** The attended bead, which also wears the gold rule and the plate. */
+export const ATTENDED_SCALE = 1.24;
+/** The other end of a weave, once the aim has acquired it. */
+export const SNAPPED_SCALE = 1.34;
+
+/**
+ * How quickly the invitation lets go once the player has touched the draw.
+ * About a second: long enough to read as the world settling, short enough that
+ * it is over before the first press is answered.
+ */
+const INVITATION_RELEASE = 1.4;
 
 const RESONANCE_LEVEL: Readonly<Record<string, number>> = Object.freeze({
   weak: 0.25,
@@ -241,6 +275,18 @@ export function Beads() {
       order: new Int32Array(n),
       anchor: new Float32Array(n * 2),
       beadRadius: new Float32Array(n),
+      /**
+       * What a bead's *own* name is offset by — its glass, never the plate
+       * around it. See `labels.ts`: the two radii are different questions, and
+       * this one has been answered wrongly (by the other) since the solver
+       * landed, which is why an attended bead carried no name at all.
+       */
+      ownRadius: new Float32Array(n),
+      /** Drawn silhouette radius, in the same isotropic screen units. */
+      glassRadius: new Float32Array(n),
+      /** This frame's wanted separation, and the eased one actually applied. */
+      push: new Float32Array(n * 2),
+      pushEased: new Float32Array(n * 2),
       half: new Float32Array(n * 2),
       hidden: new Float32Array(n),
       code: new Int32Array(n),
@@ -314,6 +360,12 @@ export function Beads() {
   const glass = useRef<THREE.InstancedMesh>(null);
   const root = useRef<THREE.Group>(null);
 
+  /**
+   * The invitation, and whether it has been accepted. A ref, not state: this
+   * changes on a frame and must never re-render the arena.
+   */
+  const invite = useRef({ unresolved: 1, touched: false });
+
   // These are built during render, not in an effect: ref callbacks fire before
   // effects, so allocating them afterwards would wipe every handle React had
   // just given us — and the labels would silently never appear.
@@ -326,6 +378,10 @@ export function Beads() {
     labelOpacity.current = new Float32Array(Math.max(1, count));
     hits.current = new Array(count).fill(null);
     labels.current = ids.map(() => ({ group: null, text: null }));
+    // A new draw is a new invitation: the world offers again, once, to a
+    // player who has not yet touched *this* arena.
+    invite.current.unresolved = 1;
+    invite.current.touched = false;
   }, [ids, count]);
 
   // Instance attributes are static for the life of a draw; state is not.
@@ -404,6 +460,26 @@ export function Beads() {
     const aspect = three.size.width / Math.max(1, three.size.height);
     const spark = kindling(idleClock(), count);
 
+    // ── the invitation, and whether it has been accepted ────────────────
+    // The first hover, press, latch or focus ends it, once, for the session.
+    if (
+      !invite.current.touched &&
+      (frameState.hoveredId !== null ||
+        frameState.snapId !== null ||
+        now.attendedId !== null ||
+        now.focusedId !== null)
+    ) {
+      invite.current.touched = true;
+    }
+    if (invite.current.touched && invite.current.unresolved > 0) {
+      invite.current.unresolved = Math.max(
+        0,
+        invite.current.unresolved - dt * INVITATION_RELEASE
+      );
+    }
+    const offer = invitationWeights(spark.gain, invite.current.unresolved);
+
+    // ── pass one: where each bead stands, and how big it is drawn ───────
     for (let i = 0; i < count; i++) {
       const id = ids[i];
       const index = frameState.beadIndex.get(id) ?? i;
@@ -413,44 +489,39 @@ export function Beads() {
       const x = positions[index * 3];
       const y = positions[index * 3 + 1] + bob;
       const z = positions[index * 3 + 2];
-      rendered[index * 3] = x;
-      rendered[index * 3 + 1] = y;
-      rendered[index * 3 + 2] = z;
 
       const attended = now.attendedId === id;
       const snapped = frameState.snapId === id || now.candidateId === id;
       const hovered = frameState.hoveredId === id;
       const focused = now.focusedId === id;
-      const target = snapped ? 1.3 : focused ? 1.16 : attended ? 1.2 : hovered ? 1.1 : 1;
+      // The invitation is a *scale*, so it stands down the moment the player's
+      // own attention arrives — a reached-for bead is never also an offer. It
+      // is suppressed entirely under reduced motion, where the same invitation
+      // is carried by light alone (see the kindling below).
+      const invited = spark.index === i;
+      const offered =
+        reducedMotion || attended || snapped || hovered || focused
+          ? 1
+          : invited
+            ? offer.reach
+            : offer.recede;
+      const target =
+        (snapped
+          ? SNAPPED_SCALE
+          : attended
+            ? ATTENDED_SCALE
+            : hovered
+              ? HOVER_SCALE
+              : focused
+                ? 1.16
+                : 1) * offered;
       const current = scales.current[i] ?? 1;
-      const next = current + (target - current) * Math.min(1, dt * 8);
+      // Hover answers faster than it lets go: the arrival is the message.
+      const rate = hovered || snapped || attended ? 13 : 8;
+      const next = current + (target - current) * Math.min(1, dt * rate);
       scales.current[i] = next;
-      const breath = reducedMotion
-        ? 1
-        : 1 + Math.sin(frameState.clock * 0.9 + bobPhases[i]) * 0.01;
-      const radius = BEAD_RADIUS * GLASS_SCALE * next * breath;
 
       originVec.set(x, y, z);
-      scaleVec.setScalar(radius);
-      matrix.compose(originVec, identityQuat, scaleVec);
-      mesh.setMatrixAt(i, matrix);
-
-      const emphasis = snapped ? 1 : attended ? 0.72 : hovered || focused ? 0.5 : 0;
-      const resonance = now.resonance.get(id) ?? 0;
-      state[i * 4] += (emphasis - state[i * 4]) * Math.min(1, dt * 9);
-      state[i * 4 + 1] += (resonance - state[i * 4 + 1]) * Math.min(1, dt * 4);
-      // Woven eases rather than steps: a bead takes on light as it is carried
-      // into the composition, and never arrives at a countable rung.
-      state[i * 4 + 2] +=
-        ((now.woven.get(id) ?? 0) - state[i * 4 + 2]) * Math.min(1, dt * 1.6);
-      state[i * 4 + 3] += ((attended ? 1 : 0) - state[i * 4 + 3]) * Math.min(1, dt * 8);
-
-      const hit = hits.current[i];
-      if (hit) {
-        hit.position.set(x, y, z);
-        hit.updateMatrixWorld();
-      }
-
       // ── the frame's hierarchy, measured ───────────────────────────────
       const eyeDistance = three.camera.position.distanceTo(originVec);
       focal.depth[i] = eyeDistance;
@@ -467,13 +538,129 @@ export function Beads() {
           ? 1
           : 0;
 
+      const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
+      focal.glassRadius[i] = (BEAD_RADIUS * GLASS_SCALE * next) / halfAtBead;
+    }
+
+    // ── pass two: no two beads may read as one ──────────────────────────
+    separateOnScreen(
+      focal.anchor,
+      focal.glassRadius,
+      focal.hidden,
+      count,
+      focal.push
+    );
+
+    // The displacement eases rather than steps: a pair that opens as the camera
+    // turns closes the gap again over about a fifth of a second, and a bead
+    // never jumps between two frames. Applied to every anchor before anything
+    // is placed, so the clearances measured below are the drawn ones.
+    const easing = Math.min(1, dt * 5);
+    for (let i = 0; i < count * 2; i++) {
+      focal.pushEased[i] += (focal.push[i] - focal.pushEased[i]) * easing;
+      focal.anchor[i] += focal.pushEased[i];
+    }
+
+    // ── pass three: place the glass, the targets and the names ──────────
+    for (let i = 0; i < count; i++) {
+      const id = ids[i];
+      const index = frameState.beadIndex.get(id) ?? i;
+      const attended = now.attendedId === id;
+      const snapped = frameState.snapId === id || now.candidateId === id;
+      const hovered = frameState.hoveredId === id;
+      const focused = now.focusedId === id;
+      const next = scales.current[i];
+      const eyeDistance = focal.depth[i];
+      const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
+      const pushX = focal.pushEased[i * 2];
+      const pushY = focal.pushEased[i * 2 + 1];
+
+      const bob = reducedMotion
+        ? 0
+        : Math.sin(frameState.clock * 0.5 + bobPhases[i]) * BOB_AMPLITUDE;
+      // Back into the world, along the screen's own axes at this bead's depth,
+      // so the separation the eye asked for is exactly the separation it gets.
+      const x =
+        positions[index * 3] +
+        (screenRight.x * pushX - screenDown.x * pushY) * halfAtBead;
+      const y =
+        positions[index * 3 + 1] +
+        bob +
+        (screenRight.y * pushX - screenDown.y * pushY) * halfAtBead;
+      const z =
+        positions[index * 3 + 2] +
+        (screenRight.z * pushX - screenDown.z * pushY) * halfAtBead;
+      rendered[index * 3] = x;
+      rendered[index * 3 + 1] = y;
+      rendered[index * 3 + 2] = z;
+
+      const breath = reducedMotion
+        ? 1
+        : 1 + Math.sin(frameState.clock * 0.9 + bobPhases[i]) * 0.01;
+      const radius = BEAD_RADIUS * GLASS_SCALE * next * breath;
+
+      originVec.set(x, y, z);
+      scaleVec.setScalar(radius);
+      matrix.compose(originVec, identityQuat, scaleVec);
+      mesh.setMatrixAt(i, matrix);
+
+      const emphasis = snapped
+        ? 1
+        : attended
+          ? 0.78
+          : hovered
+            ? HOVER_EMPHASIS
+            : focused
+              ? 0.5
+              : 0;
+      const resonance = now.resonance.get(id) ?? 0;
+      state[i * 4] += (emphasis - state[i * 4]) * Math.min(1, dt * 11);
+      state[i * 4 + 1] += (resonance - state[i * 4 + 1]) * Math.min(1, dt * 4);
+      // Woven eases rather than steps: a bead takes on light as it is carried
+      // into the composition, and never arrives at a countable rung.
+      state[i * 4 + 2] +=
+        ((now.woven.get(id) ?? 0) - state[i * 4 + 2]) * Math.min(1, dt * 1.6);
+      state[i * 4 + 3] += ((attended ? 1 : 0) - state[i * 4 + 3]) * Math.min(1, dt * 8);
+
+      // THE TARGET IS THE BEAD'S OWN, ALWAYS.
+      //
+      // The generous target I-014 asks for is generous because weaving is not a
+      // dexterity test — but a target wider than the gap to the next bead is
+      // not generosity, it is a bead standing in front of another one. It is
+      // held back to half the distance to the nearest neighbour, and never
+      // below the glass the player can actually see, so what is on the screen
+      // is always what the pointer reaches.
+      let clearance = Number.POSITIVE_INFINITY;
+      if (focal.hidden[i] === 0) {
+        for (let k = 0; k < count; k++) {
+          if (k === i || focal.hidden[k] > 0) continue;
+          const dx = focal.anchor[k * 2] - focal.anchor[i * 2];
+          const dy = focal.anchor[k * 2 + 1] - focal.anchor[i * 2 + 1];
+          const gap = Math.hypot(dx, dy) * 0.5;
+          if (gap < clearance) clearance = gap;
+        }
+      }
+      const hit = hits.current[i];
+      if (hit) {
+        const generous = BEAD_RADIUS * HIT_SCALE;
+        const bounded = Number.isFinite(clearance)
+          ? Math.max(radius, Math.min(generous, clearance * halfAtBead))
+          : generous;
+        hit.position.set(x, y, z);
+        hit.scale.setScalar(bounded);
+        hit.updateMatrixWorld();
+      }
+
       // Screen size, in half-frame-heights, of everything drawn *around* this
       // bead. For the attended one that is the intention plate, not the glass:
       // the plate is what a neighbouring name would actually collide with.
-      const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
       focal.beadRadius[i] = attended
         ? ATTENDED_LABEL_DROP_PX / (three.size.height * 0.5)
-        : (BEAD_RADIUS * GLASS_SCALE * next + 0.06) / halfAtBead;
+        : focal.glassRadius[i] + 0.06 / halfAtBead;
+      // …and what its *own* name hangs from is its own glass, whatever else is
+      // drawn around it. Handing the plate's radius to both is what left the
+      // attended bead — the frame's one definite subject — with no name at all.
+      focal.ownRadius[i] = focal.glassRadius[i] + 0.02;
 
       const label = labels.current[i];
       // Type stays the same size on screen whatever the orbit distance.
@@ -524,6 +711,7 @@ export function Beads() {
       {
         anchor: focal.anchor,
         beadRadius: focal.beadRadius,
+        ownRadius: focal.ownRadius,
         half: focal.half,
         tier: focal.tierTarget,
         hidden: focal.hidden,
@@ -555,7 +743,13 @@ export function Beads() {
       focal.attribute[i * 2] =
         tier + (focal.tierTarget[i] - tier) * Math.min(1, dt * 2.6);
       const kindle = focal.attribute[i * 2 + 1];
-      const wantKindle = spark.index === i ? spark.gain : 0;
+      // The idle score's own light, raised while the invitation stands — and
+      // under reduced motion this is the whole of the invitation, because the
+      // reach is travel and travel is what the preference is about.
+      const wantKindle =
+        spark.index === i
+          ? Math.min(1, spark.gain * (1 + 0.55 * offer.light))
+          : 0;
       focal.attribute[i * 2 + 1] =
         kindle + (wantKindle - kindle) * Math.min(1, dt * 3.4);
 

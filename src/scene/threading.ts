@@ -274,6 +274,58 @@ function clearPressTimer(): void {
 }
 
 /**
+ * THE POINTER SAYS WHAT IS UNDER IT.
+ *
+ * A canvas has no elements, so nothing tells a browser to change the cursor: it
+ * has to be said, in the one place that knows a bead is under the pointer. The
+ * hover branch set it, and `endGesture` then blanked it unconditionally — so
+ * the first press on a bead took the one cue the arena had and did not give it
+ * back until the pointer left the bead and came back. This restores it from
+ * what the frame actually says is hovered, which is also true after a release.
+ */
+function refreshCursor(): void {
+  const dom = threadingEnv.dom;
+  if (!dom) return;
+  dom.style.cursor = frameState.hoveredId === null ? "" : "pointer";
+}
+
+/**
+ * HANDING THE SIGHTLINE BACK TAKES A MOMENT LONGER THAN LETTING GO.
+ *
+ * `CameraRig` abandons a queued camera phrase from its *frame* callback, and
+ * only while the controls are disabled — "the plate opens in the pose the
+ * camera already has, not by moving the world out from under the finger and
+ * then moving it back". The phrase in question is queued by a React commit, and
+ * a commit driven from a canvas pointer event is not a discrete React event: it
+ * is flushed at default priority, one or two frames after the hand let go.
+ * Traced on the running build, clicking a bead: attention landed at 12 ms, the
+ * controls came back on the next animation frame, and the attend lean was
+ * queued at 28 ms — after the hold had ended, so nothing dropped it. The plate
+ * opened 2.3 s later, which is the whole of B2 wearing a different hat.
+ *
+ * So the hold is counted in *frames of the world*, not in callbacks of the
+ * browser, and it outlives the release by enough of them for the commit to have
+ * landed and been refused. A tenth of a second in which the orbit is still
+ * held: unmeasurable by a hand, decisive for the plate.
+ */
+const POSE_HOLD_FRAMES = 8;
+let cameraHoldFrames = 0;
+
+function releaseCameraHold(): void {
+  if (!threadingEnv.controls) return;
+  cameraHoldFrames = POSE_HOLD_FRAMES;
+}
+
+function advanceCameraHold(): void {
+  if (cameraHoldFrames <= 0) return;
+  cameraHoldFrames -= 1;
+  if (cameraHoldFrames > 0) return;
+  const controls = threadingEnv.controls;
+  // A new gesture may already own the sightline; it will release it in turn.
+  if (controls && gesture.mode === "idle") controls.enabled = true;
+}
+
+/**
  * Begin the fall-back. The capture stays open on purpose: `ThreadPreview`
  * renders while the draft is armed *and* the presentation store says a weave is
  * in flight, so closing it here would delete the ribbon on the same frame the
@@ -297,11 +349,16 @@ export function finishRecoil(): void {
 }
 
 /**
+ * THE POINTER LAYER'S FRAME TICK.
+ *
  * Driven from the scene's frame loop rather than from a timer, so the ribbon
  * falls at the rate the world is actually being drawn at — and so a controlled
- * test clock cannot strand it half way home.
+ * test clock cannot strand it half way home. The camera hold is counted here
+ * too, and for the same reason: it is a promise about *frames*, and only the
+ * frame loop knows when one has happened.
  */
 export function advanceRecoil(dt: number): void {
+  advanceCameraHold();
   const active = recoil;
   if (!active) return;
   const index = frameState.beadIndex.get(active.sourceId);
@@ -329,7 +386,7 @@ function endGesture(): void {
   clearLoadHover();
   setSilkActive(false);
   smoothedSpeed = 0;
-  if (threadingEnv.controls) threadingEnv.controls.enabled = true;
+  releaseCameraHold();
   if (threadingEnv.dom && gesture.pointerId >= 0) {
     try {
       if (threadingEnv.dom.hasPointerCapture(gesture.pointerId)) {
@@ -351,7 +408,7 @@ function endGesture(): void {
   if (!recoil) frameState.aim.active = false;
   frameState.snapId = null;
   if (suppressMiss) ignoreArenaMissUntil = performance.now() + 250;
-  if (threadingEnv.dom) threadingEnv.dom.style.cursor = "";
+  refreshCursor();
 }
 
 function cancelActiveGesture(): void {
@@ -384,6 +441,7 @@ function beginGesture(
   gesture.sourceBeadId = sourceBeadId;
   gesture.moved = false;
   gesture.longPressed = false;
+  cameraHoldFrames = 0;
   if (threadingEnv.controls) threadingEnv.controls.enabled = false;
   try {
     threadingEnv.dom?.setPointerCapture(event.pointerId);
@@ -402,7 +460,24 @@ export function beadPointerHandlers(id: string) {
       frameState.hoveredId = id;
       useStore.getState().setFocusedBead(id);
       if (frameState.snapId !== id) hoverPing(id);
-      if (threadingEnv.dom) threadingEnv.dom.style.cursor = "pointer";
+      refreshCursor();
+    },
+    /**
+     * An enter event can be missed — a bead that grows under a still pointer,
+     * a canvas that mounts beneath one, a capture that swallowed the crossing —
+     * and the cursor is the only thing on this canvas that says a bead is a
+     * thing you may touch. Saying it again on every move over the bead costs a
+     * string comparison and closes every one of those holes.
+     */
+    onPointerMove: (event: ThreeEvent<PointerEvent>) => {
+      if (gesture.mode !== "idle") return;
+      if (useStore.getState().phase !== "arena") return;
+      event.stopPropagation();
+      if (frameState.hoveredId !== id) {
+        frameState.hoveredId = id;
+        useStore.getState().setFocusedBead(id);
+      }
+      refreshCursor();
     },
     onPointerOut: () => {
       if (frameState.hoveredId === id) frameState.hoveredId = null;
@@ -412,7 +487,7 @@ export function beadPointerHandlers(id: string) {
       ) {
         useStore.getState().setFocusedBead(null);
       }
-      if (threadingEnv.dom) threadingEnv.dom.style.cursor = "";
+      refreshCursor();
     },
     onPointerDown: (event: ThreeEvent<PointerEvent>) => {
       const state = useStore.getState();
@@ -455,13 +530,42 @@ export function beadPointerHandlers(id: string) {
         }
         return;
       }
-      const mode =
-        draft.stage === "attending" && id === attendedId ? "load" : "tap";
-      beginGesture(event, id, mode, attendedId);
+      /**
+       * THE PRESS *IS* THE ATTENDING.
+       *
+       * Attention used to be set on the way back up, and only if the hand had
+       * not moved. Timed on the running build with a fresh profile: a click at
+       * T+20.6 s set attention, the live region said "Attention set. Choose an
+       * intention." — and no intention affordance appeared on screen for about
+       * three and a half seconds, because the attend phrase re-frames the
+       * camera and the plate waits for the pose. The player was asked to choose
+       * with nothing to choose from.
+       *
+       * Setting it on the way down closes that window completely, and it does
+       * it with the world's existing law rather than a special case: a gesture
+       * holds the sightline for its whole duration (`beginGesture` disables the
+       * controls), a held camera is a settled camera, and the plate opens in
+       * the pose the camera already has — around the bead under the finger,
+       * within a frame of the press, where it will stay. The same press then
+       * continues straight into the plate's four stations as a `load`, which is
+       * the gesture an attended bead already supported: a player who pulls is
+       * handed the missing step mid-motion, in the world's own material,
+       * without a word of instruction. A player who lets go simply keeps the
+       * open plate, which is still an answer and still progress.
+       */
+      beginGesture(event, id, "tap", attendedId);
+      productionInterpretation.activateConcept(toConceptId(id));
+      const opened = interpretationDraftStore.getState().draft;
       if (
-        (mode === "tap" || mode === "load") &&
-        (event.pointerType === "touch" || isCoarsePointer())
+        opened.stage === "attending" &&
+        String(opened.attendedConceptId) === id
       ) {
+        gesture.mode = "load";
+        gesture.sourceBeadId = id;
+      }
+      // A finger held still on a bead asks for the bead itself. The press has
+      // already opened it; this adds the reading, and never a weave.
+      if (event.pointerType === "touch" || isCoarsePointer()) {
         gesture.pressTimer = window.setTimeout(() => {
           gesture.pressTimer = null;
           if (gesture.pressedBeadId !== id || gesture.moved) return;
@@ -474,53 +578,15 @@ export function beadPointerHandlers(id: string) {
   };
 }
 
-/**
- * THE MOMENT AN UNARMED DRAG STOPS BEING NOTHING.
- *
- * Press a bead with no intention armed, pull, release: the gesture was routed
- * to mode `tap`, `handlePointerUp` discarded it because `activate = !moved`,
- * and the result was measurable — draft `inactive`, no threads, the same
- * "Choose a bead to Attend." message, not even a failure. The primary verb was
- * unreachable by the most natural thing a hand does with two spheres and a line
- * between them, and nothing in the world said why.
- *
- * The answer is not an overlay and not a refusal: pulling on a bead now *opens*
- * it. Attention lands on the bead under the finger, the intention plate blooms
- * around it, and the same drag continues straight into the plate's four
- * stations — the identical `load` gesture an attended bead already supported.
- * The player is taught the missing step by being handed it mid-motion, in the
- * world's own material, without a word of instruction. Releasing before the
- * plate has caught up leaves the plate open and the bead attended, which is
- * still an answer and still progress.
- */
-function escalateUnarmedDrag(event: PointerEvent): void {
-  const draft = interpretationDraftStore.getState().draft;
-  const pressedId = gesture.pressedBeadId;
-  if (!pressedId) return;
-  if (
-    draft.stage === "inactive" ||
-    String(draft.attendedConceptId) !== pressedId
-  ) {
-    productionInterpretation.activateConcept(toConceptId(pressedId));
-  }
-  const attended = interpretationDraftStore.getState().draft;
-  if (attended.stage !== "attending") return;
-  gesture.mode = "load";
-  gesture.sourceBeadId = pressedId;
-  updateLoadHover(event);
-}
-
 export function handlePointerMove(event: PointerEvent): void {
   if (event.pointerId !== gesture.pointerId || !gesture.pressedBeadId) return;
   const crossed =
     Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >=
     DRAG_THRESHOLD_PX;
-  const firstDrag = crossed && !gesture.moved;
   if (crossed) {
     gesture.moved = true;
     clearPressTimer();
   }
-  if (firstDrag && gesture.mode === "tap") escalateUnarmedDrag(event);
 
   const step = Math.hypot(event.clientX - lastMoveX, event.clientY - lastMoveY);
   lastMoveX = event.clientX;

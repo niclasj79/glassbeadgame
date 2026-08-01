@@ -311,6 +311,47 @@ describe("the label placement solver", () => {
     expect(solved.code[0]).toBe(SUPPRESSED);
   });
 
+  /**
+   * B2, the half of it nobody could see. Ground truth on the running build:
+   * after attending, `snapshot()` reported draftStage "attending" while the
+   * attended bead carried "no ring, no reticle, no glow and no label". The name
+   * was the solver doing exactly what it was told — the arena handed it the
+   * intention plate's radius as the offset for the bead's *own* name, so the
+   * name was thrown 148 px clear of the glass, landed nearer some neighbour,
+   * and was refused by the misattribution law above. The two radii have been
+   * separable here since that law was written; nothing passed the second one.
+   */
+  it("hands the solver the bead's own radius as well as the reserved one", () => {
+    const source = beadsSource();
+    expect(source).toContain("ownRadius: focal.ownRadius");
+    // …and it is the glass, not the instrument drawn around it.
+    expect(source).toMatch(/focal\.ownRadius\[i\] = focal\.glassRadius\[i\]/);
+  });
+
+  it("keeps the attended bead's own name, which is the frame's subject", () => {
+    // The measured frame: Fibonacci attended at the top of a 1280x720 page with
+    // Anamorphosis below it. With one radius for both questions the name was
+    // suppressed outright; with the bead's own radius it hangs on its bead.
+    const plate = 0.41;
+    const glass = 0.05;
+    const beads = [
+      { x: 0, y: 0.3, r: plate, own: glass, w: 0.16, h: 0.03 },
+      { x: 0.02, y: -0.25, w: 0.16, h: 0.03 },
+    ];
+    const solved = solve(beads);
+    expect(solved.code[0]).not.toBe(SUPPRESSED);
+    expect(Math.hypot(solved.offset[0], solved.offset[1])).toBeLessThan(0.12);
+    // And the neighbour still keeps clear of the whole plate, which is what the
+    // reserved radius is for.
+    if (solved.code[1] !== SUPPRESSED) {
+      const box = solved.box(1);
+      const clear =
+        Math.abs(box.cx - solved.anchor[0]) >= box.hx + plate ||
+        Math.abs(box.cy - solved.anchor[1]) >= box.hy + plate;
+      expect(clear).toBe(true);
+    }
+  });
+
   it("is what the arena actually uses", () => {
     const source = beadsSource();
     expect(source).toContain("placeLabels(");

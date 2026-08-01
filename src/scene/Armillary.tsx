@@ -66,6 +66,7 @@ uniform float uRadius;
 uniform float uMajor;
 uniform float uMinor;
 uniform float uOpacity;
+uniform float uPresence;
 uniform float uBreath;
 uniform float uCreep;
 uniform float uSweep;
@@ -142,17 +143,38 @@ void main() {
   float alpha = band * uOpacity * weight * (0.86 + 0.14 * uBreath)
               + band * glow * 0.16 * weight
               + band * pass * 0.10 * weight;
-  gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+  gl_FragColor = vec4(col, clamp(alpha * uPresence, 0.0, 1.0));
 }
 `;
+
+/**
+ * HOW PRESENT THE BRASS IS WHILE THE TITLE IS BEING READ.
+ *
+ * VC-05: "the ochre rings run straight through the wordmark and the eyebrow
+ * with no contrast management". The composition answers half of that — the
+ * title is composed concentrically now (`framing.titleComposition`), so the
+ * letterforms sit inside the instrument rather than beside it — and this
+ * answers the other half from the side that can: the brass is held back while
+ * the title is on the page, and comes up to full as the world opens.
+ *
+ * It is not a fade-in trick. A room with a title over it is a room being
+ * *read past*, and an instrument that is fully struck behind running text is
+ * an instrument competing with it. The local contrast under the letterforms
+ * themselves is the DOM's to manage; only the DOM knows where they are.
+ */
+const TITLE_PRESENCE = 0.72;
+/** Seconds the brass takes to come up. One camera phrase, near enough. */
+const PRESENCE_EASE_SECONDS = 1.05;
 
 function Ring({
   spec,
   stations,
+  presence,
   reducedMotion,
 }: {
   spec: RingSpec;
   stations: readonly StationAnchor[];
+  presence: number;
   reducedMotion: boolean;
 }) {
   const theme = useCurrentTheme();
@@ -176,6 +198,7 @@ function Ring({
         uMajor: { value: spec.major },
         uMinor: { value: spec.minor },
         uOpacity: { value: spec.opacity },
+        uPresence: { value: 1 },
         uBreath: { value: 0 },
         uCreep: { value: 0 },
         uSweep: { value: 0 },
@@ -203,9 +226,16 @@ function Ring({
    * the frame loop. Nothing here allocates — the `Vector2`s are the pooled
    * uniform values, and `stations` is at most `MAX_STATIONS` long.
    */
-  useFrame(() => {
+  const held = useRef(presence);
+
+  useFrame((_, rawDt) => {
     (material.uniforms.uBreath as { value: number }).value =
       Math.sin(frameState.breathPhase) * frameState.breathDepth;
+
+    const dt = Math.min(rawDt, 1 / 20);
+    held.current +=
+      (presence - held.current) * Math.min(1, dt / PRESENCE_EASE_SECONDS);
+    (material.uniforms.uPresence as { value: number }).value = held.current;
 
     // THE IDLE SCORE, at this ring's own rate. The turn is applied to a group
     // about the world's axis rather than folded into the ring's own Euler, so
@@ -307,6 +337,10 @@ export function Armillary() {
    */
   const stations = useMemo(() => stationAnchors(threads), [threads]);
 
+  const phase = useStore((s) => s.phase);
+  const presence =
+    phase === "title" || phase === "setup" ? TITLE_PRESENCE : 1;
+
   /**
    * THE INSTRUMENT EXISTS BEFORE THE DRAW DOES.
    *
@@ -328,6 +362,7 @@ export function Armillary() {
           key={spec.key}
           spec={spec}
           stations={stations}
+          presence={presence}
           reducedMotion={reducedMotion}
         />
       ))}
