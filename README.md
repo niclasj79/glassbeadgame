@@ -57,6 +57,9 @@ equivalent. Relation meaning is never carried by colour alone.
 
 ```sh
 npm ci                    # install exactly from package-lock.json
+npm run steering:test     # deterministic steering-harness fixture tests
+npm run steering:check    # validate task index and active packets
+npm run steering:next -- --json  # report the next locally eligible task
 npm run typecheck         # tsc strict
 npm run lint
 npm test                  # vitest
@@ -94,12 +97,18 @@ src/
   ui/                thin DOM surfaces and the accessibility mirror
   platform/          IndexedDB and the service worker
 legacy/              the archived v1 app — reference only
+scripts/
+  steering/          read-only task validation, selection, and live preflight
 ```
 
 The rule that holds it together: **domain code owns every durable rule, and
 imports nothing from the browser.** The whole golden path is proven in unit
 tests with no renderer and no audio context, which is what makes the audiovisual
 layer replaceable without risking the composition.
+
+See `docs/STEERING-HARNESS.md` before using the selector. Repository-only
+selection does not verify GitHub state; autonomous starts require the explicit
+live preflight and must still stop after one reviewable pull request.
 
 ### For composers
 

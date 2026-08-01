@@ -18,6 +18,10 @@ See `../CODEX-STEERING-READINESS.md`.
 
 Codex may select only the first Ready task whose dependencies are Done and whose declared architectural/file scope does not overlap active work. One run produces one branch and one PR, then stops.
 
+Run `npm run steering:check` before selection. Autonomous starts must then run
+`npm run steering:next -- --json --live` from a clean, exact default branch and
+stop on any refusal or valid no-Ready result. See `../STEERING-HARNESS.md`.
+
 ## Current milestone
 
 M2 — New interaction loop
@@ -28,7 +32,10 @@ None.
 
 ## In review
 
-1. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
+1. `M0-008-steering-harness-v2.md` — directly assigned read-only steering
+   validator, selector, and live preflight; awaiting steering-policy and CI
+   review.
+2. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
    the canonical interpretation path; awaiting the required director
    interaction, accessibility, and audiovisual review.
 
@@ -75,20 +82,19 @@ None.
 
 ## Planned but not yet Ready
 
-Tasks after M2-011 are not yet Ready. M2-011 is the single reviewed production
-cutover packet required by M2-007, M2-008, and M2-010: it owns production
-composition, active input arbitration, stable identity timing, removal of the
-legacy hidden-answer commit path, and minimum placeholder presentation
-together. M3 outcomes and M4 camera/audio/artistic grammar remain separate
-human-review boundaries rather than hidden additions to the cutover.
+Tasks after M2-011 are not yet Ready. Its production implementation has merged,
+but M2-011 remains Review until the director records the separate P-005
+physical-device, accessibility, and audiovisual acceptance. M3 outcomes and M4
+camera/audio/artistic grammar remain separate human-review boundaries rather
+than inferred results of the cutover or its automated checks.
 
 ## Director design companions
 
 - `../PLAYTEST-PLAN.md` — milestone hypotheses, observation protocol, proposed success criteria, and playtest decisions `P-001` through `P-008`;
-- `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-013`;
+- `../INTERACTION-DECISIONS.md` — attention, inspection, cancellation, relation-choice, gesture, and input-equivalence decisions `I-001` through `I-014`;
 - `../CONTENT-AUDIOVISUAL-REFERENCE.md` — representative pairs, provisional relation grammar, resonance boundaries, and content/audiovisual decisions `CAV-001` through `CAV-010`.
 
-Director decisions `CAV-001` through `CAV-004`, `I-001` through `I-013`, and
+Director decisions `CAV-001` through `CAV-004`, `I-001` through `I-014`, and
 `P-001` through `P-005` are accepted. The attended-viewpoint/directional-sweep,
 armed-intention, and camera-performance metaphors in
 `INTERACTION-DECISIONS.md` are binding design guidance with their stated

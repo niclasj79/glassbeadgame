@@ -28,6 +28,10 @@ jobs:
           cache: npm
       - name: Install from lockfile
         run: npm ci
+      - name: Steering harness tests
+        run: npm run steering:test
+      - name: Validate steering state
+        run: npm run steering:check
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
