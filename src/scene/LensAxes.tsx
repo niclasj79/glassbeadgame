@@ -4,17 +4,22 @@ import { useFrame } from "@react-three/fiber";
 import { Billboard, Line, Text } from "@react-three/drei";
 import interWoff from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
 import { useStore } from "@/state/store";
-import { LENS_EXTENT, LENS_VIEWS } from "@/game/layout";
+import { LENS_EXTENT, LENS_VIEWS, type LensAxis } from "@/game/layout";
 
-const AXIS_COLORS: Record<string, string> = {
-  Good: "#fbbf24",
-  True: "#60a5fa",
-  Beautiful: "#fb7185",
+/**
+ * Engraving tones, not faculty inks. An axis that borrowed a faculty's hue
+ * would look like it was making a claim about that faculty; these three sit
+ * deliberately outside the ink set the beads themselves use.
+ */
+const AXIS_COLORS: Record<LensAxis, string> = {
+  Good: "#b08d4e",
+  True: "#9fadd0",
+  Beautiful: "#c9b79a",
 };
 
 /**
- * The visible pair of transcendental axes for the current Lens view.
- * The third axis is folded away — it simply is not drawn.
+ * The visible pair of axes for the current Lens view. The third reading is
+ * folded away — it simply is not drawn.
  */
 export function LensAxes() {
   const lensActive = useStore((s) => s.lensActive);
@@ -44,7 +49,7 @@ export function LensAxes() {
   const view = LENS_VIEWS[lensView - 1] ?? LENS_VIEWS[0];
   const ext = LENS_EXTENT * 1.15;
 
-  const axes = [
+  const axes: { label: LensAxis; dir: THREE.Vector3 }[] = [
     { label: view.xAxis, dir: new THREE.Vector3(1, 0, 0) },
     { label: view.yAxis, dir: new THREE.Vector3(0, 1, 0) },
   ];
@@ -52,7 +57,7 @@ export function LensAxes() {
   return (
     <group ref={group} visible={false}>
       {axes.map(({ label, dir }) => {
-        const color = AXIS_COLORS[label] ?? "#9aa2ff";
+        const color = AXIS_COLORS[label];
         const end = dir.clone().multiplyScalar(ext);
         const start = end.clone().multiplyScalar(-1);
         return (

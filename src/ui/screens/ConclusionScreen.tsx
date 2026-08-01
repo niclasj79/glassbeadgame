@@ -1,166 +1,292 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { buildAnnotation, type Annotation } from "@/domain/annotation";
+import { resolveSessionOutcomes } from "@/domain/outcomes";
+import { compileConclusion } from "@/domain/performance";
+import { buildPortrait, type Portrait } from "@/domain/portrait";
+import { castaliaLookup } from "@/runtime/content/castaliaLookup";
+import { startSession } from "@/runtime/session";
+import { presentationNow } from "@/runtime/testMode";
+import { domainSessionStore } from "@/state/domainSession";
 import { useStore } from "@/state/store";
-import { composeAnnotation } from "@/content/annotations";
-import { totalConnections } from "@/game/ranks";
-import type { Discovery } from "@/state/types";
-import { RankSigil } from "../components/RankSigil";
-import { Button } from "../components/Button";
-import { ContinueLinkButton } from "../components/ContinueLinkButton";
-import { SessionPlateActions } from "../components/SessionPlateActions";
-import { ConnectionCard } from "../components/ConnectionCard";
+import { useStore as useVanillaStore } from "zustand";
+import {
+  delayMsFor,
+  revealAfter,
+  revealSchedule,
+  type PerformanceTiming,
+  type RevealState,
+  type RevealStep,
+} from "./conclusionReveal";
+import { PortraitPlate } from "./PortraitPlate";
+import { ReadingScroller } from "./ReadingScroller";
+import { threadRegister, type ThreadReading } from "./threadRegister";
 
-const fadeUp = {
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0 },
-};
+/**
+ * THE CONCLUSION
+ *
+ * A thin shell around `PortraitPlate`. Everything on the plate is derived from
+ * the canonical event log — the same log the arena appended to, replayed — so
+ * the reading a player is given at the end is a reading of the Game they
+ * actually played and nothing else.
+ *
+ * The legacy plate is gone entirely: score, rank sigil, codex-new markers, the
+ * share-progress link, and the list of curated connections all counted against
+ * a corpus that no longer ships. ADR-010 replaces the number with the portrait.
+ *
+ * THE PERFORMANCE NOW REACHES THE PAGE (GAP-4).
+ *
+ * `compileConclusion` has always compiled the concluded log into a score: entry
+ * times in creation order, a tempo taken from the web's density and tension
+ * load, a total length. Until this pass the only consumer outside the domain
+ * was the audio director. The page ignored it and stamped itself complete at
+ * t = 0, so a player heard a reconstruction of their session play out over a
+ * document that had finished arriving before the first voice entered.
+ *
+ * The reading assembles on that clock now — `conclusionReveal.ts` holds the
+ * mapping and the reasoning. Two things it is careful not to be:
+ *
+ *  - **Not a cutscene.** Another Game and Leave stand from the first frame,
+ *    "Read it all now" ends the assembly, and Escape does the same from the
+ *    keyboard. Nothing here waits for the performance to finish before the
+ *    player may act, and there is no state in which the way out is missing.
+ *  - **Not a second compilation of anything.** The performance is compiled from
+ *    the same replayed session the portrait and the annotation are built from,
+ *    by the same pure function the progression published to the audio director,
+ *    so the page and the score cannot describe different sessions.
+ *
+ * WHAT IS STILL UNCONSUMED, AND BY WHOM. `performance.camera` — the ordered
+ * camera hints, each with a reason — and `performance.climax` belong to the
+ * scene. This module deliberately reads neither: a camera hint is not a DOM
+ * concern, and marking the climax on the plate would print a best thread, which
+ * is the number ADR-010 removed wearing a different hat.
+ */
+
+export interface ConclusionReadingProps {
+  readonly portrait: Portrait;
+  readonly annotation: Annotation;
+  readonly threadCount: number;
+  readonly threads: readonly ThreadReading[];
+  /** Null renders the whole reading at once. See `PortraitPlateProps`. */
+  readonly reveal?: RevealState | null;
+  readonly onTakeWhole?: () => void;
+  readonly onAnother: () => void;
+  readonly onLeave: () => void;
+}
+
+/**
+ * The composed page, with no store attached — the ground it is read against,
+ * the scrolling column, and the plate. Separate from the shell so the layout
+ * that made the last image unreadable can be asserted directly.
+ */
+export function ConclusionReading({
+  portrait,
+  annotation,
+  threadCount,
+  threads,
+  reveal = null,
+  onTakeWhole,
+  onAnother,
+  onLeave,
+}: ConclusionReadingProps) {
+  return (
+    <>
+      {/*
+        THE SCRIM, IN TWO PARTS.
+
+        The web stays visible behind the reading — it is the thing being read,
+        and dismissing it to a blank page would break the one continuity the
+        conclusion has. One flat veil could not serve both halves of that: at
+        88% the arena was properly present in the margins and *also* still
+        punching through the text, because the beads carry bloom and 12% of a
+        bloomed bead is a bright object. Depth's evidence line ran across a lit
+        bead; the gold armillary crossed the column; troika bead labels read at
+        full weight through the middle of a sentence.
+
+        So the veil is cut to the column instead of being turned up everywhere.
+        Outside the measure the arena is *more* present than before; inside it
+        the ground is effectively solid and no bead, ring or label can reach the
+        type. The reading is a page laid on the world, which is what it is.
+      */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-void/72 backdrop-blur-[3px]" />
+        {/* 62rem, with the flat part of the gradient reaching 12% in from each
+            edge: that plateau is wider than the plate's 48rem measure plus its
+            gutters, so every line of type — including the evidence lines, which
+            are the longest things on the page — stands on solid ground and only
+            the empty margin sits in the fade. */}
+        <div
+          data-testid="conclusion-column-scrim"
+          className="absolute inset-y-0 left-1/2 w-[min(62rem,100%)] -translate-x-1/2"
+          style={{
+            background:
+              "linear-gradient(90deg, hsl(var(--void) / 0) 0%, hsl(var(--void) / 0.97) 12%, hsl(var(--void) / 0.97) 88%, hsl(var(--void) / 0) 100%)",
+          }}
+        />
+      </div>
+      <ReadingScroller
+        label="The reading this Game left"
+        moreBelowLabel="The reading continues"
+      >
+        <PortraitPlate
+          portrait={portrait}
+          annotation={annotation}
+          threadCount={threadCount}
+          threads={threads}
+          reveal={reveal}
+          onTakeWhole={onTakeWhole}
+          onAnother={onAnother}
+          onLeave={onLeave}
+        />
+      </ReadingScroller>
+    </>
+  );
+}
+
+/**
+ * How often the schedule is re-read while it waits.
+ *
+ * ONE CLOCK, NOT TWO. The page is measured against `presentationNow` — the same
+ * clock the cue bus schedules the audio director on — because two directors of
+ * one performance reading two different clocks is exactly how a reconstruction
+ * stops reconstructing anything. In test mode that clock only moves when a test
+ * moves it, so the wait cannot be slept off in one go: it is re-read on a
+ * bounded interval instead, which costs four comparisons a second, allocates
+ * nothing, and makes the page behave identically under a real clock and under
+ * the controlled one the capture harness and the browser suite drive.
+ */
+const RECHECK_MS = 250;
+
+/**
+ * Play the schedule.
+ *
+ * One timer at a time and one state write per step — around two dozen for a
+ * whole session — so nothing here runs on a frame path and nothing accumulates.
+ * The cursor is carried in a ref as well as in state because the timer callback
+ * needs the current value without re-subscribing, and because "the player took
+ * the whole reading" has to be visible to a timeout that is already in flight.
+ *
+ * The elapsed time is measured against a start stamp rather than accumulated
+ * from the timeouts, so a throttled background tab returns to the schedule it
+ * has actually reached instead of replaying it from where it fell asleep.
+ */
+function usePerformedReading(steps: readonly RevealStep[]): {
+  readonly reveal: RevealState;
+  readonly takeWhole: () => void;
+} {
+  const [taken, setTaken] = useState(0);
+  const takenRef = useRef(0);
+
+  useEffect(() => {
+    takenRef.current = 0;
+    setTaken(0);
+    if (steps.length === 0) return;
+
+    const startedAt = presentationNow();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const play = (): void => {
+      const elapsed = presentationNow() - startedAt;
+      let next = takenRef.current;
+      while (next < steps.length && steps[next].atSeconds * 1000 <= elapsed) {
+        next += 1;
+      }
+      if (next !== takenRef.current) {
+        takenRef.current = next;
+        setTaken(next);
+      }
+      if (next < steps.length) {
+        timer = setTimeout(
+          play,
+          Math.min(RECHECK_MS, delayMsFor(steps, next, elapsed))
+        );
+      }
+    };
+
+    play();
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [steps]);
+
+  const takeWhole = useCallback(() => {
+    takenRef.current = steps.length;
+    setTaken(steps.length);
+  }, [steps]);
+
+  const reveal = useMemo(() => revealAfter(steps, taken), [steps, taken]);
+  return { reveal, takeWhole };
+}
+
+const NO_STEPS: readonly RevealStep[] = Object.freeze([]);
 
 export function ConclusionScreen() {
-  const session = useStore((s) => s.session);
-  const codex = useStore((s) => s.codex);
-  const goToSetup = useStore((s) => s.goToSetup);
+  const domainSession = useVanillaStore(domainSessionStore, (s) => s.session);
   const returnToTitle = useStore((s) => s.returnToTitle);
-  const setCodexOpen = useStore((s) => s.setCodexOpen);
 
-  const annotation = useMemo(
-    () => (session ? composeAnnotation(session) : ""),
-    [session]
-  );
-  const [reading, setReading] = useState<Discovery | null>(null);
+  const reading = useMemo(() => {
+    if (!domainSession) return null;
+    const portrait = buildPortrait(domainSession, castaliaLookup);
+    const annotation = buildAnnotation(domainSession, castaliaLookup);
+    const threads = threadRegister(
+      resolveSessionOutcomes(domainSession, castaliaLookup)
+    );
+    /*
+     * The same compiler, over the same replayed session, that the progression
+     * published to the audio director when the Game concluded. It is pure and
+     * deterministic — `goldenPath.test.ts` pins that a reloaded log compiles
+     * byte-identically — so this is the score that is playing, not a second
+     * arrangement of it.
+     */
+    const performance: PerformanceTiming = compileConclusion(
+      domainSession,
+      castaliaLookup
+    );
+    return {
+      portrait,
+      annotation,
+      threads,
+      threadCount: domainSession.threads.length,
+      steps: revealSchedule(performance, {
+        sentences: annotation.sentences.length,
+        threads: threads.length,
+        readings: portrait.dimensions.length,
+      }),
+    };
+  }, [domainSession]);
 
-  if (!session) return null;
+  const { reveal, takeWhole } = usePerformedReading(reading?.steps ?? NO_STEPS);
 
-  const curated = session.discoveries.filter((d) => d.kind === "curated");
-  const faint = session.discoveries.length - curated.length;
-  const codexCount = Object.keys(codex).length;
+  /* The keyboard's way past the performance. Escape is unclaimed on this
+     screen, and a player who wants the page rather than the reconstruction
+     should not have to find a control to say so. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") takeWhole();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [takeWhole]);
+
+  if (!reading) return null;
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 overflow-y-auto"
+      className="absolute inset-0 z-10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 1 } }}
       exit={{ opacity: 0, transition: { duration: 0.5 } }}
     >
-      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-6 py-8">
-        <div className="w-full rounded-3xl border border-line/55 bg-void/60 px-6 py-6 text-center shadow-[0_30px_120px_-28px_rgba(0,0,0,0.92)] backdrop-blur-xl sm:px-9 sm:py-7">
-        <motion.p
-          {...fadeUp}
-          transition={{ delay: 0.4, duration: 0.8 }}
-          className="font-ui text-[11px] uppercase tracking-[0.55em] text-dim/80"
-        >
-          {session.daily
-            ? `Today's Draw concludes · ${new Date().toISOString().slice(0, 10)}`
-            : "The Game concludes"}
-        </motion.p>
-
-        <motion.h2
-          {...fadeUp}
-          transition={{ delay: 0.55, duration: 0.8 }}
-          className="mt-3 font-display text-4xl font-medium text-bright sm:text-5xl"
-        >
-          Annotation
-        </motion.h2>
-
-        <motion.div
-          {...fadeUp}
-          transition={{ delay: 0.7, duration: 0.8 }}
-          className="mt-4 h-px w-20 bg-gradient-to-r from-transparent via-glow/60 to-transparent"
-        />
-
-        <motion.p
-          {...fadeUp}
-          transition={{ delay: 0.9, duration: 1.1 }}
-          className="mt-5 text-center font-display text-lg italic leading-relaxed text-bright/90 text-balance"
-        >
-          {annotation}
-        </motion.p>
-
-        {/* Stats */}
-        <motion.div
-          {...fadeUp}
-          transition={{ delay: 1.15, duration: 0.9 }}
-          className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-2"
-        >
-          <Stat value={session.score} label="Resonance" accent />
-          <Stat value={curated.length} label="Connections" />
-          <Stat value={faint} label="Faint strands" />
-          <Stat value={session.motifs.length} label="Motifs" />
-        </motion.div>
-
-        {/* The Game's luminous connections — click any to read it again. */}
-        {curated.length > 0 && (
-          <motion.div
-            {...fadeUp}
-            transition={{ delay: 1.3, duration: 0.9 }}
-            className="mt-5 w-full"
-          >
-            <p className="text-center font-ui text-[10px] uppercase tracking-[0.4em] text-dim">
-              The connections of this Game
-              <span className="ml-2 normal-case tracking-normal text-dim/60">
-                · click to read again
-              </span>
-            </p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {curated.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => setReading(d)}
-                  className={
-                    "rounded-full border px-4 py-1.5 font-display text-sm italic transition-all duration-200 " +
-                    (d.newToCodex
-                      ? "border-glow/40 bg-glow/10 text-bright hover:border-glow/80 hover:bg-glow/20"
-                      : "border-line/50 bg-surface/50 text-bright/90 hover:border-glow/60 hover:bg-glow/10")
-                  }
-                  title={d.newToCodex ? "New to your codex" : undefined}
-                >
-                  {d.newToCodex && <span className="mr-1.5 not-italic text-glow">✧</span>}
-                  {d.title}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        <motion.div {...fadeUp} transition={{ delay: 1.5, duration: 0.9 }} className="mt-6">
-          <RankSigil codexCount={codexCount} totalCount={totalConnections()} size={84} />
-        </motion.div>
-
-        <motion.div
-          {...fadeUp}
-          transition={{ delay: 1.7, duration: 0.9 }}
-          className="mt-6 flex flex-wrap items-center justify-center gap-3"
-        >
-          <Button onClick={goToSetup}>Weave again</Button>
-          <ContinueLinkButton />
-          <SessionPlateActions session={session} />
-          <Button variant="ghost" onClick={() => setCodexOpen(true)}>
-            Open the Codex
-          </Button>
-          <Button variant="ghost" onClick={returnToTitle}>
-            Return to title
-          </Button>
-        </motion.div>
-        </div>
-      </div>
-
-      <ConnectionCard discovery={reading} onClose={() => setReading(null)} />
+      <ConclusionReading
+        portrait={reading.portrait}
+        annotation={reading.annotation}
+        threadCount={reading.threadCount}
+        threads={reading.threads}
+        reveal={reveal}
+        onTakeWhole={takeWhole}
+        onAnother={() => startSession()}
+        onLeave={returnToTitle}
+      />
     </motion.div>
-  );
-}
-
-function Stat({ value, label, accent }: { value: number; label: string; accent?: boolean }) {
-  return (
-    <div className="text-center">
-      <p
-        className={
-          accent
-            ? "font-display text-2xl font-medium tabular-nums text-resonance"
-            : "font-display text-2xl font-medium tabular-nums text-bright"
-        }
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 font-ui text-[10px] uppercase tracking-[0.3em] text-dim">{label}</p>
-    </div>
   );
 }

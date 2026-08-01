@@ -1,14 +1,18 @@
 import type { InputModality, RelationIntention } from "../../domain/events";
-import type { ConceptId } from "../../domain/ids";
+import type { ConceptId, ThreadId } from "../../domain/ids";
 import type { DomainSessionStore } from "../../state/domainSession";
 import type { InterpretationDraftStore } from "../../state/interactionDraft";
 import type { InterpretationPresentationStore } from "../../state/interpretationPresentation";
 import type { NormalizedGestureSample } from "../gestureProfile";
+import type { CuePlan } from "../cues";
+import { planAttention, planAttentionCleared, planIntentionArmed } from "../cues";
 import type { InterpretationDraft } from "../interactionDraft";
-import { createInterpretationAttentionCoordinator } from "./createInterpretationAttentionCoordinator";
+import {
+  createInterpretationAttentionCoordinator,
+  type ResolveCandidateEvidence,
+} from "./createInterpretationAttentionCoordinator";
 import { createInterpretationCommitCoordinator } from "./createInterpretationCommitCoordinator";
 import { createInterpretationThreadId } from "./createInterpretationThreadId";
-import type { ResolveProvisionalCandidateEvidence } from "./resolveProvisionalCandidateEvidence";
 
 const MAX_GESTURE_SAMPLES = 128;
 
@@ -30,8 +34,30 @@ export interface ProductionInterpretationDependencies {
   readonly draftStore: InterpretationDraftStore;
   readonly presentationStore: InterpretationPresentationStore;
   readonly now: () => number;
-  readonly resolveCandidateEvidence: ResolveProvisionalCandidateEvidence;
+  readonly resolveCandidateEvidence: ResolveCandidateEvidence;
   readonly setInspection: (conceptId: ConceptId | null) => void;
+  /**
+   * Stages one coordinated response for a draft transition.
+   *
+   * Attending, arming and releasing attention are the three moments of the loop
+   * that never touch the durable log — and for exactly that reason they used to
+   * reach nothing but a store field and an aria string. `planAttention`,
+   * `planAttentionCleared` and `planIntentionArmed` were written, tested and
+   * exported with zero production callers, so the scene, the camera and the
+   * haptics channel never learned that the player had done anything at all
+   * until a thread was committed. This is the dependency that ends that: a
+   * required one, because a loop that silently stages nothing is the bug.
+   */
+  readonly publishCuePlan: (plan: CuePlan) => void;
+  /**
+   * Runs immediately after a commit has been published, in the same turn.
+   *
+   * Deliberately a dependency rather than a store subscription. Resolving a
+   * thread's outcome is part of the commit moment, not a reaction to it — and
+   * a subscription would put the outcome one microtask behind the thread,
+   * which is exactly the drift the cue boundary exists to prevent (ADR-009).
+   */
+  readonly onCommitted?: (threadId: ThreadId) => void;
 }
 
 export interface ProductionInterpretation {
@@ -100,6 +126,20 @@ export function createProductionInterpretation(
       .getState()
       .publishAttention(result.candidateResonance);
     dependencies.setInspection(null);
+    // Relation-neutral bands only, exactly as the store received them: the cue
+    // may suggest possibility, never correctness (CAV-004).
+    dependencies.publishCuePlan(
+      planAttention(
+        {
+          conceptId,
+          candidates: result.candidateResonance.map((candidate) => ({
+            conceptId: candidate.candidateId,
+            band: candidate.band,
+          })),
+        },
+        null
+      )
+    );
     return result.draft;
   };
 
@@ -146,6 +186,7 @@ export function createProductionInterpretation(
       });
       dependencies.setInspection(null);
       dependencies.presentationStore.getState().publishCommit(threadId);
+      dependencies.onCommitted?.(threadId);
     } catch (error) {
       dependencies.presentationStore.getState().setWeaving(false);
       dependencies.presentationStore
@@ -204,10 +245,23 @@ export function createProductionInterpretation(
 
     armIntention: (intention: RelationIntention) => {
       dependencies.draftStore.getState().armIntention(intention);
+      const draft = dependencies.draftStore.getState().draft;
       dependencies.presentationStore
         .getState()
         .announce(`${intention} armed. Draw toward another bead.`);
-      return dependencies.draftStore.getState().draft;
+      // Spec §8: arming changes the attended bead's preview *immediately*. Until
+      // this line the method wrote a draft stage and an aria string and nothing
+      // else, so the one moment the player learns that intention is a tool
+      // rather than a label passed without the world moving.
+      if (draft.stage !== "inactive") {
+        dependencies.publishCuePlan(
+          planIntentionArmed({
+            conceptId: draft.attendedConceptId,
+            intention,
+          })
+        );
+      }
+      return draft;
     },
 
     cancel: () => {
@@ -221,6 +275,7 @@ export function createProductionInterpretation(
       const draft = dependencies.draftStore.getState().draft;
       if (draft.stage === "inactive") {
         dependencies.presentationStore.getState().clearAttention();
+        dependencies.publishCuePlan(planAttentionCleared());
       } else if (draft.stage === "attending") {
         dependencies.presentationStore
           .getState()
@@ -315,6 +370,7 @@ export function createProductionInterpretation(
       capture = null;
       dependencies.setInspection(null);
       dependencies.presentationStore.getState().publishCommit(threadId);
+      dependencies.onCommitted?.(threadId);
     },
 
     cancelWeave: () => {

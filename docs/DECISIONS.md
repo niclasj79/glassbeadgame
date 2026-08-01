@@ -81,3 +81,87 @@ Autonomous Codex work stops after one scoped task and PR. It does not chain into
 **Status:** Accepted
 
 The vertical slice uses static hosting and local persistence only. Backend interfaces may be designed but not implemented unless a later approved task changes scope.
+
+## ADR-013 — Event schema version 1 is frozen for the whole slice
+
+**Status:** Accepted
+
+`schemaVersion: 1` carries M3 through M8 without a payload change. The roadmap
+names concurrent event-schema and persistence-schema work as explicitly unsafe,
+and IndexedDB is scheduled inside this campaign — so the ruling is made once,
+up front, rather than discovered during a migration.
+
+Adding one field to one payload today requires coordinated edits across five
+files (`domain/events/types.ts`, `createSessionEvent.ts`,
+`decodeSessionEventLog.ts` with its exact-key structural validation,
+`reduceSession.ts`, and `reducer/fixtures.ts`). That cost is the reason to
+decide deliberately, not a reason to avoid deciding.
+
+The freeze holds only because of three binding conditions. Each is a real
+constraint on other work, not a restatement of current behaviour:
+
+1. **`DocumentedRelationId` must resolve in the pack pinned by
+   `session.started.contentPackVersion`, and a pair must have at most one
+   authored relation.** The event stores an identity, and everything else —
+   relation type, evidence class, sources, intention fit, counterpoint — is a
+   pure lookup at replay time. The content validator enforces both halves,
+   because an unresolvable id would become a durable, permanently valid,
+   permanently meaningless event.
+
+   An earlier draft of this ADR required the id to *be* `relationKey(a, b)`.
+   That was stricter than the guarantee needs and it cost readability for
+   nothing: the pair is already carried by `thread.committed`, so one relation
+   per pair means replay can resolve by pair whether or not the id encodes it.
+   Readable ids like `rel.fibonacci-counterpoint` are kept, and the one-relation
+   -per-pair rule supplies the property the freeze actually depends on.
+
+2. **Open Thread generation must not consult topology.** An `OpenThreadId` is a
+   structured handle over `(pair, intention, sharedFacet, packVersion)`, all of
+   which are recoverable from the log, so the prompt is re-derivable on replay.
+   If generation ever read live topology, the facet would have to move into the
+   payload and the freeze would break. This is the condition most likely to be
+   violated by accident; it belongs in the outcome resolver's tests.
+
+3. **Conducting during Attunement is non-durable.** Specification §13 says the
+   conducting action may influence the conclusion's emphasis, while the M6 gate
+   requires replay to reconstruct a materially equivalent performance. Those
+   pull in opposite directions unless emphasis is either logged or declared
+   ephemeral. It is declared ephemeral: Attunement affects the live state only,
+   `attunement.entered`/`attunement.exited` keep their empty payloads, and the
+   conclusion is compiled purely from the log. Determinism is preserved at no
+   cost to the experience, because emphasis is a performance of the web rather
+   than a fact about it.
+
+**Consequences:** persistence may be built against a stable schema; the
+conclusion is guaranteed reproducible; and any future need for a payload change
+becomes a deliberate versioned migration rather than an emergency.
+
+## ADR-014 — Attention events are not durable session history
+
+**Status:** Accepted
+
+`bead.attended` is emitted on every explicit Attend and grows without bound.
+Attention is retained only as *the latest* attended concept: appending an
+attention event when the previous event is also an attention event replaces it
+rather than extending the log.
+
+The reason is semantic, not performance. The log is the session's durable
+record, and it should say what the player *interpreted*, not where they looked
+on the way there. Everything downstream — the portrait, the annotation, the
+conclusion performance — is defined over threads; nothing is defined over the
+history of glances. I-002 already accepts that clearing presentation attention
+does not erase the latest canonical attended concept, so collapsing costs
+nothing the specification asks for.
+
+To be accurate about the secondary effect: `appendEvents` currently re-decodes
+and re-replays the whole log on every write, and `decodeSessionEventLogV1`
+already replays internally, so each append replays twice. That is quadratic in
+principle, but at a realistic session size of a few dozen events it is not
+close to a real cost, and collapsing attention is not a meaningful optimisation.
+It is worth stating plainly rather than dressing the semantic argument in a
+performance one. The redundant second replay is a genuine (small) waste and is
+noted separately.
+
+**Consequences:** log growth tracks committed interpretation; persisted sessions
+stay small for reasons that will matter more as sessions are archived; and the
+log reads as a record of what the player did.

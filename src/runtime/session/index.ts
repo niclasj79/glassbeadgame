@@ -1,9 +1,13 @@
 export {
-  createSessionStartCoordinator,
-  LEGACY_CONTENT_PACK_VERSION,
-  type SessionStartCoordinatorDependencies,
-  type SessionStartResult,
+  CASTALIA_WORLD_ID,
+  GOLDEN_PATH_CONCEPTS,
+  createCastaliaSessionStart,
+  type CastaliaSessionStartDependencies,
+  type CastaliaSessionStartOptions,
+  type CastaliaSessionStartResult,
+} from "./createCastaliaSessionStart";
+export {
+  startSession,
   type StartSession,
   type StartSessionOptions,
-} from "./createSessionStartCoordinator";
-export { startSession } from "./startSession";
+} from "./startSession";

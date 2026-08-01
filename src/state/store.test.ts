@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connections } from "@/content/connections";
-import { resolveAttempt } from "@/game/rules";
 import { startSession } from "@/runtime/session";
-import { makeThread } from "@/test/fixtures";
 import { domainSessionStore } from "./domainSession";
-import type { MotifAward } from "./types";
 import { useStore } from "./store";
 
+/**
+ * What is left of the presentation store once the legacy progression is gone.
+ *
+ * The cases that characterised `addThread`, `addDiscovery`, `consecrateThreads`,
+ * `mergeProgress`, `resetProgress`, the codex, the session archive, lifetime
+ * totals and the daily record were deleted with the behaviour they described —
+ * there is no weakened assertion left behind, because there is nothing left to
+ * assert. What remains is the store's two real jobs: carrying the phase, and
+ * persisting taste settings and nothing else.
+ */
 const fixedNow = new Date("2025-03-04T05:06:07.000Z");
 
-describe("legacy Zustand mutation and persistence baseline", () => {
+describe("presentation store", () => {
   beforeEach(() => {
     localStorage.clear();
     useStore.setState(useStore.getInitialState(), true);
@@ -20,89 +26,44 @@ describe("legacy Zustand mutation and persistence baseline", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("starts deterministically with a supplied seed and prevents duplicate threads", () => {
+  it("moves to the conclusion and leaves the gesture idle", () => {
     startSession(["mathematics", "music"], { seed: 777 });
-    const firstSession = useStore.getState().session!;
-    const thread = makeThread(firstSession.beadIds[0], firstSession.beadIds[1]);
+    expect(useStore.getState().phase).toBe("arena");
 
-    useStore.getState().addThread(thread);
-    useStore.getState().addThread({ ...thread, createdAt: 99 });
-
-    expect(useStore.getState().session).toMatchObject({ seed: 777, startedAt: Date.now() });
-    expect(useStore.getState().session!.threads).toEqual([thread]);
-  });
-
-  it("characterizes discovery, motif, codex, insight, and consecration updates", () => {
-    startSession(["mathematics", "music"], { seed: 777 });
-    const connection = connections[0];
-    const attempt = resolveAttempt(connection.pair[0], connection.pair[1]);
-    const motif: MotifAward = { motifId: "triad", name: "Triad", points: 15, at: Date.now() };
-    const faintThread = makeThread("test.faint-a", "test.faint-b");
-
-    useStore.getState().addThread(attempt.thread);
-    useStore.getState().addThread(faintThread);
-    const finalized = useStore.getState().addDiscovery(attempt.discovery, [motif]);
-    useStore.getState().consecrateThreads([faintThread.id], "triad");
+    useStore.getState().finishConcluding();
 
     const state = useStore.getState();
-    expect(finalized.newToCodex).toBe(true);
-    expect(state.codex[connection.id]).toEqual({ firstFoundAt: Date.now(), count: 1 });
-    expect(state.session).toMatchObject({
-      score: attempt.discovery.points + motif.points + 3,
-      insight: 3,
+    expect(state.phase).toBe("conclusion");
+    expect(state.session?.interaction).toEqual({
+      mode: "idle",
+      fromId: null,
+      sticky: false,
+      reveal: null,
     });
-    expect(state.session!.threads.find((thread) => thread.id === faintThread.id)?.consecratedBy)
-      .toBe("triad");
+    expect(state.focusedBeadId).toBeNull();
+    expect(state.pinnedInspectId).toBeNull();
   });
 
-  it("merges transferred progress by earliest discovery and maximum totals, then resets it", () => {
-    const id = connections[0].id;
-    useStore.setState({
-      codex: { [id]: { firstFoundAt: 200, count: 2 } },
-      lifetimeStats: { sessions: 2, totalScore: 20 },
-    });
-    useStore.getState().mergeProgress({
-      version: 1,
-      exportedAt: 300,
-      codex: { [id]: { firstFoundAt: 100, count: 5 } },
-      lifetimeStats: { sessions: 1, totalScore: 40 },
-      hintsSeen: { weave: true },
-    });
+  it("does nothing when asked to conclude without a session", () => {
+    useStore.getState().finishConcluding();
+    expect(useStore.getState().phase).toBe("title");
+  });
 
-    expect(useStore.getState().codex[id]).toEqual({ firstFoundAt: 100, count: 5 });
-    expect(useStore.getState().lifetimeStats).toEqual({ sessions: 2, totalScore: 40 });
-    expect(useStore.getState().settings.hintsSeen).toEqual({ weave: true });
+  it("drops the session when returning to the title", () => {
+    startSession(["mathematics", "music"], { seed: 777 });
+    useStore.getState().setFocusedBead("measure.prime-numbers");
 
-    useStore.getState().resetProgress();
+    useStore.getState().returnToTitle();
+
     expect(useStore.getState()).toMatchObject({
       phase: "title",
-      codex: {},
-      sessionArchive: [],
-      lifetimeStats: { sessions: 0, totalScore: 0 },
-      unlocks: [],
-      lastDaily: null,
+      session: null,
+      lensActive: false,
+      focusedBeadId: null,
     });
   });
 
-  it("caps the archive, totals completed sessions, and records the UTC daily result", () => {
-    for (let index = 0; index < 13; index++) {
-      vi.setSystemTime(new Date(fixedNow.getTime() + index * 1_000));
-      startSession(["mathematics", "music"], {
-        seed: index,
-        daily: index === 12,
-      });
-      const session = useStore.getState().session!;
-      useStore.getState().addThread(makeThread(session.beadIds[0], session.beadIds[1]));
-      useStore.getState().finishConcluding();
-    }
-
-    const state = useStore.getState();
-    expect(state.sessionArchive).toHaveLength(12);
-    expect(state.lifetimeStats.sessions).toBe(13);
-    expect(state.lastDaily).toEqual({ date: "2025-03-04", score: 0 });
-  });
-
-  it("persists only the declared durable slice and restores device-derived settings", async () => {
+  it("persists settings and nothing else, and keeps device-derived values device-derived", async () => {
     startSession(["mathematics", "music"], { seed: 777 });
     useStore.getState().setMuted(true);
     useStore.getState().markHintSeen("weave");
@@ -112,24 +73,24 @@ describe("legacy Zustand mutation and persistence baseline", () => {
       version: number;
     };
     expect(envelope.version).toBe(1);
-    expect(envelope.state).not.toHaveProperty("session");
-    expect(envelope.state).not.toHaveProperty("phase");
-    expect(envelope.state.settings).toEqual({ muted: true, binaural: true, hintsSeen: { weave: true } });
+    expect(Object.keys(envelope.state)).toEqual(["settings"]);
+    expect(envelope.state.settings).toEqual({
+      muted: true,
+      binaural: true,
+      hintsSeen: { weave: true },
+    });
 
-    localStorage.setItem("gbg.v1", JSON.stringify({
-      version: 1,
-      state: {
-        codex: {},
-        sessionArchive: [],
-        lifetimeStats: { sessions: 7, totalScore: 70 },
-        unlocks: [],
-        lastDaily: null,
-        settings: { muted: true, binaural: false, hintsSeen: { restored: true } },
-      },
-    }));
+    localStorage.setItem(
+      "gbg.v1",
+      JSON.stringify({
+        version: 1,
+        state: {
+          settings: { muted: true, binaural: false, hintsSeen: { restored: true } },
+        },
+      })
+    );
     await useStore.persist.rehydrate();
 
-    expect(useStore.getState().lifetimeStats).toEqual({ sessions: 7, totalScore: 70 });
     expect(useStore.getState().settings).toMatchObject({
       muted: true,
       binaural: false,

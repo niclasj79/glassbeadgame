@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/state/store";
+import { ACKNOWLEDGE_LIFT_REM, OPENING_CORNER_MS } from "@/scene/opening";
 import { GlassPanel } from "./GlassPanel";
 
 function SpeakerIcon({ muted }: { muted: boolean }) {
@@ -48,12 +49,14 @@ function Row({
       onClick={onToggle}
       role="switch"
       aria-checked={on}
-      className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-elevated/60"
+      className="flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-elevated/60"
     >
       <span>
-        <span className="block font-ui text-[12px] tracking-wide text-bright">{label}</span>
+        <span className="block font-ui text-body tracking-wide text-bright">
+          {label}
+        </span>
         {sublabel && (
-          <span className="mt-0.5 block font-ui text-[10px] leading-relaxed text-dim">
+          <span className="mt-1 block font-ui text-caption leading-relaxed text-dim">
             {sublabel}
           </span>
         )}
@@ -61,7 +64,7 @@ function Row({
       <span
         className={
           "relative h-5 w-9 shrink-0 rounded-full border transition-colors " +
-          (on ? "border-glow/70 bg-glow/30" : "border-line/60 bg-surface")
+          (on ? "border-gold/70 bg-gold/25" : "border-line/60 bg-surface")
         }
       >
         <span
@@ -75,7 +78,29 @@ function Row({
   );
 }
 
-/** Sound corner: mute + the binaural bed, with a first-listen headphone note. */
+/**
+ * The sound corner.
+ *
+ * The headphone note used to float into the arena two and a half seconds into
+ * every first session and sit there until dismissed — a card with two buttons,
+ * present in literally every frame of play until acknowledged. That is exactly
+ * the modal interruption the specification asks to recede, and it was arriving
+ * during the one part of the experience that is supposed to be uninterrupted.
+ *
+ * It now appears on the title screen, before a Game exists to interrupt, as one
+ * quiet line beside the control it concerns. The honest off-switch did not
+ * move: it lives in the panel, where someone bothered by beating tones will
+ * look for it.
+ *
+ * AND IT LEAVES WITH THE TITLE IT BELONGS TO. On a screencast of a real press
+ * the note was still in the corner at 288 ms, by which time the arena had drawn
+ * all twelve beads — title furniture sitting on a Game that had already begun.
+ * It used to dissolve on its own clock, a plain 400 ms fade begun at the phase
+ * change; it is now carried out on the same axis and the same curve as the type
+ * (`scene/opening.ts`), so the corner is part of one departure rather than a
+ * second, slower one. It goes sooner than the block does, because it is the
+ * smallest thing on the page and the last that should still be readable.
+ */
 export function SoundToggle() {
   const muted = useStore((s) => s.settings.muted);
   const binaural = useStore((s) => s.settings.binaural);
@@ -104,45 +129,38 @@ export function SoundToggle() {
     };
   }, [open]);
 
-  // One-time headphone note when the cosmos first sounds — it doubles as
-  // the binaural bed's honest off-switch.
+  // Before the Game, never during it. Retires itself once the player has opened
+  // the panel, because at that point they have met the setting properly.
   const showHeadphoneNote =
-    phase === "arena" && binaural && !muted && !hintsSeen.headphones;
+    phase === "title" &&
+    binaural &&
+    !muted &&
+    !hintsSeen.headphones &&
+    !open;
+
+  useEffect(() => {
+    if (open && !hintsSeen.headphones) markHintSeen("headphones");
+  }, [open, hintsSeen.headphones, markHintSeen]);
 
   return (
     <div ref={ref} className="absolute bottom-5 right-5 z-20">
       <AnimatePresence>
-        {showHeadphoneNote && !open && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 2.5, duration: 0.8 } }}
-            exit={{ opacity: 0, transition: { duration: 0.4 } }}
-            className="absolute bottom-14 right-0 w-[270px]"
+        {showHeadphoneNote && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { delay: 1.6, duration: 1.2 } }}
+            exit={{
+              opacity: 0,
+              y: `-${ACKNOWLEDGE_LIFT_REM}rem`,
+              transition: {
+                duration: OPENING_CORNER_MS / 1000,
+                ease: [0.32, 0, 0.24, 1],
+              },
+            }}
+            className="engraved absolute bottom-3 right-14 w-52 text-right leading-relaxed"
           >
-            <GlassPanel className="p-4">
-              <p className="font-ui text-[11px] leading-relaxed text-bright">
-                Best experienced with headphones — a subtle binaural resonance is
-                woven into the sound.
-              </p>
-              <div className="mt-2.5 flex gap-2">
-                <button
-                  onClick={() => markHintSeen("headphones")}
-                  className="rounded-full border border-glow/50 bg-glow/10 px-4 py-1.5 font-ui text-[10px] uppercase tracking-[0.2em] text-bright transition-colors hover:bg-glow/20"
-                >
-                  Keep it
-                </button>
-                <button
-                  onClick={() => {
-                    setBinaural(false);
-                    markHintSeen("headphones");
-                  }}
-                  className="rounded-full border border-line/50 px-4 py-1.5 font-ui text-[10px] uppercase tracking-[0.2em] text-dim transition-colors hover:text-bright"
-                >
-                  Turn off
-                </button>
-              </div>
-            </GlassPanel>
-          </motion.div>
+            Headphones deepen the bed
+          </motion.p>
         )}
       </AnimatePresence>
 
@@ -153,7 +171,7 @@ export function SoundToggle() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.22 }}
-            className="absolute bottom-14 right-0 w-[280px]"
+            className="absolute bottom-14 right-0 w-[286px]"
           >
             <GlassPanel className="p-2.5">
               <Row
@@ -163,7 +181,7 @@ export function SoundToggle() {
               />
               <Row
                 label="Binaural resonance"
-                sublabel="A gentle 6 Hz beat between the ears. Headphones only; off if beating tones bother you."
+                sublabel="A gentle 6 Hz beat between the ears. Headphones only; turn it off if beating tones bother you."
                 on={binaural}
                 onToggle={() => setBinaural(!binaural)}
               />
@@ -176,7 +194,7 @@ export function SoundToggle() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Sound options"
         aria-expanded={open}
-        className="rounded-full border border-line/40 bg-surface/50 p-3 text-dim backdrop-blur-md transition-colors hover:border-line/80 hover:text-bright"
+        className="rounded-full border border-line/40 bg-surface/50 p-3 text-dim backdrop-blur-md transition-colors hover:border-brass/70 hover:text-bright"
       >
         <SpeakerIcon muted={muted} />
       </button>

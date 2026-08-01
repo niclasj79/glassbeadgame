@@ -1,11 +1,8 @@
 import { audio } from "./engine";
-import { ambient } from "./ambient";
-import { SCORE } from "./score";
-import { playVoice, noiseSource } from "./voices";
-import { chordForPair, degreeToFreq, noteForConcept } from "./theory";
-import { conceptById } from "@/content/concepts";
-import { disciplineById } from "@/content/disciplines";
-import type { Discovery } from "@/state/types";
+import { playNote, noiseSource } from "./voices";
+import { beadVoice, modeFreq } from "./theory";
+import { clampBeatingHz } from "./comfort";
+import { centsForBeatingHz, transposeCents } from "./mode";
 import { presentationNow } from "@/runtime/testMode";
 
 let lastHoverAt = 0;
@@ -17,9 +14,9 @@ export function hoverPing(conceptId: string): void {
   lastHoverAt = now;
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const concept = conceptById.get(conceptId);
-  if (!concept) return;
-  playVoice(ctx, audio.sfxBus, "bell", noteForConcept(concept) * 2, {
+  const voice = beadVoice(conceptId);
+  if (!voice) return;
+  playNote(ctx, audio.sfxBus, "glass", voice.freq * 2, {
     gain: 0.045,
     release: 0.5,
   });
@@ -28,10 +25,9 @@ export function hoverPing(conceptId: string): void {
 export function selectTick(conceptId: string): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const concept = conceptById.get(conceptId);
-  if (!concept) return;
-  const disc = disciplineById.get(concept.discipline);
-  playVoice(ctx, audio.sfxBus, disc?.timbre ?? "pluck", noteForConcept(concept), {
+  const voice = beadVoice(conceptId);
+  if (!voice) return;
+  playNote(ctx, audio.sfxBus, voice.timbre, voice.freq, {
     gain: 0.09,
     release: 0.45,
   });
@@ -53,9 +49,76 @@ export function selectTick(conceptId: string): void {
   env.connect(audio.sfxBus);
   noise.start(t0);
   noise.stop(t0 + 0.35);
-  playVoice(ctx, audio.sfxBus, "bell", noteForConcept(concept) * 4, {
+  playNote(ctx, audio.sfxBus, "glass", voice.freq * 4, {
     gain: 0.012,
     release: 0.35,
+  });
+}
+
+/**
+ * THE CATCH — a candidate magnetising under the aim.
+ *
+ * This moment used to call `hoverPing`: the same function, the same gain, the
+ * same timbre as moving the mouse across a bead. Latching a candidate — the
+ * instant the weave acquires its other end — was sonically identical to
+ * pointing at something, which is why the aim never felt like it gripped.
+ *
+ * It is deliberately an *articulation* rather than a pitch: a short damped
+ * click with a low thock under it, so it reads as a mechanism catching and
+ * cannot muddy the sustained relation voice the audio director plays on top of
+ * the same cue. Hover sings; this one bites.
+ */
+export function latchTick(conceptId: string): void {
+  const ctx = audio.get();
+  if (!ctx || !audio.sfxBus) return;
+  const t0 = ctx.currentTime;
+
+  const noise = noiseSource(ctx, 0.4);
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 1650;
+  bp.Q.value = 3.2;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.linearRampToValueAtTime(0.05, t0 + 0.004);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.075);
+  noise.connect(bp);
+  bp.connect(env);
+  env.connect(audio.sfxBus);
+  noise.start(t0);
+  noise.stop(t0 + 0.12);
+
+  // Which bead was caught, said once and quietly, an octave below its identity
+  // note so it sits under the click instead of competing with it.
+  const voice = beadVoice(conceptId);
+  if (!voice) return;
+  playNote(ctx, audio.sfxBus, "gut", voice.freq * 0.5, {
+    gain: 0.035,
+    release: 0.18,
+  });
+}
+
+/**
+ * The world offering Attunement — two rising notes, quiet, at the far edge of
+ * audibility. An invitation, and specifically not an alert: nothing about it
+ * asks to be acted on, and it is played exactly once when the composition
+ * becomes able to carry it.
+ */
+export function attunementInvitation(): void {
+  const ctx = audio.get();
+  if (!ctx || !audio.sfxBus) return;
+  const t0 = ctx.currentTime + 0.02;
+  playNote(ctx, audio.sfxBus, "glass", modeFreq(0, "mid"), {
+    gain: 0.035,
+    at: t0,
+    attack: 0.08,
+    release: 2.2,
+  });
+  playNote(ctx, audio.sfxBus, "glass", modeFreq(7, "high"), {
+    gain: 0.028,
+    at: t0 + 0.42,
+    attack: 0.1,
+    release: 2.8,
   });
 }
 
@@ -104,107 +167,36 @@ export function updateSilk(speed: number): void {
   );
 }
 
-// ── Sympathetic resonance — one managed voice that sings the identity note
-// of the nearest bead holding an undiscovered luminous connection with the
-// thread's origin. Retune-with-a-dip: one voice, zero clicks.
-let sympathyNodes: {
-  osc: OscillatorNode;
-  gain: GainNode;
-  panner: StereoPannerNode;
-  currentId: string | null;
-} | null = null;
-
-export function updateSympathy(
-  candidate: { id: string; strength: number; panX: number } | null
-): void {
-  const ctx = audio.get();
-  if (!ctx || !audio.sfxBus) return;
-
-  if (!candidate) {
-    if (sympathyNodes) {
-      sympathyNodes.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
-      sympathyNodes.currentId = null;
-    }
-    return;
-  }
-
-  const concept = conceptById.get(candidate.id);
-  if (!concept) return;
-  const freq = noteForConcept(concept);
-  const t = ctx.currentTime;
-
-  if (!sympathyNodes) {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 1200;
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.0001, t);
-    const panner = ctx.createStereoPanner();
-    osc.connect(lp);
-    lp.connect(gain);
-    gain.connect(panner);
-    panner.connect(audio.sfxBus);
-    osc.start();
-    sympathyNodes = { osc, gain, panner, currentId: candidate.id };
-  } else if (sympathyNodes.currentId !== candidate.id) {
-    // New candidate: dip, glide, restore — the dip masks the glide.
-    sympathyNodes.gain.gain.setTargetAtTime(0.0001, t, 0.08);
-    sympathyNodes.osc.frequency.setTargetAtTime(freq, t + 0.09, 0.05);
-    sympathyNodes.currentId = candidate.id;
-  }
-
-  sympathyNodes.gain.gain.setTargetAtTime(candidate.strength * 0.04, t + 0.02, 0.12);
-  sympathyNodes.panner.pan.setTargetAtTime(candidate.panX * 0.7, t, 0.1);
-}
-
-/** Consecration: faint threads rising to silver — climbing bells, one per
- *  thread elevated (capped), landing on the bright fifth. */
-export function consecrationChime(count: number): void {
-  const ctx = audio.ensure();
-  const bus = audio.sfxBus;
-  if (!ctx || !bus) return;
-  const t0 = ambient.quantize();
-  const steps = Math.min(4, 1 + count);
-  for (let i = 0; i < steps; i++) {
-    playVoice(ctx, bus, "bell", degreeToFreq([1, 2, 4, 0][i % 4], 4 + (i === 3 ? 1 : 0)), {
-      gain: SCORE.consecration.gain,
-      at: t0 + i * SCORE.consecration.noteGapSeconds,
-      release: 1.7,
-    });
-  }
-}
-
-/** The revelation arpeggio — Insight spent, light briefly shown. */
-export function illuminationChime(aId: string, bId: string): void {
-  const ctx = audio.ensure();
-  const bus = audio.sfxBus;
-  if (!ctx || !bus) return;
-  const a = conceptById.get(aId);
-  const b = conceptById.get(bId);
-  if (!a || !b) return;
-  const t0 = ctx.currentTime + 0.03;
-  const notes = [noteForConcept(a), noteForConcept(b), degreeToFreq(0, 5)];
-  notes.forEach((freq, i) => {
-    playVoice(ctx, bus, "bell", freq, {
-      gain: 0.05,
-      at: t0 + i * 0.16,
-      release: 1.8,
-    });
-  });
-}
-
-/** Full teardown when a gesture or session ends. */
-export function stopSympathy(): void {
-  const ctx = audio.get();
-  if (!ctx || !sympathyNodes) return;
-  const { osc, gain } = sympathyNodes;
-  sympathyNodes = null;
-  gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1);
-  osc.stop(ctx.currentTime + 0.8);
-}
+/**
+ * ── Three prototype voices were deleted here, and why ───────────────────────
+ *
+ * `updateSympathy` / `stopSympathy` sang the identity note of "the nearest bead
+ * holding an *undiscovered* luminous connection with the thread's origin" —
+ * a hot-and-cold signal steering the pointer toward an authored pair. That is
+ * the guess-the-hidden-answer loop this game does not have: the player composes
+ * an interpretation, and a sound that gets warmer as the aim approaches a
+ * correct answer converts composition into search. It had zero callers, and
+ * wiring it would have been a regression rather than a fix, so it is gone
+ * along with `frameState.sympathy`.
+ *
+ * `consecrationChime` and `illuminationChime` belonged to the retired tier and
+ * spent-Insight mechanics and also had zero callers. `scene/Illumination.tsx`,
+ * the ghost arc the second of those voiced, went with them: the ribbon's own
+ * material already draws an Open Thread as a figure that does not close, and it
+ * does so at *solved* equal coverage (`scene/resolution.ts`), so a second mark
+ * would have re-introduced the reward gradient that module exists to remove.
+ *
+ * `discoveryChord`, `faintDyad` and `conclusionCadence` have now gone the same
+ * way. All three took a `Discovery` — the legacy record that carried `tier` and
+ * `points` — and the first two were literally voiced *by tier*, which is a
+ * reward gradient in sound. Their only callers read `session.discoveries`, a
+ * projection published empty since the legacy scoring model was removed, so
+ * none of them had sounded in a long time. What replaced them is not a
+ * substitute chord: it is `audio/grammar.ts`, where a relation is voiced by the
+ * intention the player declared, and `audio/conclusion.ts`, where the closing
+ * performance is compiled from the event log. Both are epistemically flat by
+ * construction (CAV-006).
+ */
 
 // A sustained, quiet, slightly tense dyad while a thread is being aimed.
 let tensionNodes: { osc1: OscillatorNode; osc2: OscillatorNode; gain: GainNode } | null = null;
@@ -221,12 +213,17 @@ export function setAimTension(active: boolean): void {
     lp.frequency.value = 700;
     lp.connect(gain);
     gain.connect(audio.sfxBus);
+    // Expectancy, not dissonance: one pitch and its slightly sharp twin, tuned
+    // to beat at the slow end of the comfort band (CAV-007) rather than at
+    // whatever rate an arbitrary ratio happened to give.
+    const aim = modeFreq(9, "mid");
+    const aimBeatHz = clampBeatingHz(1.3);
     const osc1 = ctx.createOscillator();
     osc1.type = "sine";
-    osc1.frequency.value = degreeToFreq(4, 3); // A3
+    osc1.frequency.value = aim;
     const osc2 = ctx.createOscillator();
     osc2.type = "sine";
-    osc2.frequency.value = degreeToFreq(4, 3) * 1.006; // a hair sharp — expectancy
+    osc2.frequency.value = transposeCents(aim, centsForBeatingHz(aim, aimBeatHz));
     osc1.connect(lp);
     osc2.connect(lp);
     osc1.start();
@@ -250,8 +247,8 @@ export function cancelGliss(): void {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(degreeToFreq(2, 4), t);
-  osc.frequency.exponentialRampToValueAtTime(degreeToFreq(0, 3), t + 0.28);
+  osc.frequency.setValueAtTime(modeFreq(4, "high"), t);
+  osc.frequency.exponentialRampToValueAtTime(modeFreq(0, "mid"), t + 0.28);
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.05, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
@@ -261,66 +258,3 @@ export function cancelGliss(): void {
   osc.stop(t + 0.4);
 }
 
-/** The discovery chord — a strum voiced by tier, guaranteed consonant,
- *  landing on the world's rhythmic grid like a note that belongs. */
-export function discoveryChord(discovery: Discovery): void {
-  const ctx = audio.ensure();
-  if (!ctx || !audio.sfxBus) return;
-  const notes = chordForPair(discovery.a, discovery.b, discovery.tier);
-  const t0 = ambient.quantize();
-  const tierGain = discovery.tier >= 3 ? 1.15 : discovery.tier === 2 ? 1.0 : 0.9;
-  const release = discovery.tier >= 3 ? 3.2 : 2.2;
-  for (const n of notes) {
-    playVoice(ctx, audio.sfxBus, n.timbre, n.freq, {
-      gain: n.gain * tierGain,
-      at: t0 + n.delay,
-      release,
-    });
-  }
-}
-
-/** Faint resonance: two quiet plucks a fifth apart. Honest, small. */
-export function faintDyad(discovery: Discovery): void {
-  const ctx = audio.get();
-  if (!ctx || !audio.sfxBus) return;
-  const a = conceptById.get(discovery.a);
-  const b = conceptById.get(discovery.b);
-  if (!a || !b) return;
-  const t0 = ambient.quantize();
-  playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(a), { gain: 0.07, at: t0, release: 0.8 });
-  playVoice(ctx, audio.sfxBus, "pluck", noteForConcept(b) * 1.5, {
-    gain: 0.055,
-    at: t0 + 0.13,
-    release: 0.8,
-  });
-}
-
-/** The conclusion cadence: every discovered pitch, resolving onto low C. */
-export function conclusionCadence(pitches: number[]): void {
-  const ctx = audio.ensure();
-  const bus = audio.sfxBus;
-  if (!ctx || !bus) return;
-  const t0 = ctx.currentTime + 0.05;
-  const unique = [...new Set(pitches)].slice(0, 10);
-  unique.forEach((freq, i) => {
-    playVoice(ctx, bus, "bell", freq, {
-      gain: 0.08,
-      at: t0 + i * 0.14,
-      release: 2.8,
-    });
-  });
-  const tEnd = t0 + unique.length * 0.14 + 0.5;
-  playVoice(ctx, bus, "drone", degreeToFreq(0, 2), {
-    gain: 0.3,
-    at: tEnd,
-    attack: 0.3,
-    hold: 1.6,
-    release: 4,
-  });
-  playVoice(ctx, bus, "pad", degreeToFreq(3, 3), {
-    gain: 0.16,
-    at: tEnd + 0.1,
-    hold: 1.4,
-    release: 3.6,
-  });
-}

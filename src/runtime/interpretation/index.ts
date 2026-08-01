@@ -14,10 +14,6 @@ export {
   type InterpretiveCommitResult,
 } from "./createInterpretationCommitCoordinator";
 export {
-  resolveProvisionalCandidateEvidence,
-  type ResolveProvisionalCandidateEvidence,
-} from "./resolveProvisionalCandidateEvidence";
-export {
   createInterpretationThreadId,
   type CreateInterpretationThreadId,
 } from "./createInterpretationThreadId";

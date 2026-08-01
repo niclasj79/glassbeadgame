@@ -1,3 +1,4 @@
+import { tensionCeiling } from "./comfort";
 import { SCORE } from "./score";
 import { runtimeRandom, testMode } from "@/runtime/testMode";
 
@@ -21,8 +22,29 @@ function makeImpulseResponse(
 
 /**
  * The audio engine singleton — context lifecycle and gain staging.
- * Everything audible flows: (voice) → ambientBus | sfxBus → master →
- * (dry + convolver wet) → compressor → destination. No React in here.
+ *
+ * Everything audible flows:
+ *   (voice) → ambientBus | motifBus | tensionBus | sfxBus
+ *           → master → (dry + convolver wet) → compressor → destination.
+ *
+ * Four buses rather than two, because the semantic layer needs levels the bed
+ * does not:
+ *
+ *   ambientBus  the generative floor — drone, pad, room tone
+ *   motifBus    concept motifs and relation grammar: the things that mean something
+ *   tensionBus  dissonance only, followed by a limiter set to the CAV-007
+ *               ceiling, so "summed gain below the ambient bed" cannot be
+ *               breached by a plan, a bug, or a future caller
+ *   sfxBus      interaction sound: touch, silk, cancel
+ *
+ * The tense path used to be a bare `GainNode` at 0.85 that the comments called a
+ * ceiling. A gain node multiplies; it does not bound. Feed it twice the bed and
+ * it passes 1.7 times the bed, politely. The limiter below is what makes the
+ * word "ceiling" true in the graph, and `capTenseGain()` in `plan.ts` makes it
+ * true in the arithmetic before a voice is ever created — belt and braces, at
+ * the two places a bound can be lost.
+ *
+ * No React in here, and no game rules.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -30,8 +52,19 @@ class AudioEngine {
   private compressor: DynamicsCompressorNode | null = null;
   ambientBus: GainNode | null = null;
   sfxBus: GainNode | null = null;
+  /** The semantic music: concept motifs, relation grammar, attunement channels. */
+  motifBus: GainNode | null = null;
+  /**
+   * Dissonance, and only dissonance. Its output passes through `tensionLimiter`
+   * before reaching the master, so what leaves is genuinely bounded.
+   */
+  tensionBus: GainNode | null = null;
+  /** The brick wall the tense path is held under. Threshold tracks the bed. */
+  private tensionLimiter: DynamicsCompressorNode | null = null;
+  /** Multiplier the attention and attunement states apply to the bed. */
+  private bedScale = 1;
   /** Sits between ambientBus and master — the Breath modulates it alone,
-   *  so it never fights setAmbientIntensity over the same AudioParam. */
+   *  so it never fights setAmbientReach over the same AudioParam. */
   private breathGain: GainNode | null = null;
   /** Pad/drone lowpass whose cutoff the Breath sweeps. */
   breathFilter: BiquadFilterNode | null = null;
@@ -104,6 +137,25 @@ class AudioEngine {
       this.sfxBus.gain.value = 1;
       this.sfxBus.connect(this.master);
 
+      this.motifBus = this.ctx.createGain();
+      this.motifBus.gain.value = 1;
+      this.motifBus.connect(this.master);
+
+      // The ceiling is structural: a limiter, not a trim. Ratio 20 with a hard
+      // knee is a brick wall in practice; the fast attack catches the onset of a
+      // suspension, and the slow release keeps it from pumping while a Tension
+      // decays to its floor over twelve seconds.
+      this.tensionBus = this.ctx.createGain();
+      this.tensionBus.gain.value = 1;
+      this.tensionLimiter = this.ctx.createDynamicsCompressor();
+      this.tensionLimiter.knee.value = 0;
+      this.tensionLimiter.ratio.value = 20;
+      this.tensionLimiter.attack.value = 0.003;
+      this.tensionLimiter.release.value = 0.4;
+      this.tensionLimiter.threshold.value = this.tensionThresholdDb();
+      this.tensionBus.connect(this.tensionLimiter);
+      this.tensionLimiter.connect(this.master);
+
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") void this.ctx?.resume();
       });
@@ -129,11 +181,94 @@ class AudioEngine {
     this.master.gain.setTargetAtTime(muted ? 0 : AudioEngine.MASTER_LEVEL, t, 0.05);
   }
 
-  /** Gentle ambient swell as the web grows; capped, never dominant. */
-  setAmbientIntensity(score: number): void {
+  /**
+   * Gentle ambient swell as the web is *carried*; capped, never dominant.
+   *
+   * The argument used to be the legacy score, divided by 400 — so the room got
+   * louder as the player accumulated points, which is a completion meter wearing
+   * an atmosphere. ADR-010 replaced the number with the portrait, and the bed
+   * now follows topology instead: `reach` is 0..1, the fraction of the arena the
+   * largest connected region of the composition spans. It rises when threads
+   * join and cannot be raised by finding anything.
+   */
+  setAmbientReach(reach: number): void {
     if (!this.ctx || !this.ambientBus) return;
-    const target = 0.9 + Math.min(0.35, score / 400);
-    this.ambientBus.gain.setTargetAtTime(target, this.ctx.currentTime, 0.8);
+    this.ambientSwell = 0.9 + 0.35 * Math.max(0, Math.min(1, reach));
+    const t = this.ctx.currentTime;
+    // Cancel first, so a scheduled conclusion fade cannot outlive the session it
+    // ended: whatever asks for the bed last is the thing the player hears.
+    this.ambientBus.gain.cancelScheduledValues(t);
+    this.ambientBus.gain.setTargetAtTime(this.ambientSwell * this.bedScale, t, 0.8);
+  }
+
+  private ambientSwell = 0.9;
+
+  /**
+   * The bed recedes so something else can be heard — attention leaving space,
+   * Attunement dropping the floor beneath individual threads. Separate from
+   * `setAmbientReach` so the web's growth and the current state of attention
+   * never fight over the same AudioParam.
+   */
+  setBedScale(scale: number): void {
+    this.bedScale = Math.max(0.1, Math.min(1, scale));
+    if (!this.ctx || !this.ambientBus) return;
+    this.ambientBus.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.ambientBus.gain.setTargetAtTime(
+      this.ambientSwell * this.bedScale,
+      this.ctx.currentTime,
+      0.6
+    );
+    // The tense ceiling is a fraction of the bed, so when the bed moves the
+    // ceiling moves with it. Thinning the bed while leaving the ceiling where it
+    // was is precisely how Attunement ended up over CAV-007.
+    if (this.tensionLimiter) {
+      this.tensionLimiter.threshold.setTargetAtTime(
+        this.tensionThresholdDb(),
+        this.ctx.currentTime,
+        0.3
+      );
+    }
+  }
+
+  /**
+   * FADE THE GENERATIVE BED TO NOTHING, ENDING AT A KNOWN MOMENT.
+   *
+   * A ramp scheduled on the Web Audio clock rather than a `setTargetAtTime`
+   * relaxation, because the whole point is that it is *finished* by `atSeconds`
+   * — an exponential approach is never finished, and the loop would still be
+   * faintly under the last authored sound, which is the thing being fixed.
+   *
+   * Not clamped to the 0.1 floor `setBedScale` keeps: that floor exists so
+   * attention and Attunement thin the bed without deleting it. This is the end
+   * of the piece, and the end of a piece is allowed to reach silence.
+   */
+  fadeAmbientOut(atSeconds: number, overSeconds: number): void {
+    if (!this.ctx || !this.ambientBus) return;
+    const over = Math.max(0.05, overSeconds);
+    const now = this.ctx.currentTime;
+    const end = Math.max(now + 0.02, atSeconds);
+    const start = Math.max(now, end - over);
+    const gain = this.ambientBus.gain;
+    gain.cancelScheduledValues(start);
+    gain.setValueAtTime(this.ambientSwell * this.bedScale, start);
+    gain.linearRampToValueAtTime(0.0001, end);
+  }
+
+  /**
+   * The bed's summed reference level, which is what the Tension gain ceiling is
+   * expressed against (CAV-007). Planners read it rather than assuming a number.
+   */
+  bedGain(): number {
+    return SCORE.grammar.bedGain * this.bedScale;
+  }
+
+  /** The absolute level tense voices may not exceed, right now. */
+  tensionCeiling(): number {
+    return tensionCeiling(this.bedGain());
+  }
+
+  private tensionThresholdDb(): number {
+    return 20 * Math.log10(Math.max(1e-5, this.tensionCeiling()));
   }
 
   /**

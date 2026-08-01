@@ -18,7 +18,7 @@
     "steering:test": "node --test scripts/steering/test/*.test.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.playwright.json",
-    "validate:content": "vitest run src/content/validate.test.ts",
+    "validate:content": "vitest run src/content/castalia/castalia.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

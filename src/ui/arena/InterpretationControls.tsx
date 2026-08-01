@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStore as useVanillaStore } from "zustand";
-import { conceptById } from "@/content/concepts";
+import { castaliaConceptById } from "@/content/castalia";
 import { toConceptId } from "@/domain/ids";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { interpretationDraftStore } from "@/state/interactionDraft";
@@ -76,7 +76,7 @@ export function InterpretationControls() {
     <section className="sr-only" aria-label="Interpretation controls">
       <div role="group" aria-label="Beads in this draw">
         {beadIds.map((id, index) => {
-          const concept = conceptById.get(id);
+          const concept = castaliaConceptById.get(id);
           const selected = id === attendedId || id === candidateId;
           const band = presentation.candidateResonance.find(
             (candidate) => String(candidate.candidateId) === id

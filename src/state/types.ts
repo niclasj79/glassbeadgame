@@ -1,8 +1,50 @@
 import type { DisciplineId } from "@/content/types";
 
+/**
+ * `setup` is unreachable: the pre-game discipline picker left with the legacy
+ * draw and the title now opens straight into the arena. The member stays in the
+ * union only because `src/audio/useAudio.ts` and `src/scene/CameraRig.tsx`
+ * still branch on it, and neither may be edited from here.
+ */
 export type Phase = "title" | "setup" | "arena" | "conclusion";
 
 export type ArenaMode = "idle" | "pressed" | "threading" | "reveal" | "concluding";
+
+/**
+ * THE LEGACY PRESENTATION PROJECTION
+ *
+ * Everything below `Settings` is a *view*, not a source of truth. The canonical
+ * session is the replayed event log in `state/domainSession`; these shapes exist
+ * only because the scene still reads `useStore().session` for bead ids, quality
+ * and framing.
+ *
+ * ── `threads`, `discoveries`, `motifs`, `score`: dead, and now unread ────────
+ *
+ * Nothing has written to these four since the legacy scoring model left with
+ * `addThread`, `addDiscovery`, `consecrateThreads` and `spendInsight`. They are
+ * published empty by `applySessionStart`, and until recently five live
+ * subscribers read them and therefore did nothing at all: the ambient choir
+ * (`ambient.addThreadVoice`), the completed-motif ensemble
+ * (`ambient.addMotifPattern`), the discovery chord and faint dyad, the bed's
+ * swell (`audio.setAmbientIntensity`), and `scene/MotifMarks`. Every one of
+ * those has been cut over to the canonical session or deleted outright.
+ *
+ * What still touches them, and what a deletion would therefore have to change
+ * in one commit — recorded here because it spans files this module may not
+ * reach on its own:
+ *
+ *   src/state/store.ts                     `applySessionStart` copies all four
+ *   src/runtime/session/startSession.ts    builds the projection literal
+ *   src/scene/ThreadingDriver.tsx          `testSnapshot` reports score,
+ *                                          threads and discoveries
+ *   src/runtime/testMode.ts                `TestSessionSnapshot` declares them
+ *   tests/browser/deterministic-mode.spec  asserts all three are empty/zero
+ *   src/scene/Membranes.tsx                reads `session.threads`; the module
+ *                                          has no importer at all and should
+ *                                          go with them
+ *
+ * `MotifAward` in particular now has no reader anywhere outside this file.
+ */
 
 export interface Thread {
   /** pairKey of the two concept ids. */
@@ -13,33 +55,30 @@ export interface Thread {
   /** 0 = faint, 1–3 = curated tier. */
   tier: 0 | 1 | 2 | 3;
   createdAt: number;
-  /** A completed motif consecrates the faint threads of its web — a state
-   *  between faint resonance and luminous connection. Holds the motif id. */
-  consecratedBy?: "triad" | "symposium" | "fugue";
 }
 
 export interface Discovery {
-  /** pairKey; equals the curated connection id when kind is curated. */
+  /** pairKey of the two concept ids. */
   id: string;
   a: string;
   b: string;
   kind: "curated" | "faint";
   tier: 0 | 1 | 2 | 3;
-  title: string;
-  insight: string;
-  quote?: { text: string; source: string };
-  /** First time this curated connection was ever found (across all sessions). */
-  newToCodex: boolean;
   points: number;
 }
 
+/**
+ * Retired. `motifId` names the prototype's three families; the domain has
+ * detected `dialectic`, `canon` and `bridge` for a long time
+ * (`domain/motifs/types.ts`), so even a populated `motifs` array would have
+ * fallen through every branch that switched on this. The world's persistent
+ * marks are `scene/motifMarkPlan.ts` now, and the ensemble voices are seated
+ * from `SessionStateV1.completedMotifs`.
+ */
 export interface MotifAward {
   motifId: "triad" | "symposium" | "fugue";
-  name: string;
-  points: number;
   at: number;
-  /** The beads that formed the motif — its persistent mark lives on them
-   *  (triangle corners, symposium members, the fugue's ordered path). */
+  /** The beads that formed the motif — its persistent mark lives on them. */
   beads?: string[];
 }
 
@@ -63,14 +102,11 @@ export interface SessionState {
   score: number;
   startedAt: number;
   interaction: Interaction;
-  /** Curated connections hidden among this draw's beads — the session's arc. */
+  /** Legacy counters. Published as zero and never incremented. */
   curatedAvailable: number;
-  /** Insight — the currency of illumination. Earned by luminous discoveries
-   *  and motifs; spent to have the Game briefly show where light hides. */
   insight: number;
-  /** How many illuminations this session has already spent (seeds the pick). */
   illuminationsUsed: number;
-  /** Set when this session is the shared daily draw. */
+  /** Set when this session was started as the shared daily draw. */
   daily?: boolean;
   /** The world this session opens into (themes registry id). */
   themeId: string;
@@ -94,18 +130,6 @@ export interface SessionStartProjection {
   readonly themeId: string;
 }
 
-export interface SessionMemory {
-  id: string;
-  seed: number;
-  endedAt: number;
-  disciplines: DisciplineId[];
-  beadIds: string[];
-  threads: Thread[];
-  discoveries: Discovery[];
-  motifs: MotifAward[];
-  score: number;
-}
-
 export interface Settings {
   muted: boolean;
   /** The theta-band binaural bed — headphone magic, honest off-switch. */
@@ -113,9 +137,4 @@ export interface Settings {
   qualityTier: "high" | "base" | "potato";
   reducedMotion: boolean;
   hintsSeen: Record<string, boolean>;
-}
-
-export interface CodexEntry {
-  firstFoundAt: number;
-  count: number;
 }

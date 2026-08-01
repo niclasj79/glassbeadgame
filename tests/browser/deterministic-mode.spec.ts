@@ -3,8 +3,8 @@ import type { DisciplineId } from "../../src/content/types";
 import type { TestSessionSnapshot } from "../../src/runtime/testMode";
 
 const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
-const SOURCE_ID = "math.fibonacci-sequence";
-const TARGET_ID = "music.counterpoint";
+const SOURCE_ID = "measure.fibonacci-sequence";
+const TARGET_ID = "sound.counterpoint";
 
 interface ScreenPoint {
   readonly x: number;
@@ -126,13 +126,18 @@ test("direct mouse weaving commits a deterministic canonical interpretation", as
 }) => {
   const composition = await composeWithMouse(page, await openSession(page));
   const first = composition.snapshot;
-  expect(first.domainSession.eventCount).toBe(5);
+  // Six, not five: the commit now resolves its own outcome in the same turn.
+  // Fibonacci and Counterpoint have an authored relation, so the log gains a
+  // documented reveal. A pair with no authored relation and no shared facet
+  // appends nothing at all — absence is the record for an unresolved thread.
+  expect(first.domainSession.eventCount).toBe(6);
   expect(first.domainSession.eventTypes).toEqual([
     "session.started",
     "bead.attended",
     "pair.selected",
     "relation.hypothesized",
     "thread.committed",
+    "documented-relation.revealed",
   ]);
   expect(first.domainSession.threads).toHaveLength(1);
   expect(first.domainSession.threads[0]).toMatchObject({
