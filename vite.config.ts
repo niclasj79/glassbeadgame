@@ -65,6 +65,17 @@ export default defineConfig(({ command, mode }) => ({
   },
   build: {
     target: "es2020",
+    /**
+     * The manifest is emitted for the bundle gate, not for the server.
+     *
+     * `scripts/report-bundle.mjs` used to sum every .js file in `dist/`, which
+     * meant a lazily-loaded chunk cost exactly as much as an eagerly-loaded one
+     * and code splitting could not move the number at all. The manifest is the
+     * only place the entry chunk and its *static* imports are distinguished
+     * from its dynamic ones, so it is what lets the gate measure what a player
+     * actually downloads before the title appears.
+     */
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks: {

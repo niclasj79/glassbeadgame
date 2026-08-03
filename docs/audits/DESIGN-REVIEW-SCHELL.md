@@ -211,9 +211,11 @@ Of these, exactly one changes the composition.
 
 For a contemplative instrument, few verbs is right, and the Lens of Elegance
 would praise the restraint. But there is one specific absence: **you cannot
-unweave.** The eight event types are `session.started`, `pair.selected`,
-`relation.hypothesized`, `thread.committed`, `motif.completed`,
+unweave.** The eleven event types are `session.started`, `bead.attended`,
+`pair.selected`, `relation.hypothesized`, `thread.committed`,
+`documented-relation.revealed`, `open-thread.created`, `motif.completed`,
 `attunement.entered`, `attunement.exited`, `session.concluded`. Nothing retracts.
+(`bead.attended` collapses to the latest under ADR-014, so it does not grow.)
 
 A game whose entire premise is *these are your readings* does not let you stop
 standing behind one.
