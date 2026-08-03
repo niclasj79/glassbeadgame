@@ -5,6 +5,13 @@
 P-001 through P-005 are accepted for a director-led personal project. P-006
 through P-008 remain pending before their named later-milestone boundaries.
 
+**This document is the programme, not the build.** It was written at M2, before
+the Castalia cutover, and its evidence rules, participant stance and session
+record all still govern — but the build it describes no longer exists. For what
+to actually run and what to ask about the *current* build, see
+`TESTER-BRIEF.md`, which carries the build hash it was written against. Where
+the two disagree about what the game does, the brief is right and this is stale.
+
 This document is an operational companion to `MASTER-PLAN.md` and `VERTICAL-SLICE-SPEC.md`. It does not change their product contract. Unanswered director decisions below are not accepted requirements until reviewed and merged with an explicit answer.
 
 ## Purpose

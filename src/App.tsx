@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
-import { ConclusionScreen } from "./ui/screens/ConclusionScreen";
 import { ArenaHud } from "./ui/arena/ArenaHud";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
@@ -29,9 +28,40 @@ function WebGLFallback() {
   );
 }
 
+/**
+ * THE CONCLUSION LOADS WITH THE CONCLUSION.
+ *
+ * `scripts/bundle-budgets.json` has been raised twice, and its own note says the
+ * answer to a third is to stop measuring total JavaScript and start measuring
+ * what a player downloads before the title appears. This is the other half of
+ * that: the portrait, the annotation's reading surfaces, the plate and the share
+ * codec are reachable only after a Game has been concluded, and none of them
+ * needs to be in the first byte a stranger fetches.
+ *
+ * It is prefetched the moment the arena opens rather than on the phase change.
+ * A player has twelve to eighteen minutes between those two events, so by the
+ * time Conclude is pressed the chunk is in memory and `Suspense` never actually
+ * suspends — which matters, because a spinner between the last thread and the
+ * reading would land exactly where the game is quietest. The fallback below is
+ * therefore what a failed prefetch looks like, not what a normal Game looks
+ * like, and it is deliberately a held blank rather than a spinner: the
+ * conclusion opens on darkness anyway.
+ */
+const ConclusionScreen = lazy(async () => ({
+  default: (await import("./ui/screens/ConclusionScreen")).ConclusionScreen,
+}));
+
+const prefetchConclusion = (): void => {
+  void import("./ui/screens/ConclusionScreen");
+};
+
 export default function App() {
   const phase = useStore((s) => s.phase);
   const [webgl] = useState(probeWebGL);
+
+  useEffect(() => {
+    if (phase === "arena") prefetchConclusion();
+  }, [phase]);
 
   if (!webgl) return <WebGLFallback />;
 
@@ -54,7 +84,11 @@ export default function App() {
         <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
           {phase === "arena" && <ArenaHud key="arena" />}
-          {phase === "conclusion" && <ConclusionScreen key="conclusion" />}
+          {phase === "conclusion" && (
+            <Suspense key="conclusion" fallback={null}>
+              <ConclusionScreen />
+            </Suspense>
+          )}
         </AnimatePresence>
         <SoundToggle />
       </div>
