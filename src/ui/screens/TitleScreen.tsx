@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { motion } from "framer-motion";
-import { startSession } from "@/runtime/session";
+import { useStore } from "@/state/store";
 import {
   ACKNOWLEDGE_LIFT_REM,
   ACKNOWLEDGE_SCALE,
@@ -210,15 +210,24 @@ export function TitleScreen() {
   }, []);
 
   /**
-   * The draw is built two frames after the leaving state is committed — long
-   * enough for the browser to have painted the acknowledgement, short enough
-   * that the arena is not kept waiting.
+   * The threshold is opened two frames after the leaving state is committed —
+   * long enough for the browser to have painted the acknowledgement, short
+   * enough that nothing is kept waiting.
+   *
+   * This used to call `startSession()` here, which built the draw and put the
+   * player straight into the arena. The draw now happens one screen later, when
+   * they leave the threshold, because a page explaining what the Game is for
+   * cannot be read by someone the Game has already started. What has NOT moved
+   * is the shader warm-up: `useDoorArmed` still holds this door shut until the
+   * world reports ready, so the expensive half is paid before either press.
    */
   useEffect(() => {
     if (!opening) return;
     let second = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => startSession());
+      second = requestAnimationFrame(() =>
+        useStore.getState().crossToThreshold()
+      );
     });
     return () => {
       cancelAnimationFrame(first);

@@ -39,6 +39,12 @@ interface GBGState {
   pinnedInspectId: string | null;
 
   returnToTitle: () => void;
+  /**
+   * Opens the threshold — the page that says what the pieces are and what
+   * drawing a connection is for, before there is a Game to interrupt. No
+   * session exists yet; the draw is built when the player leaves it.
+   */
+  crossToThreshold: () => void;
   applySessionStart: (projection: SessionStartProjection) => void;
   /** The Lens is a triptych: off → Good×True → Good×Beautiful → True×Beautiful → off. */
   cycleLens: () => void;
@@ -90,6 +96,8 @@ export const useStore = create<GBGState>()(
             focusedBeadId: null,
             pinnedInspectId: null,
           }),
+
+        crossToThreshold: () => set({ phase: "threshold" }),
 
         applySessionStart: (projection) => {
           const session: SessionState = {

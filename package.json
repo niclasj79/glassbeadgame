@@ -11,7 +11,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:browser": "playwright test tests/browser/deterministic-mode.spec.ts tests/browser/conclusion.spec.ts",
+    "test:browser": "playwright test tests/browser/deterministic-mode.spec.ts tests/browser/threshold.spec.ts tests/browser/conclusion.spec.ts",
     "measure:performance": "playwright test tests/browser/performance-reference.spec.ts",
     "steering:check": "node scripts/steering/cli.mjs check",
     "steering:next": "node scripts/steering/cli.mjs next",

@@ -191,7 +191,7 @@ function phasePose(
       phrase: "crown",
     };
   }
-  if (phase === "title" || phase === "setup") {
+  if (phase === "title" || phase === "threshold") {
     const away = phase === "title" ? 1 : 0.42;
     return {
       position: orbitPosition(
@@ -352,7 +352,7 @@ export function CameraRig() {
     () => titleComposition({ width: viewportWidth, height: viewportHeight }),
     [viewportWidth, viewportHeight]
   );
-  const composed = phase === "title" || phase === "setup" ? title : home;
+  const composed = phase === "title" || phase === "threshold" ? title : home;
   const wantedShift = useRef({ x: composed.centre.x, y: composed.centre.y });
   wantedShift.current.x = composed.centre.x;
   wantedShift.current.y = composed.centre.y;
@@ -768,7 +768,7 @@ export function CameraRig() {
       mode !== "concluding" &&
       ((phase === "arena" && idle && !frameState.aim.active) ||
         phase === "title" ||
-        phase === "setup" ||
+        phase === "threshold" ||
         phase === "conclusion");
   });
 

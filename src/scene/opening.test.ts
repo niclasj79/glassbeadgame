@@ -98,19 +98,27 @@ describe("the opening", () => {
     // transition anywhere, and no `willChange` left behind to imply one.
     expect(source).not.toMatch(/transition:\s*[`"']transform/);
     expect(source).not.toContain("willChange");
-    // The answer comes before the state change, and the draw comes after both.
-    // Measured against the code and not the commentary, which names all three.
+    // The answer comes before the state change, and the phase change after
+    // both. Measured against the code and not the commentary, which names all
+    // three.
+    //
+    // What follows the flip used to be `startSession()`. The draw now happens
+    // one screen later, on the threshold, because a page explaining what the
+    // Game is for cannot be read by someone the Game has already started — so
+    // the law this test protects is asserted against the threshold's press in
+    // `threshold.test.ts`, where the expensive work now is. What stays true
+    // here is the ordering, and that this press is still deferred behind a
+    // paint rather than taken synchronously.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, "");
     const ack = code.indexOf("strikeNow(strike.current)");
     const flip = code.indexOf("setOpening(true)");
-    const build = code.indexOf("startSession()");
+    const cross = code.indexOf("crossToThreshold()");
     expect(ack).toBeGreaterThan(-1);
     expect(flip).toBeGreaterThan(ack);
-    expect(build).toBeGreaterThan(flip);
-    // …and the draw is still deferred behind a paint, so the departure of the
-    // type is under way before the main thread is taken.
+    expect(cross).toBeGreaterThan(flip);
     expect(source).toContain("requestAnimationFrame");
-    expect(source).not.toMatch(/onClick=\{\(\) => startSession\(\)\}/);
+    // The title must not build a draw at all any more.
+    expect(code).not.toContain("startSession(");
   });
 
   it("starts that animation at the press rather than at the next commit", () => {
