@@ -11,7 +11,14 @@ import { interpretationPresentationStore } from "@/state/interpretationPresentat
 import { useCurrentTheme } from "@/themes/useTheme";
 import { hashString, smoothstep } from "@/lib/utils";
 import { isCoarsePointer } from "@/lib/device";
+import { presentationNow } from "@/runtime/testMode";
+import { beadClink } from "@/audio/sfx";
 import { frameState } from "./frameState";
+import {
+  createContactTracker,
+  detectContacts,
+  resizeContactTracker,
+} from "./contact";
 import { beadPointerHandlers } from "./threading";
 import { beadIdentity } from "./identity";
 import { sigilUniform, settingCode } from "./sigil";
@@ -356,6 +363,9 @@ export function Beads() {
     };
   }, [count]);
 
+  /** Per-pair contact memory. Outside React: it changes every frame. */
+  const contacts = useRef(createContactTracker(count));
+
   const bobPhases = useMemo(
     () => Float32Array.from(ids, (id) => (hashString(id) % 6283) / 1000),
     [ids]
@@ -647,6 +657,27 @@ export function Beads() {
 
       const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
       focal.glassRadius[i] = (BEAD_RADIUS * GLASS_SCALE * drawn) / halfAtBead;
+    }
+
+    /*
+     * Two beads meeting is a physical event, and it is heard before it is
+     * answered: the contact is measured on the *unpushed* anchors, because the
+     * separation below is the response to the collision and detecting it
+     * afterwards would report every hard hit as a soft one.
+     *
+     * Nothing durable happens here. See `scene/contact.ts` for why this is not
+     * a cue and does not reach the caption track.
+     */
+    contacts.current = resizeContactTracker(contacts.current, count);
+    for (const contact of detectContacts(contacts.current, {
+      anchor: focal.anchor,
+      radius: focal.glassRadius,
+      hidden: focal.hidden,
+      count,
+      dt,
+      nowMs: presentationNow(),
+    })) {
+      beadClink(contact.strength, contact.size, contact.pan);
     }
 
     // ── pass two: no two beads may read as one ──────────────────────────

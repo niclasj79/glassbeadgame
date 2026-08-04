@@ -58,6 +58,40 @@ export const COMFORT = Object.freeze({
     /** Hard ceiling on simultaneously scheduled voices. */
     maxConcurrent: 48,
   }),
+
+  /**
+   * Incidental contact — glass meeting glass as the camera turns.
+   *
+   * This is the only sound in the game with no semantic event behind it and no
+   * ceiling of its own on how often it could fire: the separation law runs
+   * every frame over every visible pair, so an unbounded version would machine-
+   * gun during a camera sweep and buzz continuously for any pair sitting on the
+   * separation boundary. Every bound below exists to stop one of those, and
+   * they are here rather than in the synthesiser because CAV-007 keeps every
+   * comfort bound in this file and nowhere else.
+   */
+  contact: Object.freeze({
+    /** Nothing sounds more often than this, however crowded the frame is. */
+    minIntervalMs: 55,
+    /** One pair may not ring twice inside this, so a grinding pair cannot buzz. */
+    pairCooldownMs: 260,
+    /** At most this many contacts are voiced on any single frame. */
+    maxPerFrame: 2,
+    /**
+     * Closing speed, in pair-radii per second, below which a contact is a
+     * graze and stays silent. Beads drift past each other constantly; only an
+     * actual meeting should be audible.
+     */
+    minClosingSpeed: 0.35,
+    /** The speed at which a contact is as loud as it will ever get. */
+    fullClosingSpeed: 3.2,
+    /**
+     * Peak gain of the hardest possible clink. Incidental sound sits under
+     * everything the player did on purpose: the quietest deliberate sound in
+     * the game is the hover ping at 0.045, and this stays beneath it.
+     */
+    maxGain: 0.042,
+  }),
 } as const);
 
 export type ComfortTable = typeof COMFORT;

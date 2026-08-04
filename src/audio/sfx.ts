@@ -1,7 +1,7 @@
 import { audio } from "./engine";
 import { playNote, noiseSource } from "./voices";
 import { beadVoice, modeFreq } from "./theory";
-import { clampBeatingHz } from "./comfort";
+import { COMFORT, clampBeatingHz } from "./comfort";
 import { centsForBeatingHz, transposeCents } from "./mode";
 import { presentationNow } from "@/runtime/testMode";
 
@@ -96,6 +96,103 @@ export function latchTick(conceptId: string): void {
     gain: 0.035,
     release: 0.18,
   });
+}
+
+/**
+ * THE CLINK — two beads meeting.
+ *
+ * `scene/contact.ts` finds the moment two drawn discs close on each other as
+ * the camera turns. This is what that sounds like, and it is the only sound in
+ * the game that means nothing: it is not a cue, it carries no interpretation,
+ * and it happens because of where the player is looking rather than because of
+ * anything they said.
+ *
+ * WHY IT IS NOT TUNED. Every bead owns an identity note, and a collision that
+ * sounded both notes would be lovely — two ideas touching, making an interval.
+ * It is also a lie. An interval is the vocabulary this game reserves for a
+ * relation the player actually declared, and hearing one because two discs
+ * drifted across each other would imply a reading nobody made. So the pitch
+ * comes from *size* and is continuous, off the scale, and slightly detuned per
+ * strike: it reads as a thing touching a thing, not as a note.
+ *
+ * THE PHYSICS IT IMITATES. Struck glass is inharmonic and decays fast, and the
+ * strike itself is most of what you hear. So: a short bandpassed noise
+ * transient carrying the contact, a glass body under it whose frequency falls
+ * as the pair gets larger, and — only when the hit is hard enough to justify it
+ * — one partial at 2.34x, which is roughly where a wine glass puts its second
+ * mode. Harder hits are louder, brighter, and ring a little longer, which is
+ * how real glass behaves and is also the only reason velocity is worth
+ * carrying.
+ *
+ * Its rate limits, its silence threshold and its ceiling are all in
+ * `comfort.ts` with every other comfort bound (CAV-007), because an unbounded
+ * version of this machine-guns during a camera sweep.
+ */
+export function beadClink(strength: number, size: number, pan: number): void {
+  const ctx = audio.get();
+  if (!ctx || !audio.sfxBus) return;
+
+  const hit = Math.max(0, Math.min(1, strength));
+  const t0 = ctx.currentTime;
+  const bounds = COMFORT.contact;
+  const level = bounds.maxGain * (0.3 + 0.7 * hit);
+
+  /*
+   * Bigger glass rings lower. `size` is a combined screen radius, so it grows
+   * as a bead approaches the camera and as the pair's discs get larger; the
+   * span below covers what the arena actually produces at both quality tiers,
+   * and is clamped because a bead filling the frame should not descend into
+   * a thud.
+   */
+  const span = Math.max(0, Math.min(1, (size - 0.05) / 0.22));
+  const body = 2400 - 1500 * span;
+
+  // The contact. Almost all of the character is here.
+  const noise = noiseSource(ctx, 0.25);
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 3200 + 4200 * hit;
+  bp.Q.value = 2.4;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.linearRampToValueAtTime(level, t0 + 0.0035);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.028 + 0.03 * hit);
+  noise.connect(bp);
+  bp.connect(env);
+
+  // Placed where it happened. A contact at the edge of the frame belongs at the
+  // edge of the field, which is most of what makes a busy frame legible.
+  if (Math.abs(pan) > 0.01 && typeof ctx.createStereoPanner === "function") {
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+    env.connect(panner);
+    panner.connect(audio.sfxBus);
+  } else {
+    env.connect(audio.sfxBus);
+  }
+  noise.start(t0);
+  noise.stop(t0 + 0.3);
+
+  // The body, through the one place a note is born.
+  playNote(ctx, audio.sfxBus, "glass", body, {
+    gain: level * 0.65,
+    attack: 0.001,
+    hold: 0,
+    release: 0.1 + 0.22 * hit,
+    pan,
+  });
+
+  // The second mode, only when the hit earns it. Below this the clink is a
+  // tick, which is what a soft touch on glass actually sounds like.
+  if (hit > 0.45) {
+    playNote(ctx, audio.sfxBus, "glass", body * 2.34, {
+      gain: level * 0.3 * hit,
+      attack: 0.001,
+      hold: 0,
+      release: 0.06 + 0.1 * hit,
+      pan,
+    });
+  }
 }
 
 /**

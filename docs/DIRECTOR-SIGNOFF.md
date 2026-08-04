@@ -95,7 +95,16 @@ establish nothing about whether the result is beautiful.
 - [ ] Judge camera phrasing: does attending feel situated, and does the arena
       stay legible? Does any sweep induce discomfort?
 - [ ] Judge typographic hierarchy in the arena and in the marginalia.
-- [ ] Confirm the first ninety seconds teach the interaction without text.
+- [ ] Confirm the threshold sets the stage without reading as a manual, and
+      that the arena is legible immediately after it.
+- [ ] **Judge the glass clink.** Beads that would overlap on screen push each
+      other apart as the camera turns, and that contact now sounds. Its rate
+      limits and silence threshold are bounded in code (`COMFORT.contact`) and
+      proven by tests; nothing automated establishes that it is *pleasant*, that
+      the pitch range is right, or that it survives fifteen minutes without
+      becoming tiresome. Orbit the camera deliberately, then play normally and
+      see whether you stop noticing it in a good way or a bad one. No assistant
+      has heard it.
 
 ---
 
