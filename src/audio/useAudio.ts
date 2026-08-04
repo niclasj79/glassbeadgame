@@ -182,7 +182,7 @@ export function AudioBridge(): null {
               String(thread.id)
             );
             if (useStore.getState().settings.binaural) audio.startBinaural();
-          } else if (phase === "title" || phase === "setup") {
+          } else if (phase === "title" || phase === "threshold") {
             ambient.stop();
             ambient.clearSpace();
             audio.stopBinaural();

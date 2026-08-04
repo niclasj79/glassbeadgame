@@ -9,6 +9,10 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore as useVanillaStore } from "zustand";
 import type { RelationIntention } from "@/domain/events";
+import {
+  INTENTION_VOCABULARY,
+  type IntentionVocabulary,
+} from "@/game/intentions";
 import { isCoarsePointer } from "@/lib/device";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { interpretationDraftStore } from "@/state/interactionDraft";
@@ -82,50 +86,31 @@ import {
  * literal characters `×` to the screen).
  */
 
-interface IntentionOption {
-  readonly intention: RelationIntention;
-  readonly icon: string;
-  readonly label: string;
-  readonly description: string;
+interface IntentionOption extends IntentionVocabulary {
   /** Which engraved station of the plate this verb stands on. */
   readonly station: PlateStation;
 }
 
 /**
- * Content only. Where a station *is* — its bearing and which side its name
- * sits on — belongs to the plate's geometry, so the clearance law and the
+ * Where each verb stands. The vocabulary itself — glyph, name, meaning — is in
+ * `game/intentions.ts`, because the threshold screen introduces these before
+ * the arena exists and a DOM screen must not import an R3F component to learn
+ * what Echo is called. What is left here is the only part that is genuinely
+ * about this instrument: where a station *is*, so the clearance law and the
  * rendered layout cannot drift apart.
  */
-export const INTENTION_OPTIONS: readonly IntentionOption[] = Object.freeze([
-  {
-    intention: "echo",
-    icon: "◌",
-    label: "Echo",
-    description: "shares a form",
-    station: "north",
-  },
-  {
-    intention: "passage",
-    icon: "→",
-    label: "Passage",
-    description: "carries or transforms",
-    station: "east",
-  },
-  {
-    intention: "tension",
-    icon: "≋",
-    label: "Tension",
-    description: "opposes or complicates",
-    station: "south",
-  },
-  {
-    intention: "ground",
-    icon: "□",
-    label: "Ground",
-    description: "supports or embodies",
-    station: "west",
-  },
-]);
+const STATIONS: Readonly<Record<RelationIntention, PlateStation>> = Object.freeze({
+  echo: "north",
+  passage: "east",
+  tension: "south",
+  ground: "west",
+});
+
+export const INTENTION_OPTIONS: readonly IntentionOption[] = Object.freeze(
+  INTENTION_VOCABULARY.map((entry) =>
+    Object.freeze({ ...entry, station: STATIONS[entry.intention] })
+  )
+);
 
 function station(bearing: number, radius: number): React.CSSProperties {
   const radians = (bearing * Math.PI) / 180;

@@ -339,7 +339,7 @@ export function Armillary() {
 
   const phase = useStore((s) => s.phase);
   const presence =
-    phase === "title" || phase === "setup" ? TITLE_PRESENCE : 1;
+    phase === "title" || phase === "threshold" ? TITLE_PRESENCE : 1;
 
   /**
    * THE INSTRUMENT EXISTS BEFORE THE DRAW DOES.

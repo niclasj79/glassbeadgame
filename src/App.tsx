@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
+import { ThresholdScreen } from "./ui/screens/ThresholdScreen";
 import { ArenaHud } from "./ui/arena/ArenaHud";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
@@ -83,6 +84,7 @@ export default function App() {
          */}
         <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
+          {phase === "threshold" && <ThresholdScreen key="threshold" />}
           {phase === "arena" && <ArenaHud key="arena" />}
           {phase === "conclusion" && (
             <Suspense key="conclusion" fallback={null}>
