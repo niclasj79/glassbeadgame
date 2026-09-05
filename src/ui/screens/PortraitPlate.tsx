@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { Annotation } from "@/domain/annotation";
 import type { Portrait, PortraitDimension } from "@/domain/portrait";
@@ -137,7 +138,29 @@ export interface PortraitPlateProps {
   readonly onTakeWhole?: () => void;
   readonly onAnother: () => void;
   readonly onLeave: () => void;
+  /**
+   * Whether this Game was kept, in words. Null while there is nothing to say.
+   * The plate never says how many Games are kept.
+   */
+  readonly keptLine?: string | null;
+  /**
+   * Put the whole reading — annotation, register with citations, portrait —
+   * on the clipboard as plain text. Resolves to whether it got there.
+   */
+  readonly onCopy?: () => Promise<boolean>;
 }
+
+type CopyState = "idle" | "copied" | "failed";
+
+/** How the copy control reads in each state. One word each; no exclamation. */
+const COPY_LABEL: Readonly<Record<CopyState, string>> = Object.freeze({
+  idle: "Copy the reading",
+  copied: "Copied",
+  failed: "Could not copy",
+});
+
+/** How long the control keeps saying what happened before it offers again. */
+const COPY_SETTLE_MS = 2600;
 
 export function PortraitPlate({
   portrait,
@@ -148,8 +171,20 @@ export function PortraitPlate({
   onTakeWhole,
   onAnother,
   onLeave,
+  keptLine = null,
+  onCopy,
 }: PortraitPlateProps) {
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
+  useEffect(() => {
+    if (copyState === "idle") return;
+    const timer = window.setTimeout(() => setCopyState("idle"), COPY_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
+  const copy = (): void => {
+    if (!onCopy) return;
+    void onCopy().then((done) => setCopyState(done ? "copied" : "failed"));
+  };
   /*
    * Reduced motion shortens the entrance and removes the travel; it does not
    * remove the pacing, because the pacing is the performance and not an
@@ -286,11 +321,36 @@ export function PortraitPlate({
             Read it all now
           </button>
         )}
+        {/* The one route by which the sources leave the building: the
+            register, its citations, and the portrait, as plain text. */}
+        {onCopy && (
+          <button
+            type="button"
+            data-testid="conclusion-copy"
+            onClick={copy}
+            aria-live="polite"
+            className={QUIET_CONTROL}
+          >
+            {COPY_LABEL[copyState]}
+          </button>
+        )}
       </div>
+      {/* Whether this Game is kept — said plainly, so a private window is
+          told the truth instead of losing the Game quietly. */}
+      {keptLine && (
+        <p
+          data-testid="conclusion-kept"
+          className="engraved mt-5 normal-case tracking-[0.1em] text-dim"
+        >
+          {keptLine}
+        </p>
+      )}
       {/* Says what the next Game is for. The invitation is expressive, not
           acquisitive — there is nothing here to accumulate. */}
       <p className="engraved mt-5 normal-case tracking-[0.1em]">
-        Another Game draws different beads. Nothing carries over but what you learned to notice.
+        {keptLine
+          ? "Another Game draws different beads. This one stays on the shelf; what carries over is what you learned to notice."
+          : "Another Game draws different beads. Nothing carries over but what you learned to notice."}
       </p>
     </div>
   );
