@@ -235,7 +235,7 @@ export function PortraitPlate({
         <>
           <div className="rule-engraved my-8" />
           <p className="engraved mb-5">
-            {threadCount === 1 ? "One thread" : `${threadCount} threads`} · six readings, no total
+            {threadCount === 1 ? "One thread" : `${threadCount} threads`} · seven readings, no total
           </p>
           <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
             {readings.map((dimension) => (

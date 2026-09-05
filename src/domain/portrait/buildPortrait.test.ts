@@ -46,7 +46,7 @@ const narrow = buildSessionFixture({
 });
 
 describe("buildPortrait — shape", () => {
-  it("always produces the six dimensions in canonical order", () => {
+  it("always produces the seven dimensions in canonical order", () => {
     const portrait = buildPortrait(wide.state, lookup);
     expect(portrait.dimensions.map((entry) => entry.id)).toEqual([
       ...PORTRAIT_DIMENSION_IDS,
@@ -194,7 +194,7 @@ describe("buildPortrait — totality and replay stability", () => {
     const empty = buildSessionFixture({ conceptIds: WIDE_CONCEPTS });
     const portrait = buildPortrait(empty.state, lookup);
 
-    expect(portrait.dimensions).toHaveLength(6);
+    expect(portrait.dimensions).toHaveLength(7);
     expect(portrait.dimensions.every((entry) => entry.value >= 0)).toBe(true);
     expect(portrait.byId.range.phrase).toBe("No faculty has been drawn on yet.");
     expect(portrait.byId.depth.value).toBe(0);
@@ -466,5 +466,76 @@ describe("buildPortrait — evidence lines are counts, not progress toward a tot
     expect(all).toContain("woven");
     expect(all).toContain("Tension");
     expect(all).toContain("cycle");
+  });
+});
+
+/**
+ * DESIGN-REVIEW-SCHELL §3. The intention reached the sentence, the material
+ * and the motifs, and nothing at the end. The seventh reading carries it to
+ * the portrait as a characterisation, never as a rank.
+ */
+describe("buildPortrait — reading", () => {
+  it("says which verbs the player reached for, and how often Castalia read with them", () => {
+    const reading = buildPortrait(wide.state, lookup).byId.reading;
+    expect(reading.phrase).toMatch(/^You read mostly for Echo\./);
+    expect(reading.phrase).toContain("Where Castalia answered, it ");
+    expect(reading.evidence[0]).toBe("Echo 4 · Passage 0 · Tension 1 · Ground 3");
+    expect(reading.evidence[1]).toMatch(/^\d+ read with you · \d+ narrowed · \d+ across · \d+ not authored$/);
+    expect(reading.value).toBeGreaterThan(0);
+    expect(reading.value).toBeLessThan(1);
+  });
+
+  it("names the one verb a narrow session used, and is even at zero", () => {
+    const reading = buildPortrait(narrow.state, lookup).byId.reading;
+    expect(reading.phrase).toMatch(/^You read for Echo and for nothing else\./);
+    expect(reading.value).toBe(0);
+  });
+
+  it("ranks nothing: no verdict words, and the value ignores whether the record agreed", () => {
+    for (const state of [wide.state, narrow.state]) {
+      const reading = buildPortrait(state, lookup).byId.reading;
+      expect(reading.phrase).not.toMatch(/\b(right|wrong|correct|score|better|worse)\b/i);
+    }
+    // Two sessions with the same verbs in the same proportions have the same
+    // value whatever the record said about them.
+    const agreed = buildSessionFixture({
+      conceptIds: WIDE_CONCEPTS,
+      threads: [{ a: C.fibonacci, b: C.counterpoint, intention: "echo" }],
+    });
+    const crossed = buildSessionFixture({
+      conceptIds: WIDE_CONCEPTS,
+      threads: [{ a: C.fibonacci, b: C.counterpoint, intention: "tension" }],
+    });
+    expect(buildPortrait(agreed.state, lookup).byId.reading.value).toBe(
+      buildPortrait(crossed.state, lookup).byId.reading.value
+    );
+  });
+
+  it("says where Castalia ran across a reading, and what it read for instead", () => {
+    const crossed = buildSessionFixture({
+      conceptIds: WIDE_CONCEPTS,
+      threads: [{ a: C.fibonacci, b: C.counterpoint, intention: "tension" }],
+    });
+    const outcomes = resolveSessionOutcomes(crossed.state, lookup);
+    const reading = buildPortrait(crossed.state, lookup).byId.reading;
+    if (outcomes[0]?.kind === "documented" && outcomes[0].stance === "complicated") {
+      expect(reading.phrase).toContain("ran across you once");
+      expect(reading.phrase).toMatch(/it read for \w+ where you read for Tension\./);
+    } else {
+      expect(reading.phrase).not.toContain("ran across you");
+    }
+  });
+
+  it("has a sentence for a session with nothing woven", () => {
+    const empty = buildSessionFixture({ conceptIds: WIDE_CONCEPTS });
+    const reading = buildPortrait(empty.state, lookup).byId.reading;
+    expect(reading.phrase).toBe("No reading has been declared yet.");
+    expect(reading.value).toBe(0);
+  });
+
+  it("is stable under replay", () => {
+    const a = buildPortrait(wide.state, lookup).byId.reading;
+    const b = buildPortrait(wide.state, lookup).byId.reading;
+    expect(b).toEqual(a);
   });
 });

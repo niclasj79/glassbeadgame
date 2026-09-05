@@ -20,6 +20,10 @@ export const PORTRAIT_DIMENSION_IDS = Object.freeze([
   "coherence",
   "openness",
   "return",
+  // How the player read — the intention, carried to the ending without a
+  // rank (DESIGN-REVIEW-SCHELL §3). Seventh and last, because it reads the
+  // register the plate prints above it.
+  "reading",
 ] as const);
 export type PortraitDimensionId = (typeof PORTRAIT_DIMENSION_IDS)[number];
 

@@ -5,7 +5,9 @@ import type { SessionStateV1 } from "../model/sessionState";
 import { detectMotifs } from "../motifs/detectMotifs";
 import type { MotifDetection } from "../motifs/types";
 import type { RelationLookup } from "../outcomes/lookup";
+import type { RelationIntention } from "../events";
 import {
+  INTENTION_LABELS,
   capitalise,
   clamp01,
   compareStrings,
@@ -20,7 +22,10 @@ import {
   outcomeSpeaksForTheRecord,
   resolveSessionOutcomes,
 } from "../outcomes/resolveThreadOutcome";
-import type { ThreadOutcomeResolution } from "../outcomes/types";
+import type {
+  DocumentedThreadOutcome,
+  ThreadOutcomeResolution,
+} from "../outcomes/types";
 import { FACULTY_IDS, type FacetId, type FacultyId } from "@/content/castalia/schema";
 import {
   PORTRAIT_DIMENSION_IDS,
@@ -36,6 +41,7 @@ const LABELS: Readonly<Record<PortraitDimensionId, string>> = Object.freeze({
   coherence: "Coherence",
   openness: "Openness",
   return: "Return",
+  reading: "Reading",
 });
 
 interface PortraitInputs {
@@ -456,8 +462,146 @@ function buildReturn(inputs: PortraitInputs): PortraitDimension {
   ]);
 }
 
+// ── Reading ──────────────────────────────────────────────────────────────────
+
+const INTENTION_ORDER: readonly RelationIntention[] = Object.freeze([
+  "echo",
+  "passage",
+  "tension",
+  "ground",
+]);
+
+/** "never", "once", "twice", "three times" — occasions, in words. */
+function timesWord(count: number): string {
+  if (count <= 0) return "never";
+  if (count === 1) return "once";
+  if (count === 2) return "twice";
+  return `${countWord(count)} times`;
+}
+
+/** The intention the pack reads a relation for, or null when none is primary. */
+function primaryIntentionOf(
+  fit: DocumentedThreadOutcome["relation"]["fit"]
+): RelationIntention | null {
+  for (const intention of INTENTION_ORDER) {
+    if (fit[intention] === "primary") return intention;
+  }
+  return null;
+}
+
+/** Intentions by how often they occur, most first; ties in the plate's order. */
+function tally(intentions: readonly RelationIntention[]): readonly RelationIntention[] {
+  const counts = new Map<RelationIntention, number>();
+  for (const intention of intentions) {
+    counts.set(intention, (counts.get(intention) ?? 0) + 1);
+  }
+  return INTENTION_ORDER.filter((intention) => counts.has(intention)).sort(
+    (a, b) =>
+      (counts.get(b) ?? 0) - (counts.get(a) ?? 0) ||
+      INTENTION_ORDER.indexOf(a) - INTENTION_ORDER.indexOf(b)
+  );
+}
+
 /**
- * Build the six-dimension portrait of a session.
+ * How the player read, without a rank.
+ *
+ * DESIGN-REVIEW-SCHELL §3: the Game characterised the player's reading in
+ * prose four to eight times a session — "your Echo reading is the one this
+ * relation is documented around", "your reading runs across the record" —
+ * and then threw the judgement away. The intention reached the sentence, the
+ * material and the motifs, and nothing at the end. This dimension carries it
+ * to the portrait as a characterisation rather than a score: which verbs the
+ * player reached for, how often Castalia read with them, narrowed them, or
+ * ran across them, and, where it ran across, what it read for instead. Every
+ * clause is checkable against the register printed above it.
+ *
+ * The value is the evenness of the player's own reading — how many of the
+ * four verbs they used, and how equally — which ranks nothing about being
+ * right: a session read entirely for Tension is as valid as one that used all
+ * four, and CAV-006 holds because "confirmed" is never worth more than
+ * "complicated" anywhere in here.
+ */
+function buildReading(inputs: PortraitInputs): PortraitDimension {
+  const { state, outcomes } = inputs;
+  const total = state.threads.length;
+  if (total === 0) {
+    return dimension("reading", 0, "No reading has been declared yet.", []);
+  }
+
+  const declared: Record<RelationIntention, number> = {
+    echo: 0,
+    passage: 0,
+    tension: 0,
+    ground: 0,
+  };
+  for (const thread of state.threads) declared[thread.intention] += 1;
+  const used = INTENTION_ORDER.filter((intention) => declared[intention] > 0);
+  const most = Math.max(...INTENTION_ORDER.map((intention) => declared[intention]));
+  const favoured = INTENTION_ORDER.filter((intention) => declared[intention] === most);
+
+  // Evenness: normalised entropy over the four verbs. One verb alone is 0;
+  // all four equally is 1. Nothing about correctness enters the number.
+  let entropy = 0;
+  for (const intention of INTENTION_ORDER) {
+    const share = declared[intention] / total;
+    if (share > 0) entropy -= share * Math.log(share);
+  }
+  const value = entropy / Math.log(INTENTION_ORDER.length);
+
+  const answered = outcomes.filter(
+    (outcome): outcome is DocumentedThreadOutcome => outcome.kind === "documented"
+  );
+  const withYou = answered.filter((outcome) => outcome.stance === "confirmed").length;
+  const narrowed = answered.filter((outcome) => outcome.stance === "refined").length;
+  const across = answered.filter((outcome) => outcome.stance === "complicated");
+
+  let phrase: string;
+  if (used.length === 1) {
+    phrase = `You read for ${INTENTION_LABELS[used[0] as RelationIntention]} and for nothing else.`;
+  } else if (favoured.length === 1) {
+    phrase = `You read mostly for ${INTENTION_LABELS[favoured[0] as RelationIntention]}.`;
+  } else {
+    phrase = `You read for ${formatList(
+      favoured.map((intention) => INTENTION_LABELS[intention])
+    )} in equal measure.`;
+  }
+
+  if (answered.length === 0) {
+    phrase +=
+      " None of your threads met authored material; Castalia asked, or stood silent, instead.";
+  } else {
+    const clauses: string[] = [];
+    if (withYou > 0) clauses.push(`read with you ${timesWord(withYou)}`);
+    if (narrowed > 0) clauses.push(`narrowed you ${timesWord(narrowed)}`);
+    if (across.length > 0) clauses.push(`ran across you ${timesWord(across.length)}`);
+    phrase += ` Where Castalia answered, it ${formatList(clauses)}.`;
+    if (across.length > 0) {
+      const yours = tally(across.map((outcome) => outcome.intention));
+      const its = tally(
+        across
+          .map((outcome) => primaryIntentionOf(outcome.relation.fit))
+          .filter((intention): intention is RelationIntention => intention !== null)
+      );
+      if (its.length > 0 && yours.length > 0) {
+        phrase += ` Where it ran across you, it read for ${
+          INTENTION_LABELS[its[0] as RelationIntention]
+        } where you read for ${INTENTION_LABELS[yours[0] as RelationIntention]}.`;
+      }
+    }
+  }
+
+  return dimension("reading", value, phrase, [
+    INTENTION_ORDER.map(
+      (intention) => `${INTENTION_LABELS[intention]} ${declared[intention]}`
+    ).join(" · "),
+    `${withYou} read with you · ${narrowed} narrowed · ${across.length} across · ${
+      total - answered.length
+    } not authored`,
+  ]);
+}
+
+/**
+ * Build the seven-dimension portrait of a session.
  *
  * Pure, total, and stable under replay: the portrait is a function of the
  * reduced state and the content pack alone. Nothing here reads a clock, a
@@ -482,6 +626,7 @@ export function buildPortrait(
     buildCoherence(inputs),
     buildOpenness(inputs),
     buildReturn(inputs),
+    buildReading(inputs),
   ]);
 
   const byId = {} as Record<PortraitDimensionId, PortraitDimension>;
