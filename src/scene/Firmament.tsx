@@ -7,7 +7,15 @@ import { domainSessionStore } from "@/state/domainSession";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 import { GLSL_COMMON, GLSL_ENVIRONMENT } from "./glsl";
+import { castaliaConceptById } from "@/content/castalia/concepts";
+import type { CommittedThreadV1 } from "@/domain/model";
 import { buildSky, CONSTELLATIONS } from "./constellations";
+import {
+  FIGURE_BASE,
+  FIGURE_COUNT,
+  easeReveal,
+  figureReveal,
+} from "./constellationReveal";
 import { idleClock, travellingLight } from "./idle";
 import { presentationProfile } from "./quality";
 import { getHaloTexture } from "./textures";
@@ -394,11 +402,66 @@ void main() {
 }
 `;
 
+/**
+ * The drawn figures' lines. Each figure belongs to one pair of faculties and
+ * is drawn at its own strength (`uReveal`), so the sky assembles as the web
+ * joins the regions it stands for — see scene/constellationReveal.ts. The
+ * reveal is looked up in the vertex stage from a per-vertex figure index,
+ * with a constant-bound loop rather than a dynamic index, so it runs on
+ * every GLSL the room may be drawn with.
+ */
+const LINE_VERTEX = /* glsl */ `
+attribute float aFigure;
+uniform float uReveal[${FIGURE_COUNT}];
+varying float vReveal;
+void main() {
+  int index = int(aFigure + 0.5);
+  float reveal = 0.0;
+  for (int i = 0; i < ${FIGURE_COUNT}; i++) {
+    if (i == index) reveal = uReveal[i];
+  }
+  vReveal = reveal;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const LINE_FRAGMENT = /* glsl */ `
+precision highp float;
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uBase;
+varying float vReveal;
+void main() {
+  float alpha = uOpacity * mix(uBase, 1.0, clamp(vReveal, 0.0, 1.0));
+  if (alpha < 0.003) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+const NO_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
+
+const facultyOfConcept = (conceptId: string) =>
+  castaliaConceptById.get(conceptId)?.faculty;
+
 function Constellations() {
   const theme = useCurrentTheme();
   const tier = useStore((s) => s.settings.qualityTier);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
   const attuned = useAttuned();
+  /**
+   * Which faculties the web has joined, read from the canonical session so a
+   * replayed log lights the same sky. The outcome of a thread is not read: a
+   * documented crossing and an unlit one join the same two regions.
+   */
+  const threads = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.threads ?? NO_THREADS
+  );
+  const revealTarget = useMemo(
+    () => figureReveal(threads, facultyOfConcept),
+    [threads]
+  );
+  const reveal = useRef(new Float32Array(FIGURE_COUNT));
   const budget = useMemo(
     () => presentationProfile(tier, reducedMotion).budget,
     [tier, reducedMotion]
@@ -437,6 +500,7 @@ function Constellations() {
     stars.setAttribute("aFigure", new THREE.BufferAttribute(figureFlags, 1));
     const lines = new THREE.BufferGeometry();
     lines.setAttribute("position", new THREE.BufferAttribute(sky.linePositions, 3));
+    lines.setAttribute("aFigure", new THREE.BufferAttribute(sky.lineFigures, 1));
     return {
       starGeometry: stars,
       lineGeometry: lines,
@@ -453,17 +517,23 @@ function Constellations() {
           uAttuned: { value: 0 },
         },
       }),
-      lineMaterial: new THREE.LineBasicMaterial({
-        color: new THREE.Color(theme.palette.engraving),
+      // The drawn sky is a shell at a fixed radius, not an object standing in
+      // the room's depth. Leaving it on the fog path mixed better than 40% of
+      // every authored figure into the ground colour before it reached the
+      // frame, which is why six hand-drawn figures rendered as nothing. A
+      // ShaderMaterial is off the fog path unless it asks for it.
+      lineMaterial: new THREE.ShaderMaterial({
+        vertexShader: LINE_VERTEX,
+        fragmentShader: LINE_FRAGMENT,
         transparent: true,
-        opacity: LINE_OPACITY,
         depthWrite: false,
         toneMapped: false,
-        // The drawn sky is a shell at a fixed radius, not an object standing in
-        // the room's depth. Leaving it on the fog path mixed better than 40% of
-        // every authored figure into the ground colour before it reached the
-        // frame, which is why six hand-drawn figures rendered as nothing.
-        fog: false,
+        uniforms: {
+          uColor: { value: new THREE.Color(theme.palette.engraving) },
+          uOpacity: { value: LINE_OPACITY },
+          uBase: { value: FIGURE_BASE },
+          uReveal: { value: new Float32Array(FIGURE_COUNT) },
+        },
       }),
     };
   }, [sky, figureFlags, theme.palette.starlight, theme.palette.engraving]);
@@ -494,7 +564,13 @@ function Constellations() {
     const breath =
       LINE_OPACITY +
       LINE_BREATH * Math.sin(frameState.breathPhase) * frameState.breathDepth;
-    lineMaterial.opacity = breath * (1 + 0.9 * held.current);
+    (lineMaterial.uniforms.uOpacity as { value: number }).value =
+      breath * (1 + 0.9 * held.current);
+    // The figures assemble toward what the web has joined — a fade, not a
+    // snap, and the same under reduced motion, because nothing travels.
+    easeReveal(reveal.current, revealTarget, dt);
+    const uReveal = lineMaterial.uniforms.uReveal as { value: Float32Array };
+    uReveal.value.set(reveal.current);
   });
 
   const haloTexture = useMemo(() => getHaloTexture(), []);
