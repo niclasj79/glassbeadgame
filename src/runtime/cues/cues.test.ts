@@ -8,6 +8,7 @@ import {
   planCandidateLatched,
   planCommitMoment,
   planIntentionArmed,
+  planMotifCompleted,
 } from "./planCues";
 import type { CuePayloadMap, PresentationCue } from "./types";
 
@@ -330,5 +331,52 @@ describe("createCueBus", () => {
         })
       )
     ).toThrow(RangeError);
+  });
+});
+
+describe("planMotifCompleted", () => {
+  const motif = (): CuePayloadMap["motif.completed"] =>
+    Object.freeze({
+      motifKindId: "bridge" as CuePayloadMap["motif.completed"]["motifKindId"],
+      conceptIds: Object.freeze([A, B]),
+      threadIds: Object.freeze([THREAD]),
+      reason: "Counterpoint is the only crossing here.",
+    });
+
+  it("enters at once when nothing precedes it", () => {
+    const plan = planMotifCompleted(motif(), EVENT);
+    expect(plan.cues[0].startAt).toBe(0);
+  });
+
+  /**
+   * A motif is completed by a commit whose outcome is staged a settle after
+   * the weave lands. Staged at 0 s, the motif arrived *before* that outcome
+   * and the outcome note then covered it: in the recorded playtest a Bridge
+   * formed on the third thread and the only trace was the Attune mark. The
+   * progression now passes the commit moment's span, and the motif follows it.
+   */
+  it("waits for the commit moment it completed, when told how long that is", () => {
+    const moment = planCommitMoment({
+      woven: woven(600),
+      wovenEventId: EVENT,
+      outcome: {
+        kind: "open-thread",
+        eventId: EVENT,
+        payload: {
+          threadId: THREAD,
+          pair: Object.freeze([A, B]) as readonly [typeof A, typeof B],
+          intention: "echo",
+          question: "Does the proportion appear in the construction?",
+          sharedFacet: "proportion" as CuePayloadMap["outcome.open-thread"]["sharedFacet"],
+        },
+      },
+    });
+    const plan = planMotifCompleted(motif(), EVENT, moment.duration);
+    expect(plan.cues[0].startAt).toBeCloseTo(moment.duration, 6);
+    expect(plan.duration).toBeCloseTo(moment.duration + 4.5, 6);
+  });
+
+  it("refuses to be staged before the commit that made it", () => {
+    expect(() => planMotifCompleted(motif(), EVENT, -1)).toThrow(RangeError);
   });
 });

@@ -181,7 +181,7 @@ export function createSessionProgression(
    * after every commit because a motif can only ever be created by one, and
    * dedupes on completion id so re-detection of a standing motif is silent.
    */
-  const publishNewMotifs = (): void => {
+  const publishNewMotifs = (afterSeconds = 0): void => {
     const session = requireSession(domainStore);
     const known = new Set(
       session.completedMotifs.map((motif) => String(motif.completionId))
@@ -210,7 +210,8 @@ export function createSessionProgression(
             threadIds: motif.threadIds.map(toThreadId),
             reason: motif.reason,
           },
-          event.id
+          event.id,
+          afterSeconds
         )
       );
     }
@@ -229,6 +230,15 @@ export function createSessionProgression(
       const outcome = dependencies.resolveOutcome(thread, lookup);
       const wovenEventId = thread.eventId;
 
+      // How long the commit takes to resolve on stage. A motif this commit
+      // completed is staged only after that, so the outcome and the motif are
+      // two moments rather than one note covering another.
+      let settledAfter = 0;
+      const publishMoment = (plan: ReturnType<typeof planCommitMoment>): void => {
+        cueBus.publish(plan);
+        settledAfter = plan.duration;
+      };
+
       if (outcome.kind === "documented") {
         const relation: DocumentedRelation = outcome.relation;
         const event = createSessionEvent({
@@ -243,7 +253,7 @@ export function createSessionProgression(
           },
         });
         append(event);
-        cueBus.publish(
+        publishMoment(
           planCommitMoment({
             woven: {
               threadId,
@@ -280,7 +290,7 @@ export function createSessionProgression(
           payload: { threadId, openThreadId },
         });
         append(event);
-        cueBus.publish(
+        publishMoment(
           planCommitMoment({
             woven: {
               threadId,
@@ -306,7 +316,7 @@ export function createSessionProgression(
         // No durable event: absence is the record. The cue still fires, because
         // "nothing is grounded here yet" is a real answer the player deserves
         // to receive immediately, not silence that reads as a dropped input.
-        cueBus.publish(
+        publishMoment(
           planCommitMoment({
             woven: {
               threadId,
@@ -328,7 +338,7 @@ export function createSessionProgression(
         );
       }
 
-      publishNewMotifs();
+      publishNewMotifs(settledAfter);
       return outcome;
   };
 

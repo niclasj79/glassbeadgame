@@ -6,6 +6,7 @@ import {
   MARGIN_KEPT,
   lastReading,
   openReading,
+  pendingReading,
   receive,
   reopen,
   setAside,
@@ -14,6 +15,7 @@ import {
 } from "./marginState";
 import {
   documentedCue,
+  motifCue,
   openThreadCue,
   unresolvedCue,
   wovenCue,
@@ -113,5 +115,50 @@ describe("what the margin keeps", () => {
     const state = withOne();
     expect(receive(state, unresolvedCue()).readings).toHaveLength(2);
     expect(receive(EMPTY_MARGIN, wovenCue())).toBe(EMPTY_MARGIN);
+  });
+});
+
+/**
+ * A motif is staged after the outcome of the commit that completed it, so it
+ * arrives while the player is reading that outcome. It must not take the page
+ * — that was the timer's defect in a new coat — and it must not be lost to the
+ * index either, which is what happened to the Bridge in the recorded playtest.
+ */
+describe("a motif that arrives over an open reading", () => {
+  it("waits rather than taking the page", () => {
+    const reading = withOne();
+    const state = receive(reading, motifCue());
+    expect(openReading(state)?.id).toBe(openReading(reading)?.id);
+    expect(pendingReading(state)?.kind).toBe("motif");
+    expect(state.readings.map((note) => note.kind)).toEqual(["documented", "motif"]);
+  });
+
+  it("opens the moment the reading it waited under is set aside", () => {
+    const state = setAside(receive(withOne(), motifCue()));
+    expect(openReading(state)?.kind).toBe("motif");
+    expect(pendingReading(state)).toBeNull();
+  });
+
+  it("can be read at once from under the open reading", () => {
+    const waiting = receive(withOne(), motifCue());
+    const state = reopen(waiting, pendingReading(waiting)!.id);
+    expect(openReading(state)?.kind).toBe("motif");
+    expect(pendingReading(state)).toBeNull();
+  });
+
+  it("keeps waiting while the player composes, and through the next outcome", () => {
+    const waiting = receive(withOne(), motifCue());
+    const composing = receive(waiting, wovenCue());
+    expect(openReading(composing)).toBeNull();
+    expect(pendingReading(composing)?.kind).toBe("motif");
+    const next = receive(composing, renamed(documentedCue("established"), "cue:next"));
+    expect(openReading(next)?.id).toBe("cue:next");
+    expect(pendingReading(next)?.kind).toBe("motif");
+  });
+
+  it("takes the page when nothing is open to be taken away", () => {
+    const state = receive(EMPTY_MARGIN, motifCue());
+    expect(openReading(state)?.kind).toBe("motif");
+    expect(pendingReading(state)).toBeNull();
   });
 });

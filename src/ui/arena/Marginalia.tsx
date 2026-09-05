@@ -15,6 +15,7 @@ import {
   EMPTY_MARGIN,
   lastReading,
   openReading,
+  pendingReading,
   receive,
   reopen,
   setAside,
@@ -126,6 +127,10 @@ export function MarginSurface({
   const note = openReading(state);
   const last = lastReading(state);
   const earlier = state.readings.length > 1;
+  /* A motif that arrived while this reading was open. It waits rather than
+     taking the page, and it is offered here and opened when the reading is
+     set aside — see marginState. */
+  const pending = pendingReading(state);
 
   /* A plain click on the prose sets the reading aside, so the arena underneath
      is one click away instead of being held hostage by a plate the player has
@@ -187,6 +192,16 @@ export function MarginSurface({
                 >
                   Set aside
                 </button>
+                {pending && (
+                  <button
+                    type="button"
+                    data-testid="margin-pending"
+                    onClick={() => onReopen(pending.id)}
+                    className={`${QUIET_CONTROL} border-brass/60 text-vellum`}
+                  >
+                    {pending.title} · read it
+                  </button>
+                )}
                 {earlier && (
                   <button
                     type="button"
@@ -226,7 +241,21 @@ export function MarginSurface({
             can lose: one recessed line, present only once there is something to
             return to, naming the reading it will bring back rather than
             counting anything. */}
-        {!note && last && (
+        {/* A motif that formed while the player was reading, and was never
+            opened: still on offer once the margin is clear. */}
+        {!note && pending && (
+          <div className={`flex justify-start ${READING_MEASURE}`}>
+            <button
+              type="button"
+              data-testid="margin-pending"
+              onClick={() => onReopen(pending.id)}
+              className={`${QUIET_CONTROL} max-w-full truncate border-brass/60 text-left text-vellum`}
+            >
+              {pending.title} · read it
+            </button>
+          </div>
+        )}
+        {!note && !pending && last && (
           <div className={`flex justify-start ${READING_MEASURE}`}>
             <button
               type="button"
