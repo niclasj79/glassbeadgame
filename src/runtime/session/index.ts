@@ -11,3 +11,4 @@ export {
   type StartSession,
   type StartSessionOptions,
 } from "./startSession";
+export { openKeptGame } from "./openKeptGame";

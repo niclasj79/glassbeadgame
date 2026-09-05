@@ -110,11 +110,11 @@ test("concluding loads the deferred chunk and reads the session back", async ({
   if (await takeWhole.isVisible()) await takeWhole.click();
 
   // Six readings and no total — ADR-010, asserted where a player can see it.
-  await expect(page.getByTestId("portrait-reading")).toHaveCount(6, { timeout: 30_000 });
+  await expect(page.getByTestId("portrait-reading")).toHaveCount(7, { timeout: 30_000 });
   // `innerText` is the *rendered* text, and the engraved style is uppercase, so
   // every assertion here is case-insensitive on purpose rather than by accident.
   const body = await page.locator("body").innerText();
-  expect(body).toMatch(/six readings, no total/i);
+  expect(body).toMatch(/seven readings, no total/i);
   expect(body).not.toMatch(/\bscore\b/i);
   expect(body).not.toMatch(/\brank\b/i);
 

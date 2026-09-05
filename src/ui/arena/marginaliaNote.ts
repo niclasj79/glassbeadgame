@@ -1,4 +1,5 @@
 import type { PresentationCue } from "@/runtime/cues";
+import { capitalise } from "@/domain/outcomes";
 import { castaliaConceptById } from "@/content/castalia/concepts";
 import { facetById } from "@/content/castalia/facets";
 import { toFacetId } from "@/content/castalia/schema";
@@ -49,7 +50,9 @@ export function noteFor(cue: PresentationCue): Note | null {
     case "motif.completed":
       return {
         ...motifReading(
-          `${String(cue.payload.motifKindId)} has formed`,
+          // "bridge has formed" was the id, not the name. A motif is the one
+          // structural event of the middle game and its note is titled like one.
+          `A ${capitalise(String(cue.payload.motifKindId))} has formed`,
           cue.payload.reason,
           cue.payload.conceptIds
             .map((id) => castaliaConceptById.get(String(id))?.name ?? String(id))

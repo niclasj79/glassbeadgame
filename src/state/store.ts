@@ -37,8 +37,16 @@ interface GBGState {
   focusedBeadId: string | null;
   /** A bead pinned open for reading (touch long-press); shows immediately. */
   pinnedInspectId: string | null;
+  /**
+   * The conclusion is showing a Game taken down from the shelf rather than
+   * one that just ended. The reading is then given whole — there is no
+   * performance running to assemble it on — and nothing is kept again.
+   */
+  viewingKept: boolean;
 
   returnToTitle: () => void;
+  /** Open a kept Game's reading. The canonical log is loaded by the caller. */
+  openKeptGame: (projection: SessionStartProjection) => void;
   /**
    * Opens the threshold — the page that says what the pieces are and what
    * drawing a connection is for, before there is a Game to interrupt. No
@@ -65,6 +73,22 @@ const idleInteraction = (): Interaction => ({
   reveal: null,
 });
 
+/** The legacy presentation projection, copied so the store owns its arrays. */
+function projectSession(projection: SessionStartProjection): SessionState {
+  return {
+    ...projection,
+    disciplines: [...projection.disciplines],
+    beadIds: [...projection.beadIds],
+    threads: projection.threads.map((thread) => ({ ...thread })),
+    discoveries: projection.discoveries.map((discovery) => ({ ...discovery })),
+    motifs: projection.motifs.map((motif) => ({
+      ...motif,
+      beads: motif.beads ? [...motif.beads] : undefined,
+    })),
+    interaction: { ...projection.interaction },
+  };
+}
+
 /** What survives across sessions: taste settings, and nothing else. */
 interface PersistedSlice {
   settings: Pick<Settings, "muted" | "binaural" | "hintsSeen">;
@@ -87,6 +111,7 @@ export const useStore = create<GBGState>()(
         session: null,
         focusedBeadId: null,
         pinnedInspectId: null,
+        viewingKept: false,
 
         returnToTitle: () =>
           set({
@@ -95,29 +120,30 @@ export const useStore = create<GBGState>()(
             lensActive: false,
             focusedBeadId: null,
             pinnedInspectId: null,
+            viewingKept: false,
           }),
 
         crossToThreshold: () => set({ phase: "threshold" }),
 
         applySessionStart: (projection) => {
-          const session: SessionState = {
-            ...projection,
-            disciplines: [...projection.disciplines],
-            beadIds: [...projection.beadIds],
-            threads: projection.threads.map((thread) => ({ ...thread })),
-            discoveries: projection.discoveries.map((discovery) => ({ ...discovery })),
-            motifs: projection.motifs.map((motif) => ({
-              ...motif,
-              beads: motif.beads ? [...motif.beads] : undefined,
-            })),
-            interaction: { ...projection.interaction },
-          };
           set({
             phase: "arena",
-            session,
+            session: projectSession(projection),
             lensActive: false,
             focusedBeadId: null,
             pinnedInspectId: null,
+            viewingKept: false,
+          });
+        },
+
+        openKeptGame: (projection) => {
+          set({
+            phase: "conclusion",
+            session: projectSession(projection),
+            lensActive: false,
+            focusedBeadId: null,
+            pinnedInspectId: null,
+            viewingKept: true,
           });
         },
 
@@ -161,6 +187,7 @@ export const useStore = create<GBGState>()(
             lensActive: false,
             focusedBeadId: null,
             pinnedInspectId: null,
+            viewingKept: false,
           });
         },
       }),

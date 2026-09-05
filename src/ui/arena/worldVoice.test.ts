@@ -33,7 +33,7 @@ describe("the world's voice", () => {
 
     const open = worldVoiceCaption(openThreadCue(), context);
     expect(open).not.toBeNull();
-    expect(open!.text).toContain("no documented relation here");
+    expect(open!.text).toContain("Nothing written settles this");
     expect(open!.text).toContain("Proportion");
 
     const unresolved = worldVoiceCaption(unresolvedCue(), context);

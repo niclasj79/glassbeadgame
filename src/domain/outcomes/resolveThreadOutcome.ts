@@ -41,8 +41,18 @@ const FALLBACK_QUESTIONS: Readonly<Record<RelationIntention, string>> =
       "You are asking whether {a} supplies the {facet} that {b} depends on. What would that support actually consist of?",
   });
 
+/**
+ * The honest limit, stated after the question rather than before it.
+ *
+ * This used to open with an absence — "Castalia has no documented relation for
+ * this pair" — so the Game's most interesting outcome arrived dressed as a
+ * shortfall. Every word was true and the framing was a flinch. An Open Thread
+ * is the edge of what anyone has written down, and the sentence says that:
+ * the question stands, the Game can ask it, and it cannot settle it. Still no
+ * praise, no filler, and no claim.
+ */
 const OPEN_THREAD_DISCLOSURE =
-  "Castalia has no documented relation for this pair. This is a question it can ask, not a finding it can assert.";
+  "This is where what has been written down runs out. Castalia can ask the question; it cannot settle it.";
 
 function sortFacets(facets: readonly FacetId[]): readonly FacetId[] {
   return Object.freeze([...facets].sort(compareStrings));
@@ -289,7 +299,12 @@ function resolveUnresolved(
     pair: thread.pair,
     intention: thread.intention,
     sequence: thread.sequence,
-    statement: `Castalia documents no relation between ${aName} and ${bName}, and names no facet they share. The thread holds your ${label} reading and nothing else.`,
+    // Not a correction. The domain treats this as a real thread — it is in the
+    // log and in the register — so the sentence says what the thread stands on
+    // rather than what it lacks. The world draws it unlit for the same reason:
+    // a strand no citation supports claims nothing, and it is still the
+    // player's reading.
+    statement: `${aName} and ${bName} share no facet Castalia knows, and nothing written joins them. The thread stands on your ${label} reading alone.`,
   });
 }
 

@@ -49,6 +49,9 @@ Silence is always available, and it is preferred to fabricated significance.
 - **Step back** — Escape, or the world's cancel mark. Nothing provisional is
   ever written.
 - **Conclude** when you are ready.
+- **Keep** — a concluded Game stays on the shelf at the title, on this device
+  only, and can be read again. The reading can be copied as text, citations
+  included. Nothing is counted.
 
 Every action has a mouse, touch, and keyboard path, and every cue has a textual
 equivalent. Relation meaning is never carried by colour alone.

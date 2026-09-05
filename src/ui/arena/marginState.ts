@@ -36,12 +36,24 @@ export interface MarginState {
   readonly openId: string | null;
   /** Whether the index of earlier readings is expanded. */
   readonly indexOpen: boolean;
+  /**
+   * A reading that arrived while another was open and has not been read yet.
+   *
+   * Only a motif can be pending. A motif is completed by a commit, and it is
+   * now staged after that commit's outcome has resolved — so when it arrives
+   * the player is, by construction, reading the outcome. Taking that page away
+   * to announce the motif would be the timer's defect in a new coat. Instead
+   * the motif waits: it is offered under the open plate, it opens the moment
+   * the player sets the outcome aside, and it is never lost to the index.
+   */
+  readonly pendingId: string | null;
 }
 
 export const EMPTY_MARGIN: MarginState = Object.freeze({
   readings: Object.freeze([]) as readonly Note[],
   openId: null,
   indexOpen: false,
+  pendingId: null,
 });
 
 /**
@@ -70,6 +82,12 @@ export function lastReading(state: MarginState): Note | null {
     : state.readings[state.readings.length - 1];
 }
 
+/** The reading waiting its turn, or null when nothing is waiting. */
+export function pendingReading(state: MarginState): Note | null {
+  if (state.pendingId === null) return null;
+  return state.readings.find((note) => note.id === state.pendingId) ?? null;
+}
+
 function keep(readings: readonly Note[], next: Note): readonly Note[] {
   // Cue ids are deterministic, so a replayed plan can present the same reading
   // twice. It moves to the end rather than appearing twice in the index.
@@ -88,28 +106,46 @@ function keep(readings: readonly Note[], next: Note): readonly Note[] {
 export function receive(state: MarginState, cue: PresentationCue): MarginState {
   const next = noteFor(cue);
   if (next !== null) {
+    const readings = keep(state.readings, next);
+    // A motif arriving over an open reading waits; it does not take the page.
+    if (next.kind === "motif" && state.openId !== null) {
+      return { ...state, readings, pendingId: next.id };
+    }
     return {
-      readings: keep(state.readings, next),
+      readings,
       openId: next.id,
       indexOpen: false,
+      pendingId: state.pendingId === next.id ? null : state.pendingId,
     };
   }
   if (RESUMES_COMPOSING.has(cue.type) && (state.openId !== null || state.indexOpen)) {
-    return { readings: state.readings, openId: null, indexOpen: false };
+    // The margin steps out of the arena's way; a waiting motif keeps waiting.
+    return { ...state, openId: null, indexOpen: false };
   }
   return state;
 }
 
-/** The player is done with this reading. It stays in the index. */
+/**
+ * The player is done with this reading. It stays in the index — and if a motif
+ * has been waiting under it, that is what the margin turns to next.
+ */
 export function setAside(state: MarginState): MarginState {
+  if (state.pendingId !== null) {
+    return { ...state, openId: state.pendingId, indexOpen: false, pendingId: null };
+  }
   if (state.openId === null && !state.indexOpen) return state;
-  return { readings: state.readings, openId: null, indexOpen: false };
+  return { ...state, openId: null, indexOpen: false };
 }
 
 /** Re-open a reading the player already made. The path that did not exist. */
 export function reopen(state: MarginState, id: string): MarginState {
   if (!state.readings.some((note) => note.id === id)) return state;
-  return { readings: state.readings, openId: id, indexOpen: false };
+  return {
+    ...state,
+    openId: id,
+    indexOpen: false,
+    pendingId: state.pendingId === id ? null : state.pendingId,
+  };
 }
 
 export function toggleIndex(state: MarginState): MarginState {

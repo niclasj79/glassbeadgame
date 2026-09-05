@@ -13,6 +13,7 @@ import { intentionArcMid } from "./curves";
 import { presentationProfile } from "./quality";
 import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./ribbon";
 import { threadForm, unrestAmplitude } from "./threadGrammar";
+import { standingOf, threadStandings } from "./threadStanding";
 import {
   conclusionPerformanceStore,
   runningConclusionFor,
@@ -76,6 +77,13 @@ interface RibbonProps {
    * the same quantity of ink — see scene/resolution.ts (CAV-006).
    */
   readonly resolved: boolean;
+  /**
+   * Whether the Game answered this thread at all. A documented relation and an
+   * Open Thread are lit; a strand the Game had nothing to add to hangs unlit —
+   * same ink, same construction, no mark and so no bloom (Schell #7). A
+   * preview is always lit: nothing has been asked of it yet.
+   */
+  readonly lit?: boolean;
   /** Committed threads grow once and stay; a preview is always fully drawn. */
   readonly animateGrowth: boolean;
   /**
@@ -113,6 +121,7 @@ function Ribbon({
   intention,
   opacity,
   resolved,
+  lit = true,
   animateGrowth,
   threadId,
   attuned = false,
@@ -183,12 +192,13 @@ function Ribbon({
 
   useEffect(() => {
     (material.uniforms.uResolved as { value: number }).value = resolved ? 1 : 0;
+    (material.uniforms.uLit as { value: number }).value = lit ? 1 : 0;
     (material.uniforms.uRhythmA as { value: number }).value = rhythmOf(sourceId);
     (material.uniforms.uRhythmB as { value: number }).value = rhythmOf(
       targetId ?? sourceId
     );
     (material.uniforms.uGrow as { value: number }).value = animateGrowth ? 0 : 1;
-  }, [material, resolved, sourceId, targetId, animateGrowth]);
+  }, [material, resolved, lit, sourceId, targetId, animateGrowth]);
 
   /**
    * How much of this strand the conclusion has given back: 0 before its moment,
@@ -399,13 +409,7 @@ export function Threads() {
    * Open Thread, and a thread whose outcome has not landed yet, stay open —
    * at the same brightness and the same weight.
    */
-  const closed = useMemo(() => {
-    const ids = new Set<string>();
-    for (const outcome of outcomes) {
-      if (outcome.type === "documented-relation") ids.add(String(outcome.threadId));
-    }
-    return ids;
-  }, [outcomes]);
+  const standings = useMemo(() => threadStandings(outcomes), [outcomes]);
 
   if (threads.length === 0) return null;
   return (
@@ -418,7 +422,8 @@ export function Threads() {
           targetId={String(thread.pair[1])}
           intention={thread.intention}
           opacity={0.9}
-          resolved={closed.has(String(thread.id))}
+          resolved={standingOf(standings, String(thread.id)).closed}
+          lit={standingOf(standings, String(thread.id)).lit}
           animateGrowth
           attuned={attuned}
           litAtSeconds={litTimes?.get(String(thread.id)) ?? null}

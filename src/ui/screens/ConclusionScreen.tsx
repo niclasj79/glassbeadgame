@@ -5,6 +5,7 @@ import { resolveSessionOutcomes } from "@/domain/outcomes";
 import { compileConclusion } from "@/domain/performance";
 import { buildPortrait, type Portrait } from "@/domain/portrait";
 import { castaliaLookup } from "@/runtime/content/castaliaLookup";
+import { sessionArchive } from "@/runtime/persistence";
 import { startSession } from "@/runtime/session";
 import { presentationNow } from "@/runtime/testMode";
 import { domainSessionStore } from "@/state/domainSession";
@@ -20,6 +21,7 @@ import {
 } from "./conclusionReveal";
 import { PortraitPlate } from "./PortraitPlate";
 import { ReadingScroller } from "./ReadingScroller";
+import { keptStatusLine, readingAsText } from "./readingText";
 import { threadRegister, type ThreadReading } from "./threadRegister";
 
 /**
@@ -72,6 +74,8 @@ export interface ConclusionReadingProps {
   readonly onTakeWhole?: () => void;
   readonly onAnother: () => void;
   readonly onLeave: () => void;
+  readonly keptLine?: string | null;
+  readonly onCopy?: () => Promise<boolean>;
 }
 
 /**
@@ -88,6 +92,8 @@ export function ConclusionReading({
   onTakeWhole,
   onAnother,
   onLeave,
+  keptLine = null,
+  onCopy,
 }: ConclusionReadingProps) {
   return (
     <>
@@ -137,6 +143,8 @@ export function ConclusionReading({
           onTakeWhole={onTakeWhole}
           onAnother={onAnother}
           onLeave={onLeave}
+          keptLine={keptLine}
+          onCopy={onCopy}
         />
       </ReadingScroller>
     </>
@@ -223,6 +231,8 @@ const NO_STEPS: readonly RevealStep[] = Object.freeze([]);
 export function ConclusionScreen() {
   const domainSession = useVanillaStore(domainSessionStore, (s) => s.session);
   const returnToTitle = useStore((s) => s.returnToTitle);
+  const viewingKept = useStore((s) => s.viewingKept);
+  const archive = useVanillaStore(sessionArchive.status, (s) => s);
 
   const reading = useMemo(() => {
     if (!domainSession) return null;
@@ -255,7 +265,34 @@ export function ConclusionScreen() {
     };
   }, [domainSession]);
 
-  const { reveal, takeWhole } = usePerformedReading(reading?.steps ?? NO_STEPS);
+  /*
+   * A kept Game is read, not concluded: there is no performance running to
+   * assemble the reading on, so it is given whole and nothing is staged.
+   */
+  const { reveal, takeWhole } = usePerformedReading(
+    viewingKept ? NO_STEPS : (reading?.steps ?? NO_STEPS)
+  );
+
+  const keptLine =
+    domainSession && archive.sessionId === String(domainSession.sessionId)
+      ? keptStatusLine(archive.status, viewingKept)
+      : keptStatusLine("unkept", viewingKept);
+
+  const copyReading = useCallback(async (): Promise<boolean> => {
+    if (!reading) return false;
+    const text = readingAsText({
+      annotation: reading.annotation,
+      threads: reading.threads,
+      portrait: reading.portrait,
+      endedAt: archive.keptAt,
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [reading, archive.keptAt]);
 
   /* The keyboard's way past the performance. Escape is unclaimed on this
      screen, and a player who wants the page rather than the reconstruction
@@ -282,10 +319,12 @@ export function ConclusionScreen() {
         annotation={reading.annotation}
         threadCount={reading.threadCount}
         threads={reading.threads}
-        reveal={reveal}
-        onTakeWhole={takeWhole}
+        reveal={viewingKept ? null : reveal}
+        onTakeWhole={viewingKept ? undefined : takeWhole}
         onAnother={() => startSession()}
         onLeave={returnToTitle}
+        keptLine={keptLine}
+        onCopy={copyReading}
       />
     </motion.div>
   );

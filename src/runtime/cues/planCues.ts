@@ -260,14 +260,27 @@ export function planCommitMoment(input: CommitMomentInput): CuePlan {
 
 export function planMotifCompleted(
   payload: CuePayloadMap["motif.completed"],
-  sourceEventId: EventId
+  sourceEventId: EventId,
+  afterSeconds = 0
 ): CuePlan {
   // A motif changes the world's structure, so it is given room — but it enters
   // *under* ongoing play rather than interrupting it. No modal ceremony.
+  //
+  // It also enters AFTER the commit that completed it has resolved. A motif can
+  // only ever be completed by a commit, and the commit's own outcome is staged
+  // a settle after the weave lands (`planCommitMoment`); a motif cue at 0 s
+  // therefore arrived *before* the outcome it belonged to, and the outcome
+  // note then covered the motif note in the margin. In the recorded playtest
+  // a Bridge formed on the third thread and the only trace of it was the
+  // Attune mark. The caller passes the commit moment's span, so the world's
+  // one structural event in the middle game gets its own moment, not a gap.
+  if (!Number.isFinite(afterSeconds) || afterSeconds < 0) {
+    throw new RangeError("a motif may not be staged before the commit it completes");
+  }
   return assemble(sourceEventId, [
     draft({
       type: "motif.completed",
-      startAt: 0,
+      startAt: afterSeconds,
       duration: 4.5,
       channels: ALL,
       payload,

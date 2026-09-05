@@ -289,7 +289,7 @@ describe("the golden path, in the domain alone", () => {
     expect(performance).toBeTruthy();
 
     const portrait = buildPortrait(session, castaliaLookup);
-    expect(portrait.dimensions).toHaveLength(6);
+    expect(portrait.dimensions).toHaveLength(7);
     expect(portrait).not.toHaveProperty("score");
     expect(portrait).not.toHaveProperty("total");
 

@@ -127,11 +127,12 @@ describe("the marginal note", () => {
   });
 
   it("states epistemic standing in type for every outcome shape", () => {
-    expect(noteFor(openThreadCue())!.standing).toContain(
-      "No documented relation here"
-    );
+    // Leads with what the thread is, never with what the record lacks
+    // (Schell #5): the limit is still stated, after the standing.
+    expect(noteFor(openThreadCue())!.standing).toMatch(/^Open thread/);
+    expect(noteFor(openThreadCue())!.standing).toContain("nothing written settles it");
     expect(noteFor(unresolvedCue())!.standing).toBe(
-      "The Game is not asserting anything here"
+      "Your reading alone · Castalia adds nothing here"
     );
     expect(noteFor(motifCue())).not.toBeNull();
   });

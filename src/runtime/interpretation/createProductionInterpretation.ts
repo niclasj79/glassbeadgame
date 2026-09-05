@@ -1,5 +1,6 @@
 import type { InputModality, RelationIntention } from "../../domain/events";
 import type { ConceptId, ThreadId } from "../../domain/ids";
+import { INTENTION_LABELS } from "../../domain/outcomes";
 import type { DomainSessionStore } from "../../state/domainSession";
 import type { InterpretationDraftStore } from "../../state/interactionDraft";
 import type { InterpretationPresentationStore } from "../../state/interpretationPresentation";
@@ -248,7 +249,9 @@ export function createProductionInterpretation(
       const draft = dependencies.draftStore.getState().draft;
       dependencies.presentationStore
         .getState()
-        .announce(`${intention} armed. Draw toward another bead.`);
+        // The label the plate shows, not the id the domain stores: a screen
+        // reader was told "passage armed" while the sigil said Passage.
+        .announce(`${INTENTION_LABELS[intention]} armed. Draw toward another bead.`);
       // Spec §8: arming changes the attended bead's preview *immediately*. Until
       // this line the method wrote a draft stage and an aria string and nothing
       // else, so the one moment the player learns that intention is a tool

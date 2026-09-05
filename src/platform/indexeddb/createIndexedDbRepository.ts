@@ -86,7 +86,12 @@ function openDatabase(): Promise<IDBDatabase> {
  * player in a private window gets a complete session that simply does not
  * survive a reload. Every code path above stays identical.
  */
-function createMemoryRepository(): ProgressRepository {
+/**
+ * The in-memory implementation. Exported because the deterministic test mode
+ * runs on it deliberately: a browser test must not leave one page's Games in
+ * the next page's shelf, and IndexedDB is shared by origin.
+ */
+export function createMemoryRepository(): ProgressRepository {
   const sessions = new Map<string, PersistedSessionRecord>();
   const discoveries = new Map<string, PersistedDiscoveryRecord>();
   const openThreads = new Map<string, PersistedOpenThreadRecord>();

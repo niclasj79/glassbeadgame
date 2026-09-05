@@ -151,7 +151,7 @@ describe("cue captions", () => {
       }),
       context
     )!;
-    expect(caption.text.indexOf("no documented relation")).toBeLessThan(
+    expect(caption.text.indexOf("Nothing written settles")).toBeLessThan(
       caption.text.indexOf("Does the proportion")
     );
     expect(caption.text).toContain("Recursion");

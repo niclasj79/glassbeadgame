@@ -118,7 +118,7 @@ describe("the conclusion", () => {
 
   it("still shows the reading it was given", () => {
     expect(html).toContain("The Game concludes");
-    expect(html).toContain("six readings, no total");
+    expect(html).toContain("seven readings, no total");
     expect(html).toContain("Coherence");
   });
 
@@ -209,7 +209,7 @@ describe("the conclusion", () => {
     expect(page).toContain(ANNOTATION.sentences[0]);
     expect(page).not.toContain(ANNOTATION.sentences[1]);
     expect(page).not.toContain('data-testid="portrait-reading"');
-    expect(page).not.toContain("six readings, no total");
+    expect(page).not.toContain("seven readings, no total");
     // One line per compiled entry, never a hole waiting to be filled.
     expect([...page.matchAll(/data-testid="thread-reading"/g)]).toHaveLength(1);
   });

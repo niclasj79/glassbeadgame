@@ -220,6 +220,12 @@ export interface SkyGeometry {
   readonly starMagnitudes: Float32Array;
   /** xyz pairs, two vertices per drawn line. */
   readonly linePositions: Float32Array;
+  /**
+   * Which authored figure each line vertex belongs to, aligned to
+   * `linePositions` — so a figure's lines can be drawn at their own strength
+   * as the web joins the faculties it stands for (scene/constellationReveal).
+   */
+  readonly lineFigures: Float32Array;
   readonly figureCount: number;
 }
 
@@ -240,9 +246,11 @@ export function buildSky(
   const starPositions = new Float32Array((figureStarCount + fieldStars) * 3);
   const starMagnitudes = new Float32Array(figureStarCount + fieldStars);
   const linePositions = new Float32Array(edgeCount * 6);
+  const lineFigures = new Float32Array(edgeCount * 2);
 
   let s = 0;
   let l = 0;
+  let figureIndex = 0;
   for (const f of used) {
     const base = s;
     for (let i = 0; i < f.stars.length; i++) {
@@ -256,11 +264,13 @@ export function buildSky(
     }
     for (const [a, b] of f.edges) {
       for (const index of [base + a, base + b]) {
+        lineFigures[l / 3] = figureIndex;
         linePositions[l++] = starPositions[index * 3];
         linePositions[l++] = starPositions[index * 3 + 1];
         linePositions[l++] = starPositions[index * 3 + 2];
       }
     }
+    figureIndex += 1;
   }
 
   // The unaffiliated field: sparse, faint, and deliberately not clustered
@@ -281,6 +291,7 @@ export function buildSky(
     starPositions,
     starMagnitudes,
     linePositions,
+    lineFigures,
     figureCount: used.length,
   };
 }

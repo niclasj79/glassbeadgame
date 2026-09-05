@@ -154,7 +154,7 @@ export function describeCue(
       // The disclosure comes first. A player must not hear the question and
       // assume the Game is asserting its premise.
       return {
-        text: `An open thread. The Game has no documented relation here, but the two share ${facet}. ${cue.payload.question}`,
+        text: `An open thread. Nothing written settles this, though the two share ${facet}. ${cue.payload.question}`,
         urgency: "polite",
       };
     }

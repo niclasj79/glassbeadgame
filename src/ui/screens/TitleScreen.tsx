@@ -22,6 +22,7 @@ import {
   openingWorld,
 } from "@/scene/opening";
 import { Button } from "../components/Button";
+import { KeptGamesShelf } from "./KeptGames";
 import { TITLE_EPIGRAPH } from "./titleEpigraph";
 
 /**
@@ -326,6 +327,8 @@ export function TitleScreen() {
           className="mt-5 h-px w-56 origin-center bg-gradient-to-r from-transparent via-glow to-transparent"
           style={{ transform: "scaleX(0)", opacity: 0 }}
         />
+        {/* The shelf. Absent until a Game has been kept; leaves with the door. */}
+        <KeptGamesShelf />
       </motion.div>
     </motion.div>
   );

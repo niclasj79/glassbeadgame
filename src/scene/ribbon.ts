@@ -209,6 +209,14 @@ uniform float uOpacity;
 uniform float uGrow;
 uniform float uUnrest;
 uniform float uResolved;
+/**
+ * Whether the thread carries light at all. 1 for a thread the Game answered
+ * — documented, or an Open Thread — and 0 for a strand it had nothing to add
+ * to. An unlit strand keeps its ink and its construction and loses only its
+ * mark, which is the one thing here bright enough to bloom: it hangs in the
+ * world as the player's reading, claiming nothing (Schell #7).
+ */
+uniform float uLit;
 uniform float uRhythmA;
 uniform float uRhythmB;
 
@@ -269,7 +277,7 @@ void main() {
     mark = max(mark, gbgLine(vV, 0.12) * 0.35 * body);
   }
 
-  vec3 col = mix(uInk, uMarkColor, mark * 0.85);
+  vec3 col = mix(uInk, uMarkColor, mark * 0.85 * uLit);
   float alpha = body * uOpacity * reveal;
   // Deliberately NOT modulated by uUnrest. A settled Tension used to render
   // about 22% dimmer than an Echo, which is the "one kind pays better" failure
@@ -326,6 +334,7 @@ export function createRibbonMaterial(seed: RibbonUniformSeed): THREE.ShaderMater
       uTravel: { value: form.travel },
       uOpacity: { value: seed.opacity },
       uResolved: { value: 1 },
+      uLit: { value: 1 },
       uRhythmA: { value: 7 },
       uRhythmB: { value: 7 },
     },
