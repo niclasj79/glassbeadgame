@@ -166,9 +166,15 @@ distinguishable · whether the outcome prose reads as honest · pacing across a
 full arc · whether the conclusion feels session-specific · comfort · every
 accessibility route.
 
-**Cannot, because it does not exist yet:** anything about keeping, sharing, or
-returning to a Game; anything about withdrawing a thread; anything about the sky
-responding to the shape of the web.
+**Cannot, because it does not exist yet:** anything about withdrawing a thread;
+anything about a Game having a subject; anything about Castalia asking first.
+
+**Can, since the 2026-09-05 pass, and has never been judged by a person:**
+whether the shelf at the title reads as a shelf and not a collection; whether
+the sky's figures assembling as faculties connect reads as a picture rather than
+a gauge; whether an unlit strand reads as "the Game has nothing to add" rather
+than as a fault; whether a motif arriving after its outcome, and waiting under
+it, gives the middle game a beat.
 
 ## Known absences — do not seed these to a tester
 
@@ -177,13 +183,20 @@ is evidence; a tester who was told about it is not. Watch for questions 6, 7 and
 8 in Part One to surface them unprompted.
 
 - No way to undo or withdraw a committed thread.
-- No way to save, export, or share a session. Closing the tab destroys it.
-- No visible instruction in the arena at all. The only text naming the verb is
-  in the screen-reader live region, so a sighted first-timer is told less than a
-  screen-reader user.
-- The world does not change as the web grows; the idle score is identical at
-  minute one and minute fourteen.
-- An unresolved thread and an Open Thread are drawn identically.
+- No visible instruction in the arena itself. The threshold page names the
+  pieces and the point before the arena opens; inside it, the only text naming
+  the verb is still in the screen-reader live region.
+- The room does not change stage as the web grows. The sky's figures assemble
+  as faculties connect, and the bed swells with reach; the armillary, the
+  light and the kindling are the same at minute one and minute fourteen.
+- Every Game opens on the same four beads.
+
+Addressed on this branch, and therefore now things to *watch* rather than to
+listen for: a Game is kept on this device when it concludes and can be re-read
+from the shelf at the title, and its reading can be copied as text with the
+citations intact; an unresolved thread hangs unlit and is drawn differently
+from an Open Thread; the Open Thread leads with its question rather than with
+an absence; the intention reaches the portrait as a seventh reading.
 
 ## The one thing that has never been observed
 

@@ -97,6 +97,17 @@ establish nothing about whether the result is beautiful.
 - [ ] Judge typographic hierarchy in the arena and in the marginalia.
 - [ ] Confirm the threshold sets the stage without reading as a manual, and
       that the arena is legible immediately after it.
+- [ ] **Judge the sky assembling.** Each of the six drawn figures belongs to
+      one pair of faculties and its lines come in as the web joins those two
+      (`scene/constellationReveal.ts`). Weave a Measure–Sound thread and watch
+      the monochord; weave within one faculty and confirm nothing in the sky
+      answers. The claim under test is that this reads as a picture assembling
+      and not as a gauge filling — there is no denominator on screen, but only
+      a person can say whether the eye supplies one.
+- [ ] **Judge the unlit strand.** A thread the Game has nothing to add to now
+      keeps its ink and loses its mark and its light (`scene/threadStanding.ts`,
+      `uLit`). Weave two beads that share no facet and decide whether the
+      strand reads as "your reading, standing alone" or as a broken thread.
 - [ ] **Judge the glass clink.** Beads that would overlap on screen push each
       other apart as the camera turns, and that contact now sounds. Its rate
       limits and silence threshold are bounded in code (`COMFORT.contact`) and
@@ -146,6 +157,14 @@ distinguishable from audiovisual behaviour without relying on label or colour.
       counter — confirm nothing in play reads as progress toward it.
 - [ ] Does the conclusion feel like **this** session? Recognise at least two
       session-specific moments.
+- [ ] Does the seventh reading, *Reading*, characterise how you read without
+      making you feel marked? It says which verbs you reached for and how often
+      Castalia read with you, narrowed you, or ran across you. If it reads as a
+      score in words, it has failed CAV-006 and should be rewritten or cut.
+- [ ] When a motif forms, it now arrives after the outcome of the commit that
+      completed it and waits under that reading until you set it aside. Does
+      the middle game have a beat it did not have, or does the wait read as
+      the Game withholding something?
 - [ ] Can you explain at least half your threads afterwards?
 - [ ] Do you want another Game to say something different — not to accumulate?
 
@@ -202,8 +221,17 @@ distinguishable from audiovisual behaviour without relying on label or colour.
 
 - [ ] Install as a PWA and play offline.
 - [ ] Confirm an update never interrupts a session in progress.
-- [ ] Play in a private window and confirm the game runs, and that the interface
-      says the Game will not be saved rather than silently losing it.
+- [ ] Conclude a Game, close the tab, reopen the game: it is on the shelf at
+      the title, and opening it gives the reading it left — whole, with no
+      performance to sit through, and the web drawn behind it.
+- [ ] Judge whether the shelf reads as a shelf and not as a collection. It
+      names Games by when they ended and the first thing their annotation
+      said; it counts nothing. If it ever makes you want to fill it, it has
+      become a progress bar.
+- [ ] Copy the reading and paste it somewhere: the register is in order, every
+      standing is in words, and the citations are intact.
+- [ ] Play in a private window and confirm the game runs, and that the plate
+      says the Game is kept for this visit only rather than silently losing it.
 
 ---
 
