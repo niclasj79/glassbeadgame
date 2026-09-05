@@ -201,7 +201,9 @@ describe("resolveThreadOutcome — Open Threads", () => {
       lookup
     ) as OpenThreadOutcome;
 
-    expect(outcome.disclosure).toContain("no documented relation");
+    expect(outcome.disclosure).toContain("cannot settle it");
+    // Leads with the edge of the record, never with an absence (Schell #5).
+    expect(outcome.disclosure.toLowerCase()).not.toMatch(/^castalia has no/);
     expect(outcome.disclosure.toLowerCase()).not.toContain("well done");
   });
 
@@ -246,7 +248,7 @@ describe("resolveThreadOutcome — unresolved", () => {
 
     expect(outcome.kind).toBe("unresolved");
     expect(outcome.statement).toBe(
-      "Castalia documents no relation between Equal Temperament and Conservation of Energy, and names no facet they share. The thread holds your Echo reading and nothing else."
+      "Equal Temperament and Conservation of Energy share no facet Castalia knows, and nothing written joins them. The thread stands on your Echo reading alone."
     );
   });
 

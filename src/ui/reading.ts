@@ -164,7 +164,10 @@ export function openThreadReading(question: string, facetName: string): Reading 
     title: "An open thread",
     body: question,
     aside: null,
-    standing: `No documented relation here · both carry ${facetName}`,
+    // Leads with the question's standing, not with an absence: an Open Thread
+    // is the edge of the record, and the eyebrow says so in the same breath as
+    // the facet the two beads genuinely share.
+    standing: `Open thread · both carry ${facetName} · nothing written settles it`,
     interpretive: false,
     sourceLine: null,
     citations: NO_CITATIONS,
@@ -178,10 +181,13 @@ export function openThreadReading(question: string, facetName: string): Reading 
 export function unresolvedReading(statement: string): Reading {
   return {
     kind: "unresolved",
-    title: "Nothing grounded yet",
+    // Named for what the world draws — a strand that hangs without light — and
+    // not for what the player failed to find. "Nothing grounded yet" read as a
+    // correction; the thread is still theirs.
+    title: "An unlit thread",
     body: statement,
     aside: null,
-    standing: "The Game is not asserting anything here",
+    standing: "Your reading alone · Castalia adds nothing here",
     interpretive: false,
     sourceLine: null,
     citations: NO_CITATIONS,
