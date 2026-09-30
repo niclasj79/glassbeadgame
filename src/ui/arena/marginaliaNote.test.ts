@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { entranceMs, noteFor } from "./marginaliaNote";
+import { toEventId, toThreadId } from "@/domain/ids";
+import { resolveThreadOutcome } from "@/domain/outcomes";
+import { CASTALIA_RELATIONS } from "@/content/castalia/relations";
+import { castaliaLookup } from "@/runtime/content/castaliaLookup";
+import { threadRegister } from "../screens/threadRegister";
+import {
+  entranceMs,
+  firstSentence,
+  noteFor,
+  noteForOutcome,
+  noteLayers,
+} from "./marginaliaNote";
 import {
   documentedCue,
   motifCue,
@@ -8,6 +19,7 @@ import {
   unresolvedCue,
   wovenCue,
 } from "./testing/cueFixtures";
+import { GOLDEN_PAIR, UNSHARED_PAIR } from "./testing/focusFixtures";
 
 /**
  * The margin is the surface a sighted player reads an outcome on. What it may
@@ -139,5 +151,139 @@ describe("the marginal note", () => {
 
   it("writes nothing in the margin for a cue that is not an outcome", () => {
     expect(noteFor(wovenCue())).toBeNull();
+  });
+
+  it("remembers which thread each outcome answers, and a motif none (I-019)", () => {
+    for (const cue of [documentedCue("established"), openThreadCue(), unresolvedCue()]) {
+      expect(noteFor(cue)!.threadId).toBe("thread:1:s:1");
+    }
+    // A motif belongs to several threads and to none of them alone.
+    expect(noteFor(motifCue())!.threadId).toBeNull();
+  });
+});
+
+/**
+ * The thread card leads with one sentence of the insight (I-018). The pack's
+ * insights are dense with what fools a naive splitter — dates, "c.", Roman
+ * numerals, initials — so the rule is proved against every one of them.
+ */
+describe("one sentence of an insight", () => {
+  it("stops at the first full stop that begins a new sentence", () => {
+    expect(firstSentence("Both use proportion. One locks and one never does.")).toBe(
+      "Both use proportion."
+    );
+    expect(firstSentence("Is it heard? Or only counted?")).toBe("Is it heard?");
+  });
+
+  it("does not stop at an abbreviation, an initial, or a date", () => {
+    expect(firstSentence("Codified c. 1300 in motets. Then it spread.")).toBe(
+      "Codified c. 1300 in motets."
+    );
+    expect(firstSentence("J. S. Bach wrote canons at every interval. Few did.")).toBe(
+      "J. S. Bach wrote canons at every interval."
+    );
+    expect(firstSentence("It was known (e.g. to Kepler) early. Later too.")).toBe(
+      "It was known (e.g. to Kepler) early."
+    );
+  });
+
+  it("returns a single sentence whole rather than cutting it", () => {
+    expect(firstSentence("  Nothing here ends early  ")).toBe("Nothing here ends early");
+  });
+
+  it("finds a whole first sentence in every authored insight", () => {
+    for (const relation of CASTALIA_RELATIONS) {
+      const insight = relation.insight.trim();
+      const sentence = firstSentence(insight);
+      expect(insight.startsWith(sentence)).toBe(true);
+      expect(sentence).toMatch(/[.!?…]["'”’)\]]*$/);
+      // Long enough to be a sentence, not a fragment cut at an abbreviation.
+      expect(sentence.split(/\s+/).length).toBeGreaterThanOrEqual(8);
+      // And what follows begins a sentence of its own.
+      const rest = insight.slice(sentence.length).trimStart();
+      if (rest.length > 0) expect(rest).toMatch(/^["'“‘(]?[A-Z0-9À-Þ]/);
+    }
+  });
+});
+
+describe("the thread card's two layers (I-018)", () => {
+  const INSIGHT = "Proportion runs through both. One uses it to lock, the other never to lock.";
+
+  it("leads a documented relation with its title, evidence line and one sentence", () => {
+    const note = noteFor(
+      documentedCue(
+        "established",
+        "confirmed",
+        relationFixture({ evidence: "established", insight: INSIGHT })
+      )
+    )!;
+    const { first, more } = noteLayers(note);
+    expect(more).toBe(true);
+    expect(first.title).toBe(note.title);
+    // The standing is never "more": it says what kind of claim this is.
+    expect(first.standing).toBe(note.standing);
+    expect(first.body).toBe("Proportion runs through both.");
+    expect(first.aside).toBeNull();
+    expect(first.sourceLine).toBeNull();
+    expect(first.citations).toHaveLength(0);
+    // The note itself still carries everything, for the second layer.
+    expect(note.body).toBe(INSIGHT);
+    expect(note.aside).not.toBeNull();
+    expect(note.citations).toHaveLength(2);
+  });
+
+  it("has nothing more to give when one sentence is all there is", () => {
+    const note = noteFor(
+      documentedCue(
+        "established",
+        "confirmed",
+        relationFixture({
+          evidence: "established",
+          insight: "Proportion runs through both.",
+          counterpoint: undefined,
+          sources: [],
+        })
+      )
+    )!;
+    expect(noteLayers(note).more).toBe(false);
+  });
+
+  it("gives an Open Thread its whole question and an unlit thread its whole statement", () => {
+    for (const cue of [openThreadCue(), unresolvedCue(), motifCue()]) {
+      const note = noteFor(cue)!;
+      const { first, more } = noteLayers(note);
+      expect(more).toBe(false);
+      expect(first).toBe(note);
+    }
+  });
+});
+
+describe("a thread's reading rebuilt from the log (I-019)", () => {
+  const thread = (pair: typeof GOLDEN_PAIR) =>
+    Object.freeze({
+      id: toThreadId("thread:3:s:1"),
+      pair,
+      intention: "echo" as const,
+      gesture: Object.freeze({ inputModality: "mouse" as const }),
+      eventId: toEventId("event:3"),
+      sequence: 3,
+      committedAt: 0,
+    });
+
+  it("says exactly what the conclusion's register says of the same thread", () => {
+    for (const pair of [GOLDEN_PAIR, UNSHARED_PAIR]) {
+      const outcome = resolveThreadOutcome(thread(pair), castaliaLookup);
+      const note = noteForOutcome(outcome);
+      const [entry] = threadRegister([outcome]);
+      expect(note.threadId).toBe("thread:3:s:1");
+      expect(note.id).toBe("thread-reading:thread:3:s:1");
+      expect(note.kind).toBe(entry.kind);
+      expect(note.title).toBe(entry.title);
+      expect(note.body).toBe(entry.body);
+      expect(note.standing).toBe(entry.standing);
+      expect(note.citations).toEqual(entry.citations);
+      // Nothing of the register's own row label leaks into the note.
+      expect(Object.keys(note)).not.toContain("reading");
+    }
   });
 });

@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useSyncExternalStore,
 } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -12,12 +13,12 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { easing } from "maath";
 import { useStore } from "@/state/store";
 import { useStore as useVanillaStore } from "zustand";
-import { interpretationDraftStore } from "@/state/interactionDraft";
 import { domainSessionStore } from "@/state/domainSession";
 import { cueBus } from "@/runtime/cues";
 import { ARENA_RADIUS } from "@/game/layout";
-import { isCoarsePointer } from "@/lib/device";
 import { frameState } from "./frameState";
+import { sampleFocusView, subscribeFocusView } from "./focusFrame";
+import type * as FocusPosture from "./focusPosture";
 import {
   beginConclusionPerformance,
   conclusionPerformanceStore,
@@ -30,21 +31,18 @@ import {
 import {
   ARENA_FOV,
   PORTRAIT_ASPECT,
-  attendedFraming,
   createDamped,
   createOrbitDamper,
   createOrbitPose,
   dampOrbitToward,
   dampScalar,
+  focusPoseKey,
+  focusPoseRequest,
   homeComposition,
   orbitFromPosition,
   phraseSmoothTime,
-  plateGeometry,
-  plateSafeArea,
   positionFromOrbit,
   titleComposition,
-  unshiftArea,
-  unshiftNdc,
   type CameraPhrase,
   type HomeComposition,
 } from "./framing";
@@ -83,10 +81,21 @@ import { presentationNow } from "@/runtime/testMode";
  *   an 810 px viewport. The same poses are computed and applied instantly.
  *   Reduced motion is a first-class path, not a fallback.
  *
- * The attended posture is a lean toward an idea that still preserves the whole
- * arena (I-012), and it is now checked against the plate's safe area: if the
- * intention plate would not fit at the composed distance, the camera stands
- * back until it does.
+ * THE FOCUS VIEW CARRIES THE FRAME (I-017).
+ *
+ * Attend closes the camera in — as close as the whole bead shell allows — and
+ * turns the instrument so the attended bead sits lower-left; Lock turns it
+ * once more so the pair is framed, the attended bead lower-left and the second
+ * up and to the right; a reopened thread is framed as a locked pair. The poses
+ * are solved in `framing.ts` §6 from the one focus view every surface reads,
+ * and a *look* — the bead under the lens — never moves the camera. After a
+ * commit the pair stays framed while the commit is performed, and the camera
+ * returns to rest when the performance ends.
+ *
+ * REDUCED MOTION: NO TRAVEL. I-017 is explicit, and it is narrower than the
+ * law above: for the focus view the camera does not move at all, and the
+ * attended bead is set apart by scale and brightness instead (`Beads.tsx`).
+ * The phase poses keep the instant framing described above.
  *
  * THE CONCLUSION IS NOW PERFORMED (BLOCK-1, spec §14).
  *
@@ -133,11 +142,45 @@ const TRANSIT_TIMEOUT_S = 3.5;
 const IDLE_ORBIT_AFTER_MS = 10_000;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
-/** Where the attended bead is asked to sit, in NDC. Lower corner, both axes. */
-const ATTEND_NDC_X = 0.34;
-const ATTEND_NDC_Y = -0.28;
-const ATTEND_NDC_X_PORTRAIT = 0.3;
-const ATTEND_NDC_Y_PORTRAIT = -0.32;
+/**
+ * WHAT A FINGER DOES TO THE ORBIT.
+ *
+ * Roaming, one finger orbits and two dolly. While a bead is attended the
+ * pointer is a lens (I-017): a one-finger drag over the arena moves the lens —
+ * the pointer layer's business — and must not also turn the world under it, so
+ * one finger is handed to a pan the controls never perform (`enablePan` is
+ * off), and two fingers orbit and dolly instead (INTERACTION-DECISIONS, input
+ * equivalence: "one-finger drag over the arena; two-finger drag orbits").
+ */
+const ROAMING_TOUCHES = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+const LENS_TOUCHES = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+
+/**
+ * The focus view's request, as a key. Equal keys ask for the same pose, so a
+ * look — which changes the view but not the request — renders nothing here.
+ */
+const readFocusPoseKey = (): string =>
+  focusPoseKey(focusPoseRequest(sampleFocusView()));
+
+const readLensTouch = (): boolean => sampleFocusView().mode === "focus";
+
+/**
+ * The focus postures' solvers (`focusPosture.ts`), fetched once, after the
+ * first paint: nothing in them is needed until a bead is attended, and the
+ * first download is a budget. The rig asks for them the moment it mounts, so
+ * they are in hand long before anyone can attend.
+ */
+let posture: typeof FocusPosture | null = null;
+let postureArriving: Promise<typeof FocusPosture> | null = null;
+function loadPosture(): Promise<typeof FocusPosture> {
+  if (!postureArriving) {
+    postureArriving = import("./focusPosture").then((module) => {
+      posture = module;
+      return module;
+    });
+  }
+  return postureArriving;
+}
 
 /**
  * THE REST POSTURE, AND THE ONE BEFORE IT
@@ -264,17 +307,26 @@ function applyLensShift(
  *
  * So the camera is *held* for as long as the gesture owns it. This is the same
  * hold the weaving branch has always taken through `frameState.aim.active`,
- * stated once and applied to every gesture — and a pose queued during the hold
- * is abandoned rather than deferred, because the answer to "the player is
- * pulling on this bead" is to open the plate in the pose the camera already has,
- * not to move the world out from under the finger and then move it back.
+ * stated once and applied to every gesture: nothing moves the camera while the
+ * hold stands.
+ *
+ * A POSE QUEUED DURING THE HOLD NOW WAITS FOR THE HAND. It used to be
+ * abandoned, because the plate opened round the pressed bead and the answer to
+ * "the player is pulling on this bead" was to open it in the pose the camera
+ * already had. The plate has left the attended bead (the sigils bloom on the
+ * preview thread after Lock, I-016), and under the focus view the press *is*
+ * the act the camera answers (I-017): a tap attends, and the camera must close
+ * in. Abandoning the pose would leave every pointer Attend unanswered. So the
+ * pose is kept, the camera stays exactly where it is while the finger is down
+ * — which is what GAP-2 needed — and the move is made once the hand has let go
+ * and the controls are aiming the camera again.
  */
 function cameraIsHeld(controlsEnabled: boolean, aiming: boolean): boolean {
   return !controlsEnabled || aiming;
 }
 
 const beadVec = new THREE.Vector3();
-const screenVec = new THREE.Vector3();
+const secondVec = new THREE.Vector3();
 
 /**
  * How far the finished web actually reaches. The crown has to clear whatever
@@ -318,15 +370,37 @@ export function CameraRig() {
   const viewportHeight = useThree((s) => s.size.height);
   const phase = useStore((s) => s.phase);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
-  const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
-  const attendedId =
-    draft.stage === "inactive" ? null : String(draft.attendedConceptId);
-  const armed = draft.stage === "armed" || draft.stage === "candidate-selected";
   const lensActive = useStore((s) => s.lensActive);
   const lensView = useStore((s) => s.lensView);
+  /**
+   * What the focus view asks of the camera, as a key: it changes on Attend,
+   * Lock, a reopened thread and a return to roaming, and never on a look.
+   */
+  const focusPose = useSyncExternalStore(
+    subscribeFocusView,
+    readFocusPoseKey,
+    readFocusPoseKey
+  );
+  /** Whether the pointer is a lens, which is what a finger must not orbit. */
+  const lensTouch = useSyncExternalStore(
+    subscribeFocusView,
+    readLensTouch,
+    readLensTouch
+  );
 
   const aspect = useThree((s) => s.viewport.aspect);
-  const previousAttendedId = useRef<string | null>(null);
+  /**
+   * The focus pose the camera currently holds, by key — or null at rest. While
+   * one is held the phase pose must not re-home the camera under it.
+   */
+  const focusHeld = useRef<string | null>(null);
+  /**
+   * The focus view has let go, and the camera owes the rest pose — performed
+   * once any commit performance has ended (`performingUntil`).
+   */
+  const releaseOwed = useRef(false);
+  /** When the commit performance being staged ends, on the presentation clock. */
+  const performingUntil = useRef(0);
 
   /**
    * The composition this frame is being made in: where the arena's centre is
@@ -392,9 +466,21 @@ export function CameraRig() {
    * so a strand, its voice and its line in the register are one moment rather
    * than three approximations of it.
    */
+  // Fetch the focus postures' solvers now, while nothing is being attended.
+  useEffect(() => {
+    void loadPosture();
+  }, []);
+
   useEffect(
     () =>
-      cueBus.subscribe("camera", (cue) => {
+      cueBus.subscribe("camera", (cue, plan) => {
+        if (cue.type === "thread.woven") {
+          // The commit is performed on the pair the camera is holding: the
+          // thread grows, the sky answers, and the camera goes home only once
+          // the whole plan — the thread and its outcome — has been performed.
+          performingUntil.current = presentationNow() + plan.duration * 1000;
+          return;
+        }
         if (cue.type !== "conclusion.perform") return;
         const performance = readScenePerformance(cue.payload.performance);
         // Silence beats fabricated significance: a performance the scene
@@ -432,110 +518,117 @@ export function CameraRig() {
     [perform]
   );
 
-  /** Attend: swing the instrument so the bead comes to a lower corner. */
+  /**
+   * THE FOCUS VIEW'S POSTURE (I-017).
+   *
+   * Attend closes in and turns the instrument so the attended bead sits
+   * lower-left; Lock — and a reopened thread — turns it once more to frame the
+   * pair. Both are solved from where the beads are *drawn*, because that is
+   * where the eye sees them. The old lean stood further back and kept the bead
+   * on whichever side it was on; the old arming breath is gone with arming
+   * itself, because Lock now answers with a turn of its own.
+   *
+   * Roaming again, the camera owes the rest pose. It is paid at once after a
+   * Cancel, and after a commit only when the commit's performance has ended —
+   * the thread grows and the sky answers on the pair it was woven between —
+   * which the frame loop below settles.
+   *
+   * Under reduced motion there is no travel at all (I-017). The pose is still
+   * *owned*, so nothing else re-homes the camera under the view, but no move is
+   * queued; `Beads.tsx` sets the attended bead apart by scale and brightness.
+   */
   useLayoutEffect(() => {
     if (phase !== "arena" || lensActive) {
-      previousAttendedId.current = null;
+      focusHeld.current = null;
+      releaseOwed.current = false;
       return;
     }
-    if (!attendedId) {
-      if (previousAttendedId.current) {
-        perform(arenaHomePose(home, aspect, "release"));
+    const request = focusPoseRequest(sampleFocusView());
+    // The key this render was made for and the view read now are one moment;
+    // if they are not, the render that follows brings the right one.
+    if (focusPoseKey(request) !== focusPose) return;
+    if (request.kind === "rest") {
+      if (focusHeld.current !== null) releaseOwed.current = true;
+      focusHeld.current = null;
+      return;
+    }
+    focusHeld.current = focusPose;
+    releaseOwed.current = false;
+    // A new act ends the old performance's claim on the camera: a Cancel from
+    // here goes home at once, not when a commit before it would have finished.
+    performingUntil.current = 0;
+    if (reducedMotion) return;
+
+    const viewport = { width: viewportWidth, height: viewportHeight };
+    const compose = (solvers: typeof FocusPosture): void => {
+      const attended = beadAt(request.attended);
+      if (!attended) return;
+      beadVec.set(attended.x, attended.y, attended.z);
+      if (request.kind === "attend") {
+        const framing = solvers.focusFraming({
+          bead: beadVec,
+          viewport,
+          minDistance: MIN_ORBIT,
+          maxDistance: maxOrbit(aspect),
+        });
+        if (framing) {
+          perform({ position: framing.position, target: framing.target, phrase: "lean" });
+        }
+        return;
       }
-      previousAttendedId.current = null;
+      const second = beadAt(request.second);
+      if (!second) return;
+      secondVec.set(second.x, second.y, second.z);
+      const framing = solvers.pairFraming({
+        attended: beadVec,
+        second: secondVec,
+        viewport,
+        from: camera.position,
+        minDistance: MIN_ORBIT,
+        maxDistance: maxOrbit(aspect),
+      });
+      if (framing) {
+        perform({ position: framing.position, target: framing.target, phrase: "frame" });
+      }
+    };
+    if (posture) {
+      compose(posture);
       return;
     }
-    previousAttendedId.current = attendedId;
-    const index = frameState.beadIndex.get(attendedId);
-    if (index === undefined) return;
-    const rendered = frameState.rendered;
-    beadVec.set(
-      rendered[index * 3],
-      rendered[index * 3 + 1],
-      rendered[index * 3 + 2]
-    );
-
-    const rest = arenaHomePose(home, aspect, "lean");
-    const portrait = aspect < PORTRAIT_ASPECT;
-    // Keep the bead on the side of the frame it is already on: the phrase is
-    // a lean toward the idea, never a lurch across it.
-    screenVec.copy(beadVec).project(camera);
-    const side = screenVec.x >= 0 ? 1 : -1;
-    const ndcX = side * (portrait ? ATTEND_NDC_X_PORTRAIT : ATTEND_NDC_X);
-    const ndcY = portrait ? ATTEND_NDC_Y_PORTRAIT : ATTEND_NDC_Y;
-    const ceiling = maxOrbit(aspect);
-    const distance = Math.min(rest.position.length() * 1.18, ceiling);
-
-    // The plate is drawn in screen space around this bead, so the pose is only
-    // acceptable if the plate fits. This is the whole of B1: under reduced
-    // motion this solve simply never ran.
-    const plate = plateGeometry(
-      viewportWidth,
-      typeof window === "undefined" ? false : isCoarsePointer()
-    );
-    const safeArea = plateSafeArea(plate, {
-      width: viewportWidth,
-      height: viewportHeight,
+    // Only if a bead is attended before the solvers have arrived — they are
+    // fetched when the rig mounts — does the posture wait for them, and then
+    // only if the view still asks for it.
+    let current = true;
+    void loadPosture().then((solvers) => {
+      if (current && focusHeld.current === focusPose) compose(solvers);
     });
-
-    // The plate is placed on the *screen*, and the lens shift stands between
-    // the screen and the projection the solver works in. Both the target and
-    // the box it is judged against are carried back through the shift, so a
-    // composed frame cannot quietly move the plate off the edge it was solved
-    // to stay inside.
-    const wanted = unshiftNdc(ndcX, ndcY, home);
-    const framing = attendedFraming({
-      bead: beadVec,
-      distance,
-      aspect,
-      ndcX: wanted.x,
-      ndcY: wanted.y,
-      safeArea: unshiftArea(safeArea, home),
-      maxDistance: ceiling,
-    });
-    perform(
-      framing
-        ? { position: framing.position, target: framing.target, phrase: "lean" }
-        : rest
-    );
+    return () => {
+      current = false;
+    };
   }, [
-    attendedId,
+    focusPose,
     phase,
     lensActive,
+    reducedMotion,
     camera,
     aspect,
-    home,
     viewportWidth,
     viewportHeight,
     perform,
   ]);
-
-  /**
-   * Arming is a smaller phrase: a short breath inward, no re-framing. It is
-   * the one move reduced motion drops entirely, because it carries nothing the
-   * gold rule on the plate has not already said — suppressing an animation is
-   * exactly what reduced motion is for.
-   */
-  useEffect(() => {
-    if (!armed || reducedMotion || phase !== "arena" || lensActive) return;
-    const current = goal.current;
-    const from = current ? current.position : camera.position;
-    perform({
-      position: from.clone().multiplyScalar(0.965),
-      target: (current ? current.target : ORIGIN).clone(),
-      phrase: "breath",
-    });
-  }, [armed, reducedMotion, phase, lensActive, camera, perform]);
 
   // A layout effect: the pose must land in the same commit that publishes the
   // bead layout, before anything can measure the arena. As a passive effect it
   // ran a task later, and for that task the world reported bead positions from
   // a camera that had already been replaced.
   useLayoutEffect(() => {
-    // The attend effect is declared above this one and therefore runs first;
-    // while it owns the pose this one must not re-home the camera, or a resize
-    // during an interpretation would throw the plate back to the middle.
-    if (phase === "arena" && previousAttendedId.current) return;
+    // The focus effect is declared above this one and therefore runs first;
+    // while it owns the pose — or still owes the return from one — this one
+    // must not re-home the camera, or a resize during an interpretation would
+    // throw the attended bead back to wherever rest left it.
+    if (phase === "arena" && (focusHeld.current !== null || releaseOwed.current)) {
+      return;
+    }
     // The conclusion is *performed*, not posed. While a compiled performance
     // owns the camera the hints are the only thing allowed to move it — and its
     // own last hint is the crown, so nothing is lost by standing aside.
@@ -666,19 +759,27 @@ export function CameraRig() {
     }
 
     // A gesture owns the sightline until release: suspending the move keeps a
-    // latched bead from drifting out from under a finger, and — see
-    // `cameraIsHeld` — moving the camera while the controls are off moves it
-    // without aiming it. A held sightline is deliberately frozen, so it counts
-    // as settled for anything measuring the arena.
+    // bead from drifting out from under a finger, and — see `cameraIsHeld` —
+    // moving the camera while the controls are off moves it without aiming it.
+    // A pose queued meanwhile waits for the hand rather than being dropped, so
+    // a tap that attends is still answered by the camera once it has let go. A
+    // held sightline with nothing waiting is deliberately frozen, so it counts
+    // as settled for anything measuring the arena; one with a move waiting is
+    // about to be replaced, so it does not.
     if (cameraIsHeld(ctl.enabled, frameState.aim.active)) {
-      if (!ctl.enabled) {
-        // The plate opens in the pose the camera already has.
-        goal.current = null;
-        transitAge.current = 0;
-      }
+      transitAge.current = 0;
       ctl.autoRotate = false;
-      frameState.cameraSettled = true;
+      frameState.cameraSettled = goal.current === null;
       return;
+    }
+
+    // The focus view has let go and the rest pose is owed: at once after a
+    // Cancel, and after a commit only once its performance has ended.
+    if (releaseOwed.current && presentationNow() >= performingUntil.current) {
+      releaseOwed.current = false;
+      if (!reducedMotion && phase === "arena" && !lensActive) {
+        perform(arenaHomePose(home, aspect, "release"));
+      }
     }
 
     /*
@@ -761,12 +862,16 @@ export function CameraRig() {
     // It returns of its own accord once the crown has settled.
     const performing =
       conclusion !== null && conclusionCamera.current.owns(now);
+    // Nor under the focus view: an idle drift would carry the attended bead
+    // out of its corner and sweep the lens across beads nobody looked at.
+    const composing =
+      releaseOwed.current || sampleFocusView().mode !== "roaming";
     ctl.autoRotate =
       !reducedMotion &&
       !performing &&
       mode !== "reveal" &&
       mode !== "concluding" &&
-      ((phase === "arena" && idle && !frameState.aim.active) ||
+      ((phase === "arena" && idle && !frameState.aim.active && !composing) ||
         phase === "title" ||
         phase === "threshold" ||
         phase === "conclusion");
@@ -777,6 +882,7 @@ export function CameraRig() {
       ref={controls}
       makeDefault
       enablePan={false}
+      touches={lensTouch ? LENS_TOUCHES : ROAMING_TOUCHES}
       enableDamping
       dampingFactor={0.08}
       rotateSpeed={0.5}

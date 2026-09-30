@@ -219,53 +219,8 @@ export function attunementInvitation(): void {
   });
 }
 
-// ── The silk shimmer — a continuous close texture while a thread is drawn,
-// its brightness and level riding the pointer's velocity. Silence when still.
-let silkNodes: {
-  src: AudioBufferSourceNode;
-  bp: BiquadFilterNode;
-  gain: GainNode;
-} | null = null;
-
-export function setSilkActive(active: boolean): void {
-  const ctx = audio.get();
-  if (!ctx || !audio.sfxBus) return;
-  if (active && !silkNodes) {
-    const src = noiseSource(ctx, 3);
-    const bp = ctx.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 2200;
-    bp.Q.value = 1.4;
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    src.connect(bp);
-    bp.connect(gain);
-    gain.connect(audio.sfxBus);
-    src.start();
-    silkNodes = { src, bp, gain };
-  } else if (!active && silkNodes) {
-    const { src, gain } = silkNodes;
-    silkNodes = null;
-    gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1);
-    src.stop(ctx.currentTime + 0.6);
-  }
-}
-
-/** Pointer speed (px/frame, smoothed by the caller) → silk brightness. */
-export function updateSilk(speed: number): void {
-  const ctx = audio.get();
-  if (!ctx || !silkNodes) return;
-  const t = ctx.currentTime;
-  silkNodes.gain.gain.setTargetAtTime(Math.min(0.025, speed * 4e-4), t, 0.12);
-  silkNodes.bp.frequency.setTargetAtTime(
-    1500 + Math.min(3500, speed * 55),
-    t,
-    0.15
-  );
-}
-
 /**
- * ── Three prototype voices were deleted here, and why ───────────────────────
+ * ── Prototype voices deleted here, and why ──────────────────────────────────
  *
  * `updateSympathy` / `stopSympathy` sang the identity note of "the nearest bead
  * holding an *undiscovered* luminous connection with the thread's origin" —
@@ -293,6 +248,11 @@ export function updateSilk(speed: number): void {
  * intention the player declared, and `audio/conclusion.ts`, where the closing
  * performance is compiled from the event log. Both are epistemically flat by
  * construction (CAV-006).
+ *
+ * `setSilkActive` / `updateSilk`, the silk shimmer, rode the pointer's speed
+ * while a thread was dragged from one bead to another. The focus view weaves by
+ * holding a reading's sigil on a pair already chosen (I-016, I-020), so there
+ * is no drag for it to ride; its last caller went with the drag.
  */
 
 // A sustained, quiet, slightly tense dyad while a thread is being aimed.

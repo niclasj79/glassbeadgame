@@ -43,4 +43,32 @@ describe("opening an intention from the keyboard", () => {
     // A retry with no bound is a leak on any path where the plate never opens.
     expect(source()).toMatch(/attempts < \d+/);
   });
+
+  it("arrives on Echo, the first reading, by the id the keyboard layer uses", () => {
+    expect(source()).toContain('document.getElementById(sigilControlId("echo"))');
+  });
+});
+
+/**
+ * …AND LEAVING IT WITHOUT BEING DROPPED ON THE PAGE.
+ *
+ * Enter weaves, and Escape or Step back returns to attending: each closes the
+ * plate under the keyboard's focus. Focus on a removed element falls to the
+ * document, and the next Tab would start from the top of the page. The plate
+ * hands the keyboard back to the second bead's control instead — but only a
+ * keyboard's focus, and only if it has not already gone somewhere on purpose.
+ */
+describe("closing the plate under the keyboard", () => {
+  it("hands focus back to the second bead's control in the mirror", () => {
+    const text = source();
+    expect(text).toContain("document.getElementById(`bead-control-${returnTo}`)?.focus();");
+    expect(text).toMatch(/\}, \[secondId\]\);/);
+  });
+
+  it("only for focus the keyboard brought, and only when it was lost", () => {
+    const text = source();
+    expect(text).toContain('target.matches(":focus-visible")');
+    expect(text).toContain("keyboardOnPlate.current = focusIsVisible(event.target);");
+    expect(text).toMatch(/active !== null && active !== document\.body/);
+  });
 });

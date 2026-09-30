@@ -297,6 +297,96 @@ describe("buildGestureProfile", () => {
     );
   });
 
+  describe("the approach — lens path before the hold (I-020)", () => {
+    const approach = [
+      { atMs: 100, xViewport: 0.1, yViewport: 0.8 },
+      { atMs: 200, xViewport: 0.3, yViewport: 0.6 },
+      { atMs: 300, xViewport: 0.6, yViewport: 0.5 },
+    ];
+
+    it("takes geometry from the approach and duration from the hold", () => {
+      const profile = buildGestureProfile({
+        inputModality: "mouse",
+        startedAtMs: 1_000,
+        endedAtMs: 1_400,
+        approach,
+      });
+      const withoutApproach = buildGestureProfile({
+        inputModality: "mouse",
+        startedAtMs: 100,
+        endedAtMs: 300,
+        samples: approach,
+      });
+
+      expect(profile.durationMs).toBe(400);
+      expect(profile.pathLengthViewport).toBeCloseTo(withoutApproach.pathLengthViewport!);
+      expect(profile.curvature).toBeCloseTo(withoutApproach.curvature!);
+      expect(profile.averageSpeedViewportPerSecond).toBeCloseTo(
+        withoutApproach.averageSpeedViewportPerSecond!
+      );
+      expect(profile.speedVariance).toBeCloseTo(withoutApproach.speedVariance!);
+      expect(Object.keys(profile).sort()).toEqual(
+        Object.keys(withoutApproach).sort()
+      );
+    });
+
+    it("keeps pressure from the hold, not the approach", () => {
+      const profile = buildGestureProfile({
+        inputModality: "pen",
+        startedAtMs: 1_000,
+        endedAtMs: 1_200,
+        approach,
+        samples: [{ atMs: 1_100, pressure: 0.4 }],
+      });
+      expect(profile.pressure).toBeCloseTo(0.4);
+      expect(profile.pathLengthViewport).toBeGreaterThan(0);
+    });
+
+    it("adds no geometry for a single approach point", () => {
+      const profile = buildGestureProfile({
+        inputModality: "touch",
+        startedAtMs: 1_000,
+        endedAtMs: 1_100,
+        approach: [approach[0]],
+      });
+      expect(profile).toEqual({ inputModality: "touch", durationMs: 100 });
+    });
+
+    it("rejects an approach that follows the hold, runs backwards, or lacks coordinates", () => {
+      expectBuildError(
+        { inputModality: "mouse", startedAtMs: 250, endedAtMs: 400, approach },
+        "invalid-sample-time"
+      );
+      expectBuildError(
+        {
+          inputModality: "mouse",
+          startedAtMs: 1_000,
+          endedAtMs: 1_100,
+          approach: [approach[1], approach[0]],
+        },
+        "non-monotonic-samples"
+      );
+      expectBuildError(
+        unsafeInput({
+          inputModality: "mouse",
+          startedAtMs: 1_000,
+          endedAtMs: 1_100,
+          approach: [{ atMs: 10 }, { atMs: 20 }],
+        }),
+        "invalid-sample-coordinates"
+      );
+      expectBuildError(
+        unsafeInput({
+          inputModality: "mouse",
+          startedAtMs: 1_000,
+          endedAtMs: 1_100,
+          approach: "path",
+        }),
+        "invalid-samples"
+      );
+    });
+  });
+
   it("rejects mixed coordinate availability", () => {
     expectBuildError(
       {

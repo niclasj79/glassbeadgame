@@ -21,8 +21,8 @@
  * is unit-testable with an injected clock.
  */
 import { audio } from "./engine";
-import { playVoice } from "./voices";
-import { capTenseGain, type VoicePlan } from "./plan";
+import { playVoice, type RetireVoice } from "./voices";
+import { capTenseGain, noteEndSeconds, type VoicePlan } from "./plan";
 
 export interface QueuedPlan {
   /** Absolute AudioContext time at which the plan begins. */
@@ -35,6 +35,8 @@ export interface PlanQueue {
   readonly push: (plan: VoicePlan, at: number) => boolean;
   /** Everything starting at or before `horizon`, in time order, removed. */
   readonly drain: (horizon: number) => readonly QueuedPlan[];
+  /** Drop the newest waiting plan with this id. True when there was one. */
+  readonly remove: (planId: string) => boolean;
   readonly pending: () => number;
   readonly reset: () => void;
 }
@@ -71,6 +73,15 @@ export function createPlanQueue(options: PlanQueueOptions = {}): PlanQueue {
       const due = queue.slice(0, index);
       queue = queue.slice(index);
       return Object.freeze(due);
+    },
+
+    remove: (planId) => {
+      for (let index = queue.length - 1; index >= 0; index -= 1) {
+        if (queue[index].plan.id !== planId) continue;
+        queue = [...queue.slice(0, index), ...queue.slice(index + 1)];
+        return true;
+      }
+      return false;
     },
 
     pending: () => queue.length,
@@ -110,7 +121,12 @@ export function realizeVoicePlan(
   ctx: AudioContext,
   targets: RealizeTargets,
   plan: VoicePlan,
-  atSeconds: number
+  atSeconds: number,
+  /**
+   * When given, receives a way to take back each voice that sounded. Asked for
+   * only by a caller that may retire the plan, because each one costs a gain node.
+   */
+  retirers?: RetireVoice[]
 ): number {
   let sounded = 0;
   const bounded = capTenseGain(plan, targets.tensionCeiling);
@@ -134,6 +150,8 @@ export function realizeVoicePlan(
       // point: a tense voice's beat rate is planned, so it must not be jittered.
       seed: note.id,
       exactTuning: note.tense,
+      onRetire:
+        retirers === undefined ? undefined : (retire) => retirers.push(retire),
     });
     if (ok) sounded += 1;
   }
@@ -148,6 +166,13 @@ export interface LookaheadScheduler {
   readonly running: () => boolean;
   /** Schedule a plan at an absolute AudioContext time. */
   readonly schedule: (plan: VoicePlan, atSeconds: number) => boolean;
+  /**
+   * Take back a plan: one still waiting is not played, and one already sounding
+   * fades over `fadeSeconds` from `atSeconds`, and whatever of it has not begun
+   * by then never does. Applies to the newest plan with that id held when it is
+   * called.
+   */
+  readonly retire: (planId: string, atSeconds: number, fadeSeconds: number) => void;
   /** Drain and realise everything inside the look-ahead window. */
   readonly tick: () => void;
   readonly pending: () => number;
@@ -175,6 +200,17 @@ export function createLookaheadScheduler(
   const lookahead = options.lookaheadSeconds ?? DEFAULT_LOOKAHEAD_S;
   let timer: number | null = null;
 
+  /**
+   * What has been realised and can still be taken back, newest last. Bounded by
+   * what is still sounding: an entry goes when its last voice has ended.
+   */
+  let held: {
+    readonly planId: string;
+    readonly retirers: RetireVoice[];
+    readonly endsAt: number;
+    retired: boolean;
+  }[] = [];
+
   const tick = (): void => {
     const ctx = audio.get();
     const music = audio.motifBus;
@@ -182,13 +218,22 @@ export function createLookaheadScheduler(
     if (!ctx || !music || !tension) return;
     const ceiling = audio.tensionCeiling();
     for (const entry of queue.drain(ctx.currentTime + lookahead)) {
+      const retirers: RetireVoice[] = [];
       realizeVoicePlan(
         ctx,
         { music, tension, tensionCeiling: ceiling },
         entry.plan,
-        entry.at
+        entry.at,
+        retirers
       );
+      held.push({
+        planId: entry.plan.id,
+        retirers,
+        endsAt: entry.at + Math.max(0, ...entry.plan.notes.map(noteEndSeconds)),
+        retired: false,
+      });
     }
+    held = held.filter((entry) => entry.endsAt > ctx.currentTime).slice(-64);
   };
 
   const scheduler: LookaheadScheduler = {
@@ -201,12 +246,27 @@ export function createLookaheadScheduler(
       window.clearInterval(timer);
       timer = null;
       queue.reset();
+      held = [];
     },
     running: () => timer !== null,
     schedule: (plan, atSeconds) => queue.push(plan, atSeconds),
+    retire: (planId, atSeconds, fadeSeconds) => {
+      // Still waiting for its moment: it is simply not played.
+      if (queue.remove(planId)) return;
+      for (let index = held.length - 1; index >= 0; index -= 1) {
+        const entry = held[index];
+        if (entry.planId !== planId || entry.retired) continue;
+        entry.retired = true;
+        for (const retire of entry.retirers) retire(atSeconds, fadeSeconds);
+        return;
+      }
+    },
     tick,
     pending: () => queue.pending(),
-    reset: () => queue.reset(),
+    reset: () => {
+      queue.reset();
+      held = [];
+    },
   };
   return Object.freeze(scheduler);
 }

@@ -57,12 +57,42 @@ export interface AttentionEnterPayload {
   }[];
 }
 
-export interface IntentionArmedPayload {
-  readonly conceptId: ConceptId;
-  readonly intention: RelationIntention;
+/**
+ * The bead settled under the lens while attending (I-017, I-018) — or none,
+ * when the lens has left every bead and the gap is open again. Its band is the
+ * same relation-neutral band `attention.enter` already published; its shared
+ * facets are public structure. Neither says whether the pair is documented.
+ */
+export interface AttentionSightedPayload {
+  readonly attendedConceptId: ConceptId;
+  readonly sighted: Readonly<{
+    conceptId: ConceptId;
+    band: "weak" | "medium" | "high";
+    sharedFacets: readonly FacetId[];
+  }> | null;
 }
 
-export interface CandidateLatchedPayload {
+/** A second bead fixed: the pair is the object of the act (I-016). */
+export interface PairLockedPayload {
+  readonly pair: ConceptPair;
+  readonly sharedFacets: readonly FacetId[];
+}
+
+/**
+ * A reading heard on the locked pair before it is made. `chosen` is false for
+ * a pointer hovering a sigil and true once the reading is chosen (a press, or
+ * keyboard focus on the radio). Nothing here says which reading the record
+ * prefers; that is known only after commit.
+ */
+export interface ReadingPreviewedPayload {
+  readonly pair: ConceptPair;
+  readonly intention: RelationIntention;
+  readonly chosen: boolean;
+}
+
+/** A committed thread opened again for reading (I-019). Changes nothing durable. */
+export interface ThreadReopenedPayload {
+  readonly threadId: ThreadId;
   readonly pair: ConceptPair;
   readonly intention: RelationIntention;
 }
@@ -125,8 +155,10 @@ export interface ConclusionPayload {
 export interface CuePayloadMap {
   readonly "attention.enter": AttentionEnterPayload;
   readonly "attention.clear": Readonly<Record<string, never>>;
-  readonly "intention.armed": IntentionArmedPayload;
-  readonly "candidate.latched": CandidateLatchedPayload;
+  readonly "attention.sighted": AttentionSightedPayload;
+  readonly "pair.locked": PairLockedPayload;
+  readonly "reading.previewed": ReadingPreviewedPayload;
+  readonly "thread.reopened": ThreadReopenedPayload;
   readonly "weave.released": ThreadWovenPayload;
   readonly "thread.woven": ThreadWovenPayload;
   readonly "outcome.documented": DocumentedOutcomePayload;

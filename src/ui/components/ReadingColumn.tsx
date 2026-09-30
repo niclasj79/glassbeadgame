@@ -21,10 +21,21 @@ import type { ReactNode } from "react";
  * the lower left in a rounded glass panel at 10–12px, so the surface that fires
  * first destroyed the world it describes while the column built for exactly
  * that content sat empty in the same frame. There is one column now, one
- * measure, one rule, one type scale; the two surfaces differ only in what they
- * say. Whichever is open takes the column, and `Marginalia` yields to an
- * inspection, because an inspection is something the player has just asked for
- * by name and a reading they set down is one control away.
+ * measure, one rule, one type scale; the surfaces in it differ only in what
+ * they say.
+ *
+ * ONE COLUMN, WRITTEN FROM ITS HEAD (I-018). The focus view puts more in the
+ * column than one plate at a time: the attended bead's card locks at the top,
+ * the second bead's card or the empty gap stands beneath it, and after a weave
+ * the pair folds into the thread card in the same place. Those used to be
+ * separate absolutely-positioned columns laid over one another and arbitrating
+ * who was drawn; they are now written into a single page, in order, down one
+ * scroll (`READING_STACK`), so two of them can never occupy the same pixels.
+ * The page is written from its head on a wide screen rather than centred,
+ * because a centred stack re-centres every time a card arrives — the attended
+ * card would slide up the page the moment the second bead was sighted, which
+ * is the opposite of "locked at the top". The arena's two verbs stand in the
+ * top corner, so the head is set below them.
  *
  * NO STANDING AT REST (IMP-4). The column was pure negative space until an
  * outcome fired: measured ink per vertical third on the opening frame was
@@ -55,21 +66,39 @@ const FRAME_RULE_GAP = "calc(5.75 * min(1vw, 1vh))";
 const FOOT_RESERVE = "min-h-[30vh] md:min-h-0";
 
 /**
- * The measure a reading is set to, on either edge of the page. Identical for
- * both surfaces on purpose: a bead's description and an outcome's insight are
- * the same class of thing, and a difference in measure is a difference in
- * weight (CAV-006).
+ * How much of the page the column's writing may take: never more than half a
+ * phone, so the arena's working half is left alone, and the whole column
+ * between the page's rules on a wide screen.
  */
-export const READING_MEASURE =
-  "m-0 w-full px-6 pb-20 pt-7 md:px-0 md:py-0 md:pl-10 md:pr-8";
+const WRITING_CEILING = "max-h-[50vh] md:max-h-full";
 
 /**
- * How the column holds a plate: it scrolls inside itself rather than off the
- * screen, and it never takes more than half a phone, so the arena's working
- * half is left alone.
+ * THE PAGE THE COLUMN IS WRITTEN ON — its measure, and its one scroll.
+ *
+ * The measure is identical for everything written here on purpose: a bead's
+ * description and an outcome's insight are the same class of thing, and a
+ * difference in measure is a difference in weight (CAV-006). `pb-20` keeps the
+ * last line clear of the sound control in the phone's corner; `md:pt-24` sets
+ * the head below the arena's two verbs, and `md:pb-24` keeps the foot clear of
+ * the same sound control on a wide page.
+ *
+ * It scrolls rather than running off the screen — a five-source relation with
+ * an 85-word insight, set under two bead cards, is taller than a laptop margin,
+ * and a citation that falls off the bottom edge is a citation nobody can check.
+ * The stack itself stays `pointer-events-none`, so its empty padding never
+ * covers the arena; a wheel or a finger over any plate inside it still scrolls
+ * it, because scrolling follows the plate's ancestors, not its hit test.
  */
-export const READING_PLATE =
-  "pointer-events-auto max-h-[50vh] overflow-y-auto overscroll-contain md:max-h-full";
+export const READING_STACK =
+  "pointer-events-none flex min-h-0 w-full flex-col gap-5 overflow-y-auto overscroll-contain px-6 pb-20 pt-7 md:gap-6 md:px-0 md:pb-24 md:pl-10 md:pr-8 md:pt-24";
+
+/**
+ * How the column holds a plate. Identical for every plate — the bead card, the
+ * margin's reading, the thread card — so none of them can acquire more weight
+ * than another. A plate catches the pointer in its own box and nowhere else;
+ * the page it is written on does the scrolling.
+ */
+export const READING_PLATE = "pointer-events-auto m-0 w-full";
 
 /** The recessed marks: engraved, faint, and never competing with the world. */
 export const QUIET_CONTROL =
@@ -230,6 +259,11 @@ export interface ReadingColumnProps {
  * The container stays `pointer-events-none` so only a plate's own box catches
  * anything: the arena is never covered by an invisible sheet, which is the
  * whole difference between a margin and a modal.
+ *
+ * On a narrow page the writing stands at the foot and grows upward; on a wide
+ * one it is written from the head down (`md:items-start`). The wrapper is what
+ * holds the ceiling, as a flex column, so the `READING_STACK` inside it can
+ * shrink to the page and scroll rather than run past the bottom rule.
  */
 export function ReadingColumn({
   label,
@@ -243,12 +277,12 @@ export function ReadingColumn({
       aria-label={label}
       data-testid={testId}
       className={
-        "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end md:inset-y-0 md:left-auto md:right-0 md:w-[min(27rem,32vw)] md:items-center " +
+        "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end md:inset-y-0 md:left-auto md:right-0 md:w-[min(27rem,32vw)] md:items-start " +
         FOOT_RESERVE
       }
     >
       <Page lit={lit} />
-      <div className="w-full">{children}</div>
+      <div className={`flex w-full flex-col ${WRITING_CEILING}`}>{children}</div>
     </div>
   );
 }

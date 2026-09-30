@@ -44,6 +44,8 @@ const sink: AudioSink = {
     semanticScheduler.start();
     semanticScheduler.schedule(plan, atSeconds);
   },
+  retire: (planId, atSeconds, fadeSeconds) =>
+    semanticScheduler.retire(planId, atSeconds, fadeSeconds),
   setSpace: (density, bed) => ambient.setSpace(density, bed),
   activeVoiceCount: () => ambient.activeVoiceCount(),
   concludeAt: (atSeconds, fadeSeconds) =>

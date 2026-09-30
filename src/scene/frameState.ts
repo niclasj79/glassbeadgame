@@ -31,6 +31,13 @@ export const frameState = {
   /** World-space pointer aim point while threading (set by the threading driver). */
   aim: { x: 0, y: 0, z: 0, active: false },
   hoveredId: null as string | null,
+  /**
+   * The lens (I-017): where the pointer is while a bead is attended, in
+   * viewport-normalised coordinates (0..1, origin top-left). Written by the
+   * pointer layer, read by the fog; never a store field, because it moves at
+   * the rate of the hand.
+   */
+  lens: { x: 0.5, y: 0.5, active: false },
   /** Bead currently magnetized as the thread's landing candidate. */
   snapId: null as string | null,
   /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */

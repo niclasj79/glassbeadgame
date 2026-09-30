@@ -4,7 +4,10 @@ import type { DocumentedRelation } from "@/content/castalia/schema";
 import {
   planAttention,
   planCommitMoment,
-  planIntentionArmed,
+  planPairLocked,
+  planReadingPreviewed,
+  planSighting,
+  planThreadReopened,
   type PresentationCue,
 } from "../cues";
 import { describeCue, type CaptionContext } from "./describeCue";
@@ -79,7 +82,13 @@ describe("cue captions", () => {
         { conceptId: A, candidates: [{ conceptId: B, band: "high" }] },
         null
       ).cues[0],
-      planIntentionArmed({ conceptId: A, intention: "tension" }).cues[0],
+      planReadingPreviewed({ pair: PAIR, intention: "tension", chosen: true }).cues[0],
+      planSighting({
+        attendedConceptId: A,
+        sighted: { conceptId: B, band: "high", sharedFacets: ["recursion" as never] },
+      }).cues[0],
+      planPairLocked({ pair: PAIR, sharedFacets: [] }).cues[0],
+      planThreadReopened({ threadId: THREAD, pair: PAIR, intention: "ground" }).cues[0],
       documentedCue("established", "confirmed"),
       documentedCue("contested", "complicated"),
       commitCue({
@@ -160,7 +169,7 @@ describe("cue captions", () => {
   it("carries relation meaning in words, so nothing depends on colour", () => {
     for (const intention of ["echo", "passage", "tension", "ground"] as const) {
       const caption = describeCue(
-        planIntentionArmed({ conceptId: A, intention }).cues[0],
+        planReadingPreviewed({ pair: PAIR, intention, chosen: false }).cues[0],
         context
       )!;
       expect(caption.text.toLowerCase()).toContain(intention);
@@ -207,9 +216,40 @@ describe("cue captions", () => {
     expect(caption.text).toContain("unknown.bead");
   });
 
+  it("says what a sighted bead shares, or that it shares nothing, and stays quiet when the gap reopens", () => {
+    const shared = describeCue(
+      planSighting({
+        attendedConceptId: A,
+        sighted: { conceptId: B, band: "weak", sharedFacets: ["recursion" as never] },
+      }).cues[0],
+      context
+    )!;
+    expect(shared.text).toMatch(/shares/i);
+    expect(shared.text).not.toMatch(/documented|record|weak|strong/i);
+
+    const none = describeCue(
+      planSighting({
+        attendedConceptId: A,
+        sighted: { conceptId: B, band: "high", sharedFacets: [] },
+      }).cues[0],
+      context
+    )!;
+    expect(none.text).toMatch(/shares no facet/i);
+
+    expect(
+      describeCue(planSighting({ attendedConceptId: A, sighted: null }).cues[0], context)
+    ).toBeNull();
+  });
+
+  it("names the pair on lock and asks for a reading without ranking the four", () => {
+    const caption = describeCue(planPairLocked({ pair: PAIR, sharedFacets: [] }).cues[0], context)!;
+    expect(caption.text).toMatch(/Echo, Passage, Tension or Ground/);
+  });
+
   it("never interrupts: nothing in the ordinary flow is assertive", () => {
     const cues: PresentationCue[] = [
-      planIntentionArmed({ conceptId: A, intention: "echo" }).cues[0],
+      planReadingPreviewed({ pair: PAIR, intention: "echo", chosen: true }).cues[0],
+      planPairLocked({ pair: PAIR, sharedFacets: [] }).cues[0],
       documentedCue("established", "confirmed"),
     ];
     for (const cue of cues) {

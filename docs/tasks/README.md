@@ -34,10 +34,7 @@ None.
 
 ## In progress
 
-1. `M2-012-focus-view.md` — directly assigned focus view: pair before reading,
-   camera close-in, fog and lens, the two-card column, dwell inspection and
-   thread reopening (I-015 through I-020); awaiting implementation on
-   `codex/M2-012-focus-view`.
+None.
 
 ## In review
 
@@ -47,6 +44,11 @@ None.
 2. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
    the canonical interpretation path; awaiting the required director
    interaction, accessibility, and audiovisual review.
+3. `M2-012-focus-view.md` — directly assigned focus view: pair before reading,
+   camera close-in, fog and lens, the two-card column, dwell inspection and
+   thread reopening (I-015 through I-020); implemented on
+   `codex/M2-012-focus-view` and awaiting the director's product,
+   accessibility-interaction and audiovisual review.
 
 ## Blocked queue
 

@@ -16,11 +16,11 @@ import {
   planAttention,
   planAttentionCleared,
   planAttunement,
-  planCandidateLatched,
   planCommitMoment,
   planConclusion,
-  planIntentionArmed,
   planMotifCompleted,
+  planPairLocked,
+  planReadingPreviewed,
   type CueChannel,
   type CuePlan,
 } from "../cues";
@@ -122,8 +122,8 @@ function everyPlan(): readonly CuePlan[] {
   return [
     planAttention({ conceptId: a, candidates: [] }, null),
     planAttentionCleared(),
-    planIntentionArmed({ conceptId: a, intention: "tension" }),
-    planCandidateLatched({ pair: [a, b], intention: "tension" }),
+    planReadingPreviewed({ pair: [a, b], intention: "tension", chosen: true }),
+    planPairLocked({ pair: [a, b], sharedFacets: [] }),
     commitPlan("documented"),
     commitPlan("open-thread"),
     commitPlan("unresolved"),
@@ -220,7 +220,7 @@ describe("the world's cue channels", () => {
       touch: () => {},
     };
     const director = createSceneDirector(sceneOnly);
-    const cue = planCandidateLatched({ pair: [a, b], intention: "echo" }).cues[0];
+    const cue = planPairLocked({ pair: [a, b], sharedFacets: [] }).cues[0];
 
     director.handleScene(cue);
     expect(camera, "the scene channel must not spend the camera's impact").toEqual([]);

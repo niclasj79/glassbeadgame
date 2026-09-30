@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ARENA_RADIUS, fibonacciSpherePositions } from "@/game/layout";
+import { deriveFocusView } from "@/runtime/interactionDraft";
+import { toConceptId, toThreadId } from "@/domain/ids";
+import type { ConceptPair } from "@/domain/events";
 import {
   ARENA_FOV,
   CAMERA_BEAT_SECONDS,
   CAMERA_PHRASES,
   CONTROL_CLEARANCE,
+  FOCUS_FOOT_VH,
+  FOCUS_NEAREST_RATIO,
   FRAME_RULE_INSET,
   INSTRUMENT_HALF_SPAN,
   MAX_ELEVATION,
   MAX_HORIZON_NDC,
   MIN_RING_RADIUS,
   PORTRAIT_ASPECT,
+  READING_COLUMN_BREAKPOINT_PX,
   attendedFraming,
+  focusPoseKey,
+  focusPoseRequest,
   boxGap,
   clampToSafeArea,
   createDamped,
@@ -51,6 +59,16 @@ import {
   type SafeArea,
   type Viewport,
 } from "./framing";
+import {
+  focusBeadArea,
+  focusDistance,
+  focusFootEdge,
+  focusFrameBox,
+  focusFraming,
+  pairFraming,
+  shellOvershoot,
+  sphereHalfExtent,
+} from "./focusPosture";
 
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 const DISTANCE = 12.3;
@@ -433,6 +451,8 @@ describe("the camera's motion language", () => {
     expect(phraseSmoothTime("breath")).toBeLessThan(phraseSmoothTime("lean"));
     expect(phraseSmoothTime("lean")).toBe(phraseSmoothTime("release"));
     expect(phraseSmoothTime("crown")).toBeGreaterThan(phraseSmoothTime("dwell"));
+    // The lock is a turn of the same look as the attend, in the same tempo.
+    expect(phraseSmoothTime("frame")).toBe(phraseSmoothTime("lean"));
   });
 
   it("wraps angles the short way round", () => {
@@ -848,5 +868,408 @@ describe("the composed home frame", () => {
         `${viewport.name} tight`
       );
     }
+  });
+});
+
+/**
+ * I-017 — ATTENTION IS UNMISTAKABLE: THE CAMERA CLOSES IN, AND TURNS TO THE PAIR
+ *
+ * Played end to end, the attended "lean" stood the camera 1.18 times *further*
+ * back than rest and kept the bead on whichever side it already was: Attend was
+ * not visibly different from roaming. These are the laws that replaced it,
+ * each stated as what it is for.
+ */
+describe("the focus view's postures", () => {
+  const VIEWPORTS: readonly (Viewport & { readonly name: string })[] = [
+    { name: "desktop 1440x810", width: 1440, height: 810 },
+    { name: "desktop 1920x1080", width: 1920, height: 1080 },
+    { name: "tablet landscape 1024x768", width: 1024, height: 768 },
+    { name: "ultrawide 2560x1080", width: 2560, height: 1080 },
+    { name: "tablet portrait 768x1024", width: 768, height: 1024 },
+    { name: "phone 414x896", width: 414, height: 896 },
+    { name: "phone 360x740", width: 360, height: 740 },
+  ];
+  /** The orbit ceiling the controls enforce (CameraRig.maxOrbit). */
+  const ceilingFor = (viewport: Viewport): number =>
+    viewport.width / viewport.height < 0.75 ? 26 : 18;
+  const MIN_ORBIT = 5.2;
+  const draw = beads(12);
+  const depthOf = (
+    bead: THREE.Vector3,
+    position: THREE.Vector3,
+    target: THREE.Vector3
+  ): number =>
+    bead.clone().sub(position).dot(target.clone().sub(position).normalize());
+  const attendOn = (viewport: Viewport, bead: THREE.Vector3) =>
+    focusFraming({
+      bead,
+      viewport,
+      minDistance: MIN_ORBIT,
+      maxDistance: ceilingFor(viewport),
+    });
+
+  it("closes in: nearer than rest, never nearer than its floor, the shell still fitting", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      const distance = focusDistance(viewport);
+      expect(`${viewport.name} ${distance < home.distance * 0.96}`).toBe(
+        `${viewport.name} true`
+      );
+      expect(distance).toBeGreaterThanOrEqual(home.distance * FOCUS_NEAREST_RATIO - 1e-9);
+      // From every direction, aimed at the centre, the shell is inside the
+      // focus frame: the viewport less its clearance, and out of the column.
+      const box = focusFrameBox(viewport);
+      const aspect = viewport.width / viewport.height;
+      const half = sphereHalfExtent(distance);
+      expect(home.centre.y + half).toBeLessThanOrEqual(box.maxY + 1e-6);
+      expect(home.centre.y - half).toBeGreaterThanOrEqual(box.minY - 1e-6);
+      expect(home.centre.x + half / aspect).toBeLessThanOrEqual(box.maxX + 1e-6);
+      expect(home.centre.x - half / aspect).toBeGreaterThanOrEqual(box.minX - 1e-6);
+    }
+  });
+
+  it("never lets the shell into the reading column, where the two cards are", () => {
+    for (const viewport of VIEWPORTS) {
+      const box = focusFrameBox(viewport);
+      const column = compositionBox(viewport);
+      if (viewport.width / viewport.height < PORTRAIT_ASPECT) {
+        expect(box.minY).toBeGreaterThanOrEqual(column.minY - 1e-9);
+      } else {
+        expect(box.maxX).toBeLessThanOrEqual(column.maxX + 1e-9);
+      }
+    }
+  });
+
+  it("keeps a phone's attended bead and whole sphere above the band of cards at its foot", () => {
+    // On a narrow page the column is a band along the foot, and in the focus
+    // view it holds two cards side by side: roughly a third of the page with
+    // its padding. The focus view keeps clear of `FOCUS_FOOT_VH` of it; the
+    // rest composition's own reserve is untouched.
+    expect(FOCUS_FOOT_VH).toBeGreaterThanOrEqual(0.38);
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 414, height: 896 },
+      { width: 360, height: 740 },
+    ]) {
+      const band = -1 + 2 * FOCUS_FOOT_VH;
+      expect(focusFootEdge(viewport)).toBeCloseTo(band, 12);
+      expect(focusFrameBox(viewport).minY).toBeGreaterThanOrEqual(band - 1e-9);
+      const bandTopPx = (1 - FOCUS_FOOT_VH) * viewport.height;
+      const home = homeComposition(viewport);
+      for (const bead of draw) {
+        const framing = attendOn(viewport, bead)!;
+        // The attended bead, and room for its name beneath it, above the band.
+        const beadPx = ((1 - framing.landed.y) / 2) * viewport.height;
+        expect(beadPx).toBeLessThan(bandTopPx - 40);
+        // And no bead of the sphere under it.
+        expect(
+          shellOvershoot(framing.position, framing.target, viewport, focusFrameBox(viewport))
+        ).toBeLessThanOrEqual(1 + 1e-4);
+      }
+      // Roaming is untouched: the rest composition still reserves its own foot.
+      expect(compositionBox(viewport).minY).toBeCloseTo(-1 + 2 * MARGIN_RESERVE, 12);
+      expect(home.distance).toBeGreaterThan(focusDistance(viewport) - 1e-9);
+    }
+    // A page wide enough to carry the column down its side has no foot band.
+    const tablet = { width: 768, height: 1024 };
+    expect(tablet.width).toBeGreaterThanOrEqual(READING_COLUMN_BREAKPOINT_PX);
+    expect(focusFootEdge(tablet)).toBeCloseTo(compositionBox(tablet).minY, 12);
+  });
+
+  it("carries every attended bead left, and lower-left wherever the level allows", () => {
+    for (const viewport of VIEWPORTS) {
+      const home = homeComposition(viewport);
+      for (const bead of draw) {
+        const framing = attendOn(viewport, bead);
+        expect(framing).not.toBeNull();
+        if (!framing) continue;
+        // Always the left of the sphere: a turn to one corner, whatever side
+        // the bead started on.
+        expect(`${viewport.name} ${framing.landed.x < home.centre.x}`).toBe(
+          `${viewport.name} true`
+        );
+        // And below its centre, except for a bead on the crown of the
+        // instrument, which the level will not carry that far (§3).
+        if (bead.y <= ARENA_RADIUS * 0.3) {
+          expect(framing.landed.y).toBeLessThan(home.centre.y);
+        }
+        // Where the bead lands, it lands on the page and out of the column.
+        expect(
+          withinSafeArea(framing.landed.x, framing.landed.y, focusBeadArea(viewport), 2e-3)
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("keeps the whole sphere legible: the bead shell inside the frame from every attended pose", () => {
+    for (const viewport of VIEWPORTS) {
+      const box = focusFrameBox(viewport);
+      for (const bead of draw) {
+        const framing = attendOn(viewport, bead);
+        if (!framing) continue;
+        expect(framing.shellInside).toBe(true);
+        expect(
+          shellOvershoot(framing.position, framing.target, viewport, box)
+        ).toBeLessThanOrEqual(1 + 1e-4);
+      }
+    }
+  });
+
+  it("draws the attended bead clearly larger than the lean it replaced, and than rest", () => {
+    for (const viewport of VIEWPORTS) {
+      const aspect = viewport.width / viewport.height;
+      const home = homeComposition(viewport);
+      const ceiling = ceilingFor(viewport);
+      const restPosition = new THREE.Vector3(0, 0, home.distance);
+      for (const bead of draw) {
+        const framing = attendOn(viewport, bead);
+        if (!framing) continue;
+        const near = depthOf(bead, framing.position, framing.target);
+        // The old lean, restated: 1.18 of rest, the bead kept on its side.
+        const side = framing.landed.x >= 0 ? 1 : -1;
+        const portrait = aspect < PORTRAIT_ASPECT;
+        const want = unshiftNdc(
+          side * (portrait ? 0.3 : 0.34),
+          portrait ? -0.32 : -0.28,
+          home
+        );
+        const lean = attendedFraming({
+          bead,
+          distance: Math.min(home.distance * 1.18, ceiling),
+          aspect,
+          ndcX: want.x,
+          ndcY: want.y,
+          maxDistance: ceiling,
+        });
+        if (lean) {
+          const gain = depthOf(bead, lean.position, lean.target) / near;
+          expect(`${viewport.name} ${gain > 1.15}`).toBe(`${viewport.name} true`);
+        }
+        // …and nearer than wherever it stood at rest.
+        expect(near).toBeLessThan(depthOf(bead, restPosition, ORIGIN));
+      }
+    }
+  });
+
+  it("keeps the level and the aim: a turn of the instrument, not a pan", () => {
+    for (const viewport of VIEWPORTS) {
+      for (const bead of draw) {
+        const framing = attendOn(viewport, bead);
+        if (!framing) continue;
+        const elevation = Math.asin(framing.position.y / framing.position.length());
+        expect(Math.abs(elevation)).toBeLessThanOrEqual(MAX_ELEVATION + 1e-6);
+        // No aim offset: at the focus distance the sphere has no room to be
+        // carried across the screen.
+        expect(framing.target.length()).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it("is deterministic for the same bead", () => {
+    const viewport = VIEWPORTS[0];
+    const a = attendOn(viewport, draw[5])!;
+    const b = attendOn(viewport, draw[5])!;
+    expect(a.position.toArray()).toEqual(b.position.toArray());
+    expect(a.target.toArray()).toEqual(b.target.toArray());
+  });
+
+  it("frames a pair: both in frame, the second to the right, and up wherever it is the higher bead", () => {
+    for (const viewport of VIEWPORTS) {
+      const box = focusFrameBox(viewport);
+      const home = homeComposition(viewport);
+      let pairs = 0;
+      let right = 0;
+      let higher = 0;
+      let upRight = 0;
+      let attendedLeft = 0;
+      for (let i = 0; i < draw.length; i++) {
+        const from = attendOn(viewport, draw[i])!.position;
+        for (let j = 0; j < draw.length; j++) {
+          if (i === j) continue;
+          const framing = pairFraming({
+            attended: draw[i],
+            second: draw[j],
+            viewport,
+            from,
+            minDistance: MIN_ORBIT,
+            maxDistance: ceilingFor(viewport),
+          });
+          expect(framing).not.toBeNull();
+          if (!framing) continue;
+          pairs++;
+          // Both beads, and the whole shell, in frame — every pair.
+          expect(withinSafeArea(framing.attended.x, framing.attended.y, box, 1e-6)).toBe(true);
+          expect(withinSafeArea(framing.second.x, framing.second.y, box, 1e-6)).toBe(true);
+          expect(
+            shellOvershoot(framing.position, framing.target, viewport, box)
+          ).toBeLessThanOrEqual(1 + 1e-4);
+          const elevation = Math.asin(framing.position.y / framing.position.length());
+          expect(Math.abs(elevation)).toBeLessThanOrEqual(MAX_ELEVATION + 1e-6);
+          if (framing.second.x > framing.attended.x) right++;
+          if (framing.attended.x < home.centre.x) attendedLeft++;
+          // "Where the sphere allows": the level keeps the screen's up close
+          // to the world's, so only a second bead that is the higher of the
+          // two can be carried above the attended one.
+          if (draw[j].y > draw[i].y + ARENA_RADIUS * 0.1) {
+            higher++;
+            if (
+              framing.second.x > framing.attended.x &&
+              framing.second.y > framing.attended.y
+            ) {
+              upRight++;
+            }
+          }
+        }
+      }
+      expect(`${viewport.name} right ${right / pairs >= 0.95}`).toBe(
+        `${viewport.name} right true`
+      );
+      expect(`${viewport.name} up-right ${upRight / higher >= 0.9}`).toBe(
+        `${viewport.name} up-right true`
+      );
+      expect(attendedLeft / pairs).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+
+  it("frames the pair at the attended posture's distance, so the lock is a turn and not a new shot", () => {
+    const viewport = VIEWPORTS[0];
+    const attended = attendOn(viewport, draw[3])!;
+    const pair = pairFraming({
+      attended: draw[3],
+      second: draw[8],
+      viewport,
+      from: attended.position,
+      minDistance: MIN_ORBIT,
+      maxDistance: 18,
+    })!;
+    expect(pair.distance).toBeCloseTo(focusDistance(viewport), 9);
+    expect(pair.position.length()).toBeCloseTo(pair.distance, 9);
+    expect(pair.target.length()).toBe(0);
+  });
+
+  it("prefers the smaller turn when two framings are nearly as good", () => {
+    // The same pair, asked for from two cameras half a turn apart: each lock
+    // turns no further from where it started than the other lock would have.
+    const viewport = VIEWPORTS[0];
+    const pair = (from: THREE.Vector3) =>
+      pairFraming({
+        attended: draw[2],
+        second: draw[9],
+        viewport,
+        from,
+        minDistance: MIN_ORBIT,
+        maxDistance: 18,
+      })!;
+    const east = new THREE.Vector3(10, 0.5, 0);
+    const west = new THREE.Vector3(-10, 0.5, 0);
+    const fromEast = pair(east);
+    const fromWest = pair(west);
+    const turn = (a: THREE.Vector3, b: THREE.Vector3) => a.angleTo(b);
+    expect(turn(east, fromEast.position)).toBeLessThanOrEqual(
+      turn(east, fromWest.position) + 1e-9
+    );
+    expect(turn(west, fromWest.position)).toBeLessThanOrEqual(
+      turn(west, fromEast.position) + 1e-9
+    );
+  });
+
+  it("is deterministic for the same pair from the same camera", () => {
+    const viewport = VIEWPORTS[5];
+    const from = new THREE.Vector3(0, 1, 20);
+    const request = {
+      attended: draw[1],
+      second: draw[7],
+      viewport,
+      from,
+      minDistance: MIN_ORBIT,
+      maxDistance: 26,
+    };
+    expect(pairFraming(request)!.position.toArray()).toEqual(
+      pairFraming(request)!.position.toArray()
+    );
+  });
+
+  it("declines rather than guessing for a degenerate pair", () => {
+    expect(
+      pairFraming({
+        attended: new THREE.Vector3(0, 0, 0),
+        second: draw[1],
+        viewport: VIEWPORTS[0],
+        from: new THREE.Vector3(0, 0, 11),
+      })
+    ).toBeNull();
+  });
+});
+
+/**
+ * A LOOK NEVER MOVES THE CAMERA.
+ *
+ * The bead under the lens changes the view — it is sharp, it has a card — but
+ * sighting reaches neither the camera nor the hand (the cue plan says so, and
+ * so does this). Only Attend, Lock and a reopened thread ask for a pose.
+ */
+describe("what the focus view asks of the camera", () => {
+  const profile = { reducedMotion: false, qualityTier: "base" as const };
+  const fib = toConceptId("measure.fibonacci-sequence");
+  const counterpoint = toConceptId("sound.counterpoint");
+  const prime = toConceptId("measure.prime-numbers");
+  type ViewInput = Parameters<typeof deriveFocusView>[0];
+  const view = (draft: ViewInput["draft"], extra: Partial<ViewInput> = {}) =>
+    deriveFocusView({
+      draft,
+      sightedConceptId: null,
+      dwellConceptId: null,
+      previewIntention: null,
+      reopened: null,
+      holding: false,
+      profile,
+      ...extra,
+    });
+
+  it("asks for rest while roaming, even with a bead dwelt on", () => {
+    const roaming = view({ stage: "inactive" }, { dwellConceptId: fib });
+    expect(focusPoseRequest(roaming)).toEqual({ kind: "rest" });
+    expect(focusPoseKey(focusPoseRequest(roaming))).toBe("rest");
+  });
+
+  it("asks for the attended posture, and the same one whatever is sighted", () => {
+    const attending = { stage: "attending", attendedConceptId: fib } as const;
+    const plain = focusPoseKey(focusPoseRequest(view(attending)));
+    const sighting = focusPoseKey(
+      focusPoseRequest(view(attending, { sightedConceptId: prime }))
+    );
+    expect(plain).toBe(`attend:${fib}`);
+    expect(sighting).toBe(plain);
+  });
+
+  it("asks for the pair on Lock and on a reopened thread", () => {
+    const pair: ConceptPair = [fib, counterpoint];
+    const locked = view({
+      stage: "locked",
+      attendedConceptId: fib,
+      candidateConceptId: counterpoint,
+      pair,
+    });
+    expect(focusPoseRequest(locked)).toEqual({
+      kind: "pair",
+      attended: String(fib),
+      second: String(counterpoint),
+    });
+    // Choosing a reading re-frames nothing: the pair is the same pair.
+    const reading = view({
+      stage: "reading",
+      attendedConceptId: fib,
+      candidateConceptId: counterpoint,
+      intention: "echo",
+      pair,
+    });
+    expect(focusPoseKey(focusPoseRequest(reading))).toBe(
+      focusPoseKey(focusPoseRequest(locked))
+    );
+    const held = view(
+      { stage: "inactive" },
+      { reopened: { threadId: toThreadId("thread-1"), pair } }
+    );
+    expect(focusPoseKey(focusPoseRequest(held))).toBe(`pair:${fib}:${counterpoint}`);
   });
 });

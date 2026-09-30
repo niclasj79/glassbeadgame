@@ -4,15 +4,17 @@ import { useFrame } from "@react-three/fiber";
 import { useStore as useVanillaStore } from "zustand";
 import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
+import type { RelationIntention } from "@/domain/events";
 import type { CommittedThreadV1, ThreadOutcomeV1 } from "@/domain/model";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { audio } from "@/audio/engine";
 import { presentationNow } from "@/runtime/testMode";
 import { frameState } from "./frameState";
-import { intentionArcMid } from "./curves";
+import { arcPoint, intentionArcMid } from "./curves";
 import { presentationProfile } from "./quality";
 import { createRibbonMaterial, rhythmOf, ribbonGeometry, threadInk } from "./ribbon";
 import { threadForm, unrestAmplitude } from "./threadGrammar";
+import { forgetThreadCurve, writeThreadCurve } from "./threadPicking";
 import { standingOf, threadStandings } from "./threadStanding";
 import {
   conclusionPerformanceStore,
@@ -49,27 +51,15 @@ const MAX_VOICE_LIGHTS = 2;
 const REBUILD_EASE_S = 0.35;
 const REBUILD_EASE_REDUCED_S = 0.08;
 
-/** Quadratic Bézier, the same curve the ribbon's vertex shader evaluates. */
-function arcPoint(
-  a: THREE.Vector3,
-  m: THREE.Vector3,
-  b: THREE.Vector3,
-  t: number,
-  out: THREE.Vector3
-): THREE.Vector3 {
-  const it = 1 - t;
-  out.set(
-    it * it * a.x + 2 * it * t * m.x + t * t * b.x,
-    it * it * a.y + 2 * it * t * m.y + t * t * b.y,
-    it * it * a.z + 2 * it * t * m.z + t * t * b.z
-  );
-  return out;
-}
-
 interface RibbonProps {
   readonly sourceId: string;
-  readonly targetId: string | null;
-  readonly intention: CommittedThreadV1["intention"];
+  readonly targetId: string;
+  /**
+   * The reading this strand is drawn in — or null for the unread strand: a
+   * sighting, or a locked pair nobody has read yet (I-016, I-017). A
+   * committed thread always has one.
+   */
+  readonly intention: RelationIntention | null;
   readonly opacity: number;
   /**
    * Whether this thread's figure has closed. A documented relation closes; an
@@ -135,7 +125,10 @@ function Ribbon({
     () => presentationProfile(tier, reducedMotion),
     [tier, reducedMotion]
   );
-  const form = useMemo(() => threadForm(intention), [intention]);
+  const form = useMemo(
+    () => (intention === null ? null : threadForm(intention)),
+    [intention]
+  );
   const geometry = useMemo(
     () => ribbonGeometry(profile.budget.threadSegments),
     [profile.budget.threadSegments]
@@ -146,7 +139,7 @@ function Ribbon({
       createRibbonMaterial({
         theme,
         form,
-        ink: threadInk(theme, sourceId, targetId ?? sourceId),
+        ink: threadInk(theme, sourceId, targetId),
         width: 0.022,
         opacity,
         reducedMotion: profile.reducedMotion,
@@ -169,7 +162,7 @@ function Ribbon({
    */
   const lights = useRef<(THREE.Sprite | null)[]>([]);
   const lightMaterials = useMemo(() => {
-    const ink = threadInk(theme, sourceId, targetId ?? sourceId);
+    const ink = threadInk(theme, sourceId, targetId);
     return Array.from({ length: MAX_VOICE_LIGHTS }, () =>
       new THREE.SpriteMaterial({
         map: getHaloTexture(),
@@ -194,9 +187,7 @@ function Ribbon({
     (material.uniforms.uResolved as { value: number }).value = resolved ? 1 : 0;
     (material.uniforms.uLit as { value: number }).value = lit ? 1 : 0;
     (material.uniforms.uRhythmA as { value: number }).value = rhythmOf(sourceId);
-    (material.uniforms.uRhythmB as { value: number }).value = rhythmOf(
-      targetId ?? sourceId
-    );
+    (material.uniforms.uRhythmB as { value: number }).value = rhythmOf(targetId);
     (material.uniforms.uGrow as { value: number }).value = animateGrowth ? 0 : 1;
   }, [material, resolved, lit, sourceId, targetId, animateGrowth]);
 
@@ -227,6 +218,16 @@ function Ribbon({
 
   const age = useRef(0);
 
+  /*
+   * A committed strand is pickable for as long as it is drawn (I-019): the
+   * frame loop below keeps its curve current in the picking registry, and it
+   * leaves the registry with the ribbon.
+   */
+  useEffect(() => {
+    if (threadId === undefined) return;
+    return () => forgetThreadCurve(threadId);
+  }, [threadId]);
+
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 20);
     age.current += dt;
@@ -245,28 +246,17 @@ function Ribbon({
       Math.min(1, dt / (reducedMotion ? REBUILD_EASE_REDUCED_S : REBUILD_EASE_S));
 
     const ia = frameState.beadIndex.get(sourceId);
-    if (ia === undefined) return;
+    const ib = frameState.beadIndex.get(targetId);
+    if (ia === undefined || ib === undefined) return;
     const rendered = frameState.rendered;
     vStart.set(rendered[ia * 3], rendered[ia * 3 + 1], rendered[ia * 3 + 2]);
-
-    if (targetId) {
-      const ib = frameState.beadIndex.get(targetId);
-      if (ib === undefined) return;
-      vEnd.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
-    } else if (frameState.snapId) {
-      const ib = frameState.beadIndex.get(frameState.snapId);
-      if (ib === undefined) return;
-      vEnd.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
-    } else if (frameState.aim.active) {
-      vEnd.set(frameState.aim.x, frameState.aim.y, frameState.aim.z);
-    } else {
-      return;
-    }
+    vEnd.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
 
     intentionArcMid(vStart, vEnd, intention, vMid);
     (uniforms.uA.value as THREE.Vector3).copy(vStart);
     (uniforms.uB.value as THREE.Vector3).copy(vEnd);
     (uniforms.uM.value as THREE.Vector3).copy(vMid);
+    if (threadId !== undefined) writeThreadCurve(threadId, vStart, vMid, vEnd);
 
     // A withheld strand is not a slow strand: it is not being drawn at all yet.
     if (animateGrowth && arrived) {
@@ -278,7 +268,7 @@ function Ribbon({
     // Tension keeps its instability as a permanent fact but stops shouting:
     // the amplitude decays to a floor within roughly twelve seconds (CAV-007).
     (uniforms.uUnrest as { value: number }).value =
-      form.beatHz > 0 ? unrestAmplitude(age.current) : 1;
+      form !== null && form.beatHz > 0 ? unrestAmplitude(age.current) : 1;
 
     // Ground settles once and stays seated.
     (uniforms.uSettle as { value: number }).value = Math.min(
@@ -308,7 +298,8 @@ function Ribbon({
     }
     const speaking = progress >= 0;
 
-    let travel = speaking ? voiceTravel(intention, progress) : null;
+    let travel =
+      speaking && intention !== null ? voiceTravel(intention, progress) : null;
     if (travel !== null && fromFarEnd) travel = mirrorTravel(travel);
     for (let i = 0; i < MAX_VOICE_LIGHTS; i++) {
       const sprite = lights.current[i];

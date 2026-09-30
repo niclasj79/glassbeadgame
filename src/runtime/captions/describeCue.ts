@@ -83,6 +83,26 @@ function nameOf(id: string, resolve: (id: string) => string): string {
   return name.length > 0 ? name : id;
 }
 
+/**
+ * Shared structure, said plainly — or its absence, said just as plainly. The
+ * facets are public; this never hints at whether anything is documented.
+ */
+function sharedPhrase(
+  facets: readonly string[],
+  withName: string,
+  context: CaptionContext
+): string {
+  if (facets.length === 0) {
+    return `Shares no facet Castalia knows with ${withName}.`;
+  }
+  const names = facets.map((facet) => context.facetName(String(facet)));
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Shares ${list} with ${withName}.`;
+}
+
 export interface CaptionContext {
   /** Player-facing concept name. Falls back to the id rather than to silence. */
   readonly conceptName: (id: string) => string;
@@ -119,17 +139,43 @@ export function describeCue(
     case "attention.clear":
       return { text: "Attention released.", urgency: "polite" };
 
-    case "intention.armed": {
-      const intention = cue.payload.intention;
+    case "attention.sighted": {
+      // The gap reopening is not news; a caption per sweep would be noise.
+      if (cue.payload.sighted === null) return null;
+      const from = nameOf(String(cue.payload.attendedConceptId), context.conceptName);
+      const to = nameOf(String(cue.payload.sighted.conceptId), context.conceptName);
       return {
-        text: `${INTENTION_NAME[intention]} armed — ${INTENTION_PHRASE[intention]}. Draw toward another bead.`,
+        text: `${to}. ${sharedPhrase(cue.payload.sighted.sharedFacets, from, context)}`,
         urgency: "polite",
       };
     }
 
-    case "candidate.latched": {
-      const to = nameOf(String(cue.payload.pair[1]), context.conceptName);
-      return { text: `${to} latched. Release to weave.`, urgency: "polite" };
+    case "pair.locked": {
+      const a = nameOf(String(cue.payload.pair[0]), context.conceptName);
+      const b = nameOf(String(cue.payload.pair[1]), context.conceptName);
+      return {
+        text: `${a} and ${b}, held together. Choose how you read them: Echo, Passage, Tension or Ground.`,
+        urgency: "polite",
+      };
+    }
+
+    case "reading.previewed": {
+      const intention = cue.payload.intention;
+      return {
+        text: cue.payload.chosen
+          ? `${INTENTION_NAME[intention]} — ${INTENTION_PHRASE[intention]}. Hold to weave.`
+          : `${INTENTION_NAME[intention]} — ${INTENTION_PHRASE[intention]}.`,
+        urgency: "polite",
+      };
+    }
+
+    case "thread.reopened": {
+      const a = nameOf(String(cue.payload.pair[0]), context.conceptName);
+      const b = nameOf(String(cue.payload.pair[1]), context.conceptName);
+      return {
+        text: `Reopened: ${a} and ${b}, read as ${INTENTION_NAME[cue.payload.intention]}.`,
+        urgency: "polite",
+      };
     }
 
     case "thread.woven": {

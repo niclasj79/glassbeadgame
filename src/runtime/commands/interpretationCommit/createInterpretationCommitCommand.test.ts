@@ -27,10 +27,10 @@ import {
   type DomainSessionStore,
 } from "../../../state/domainSession";
 import {
-  armDraftIntention,
   attendDraft,
+  chooseDraftReading,
   createInterpretationDraft,
-  selectDraftCandidate,
+  lockDraftCandidate,
 } from "../../interactionDraft";
 import {
   INTERPRETATION_COMMIT_COMMAND_ERROR_CODES,
@@ -89,10 +89,9 @@ function selectedDraft() {
     IDS.fibonacci,
     SESSION_CONCEPT_IDS
   );
-  return selectDraftCandidate(
-    armDraftIntention(attending, "echo"),
-    IDS.counterpoint,
-    SESSION_CONCEPT_IDS
+  return chooseDraftReading(
+    lockDraftCandidate(attending, IDS.counterpoint, SESSION_CONCEPT_IDS),
+    "echo"
   );
 }
 
@@ -258,7 +257,12 @@ describe("createInterpretationCommitCommand", () => {
   it.each([
     { stage: "inactive" },
     { stage: "attending", attendedConceptId: IDS.fibonacci },
-    { stage: "armed", attendedConceptId: IDS.fibonacci, intention: "echo" },
+    {
+      stage: "locked",
+      attendedConceptId: IDS.fibonacci,
+      candidateConceptId: IDS.counterpoint,
+      pair: [IDS.fibonacci, IDS.counterpoint],
+    },
     { stage: "weaving" },
     null,
   ])("rejects a non-candidate draft %# before reading the clock", (draft) => {
@@ -344,7 +348,7 @@ describe("createInterpretationCommitCommand", () => {
     const input = unsafeInput({
       ...createInput(),
       draft: Object.freeze({
-        stage: "candidate-selected",
+        stage: "reading",
         attendedConceptId: IDS.unknown,
         candidateConceptId: IDS.counterpoint,
         intention: "echo",
@@ -387,10 +391,13 @@ describe("createInterpretationCommitCommand", () => {
       FULL_SESSION_FIXTURE_IDS.primeNumbersId,
       sessionConceptIds
     );
-    const draft = selectDraftCandidate(
-      armDraftIntention(attending, "ground"),
-      FULL_SESSION_FIXTURE_IDS.counterpointId,
-      sessionConceptIds
+    const draft = chooseDraftReading(
+      lockDraftCandidate(
+        attending,
+        FULL_SESSION_FIXTURE_IDS.counterpointId,
+        sessionConceptIds
+      ),
+      "ground"
     );
     const input: CommitInterpretationInput = {
       draft,

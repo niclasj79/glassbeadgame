@@ -39,10 +39,10 @@ function advanceTo(
   store.getState().attend(IDS.fibonacci, SESSION_CONCEPT_IDS);
   if (stage === "attending") return;
 
-  store.getState().armIntention("echo");
-  if (stage === "armed") return;
+  store.getState().lockCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+  if (stage === "locked") return;
 
-  store.getState().selectCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+  store.getState().chooseReading("echo");
 }
 
 function expectStableActions(
@@ -50,13 +50,13 @@ function expectStableActions(
   after: ReturnType<InterpretationDraftStore["getState"]>
 ): void {
   expect(after.attend).toBe(before.attend);
-  expect(after.armIntention).toBe(before.armIntention);
-  expect(after.selectCandidate).toBe(before.selectCandidate);
+  expect(after.lockCandidate).toBe(before.lockCandidate);
+  expect(after.chooseReading).toBe(before.chooseReading);
   expect(after.cancel).toBe(before.cancel);
   expect(after.reset).toBe(before.reset);
 }
 
-describe("createInterpretationDraftStore", () => {
+describe("createInterpretationDraftStore — pair before reading", () => {
   it("creates isolated inactive stores with a narrow public API and stable actions", () => {
     const first = createInterpretationDraftStore();
     const second = createInterpretationDraftStore();
@@ -71,12 +71,12 @@ describe("createInterpretationDraftStore", () => {
     expect(second.getState().draft).toBe(INACTIVE_INTERPRETATION_DRAFT);
     expect(first.getInitialState()).toBe(initial);
     expect(Object.keys(initial).sort()).toEqual([
-      "armIntention",
       "attend",
       "cancel",
+      "chooseReading",
       "draft",
+      "lockCandidate",
       "reset",
-      "selectCandidate",
     ]);
 
     initial.attend(IDS.fibonacci, SESSION_CONCEPT_IDS);
@@ -86,23 +86,23 @@ describe("createInterpretationDraftStore", () => {
     expectStableActions(initial, first.getState());
   });
 
-  it("publishes the complete Attend, arm, and candidate sequence once per transition", () => {
+  it("publishes the complete Attend, lock, and reading sequence once per transition", () => {
     const store = createInterpretationDraftStore();
     const initial = store.getState();
     const published: InterpretationDraft[] = [];
     store.subscribe((state) => published.push(state.draft));
 
     store.getState().attend(IDS.fibonacci, SESSION_CONCEPT_IDS);
-    store.getState().armIntention("echo");
-    store.getState().selectCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+    store.getState().lockCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+    store.getState().chooseReading("echo");
 
     expect(published.map((draft) => draft.stage)).toEqual([
       "attending",
-      "armed",
-      "candidate-selected",
+      "locked",
+      "reading",
     ]);
     expect(store.getState().draft).toEqual({
-      stage: "candidate-selected",
+      stage: "reading",
       attendedConceptId: IDS.fibonacci,
       candidateConceptId: IDS.counterpoint,
       intention: "echo",
@@ -112,7 +112,7 @@ describe("createInterpretationDraftStore", () => {
     expectStableActions(initial, store.getState());
   });
 
-  it.each(["attending", "armed", "candidate-selected"] as const)(
+  it.each(["attending", "locked", "reading"] as const)(
     "re-Attend replaces a %s draft with one new attending draft",
     (stage) => {
       const store = createInterpretationDraftStore();
@@ -136,9 +136,9 @@ describe("createInterpretationDraftStore", () => {
     }
   );
 
-  it("re-arms explicitly with one new immutable draft", () => {
+  it("changes the reading explicitly with one new immutable draft", () => {
     const store = createInterpretationDraftStore();
-    advanceTo(store, "armed");
+    advanceTo(store, "reading");
     const before = store.getState();
     const priorDraft = before.draft;
     let notifications = 0;
@@ -146,26 +146,35 @@ describe("createInterpretationDraftStore", () => {
       notifications += 1;
     });
 
-    store.getState().armIntention("tension");
+    store.getState().chooseReading("tension");
 
     expect(notifications).toBe(1);
-    expect(store.getState().draft).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
+    expect(store.getState().draft).toMatchObject({
+      stage: "reading",
       intention: "tension",
     });
-    expect(priorDraft).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
-      intention: "echo",
-    });
+    expect(priorDraft).toMatchObject({ stage: "reading", intention: "echo" });
     expectDeeplyFrozen(store.getState().draft);
     expectStableActions(before, store.getState());
   });
 
+  it("replaces the second bead and drops the reading when re-locked", () => {
+    const store = createInterpretationDraftStore();
+    advanceTo(store, "reading");
+
+    store.getState().lockCandidate(IDS.primeNumbers, SESSION_CONCEPT_IDS);
+
+    expect(store.getState().draft).toEqual({
+      stage: "locked",
+      attendedConceptId: IDS.fibonacci,
+      candidateConceptId: IDS.primeNumbers,
+      pair: [IDS.fibonacci, IDS.primeNumbers],
+    });
+  });
+
   it("follows the complete cancellation hierarchy and makes inactive cancel a no-op", () => {
     const store = createInterpretationDraftStore();
-    advanceTo(store, "candidate-selected");
+    advanceTo(store, "reading");
     const published: InterpretationDraft[] = [];
     store.subscribe((state) => published.push(state.draft));
 
@@ -174,7 +183,7 @@ describe("createInterpretationDraftStore", () => {
     store.getState().cancel();
 
     expect(published.map((draft) => draft.stage)).toEqual([
-      "armed",
+      "locked",
       "attending",
       "inactive",
     ]);
@@ -187,7 +196,7 @@ describe("createInterpretationDraftStore", () => {
     expect(store.getState()).toBe(inactive);
   });
 
-  it.each(["attending", "armed", "candidate-selected"] as const)(
+  it.each(["attending", "locked", "reading"] as const)(
     "resets a %s draft once without changing prior values",
     (stage) => {
       const store = createInterpretationDraftStore();
@@ -239,31 +248,30 @@ describe("createInterpretationDraftStore", () => {
       code: "unknown-concept",
     },
     {
-      label: "unsupported intention",
-      prepare: (store: InterpretationDraftStore) => advanceTo(store, "attending"),
+      label: "unsupported reading",
+      prepare: (store: InterpretationDraftStore) => advanceTo(store, "locked"),
       act: (store: InterpretationDraftStore) =>
-        store.getState().armIntention("analogy" as RelationIntention),
+        store.getState().chooseReading("analogy" as RelationIntention),
       code: "unsupported-intention",
     },
     {
       label: "identical concepts",
-      prepare: (store: InterpretationDraftStore) => advanceTo(store, "armed"),
+      prepare: (store: InterpretationDraftStore) => advanceTo(store, "attending"),
       act: (store: InterpretationDraftStore) =>
-        store.getState().selectCandidate(IDS.fibonacci, SESSION_CONCEPT_IDS),
+        store.getState().lockCandidate(IDS.fibonacci, SESSION_CONCEPT_IDS),
       code: "identical-concepts",
     },
     {
       label: "unknown candidate",
-      prepare: (store: InterpretationDraftStore) => advanceTo(store, "armed"),
+      prepare: (store: InterpretationDraftStore) => advanceTo(store, "attending"),
       act: (store: InterpretationDraftStore) =>
-        store.getState().selectCandidate(IDS.unknown, SESSION_CONCEPT_IDS),
+        store.getState().lockCandidate(IDS.unknown, SESSION_CONCEPT_IDS),
       code: "unknown-concept",
     },
     {
-      label: "invalid transition order",
-      prepare: (_store: InterpretationDraftStore) => undefined,
-      act: (store: InterpretationDraftStore) =>
-        store.getState().armIntention("echo"),
+      label: "a reading before a lock",
+      prepare: (store: InterpretationDraftStore) => advanceTo(store, "attending"),
+      act: (store: InterpretationDraftStore) => store.getState().chooseReading("echo"),
       code: "invalid-transition-order",
     },
   ] as const)("propagates $label without publishing", ({ prepare, act, code }) => {
@@ -296,13 +304,13 @@ describe("createInterpretationDraftStore", () => {
     const snapshot = [...sessionConceptIds];
 
     store.getState().attend(IDS.fibonacci, sessionConceptIds);
-    store.getState().armIntention("ground");
-    store.getState().selectCandidate(IDS.counterpoint, sessionConceptIds);
+    store.getState().lockCandidate(IDS.counterpoint, sessionConceptIds);
+    store.getState().chooseReading("ground");
     sessionConceptIds.push(IDS.primeNumbers);
 
     expect(sessionConceptIds.slice(0, 2)).toEqual(snapshot);
     expect(store.getState().draft).toEqual({
-      stage: "candidate-selected",
+      stage: "reading",
       attendedConceptId: IDS.fibonacci,
       candidateConceptId: IDS.counterpoint,
       intention: "ground",
@@ -317,8 +325,8 @@ describe("createInterpretationDraftStore", () => {
     const run = (): InterpretationDraft => {
       const store = createInterpretationDraftStore();
       store.getState().attend(IDS.fibonacci, SESSION_CONCEPT_IDS);
-      store.getState().armIntention("passage");
-      store.getState().selectCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+      store.getState().lockCandidate(IDS.counterpoint, SESSION_CONCEPT_IDS);
+      store.getState().chooseReading("passage");
       return store.getState().draft;
     };
 

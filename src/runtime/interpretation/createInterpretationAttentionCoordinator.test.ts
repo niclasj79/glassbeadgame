@@ -128,9 +128,9 @@ function advanceDraft(
   const conceptIds = START_EVENT.payload.conceptIds;
   store.getState().attend(IDS.fibonacci, conceptIds);
   if (stage === "attending") return;
-  store.getState().armIntention("echo");
-  if (stage === "armed") return;
-  store.getState().selectCandidate(IDS.counterpoint, conceptIds);
+  store.getState().lockCandidate(IDS.counterpoint, conceptIds);
+  if (stage === "locked") return;
+  store.getState().chooseReading("echo");
 }
 
 function expectDeeplyFrozen(value: unknown): void {
@@ -226,7 +226,7 @@ describe("createInterpretationAttentionCoordinator", () => {
     expectDeeplyFrozen(draftBefore.draft);
   });
 
-  it.each(["attending", "armed", "candidate-selected"] as const)(
+  it.each(["attending", "locked", "reading"] as const)(
     "re-Attends from %s by discarding only provisional draft state",
     (stage) => {
       const { attend, domainStore, draftStore } = createHarness();

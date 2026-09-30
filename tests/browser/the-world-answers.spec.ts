@@ -26,6 +26,13 @@ import type { TestSessionSnapshot } from "../../src/runtime/testMode";
  * This suite runs against the deterministic adapter but *without* reduced
  * motion, because the camera phrase and the world's own answer are exactly what
  * is under test.
+ *
+ * B2 AFTER THE FOCUS VIEW (I-016, I-017). The plate is now demanded by the
+ * press that locks a pair, not by the one that attends a bead, and it opens on
+ * the thread between them once the hand has let go and the pose has arrived.
+ * Under reduced motion the pose is instant, so the law "at once" is measured
+ * there, in frames; with motion the camera first turns to frame the pair, and
+ * the law that remains is that the plate opens where it will stay.
  */
 
 const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
@@ -35,8 +42,13 @@ interface Point {
   readonly y: number;
 }
 
-async function openSession(page: Page): Promise<TestSessionSnapshot> {
-  await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato");
+async function openSession(
+  page: Page,
+  reducedMotion = false
+): Promise<TestSessionSnapshot> {
+  await page.goto(
+    `/?testMode=1&seed=castalia-golden-001&quality=potato${reducedMotion ? "&reducedMotion=1" : ""}`
+  );
   await page.waitForFunction(() => Boolean(window.__gbgTest));
   const initial = await page.evaluate(
     (picks) => window.__gbgTest!.startSession(picks),
@@ -153,54 +165,59 @@ test("the pointer says a bead is a thing you may touch", async ({ page }) => {
   await expect.poll(cursor).toBe("(none)");
 });
 
-test("the press raises the intention ring, at once and where it will stay", async ({
+/**
+ * Frames between the release that locks a pair and the plate's first drawn
+ * frame when the pose is instant: the sightline's hold after a release
+ * (`POSE_HOLD_FRAMES`, 8), the two settled frames the plate waits for, and the
+ * frame the anchored overlay takes to reveal itself — with one to spare.
+ * Measured at 11 on the software renderer. At sixty frames a second that is a
+ * fifth of a second, which is the law B2 set.
+ */
+const LOCK_TO_PLATE_FRAMES = 12;
+
+test("the lock raises the four readings at once, and where they will stay", async ({
   page,
 }) => {
-  const initial = await openSession(page);
-  const at = await beadPoint(page, initial.beadIds[0]);
-  await page.mouse.move(at.x, at.y, { steps: 3 });
+  const initial = await openSession(page, true);
+  const [firstId, secondId] = initial.beadIds;
+  const first = await beadPoint(page, firstId);
+  await page.mouse.click(first.x, first.y);
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(() => window.__gbgTest!.snapshot())).draftStage
+    )
+    .toBe("attending");
+  const second = await beadPoint(page, secondId);
+  await page.mouse.move(second.x, second.y, { steps: 3 });
 
   // Sampled inside the page on every animation frame, from before the press:
   // asking across the wire would measure the plate long after it opened, which
   // is precisely the window the defect lived in.
   await page.evaluate(() => {
     const probe = {
-      down: 0,
-      downFrame: 0,
+      up: 0,
+      upFrame: 0,
       frame: 0,
-      /** How long a frame of the world takes on this machine, in ms. */
-      interval: [] as number[],
-      samples: [] as {
-        t: number;
-        frame: number;
-        x: number;
-        y: number;
-        w: number;
-        h: number;
-      }[],
+      samples: [] as { frame: number; x: number; y: number; w: number; h: number }[],
     };
     (window as unknown as { __ring: typeof probe }).__ring = probe;
     window.addEventListener(
-      "pointerdown",
+      "pointerup",
       () => {
-        probe.down = performance.now();
-        probe.downFrame = probe.frame;
+        probe.up = performance.now();
+        probe.upFrame = probe.frame;
       },
       { capture: true, once: true }
     );
     const started = performance.now();
-    let previous = started;
     const tick = () => {
-      const now = performance.now();
       probe.frame += 1;
-      probe.interval.push(now - previous);
-      previous = now;
       const rect = document
         .querySelector('[data-testid="intention-constellation"]')
         ?.getBoundingClientRect();
       if (rect && rect.width > 0) {
         probe.samples.push({
-          t: now,
           frame: probe.frame,
           x: rect.x + rect.width / 2,
           y: rect.y + rect.height / 2,
@@ -208,7 +225,7 @@ test("the press raises the intention ring, at once and where it will stay", asyn
           h: rect.height,
         });
       }
-      if (now - started < 6_000) requestAnimationFrame(tick);
+      if (performance.now() - started < 15_000) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });
@@ -220,49 +237,30 @@ test("the press raises the intention ring, at once and where it will stay", asyn
       async () =>
         (await page.evaluate(() => window.__gbgTest!.snapshot())).draftStage
     )
-    .toBe("attending");
-  await page.waitForTimeout(3_500);
+    .toBe("locked");
+  await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 20_000 });
+  await page.waitForTimeout(2_500);
 
   const ring = await page.evaluate(
     () =>
       (
         window as unknown as {
           __ring: {
-            down: number;
-            downFrame: number;
-            interval: number[];
-            samples: {
-              t: number;
-              frame: number;
-              x: number;
-              y: number;
-              w: number;
-              h: number;
-            }[];
+            upFrame: number;
+            samples: { frame: number; x: number; y: number; w: number; h: number }[];
           };
         }
       ).__ring
   );
   expect(ring.samples.length).toBeGreaterThan(3);
 
-  /**
-   * THE ASSERTION THE BLOCKER ASKED FOR: the stations are on screen within a
-   * fifth of a second of the press that demands them — measured on the real
-   * thing at 115 ms, against about 3.5 s before the fix.
-   *
-   * The bound is stated in frames as well, because CI renders this scene in
-   * software at a few frames a second and a promise about milliseconds is a
-   * promise about the GPU. Both numbers are the same law: the plate opens in
-   * the pose the press was made in, which is the very next frame or two.
-   */
-  const median = [...ring.interval].sort((a, b) => a - b)[
-    Math.floor(ring.interval.length / 2)
-  ];
-  expect(ring.samples[0].frame - ring.downFrame).toBeLessThanOrEqual(6);
-  expect(ring.samples[0].t - ring.down).toBeLessThan(Math.max(200, median * 6));
+  // At once: counted in frames, because CI renders this scene in software at a
+  // few frames a second and a promise about milliseconds is a promise about
+  // the GPU.
+  expect(ring.samples[0].frame - ring.upFrame).toBeLessThanOrEqual(LOCK_TO_PLATE_FRAMES);
 
-  // …and they are still where they opened, so the plate is aimable the whole
-  // time (GAP-12: it used to travel 294 px over three and a half seconds).
+  // …and still where it opened, so the plate is aimable the whole time
+  // (GAP-12: it used to travel 294 px over three and a half seconds).
   const opened = ring.samples[0];
   const rested = ring.samples[ring.samples.length - 1];
   expect(Math.hypot(rested.x - opened.x, rested.y - opened.y)).toBeLessThan(8);
@@ -329,7 +327,27 @@ test("the plate stays reachable on a phone, where the page cannot hold it", asyn
             .draftAttendedConceptId
       )
       .toBe(edge.id);
-    await expect(page.getByTestId("intention-echo")).toBeVisible();
+
+    // Hold it with its nearest neighbour, wherever the Attend pose has put
+    // them: the plate sits on the thread between the pair.
+    const turned = await onScreen(page);
+    const from = turned.find((bead) => bead.id === edge.id)!;
+    const neighbour = turned
+      .filter((bead) => bead.id !== edge.id)
+      .reduce((best, bead) =>
+        Math.hypot(bead.x - from.x, bead.y - from.y) <
+        Math.hypot(best.x - from.x, best.y - from.y)
+          ? bead
+          : best
+      );
+    await page.touchscreen.tap(neighbour.x, neighbour.y);
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.__gbgTest!.snapshot())).draftStage
+      )
+      .toBe("locked");
+    await expect(page.getByTestId("intention-echo")).toBeVisible({ timeout: 30_000 });
 
     const stations = await page.evaluate(() =>
       ["echo", "passage", "tension", "ground"].map((intention) => {

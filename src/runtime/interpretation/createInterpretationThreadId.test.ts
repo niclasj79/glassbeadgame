@@ -24,10 +24,10 @@ import {
 import { createDomainSessionStore } from "../../state/domainSession";
 import { createInterpretationCommitCommand } from "../commands/interpretationCommit";
 import {
-  armDraftIntention,
   attendDraft,
+  chooseDraftReading,
   createInterpretationDraft,
-  selectDraftCandidate,
+  lockDraftCandidate,
 } from "../interactionDraft";
 import * as interpretation from ".";
 import { createInterpretationThreadId } from ".";
@@ -236,12 +236,12 @@ describe("createInterpretationThreadId", () => {
       IDS.firstConcept,
       initialSession.conceptIds
     );
-    const armed = armDraftIntention(attending, "echo");
-    const draft = selectDraftCandidate(
-      armed,
+    const locked = lockDraftCandidate(
+      attending,
       IDS.secondConcept,
       initialSession.conceptIds
     );
+    const draft = chooseDraftReading(locked, "echo");
     const commit = createInterpretationCommitCommand({
       domainStore,
       now: () => 100,

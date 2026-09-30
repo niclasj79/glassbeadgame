@@ -348,34 +348,35 @@ describe("the label placement solver", () => {
    * its own: the attended name is the dial's caption, so it takes the dial's
    * radius *and* says so.
    */
-  it("hands the solver the bead's own radius as well as the reserved one", () => {
+  it("hands the solver each bead's own glass, the attended bead's included", () => {
+    // The attended bead used to reserve the intention dial drawn round it, for
+    // its own name and for every neighbour's. Under the focus view the sigils
+    // bloom on the preview thread between the locked pair (I-016), so nothing
+    // is drawn round the attended bead but its glass: its name hangs off that
+    // glass like any other — larger and grounded (below) — and no neighbour is
+    // held a dial's width away from a dial that is not there.
     const source = beadsSource();
     expect(source).toContain("ownRadius: focal.ownRadius");
-    // A bead that draws nothing but its own glass is not further from its own
-    // name for it — that half of the separation is exactly as it was.
+    expect(source).toMatch(/focal\.ownRadius\[i\] = focal\.glassRadius\[i\] \+ 0\.02;/);
     expect(source).toMatch(
-      /focal\.ownRadius\[i\] = attended[\s\S]{0,80}focal\.glassRadius\[i\] \+ 0\.02/
+      /focal\.beadRadius\[i\] = focal\.glassRadius\[i\] \+ 0\.06 \/ halfAtBead;/
     );
-    // …and the attended bead takes the plate for both questions, because the
-    // dial is drawn over the canvas and a name hung off the glass is a name
-    // underneath the instrument.
-    expect(source).toMatch(/focal\.ownRadius\[i\] = attended\s*\?\s*plateRadius/);
-    expect(source).toContain("anchored: focal.anchored");
-    expect(source).toMatch(/focal\.anchored\[i\] = attended \? 1 : 0/);
-
-    // And the reservation is the circle that contains the *whole* plate, asked
-    // of the plate's own geometry. Reserving the vertical drop alone put the
-    // name out to the side, where the plate is 33 px wider because a verb's
-    // engraved caption stands there: on the running build "Fibonacci Sequence"
-    // was struck straight through the word PASSAGE.
-    expect(source).toContain("plateGeometry(three.size.width");
-    expect(source).toMatch(
-      /Math\.max\(\s*geometry\.extentUp,\s*geometry\.extentDown,\s*geometry\.extentSide\s*\)/
-    );
-    // Solved from the geometry, never a second copy of the number.
+    expect(source).not.toContain("plateGeometry(");
+    expect(source).not.toContain("anchored: focal.anchored");
+    // …and the old second copy of the dial's drop never comes back.
     expect(source).not.toContain("ATTENDED_LABEL_DROP_PX");
-    // …and not re-solved per bead per frame: the frame loop allocates nothing.
-    expect(source).toMatch(/plate\.current\.width !== three\.size\.width/);
+  });
+
+  it("tells the fog where every drawn name is, so a sharp bead's caption comes sharp", () => {
+    // The fog softens the world; a softened caption is not a caption. The
+    // arena hands the fog the box the solver placed — and nothing for a name
+    // that was suppressed or has faded out.
+    const source = beadsSource();
+    expect(source).toMatch(
+      /const shown = focal\.code\[i\] !== SUPPRESSED && labelOpacity\.current\[i\] > 0\.05;/
+    );
+    expect(source).toContain("focusFrame.names[index * 4] = shown ? focal.offset[i * 2] : 0;");
+    expect(source).toContain("focusFrame.names[index * 4 + 2] = shown ? focal.half[i * 2] : 0;");
   });
 
   it("hangs the attended name on the dial's rim instead of under it", () => {

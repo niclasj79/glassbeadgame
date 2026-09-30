@@ -2,11 +2,11 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { RelationIntention } from "../../domain/events";
 import type { ConceptId } from "../../domain/ids";
 import {
-  armDraftIntention,
   attendDraft,
   cancelDraft,
+  chooseDraftReading,
   createInterpretationDraft,
-  selectDraftCandidate,
+  lockDraftCandidate,
   type InterpretationDraft,
 } from "../../runtime/interactionDraft";
 
@@ -16,11 +16,13 @@ export interface InterpretationDraftAdapterState {
     conceptId: ConceptId,
     sessionConceptIds: readonly ConceptId[]
   ) => void;
-  readonly armIntention: (intention: RelationIntention) => void;
-  readonly selectCandidate: (
+  /** Fix — or replace — the second bead (I-016). */
+  readonly lockCandidate: (
     conceptId: ConceptId,
     sessionConceptIds: readonly ConceptId[]
   ) => void;
+  /** Choose — or change — the reading of the locked pair. */
+  readonly chooseReading: (intention: RelationIntention) => void;
   readonly cancel: () => void;
   readonly reset: () => void;
 }
@@ -44,14 +46,12 @@ export function createInterpretationDraftStore(): InterpretationDraftStore {
         publish(attendDraft(get().draft, conceptId, sessionConceptIds));
       },
 
-      armIntention: (intention) => {
-        publish(armDraftIntention(get().draft, intention));
+      lockCandidate: (conceptId, sessionConceptIds) => {
+        publish(lockDraftCandidate(get().draft, conceptId, sessionConceptIds));
       },
 
-      selectCandidate: (conceptId, sessionConceptIds) => {
-        publish(
-          selectDraftCandidate(get().draft, conceptId, sessionConceptIds)
-        );
+      chooseReading: (intention) => {
+        publish(chooseDraftReading(get().draft, intention));
       },
 
       cancel: () => {

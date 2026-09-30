@@ -45,7 +45,22 @@ export interface TestSessionSnapshot {
     band: "weak" | "medium" | "high";
   }>;
   weaving: boolean;
-  snappedConceptId: string | null;
+  /** The bead settled under the lens while attending (I-017). */
+  sightedConceptId: string | null;
+  previewIntention: string | null;
+  reopenedThreadId: string | null;
+  /** The focus view as every surface derives it (deriveFocusView). */
+  focus: {
+    mode: "roaming" | "focus" | "locked" | "held";
+    fogActive: boolean;
+    blurActive: boolean;
+    lensActive: boolean;
+    sigilsVisible: boolean;
+    attendedCardOpen: boolean;
+    gapOpen: boolean;
+    sightedCardOpen: boolean;
+    dwellCardConceptId: string | null;
+  };
   message: string;
   failureMessage: string | null;
   now: number;
@@ -81,7 +96,25 @@ export interface BrowserTestAdapter {
   startSession(picks: DisciplineId[]): TestSessionSnapshot;
   snapshot(): TestSessionSnapshot;
   advanceClock(milliseconds: number): number;
-  beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
+  /**
+   * A bead's centre on the page. While the camera is moving, or has a move
+   * waiting, it answers "behind" so nothing acts on a point about to change —
+   * unless `evenIfUnsettled` asks what is drawn right now, to measure whether
+   * the world is holding still.
+   */
+  beadScreen(
+    id: string,
+    options?: { readonly evenIfUnsettled?: boolean }
+  ): { x: number; y: number; behind: boolean } | null;
+  /**
+   * A point along a committed thread's drawn strand (`at` from 0 at its first
+   * bead to 1 at its second; the middle by default), in page pixels, or null
+   * when no strand with that id is drawn (I-019: the world can be pointed at).
+   */
+  threadScreen(
+    threadId: string,
+    at?: number
+  ): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
   canonicalEventLog(): string;
   reloadCanonical(): TestSessionSnapshot;

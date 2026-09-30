@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vitest";
 import { castaliaConceptById } from "@/content/castalia";
 import { BeadPlate } from "../arena/BeadInspectCard";
-import { MarginSurface } from "../arena/Marginalia";
+import { ColumnSurface, type ColumnSurfaceProps } from "../arena/FocusColumn";
+import { planColumn, type ColumnPlan } from "../arena/columnPlan";
 import {
   EMPTY_MARGIN,
   receive,
@@ -13,8 +14,15 @@ import {
   documentedCue,
   relationFixture,
 } from "../arena/testing/cueFixtures";
+import {
+  COUNTERPOINT,
+  FIBONACCI,
+  focusView,
+  roamingView,
+} from "../arena/testing/focusFixtures";
 import { installMotionDomStubs } from "../testing/domStubs";
 import { inspectedConcept } from "./inspection";
+import { READING_PLATE } from "./ReadingColumn";
 
 /**
  * THE RESERVED COLUMN, AND WHO IS ALLOWED IN IT.
@@ -33,11 +41,42 @@ import { inspectedConcept } from "./inspection";
  * rather than as an asymmetry that was chosen (measured ink per vertical third:
  * 43/49/7).
  *
- * Both are asserted against the real components' markup, because both defects
- * were invisible to every test of the note *model*.
+ * I-018. The focus view writes more than one plate into the column at once, so
+ * the surfaces no longer take turns drawing columns of their own: there is one
+ * page, and every plate on it obeys the same law.
+ *
+ * All are asserted against the real components' markup, because every one of
+ * these defects was invisible to a test of the note *model*.
  */
 
 const CONCEPT = castaliaConceptById.get("measure.fibonacci-sequence")!;
+const noop = (): void => undefined;
+
+const column = (
+  plan: ColumnPlan,
+  margin: MarginState = EMPTY_MARGIN
+): string =>
+  renderToStaticMarkup(
+    createElement(ColumnSurface, {
+      plan,
+      margin,
+      hintShown: false,
+      lensActive: false,
+      reducedMotion: true,
+      onCloseInspection: noop,
+      onStepBack: noop,
+      onSetAside: noop,
+      onReopen: noop,
+      onToggleIndex: noop,
+      onReadMore: noop,
+      onReadLess: noop,
+    } satisfies ColumnSurfaceProps)
+  );
+
+const plan = (
+  view: Parameters<typeof planColumn>[0]["view"],
+  pinnedInspectId: string | null = null
+): ColumnPlan => planColumn({ view, pinnedInspectId, lensActive: false });
 
 const bead = (): string =>
   renderToStaticMarkup(
@@ -46,17 +85,6 @@ const bead = (): string =>
       lensActive: false,
       onClose: () => undefined,
       reducedMotion: true,
-    })
-  );
-
-const margin = (state: MarginState): string =>
-  renderToStaticMarkup(
-    createElement(MarginSurface, {
-      state,
-      reducedMotion: true,
-      onSetAside: () => undefined,
-      onReopen: () => undefined,
-      onToggleIndex: () => undefined,
     })
   );
 
@@ -83,15 +111,22 @@ describe("the reading column", () => {
   beforeAll(installMotionDomStubs);
 
   it("docks the bead card in the same column as the margin (IMP-5)", () => {
-    // The container: same edge, same reserve, same pointer law. Not a panel
+    // The container: the one column, whoever is written in it. Not a panel
     // floating over the instrument at the opposite corner.
-    expect(classesOf(bead(), "bead-inspect")).toBe(
-      classesOf(margin(documented()), "marginalia")
-    );
-    // The plate: same measure, same ceiling, same scroll behaviour.
-    expect(classesOf(bead(), "bead-plate")).toBe(
-      classesOf(margin(documented()), "margin-plate")
-    );
+    const pinned = column(plan(roamingView(), String(FIBONACCI)));
+    const reading = column(plan(roamingView()), documented());
+    expect(pinned).toContain('data-testid="bead-inspect"');
+    expect(reading).toContain('data-testid="marginalia"');
+    expect(classesOf(pinned, "focus-column")).toBe(classesOf(reading, "focus-column"));
+    // The plate: same measure, same pointer law, same scroll.
+    expect(classesOf(pinned, "bead-plate")).toBe(classesOf(reading, "margin-plate"));
+    expect(classesOf(bead(), "bead-plate")).toBe(READING_PLATE);
+  });
+
+  it("sets every card of the focus view on the same plate (I-018)", () => {
+    const html = column(plan(focusView(FIBONACCI, COUNTERPOINT)));
+    expect(classesOf(html, "focus-card-top")).toBe(READING_PLATE);
+    expect(classesOf(html, "focus-card-second")).toBe(READING_PLATE);
   });
 
   it("sets the bead in the same type and rule system as a reading (IMP-5)", () => {
@@ -110,21 +145,39 @@ describe("the reading column", () => {
     expect(html).not.toContain("left-5");
   });
 
-  it("hands the column to exactly one surface at a time (IMP-5)", () => {
-    // Both the card and the margin ask this. Two plates in one column is one
-    // plate over another; no plate at all is a column that blinks out.
+  it("hands the column to a pinned card alone, and never to a bead it cannot name (IMP-5)", () => {
     expect(inspectedConcept(null)).toBeNull();
-    expect(inspectedConcept("measure.fibonacci-sequence")?.id).toBe(
-      CONCEPT.id
-    );
+    expect(inspectedConcept("measure.fibonacci-sequence")?.id).toBe(CONCEPT.id);
     // A pinned id the pack cannot resolve is not an inspection: the card would
     // draw nothing, so the margin must not stand down for it.
     expect(inspectedConcept("no-such-bead")).toBeNull();
+    const unresolved = column(plan(roamingView(), "no-such-bead"), documented());
+    expect(unresolved).toContain('data-testid="margin-plate"');
+    // A pinned card the pack can name holds the column; the margin waits.
+    const pinned = column(plan(roamingView(), String(FIBONACCI)), documented());
+    expect(pinned).toContain('data-testid="bead-plate"');
+    expect(pinned).not.toContain('data-testid="margin-plate"');
+  });
+
+  it("writes from the head of a wide page, and scrolls rather than running off it", () => {
+    const html = column(plan(focusView(FIBONACCI, COUNTERPOINT)));
+    const root = classesOf(html, "focus-column").split(/\s+/);
+    // A card set at the top stays where it was set while more is written.
+    expect(root).toContain("md:items-start");
+    expect(root).not.toContain("md:items-center");
+    // Still the reserved column on a wide page and the foot of a narrow one.
+    expect(root).toContain("bottom-0");
+    expect(root).toContain("md:right-0");
+    expect(root).toContain("md:w-[min(27rem,32vw)]");
+    // Never more than half a phone; one scroll for everything written.
+    expect(html).toContain("max-h-[50vh]");
+    expect(html).toContain("md:max-h-full");
+    expect(html).toMatch(/class="pointer-events-none flex min-h-0[^"]*overflow-y-auto/);
   });
 
   it("gives the column standing before it has anything to say (IMP-4)", () => {
     // The margin at rest: no reading, no re-open control, nothing written.
-    const html = margin(EMPTY_MARGIN);
+    const html = column(plan(roamingView()));
     expect(html).not.toContain('data-testid="margin-plate"');
     expect(html).not.toContain('data-testid="margin-reopen"');
 
@@ -150,7 +203,11 @@ describe("the reading column", () => {
     // The standing is not just the ground turned up: the ground stays down
     // until something is written, which is the whole distinction.
     expect(html).toMatch(/backdrop-blur-\[2px\][^"]*opacity-0/);
-    expect(margin(documented())).toMatch(
+    expect(column(plan(roamingView()), documented())).toMatch(
+      /backdrop-blur-\[2px\][^"]*opacity-100/
+    );
+    // A bead card is writing too.
+    expect(column(plan(focusView(FIBONACCI)))).toMatch(
       /backdrop-blur-\[2px\][^"]*opacity-100/
     );
   });

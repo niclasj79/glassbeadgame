@@ -33,6 +33,14 @@ export interface SceneBudget {
   readonly marginRule: boolean;
   /** Vellum grain amplitude across the frame, 0 = none. */
   readonly grain: number;
+  /**
+   * Taps the focus fog's softening takes from the frame (I-017). 0 is the
+   * dim-only fog: the pass is compiled without a single blur tap, so the
+   * engraved tier never pays for a softening it does not draw. The fog itself
+   * — the dim, the clear discs round the attended bead and the lens — is on
+   * every tier, because it is the channel that says what is attended.
+   */
+  readonly fogBlurTaps: number;
 }
 
 const HIGH: SceneBudget = Object.freeze({
@@ -46,6 +54,7 @@ const HIGH: SceneBudget = Object.freeze({
   graduations: 72,
   marginRule: true,
   grain: 0.035,
+  fogBlurTaps: 13,
 });
 
 const BASE: SceneBudget = Object.freeze({
@@ -59,6 +68,7 @@ const BASE: SceneBudget = Object.freeze({
   graduations: 36,
   marginRule: true,
   grain: 0.022,
+  fogBlurTaps: 9,
 });
 
 /**
@@ -77,6 +87,7 @@ const POTATO: SceneBudget = Object.freeze({
   graduations: 24,
   marginRule: true,
   grain: 0,
+  fogBlurTaps: 0,
 });
 
 const BUDGETS: Readonly<Record<QualityTier, SceneBudget>> = Object.freeze({
@@ -118,4 +129,12 @@ export function presentationProfile(
 
 export function sceneBudget(tier: QualityTier): SceneBudget {
   return BUDGETS[tier];
+}
+
+/**
+ * Whether this tier may soften the focus fog at all. The engraved tier's fog
+ * is dim-only (I-017): the plate does not transmit, and it does not blur.
+ */
+export function fogBlurAllowed(tier: QualityTier): boolean {
+  return BUDGETS[tier].fogBlurTaps > 0;
 }

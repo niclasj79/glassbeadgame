@@ -5,7 +5,7 @@ import { Html } from "@react-three/drei";
 import { useStore as useVanillaStore } from "zustand";
 import {
   threadingEnv,
-  advanceRecoil,
+  advancePointerFrame,
   handlePointerMove,
   handlePointerUp,
   handlePointerCancel,
@@ -13,6 +13,8 @@ import {
   handleWindowBlur,
 } from "./threading";
 import { emitBurst, frameState, frameStateStage } from "./frameState";
+import { arcPoint } from "./curves";
+import { threadCurves } from "./threadPicking";
 import { attunementInvitation } from "@/audio/sfx";
 import {
   attachWorldDirectors,
@@ -29,7 +31,11 @@ import {
   serializeSessionEventLogV1,
 } from "@/domain/replay";
 import { interpretationDraftStore } from "@/state/interactionDraft";
-import { interpretationPresentationStore } from "@/state/interpretationPresentation";
+import {
+  focusPresentationStore,
+  interpretationPresentationStore,
+  readFocusView,
+} from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
 import type { DisciplineId } from "@/content/types";
 import { cueBus } from "@/runtime/cues";
@@ -62,6 +68,8 @@ function testSnapshot(): TestSessionSnapshot {
   }
   const draft = interpretationDraftStore.getState().draft;
   const presentation = interpretationPresentationStore.getState();
+  const focus = focusPresentationStore.getState();
+  const view = readFocusView();
   return {
     phase: state.phase,
     seed: session.seed,
@@ -85,12 +93,9 @@ function testSnapshot(): TestSessionSnapshot {
     draftStage: draft.stage,
     draftAttendedConceptId:
       draft.stage === "inactive" ? null : String(draft.attendedConceptId),
-    draftIntention:
-      draft.stage === "armed" || draft.stage === "candidate-selected"
-        ? draft.intention
-        : null,
+    draftIntention: draft.stage === "reading" ? draft.intention : null,
     draftCandidateConceptId:
-      draft.stage === "candidate-selected"
+      draft.stage === "locked" || draft.stage === "reading"
         ? String(draft.candidateConceptId)
         : null,
     candidateResonance: presentation.candidateResonance.map((candidate) => ({
@@ -98,7 +103,25 @@ function testSnapshot(): TestSessionSnapshot {
       band: candidate.band,
     })),
     weaving: presentation.weaving,
-    snappedConceptId: frameState.snapId,
+    sightedConceptId: focus.sightedConceptId === null ? null : String(focus.sightedConceptId),
+    previewIntention: focus.previewIntention,
+    reopenedThreadId: focus.reopened === null ? null : String(focus.reopened.threadId),
+    focus: {
+      mode: view.mode,
+      fogActive: view.fog.active,
+      blurActive: view.fog.blur,
+      lensActive: view.lensActive,
+      sigilsVisible: view.sigilsVisible,
+      attendedCardOpen:
+        view.column.top.kind === "bead" && view.column.top.role !== "dwell",
+      gapOpen: view.column.second.kind === "gap",
+      sightedCardOpen:
+        view.column.second.kind === "bead" && view.column.second.role === "sighted",
+      dwellCardConceptId:
+        view.column.top.kind === "bead" && view.column.top.role === "dwell"
+          ? String(view.column.top.conceptId)
+          : null,
+    },
     message: presentation.message,
     failureMessage: presentation.failureMessage,
     now: gameNow(),
@@ -270,39 +293,57 @@ export function ThreadingDriver() {
     if (!testMode.enabled) return;
     const v = new THREE.Vector3();
     const view = new THREE.Vector3();
+    /**
+     * A world point on the page, or "behind" while it cannot be trusted. A
+     * camera mid-transit, or a layout the scene has not drawn yet, would
+     * report a point that is already wrong by the time anyone acts on it —
+     * and on a slow software renderer "not yet" can be a second.
+     */
+    const screenOf = (
+      point: THREE.Vector3,
+      evenIfUnsettled = false
+    ): { x: number; y: number; behind: boolean } => {
+      if (
+        frameState.framesSinceLayout < 3 ||
+        (!frameState.cameraSettled && !evenIfUnsettled)
+      ) {
+        return { x: 0, y: 0, behind: true };
+      }
+      view.copy(point).applyMatrix4(camera.matrixWorldInverse);
+      point.project(camera);
+      const rect = gl.domElement.getBoundingClientRect();
+      return {
+        x: rect.left + ((point.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - point.y) / 2) * rect.height,
+        behind:
+          view.z >= 0 ||
+          point.z < -1 ||
+          point.z > 1 ||
+          Math.abs(point.x) > 1 ||
+          Math.abs(point.y) > 1,
+      };
+    };
     window.__gbgTest = {
       seedText: testMode.seedText!,
       seed: testMode.seed!,
       startSession: startTestSession,
       snapshot: testSnapshot,
       advanceClock: advanceTestClock,
-      beadScreen: (id: string) => {
+      beadScreen: (id: string, options?: { readonly evenIfUnsettled?: boolean }) => {
         const i = frameState.beadIndex.get(id);
         if (i === undefined) return null;
-        // A camera mid-transit, or a layout the scene has not drawn yet,
-        // would report a point that is already wrong by the time anyone acts
-        // on it — and on a slow software renderer "not yet" can be a second.
-        if (!frameState.cameraSettled || frameState.framesSinceLayout < 3) {
-          return { x: 0, y: 0, behind: true };
-        }
         v.set(
           frameState.rendered[i * 3],
           frameState.rendered[i * 3 + 1],
           frameState.rendered[i * 3 + 2]
         );
-        view.copy(v).applyMatrix4(camera.matrixWorldInverse);
-        v.project(camera);
-        const rect = gl.domElement.getBoundingClientRect();
-        return {
-          x: rect.left + ((v.x + 1) / 2) * rect.width,
-          y: rect.top + ((1 - v.y) / 2) * rect.height,
-          behind:
-            view.z >= 0 ||
-            v.z < -1 ||
-            v.z > 1 ||
-            Math.abs(v.x) > 1 ||
-            Math.abs(v.y) > 1,
-        };
+        return screenOf(v, options?.evenIfUnsettled === true);
+      },
+      threadScreen: (threadId: string, at = 0.5) => {
+        const curve = threadCurves.get(threadId);
+        if (curve === undefined) return null;
+        arcPoint(curve.a, curve.m, curve.b, Math.min(1, Math.max(0, at)), v);
+        return screenOf(v);
       },
       beadIds: () => [...frameState.beadIndex.keys()],
       canonicalEventLog: () => {
@@ -384,9 +425,10 @@ export function ThreadingDriver() {
     // said it would.
     cueBus.tick(presentationNow() / 1000);
 
-    // The ribbon falling back out of a missed weave. Driven by frame time, not
-    // by a clock, so a controlled test clock cannot leave it hanging in the air.
-    advanceRecoil(Math.min(dt, 1 / 20));
+    // The pointer layer's own tick: the camera hold after a press is counted
+    // in frames of the world, and the lens is put down the frame the focus
+    // view stops sighting, not on the next move of a hand that may not move.
+    advancePointerFrame();
 
     acc.current += dt;
     if (acc.current < 0.066) return;

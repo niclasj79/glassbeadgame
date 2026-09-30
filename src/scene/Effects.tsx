@@ -5,6 +5,7 @@ import type { BloomEffect } from "postprocessing";
 import { useStore } from "@/state/store";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
+import { FocusFogPass } from "./FocusFogEffect";
 import { presentationProfile } from "./quality";
 
 /**
@@ -18,6 +19,12 @@ import { presentationProfile } from "./quality";
  * The margin owns the edge of the frame and the page's tooth, so there is no
  * vignette pass and no noise pass here; two passes were doing the job of one
  * material and fighting it.
+ *
+ * THE FOCUS FOG STANDS BEFORE THE BLOOM (I-017). It is the one other pass, it
+ * is switched off — and therefore free — whenever the air is clear, and the
+ * bloom then gathers from the fogged frame, so the receding world stops
+ * glowing while the attended bead and the lens keep their light. It must never
+ * be the composer's last pass: see `FocusFogEffect.tsx`.
  */
 const TIER_BLOOM: Record<
   "high" | "base" | "potato",
@@ -81,6 +88,7 @@ export function Effects() {
     <>
       <BreathDriver bloomRef={bloomRef} base={baseIntensity} depth={breathDepth} />
       <EffectComposer multisampling={0}>
+        <FocusFogPass />
         <Bloom
           ref={bloomRef as never}
           mipmapBlur

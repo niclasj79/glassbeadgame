@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
+import { RELATION_INTENTIONS } from "@/domain/events";
 import { STATION_SIZE, UTILITY_SIZE, plateGeometry } from "./framing";
 
 /**
@@ -53,6 +54,10 @@ beforeAll(async () => {
 const source = (): string =>
   readFileSync(new URL("./IntentionConstellation.tsx", import.meta.url), "utf8");
 
+/** Source with comments removed — prose about a rule is not the rule. */
+const code = (text: string): string =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\/[^\n]*/g, "");
+
 describe("the intention plate", () => {
   it("opens in the pose it will be aimed at, not while the camera travels", () => {
     const text = source();
@@ -60,9 +65,19 @@ describe("the intention plate", () => {
     expect(text).toContain("frameState.cameraSettled");
     expect(text).toMatch(/if \(!posed\) return <group ref=\{anchor\} \/>;/);
     // Latched: once open it may not be taken away again by a later phrase —
-    // the breath on arming would otherwise close the plate mid-interpretation.
+    // the breath on choosing would otherwise close the plate mid-reading. It
+    // is re-placed only when the pair itself changes (a re-lock).
     expect(text).toMatch(/if \(!posed\) \{[\s\S]{0,320}setPosed\(true\)/);
-    expect(text).toMatch(/\}, \[attendedId\]\);/);
+    expect(text).toMatch(/\}, \[pairKey\]\);/);
+  });
+
+  it("waits for the hand that locked the pair to let go before it counts a pose", () => {
+    // A press holds the sightline, and a held camera reports itself settled:
+    // without this the plate would open in the frozen pose and then be carried
+    // off by the framing the lock asked for.
+    const text = code(source());
+    expect(text).toContain("isSightlineHeld()");
+    expect(text).toMatch(/if \(sightlineHeld\) \{[\s\S]{0,160}return false;/);
   });
 
   it("waits more than one frame, because the flag it reads is a frame old", () => {
@@ -173,6 +188,13 @@ describe("the intention plate", () => {
     expect(text).toMatch(/offset="0%"[\s\S]{0,80}stopOpacity=\{0\}/);
   });
 
+  it("keeps the preview thread legible through its own centre", () => {
+    // The thread runs straight through the plate and is the thing being heard,
+    // so the ground is a band under the engraving and clear at the middle.
+    const text = source();
+    expect(text).toMatch(/offset="58%"[\s\S]{0,80}stopOpacity=\{0\}/);
+  });
+
   it("draws the two utilities as a smaller, quieter class than the verbs", () => {
     const text = source();
     // The mark is materially smaller than a verb station …
@@ -194,5 +216,81 @@ describe("the intention plate", () => {
     const plate = plateGeometry(1280, false);
     expect(plate.utility).toBe(UTILITY_SIZE);
     expect(drawn).toBeLessThan(plate.utility);
+  });
+});
+
+/**
+ * I-016 — THE SIGILS BLOOM ON THE THREAD BETWEEN THE PAIR.
+ *
+ * They used to ring the attended bead and ask for a verb before the object
+ * existed. The plate now stands halfway along the unread strand between the
+ * locked pair, appears exactly when the focus view says the sigils are
+ * visible, and gives all four readings the same hands.
+ */
+describe("the sigils on the preview thread", () => {
+  it("anchors the plate between the pair, not on the attended bead", () => {
+    const text = code(source());
+    expect(text).toContain("previewMidpoint(attendedAt, secondAt, midpoint)");
+    expect(text).toContain("anchor.current.position.copy(midpoint)");
+    expect(text).not.toMatch(/anchor\.current\.position\.set\(/);
+  });
+
+  it("appears exactly when the focus view says the sigils are visible", () => {
+    const text = code(source());
+    expect(text).toContain("useFocusView()");
+    expect(text).toContain("view.sigilsVisible ? view.attendedConceptId : null");
+    expect(text).toContain("view.sigilsVisible ? view.secondConceptId : null");
+  });
+
+  it("stands the four readings in one fixed order, whatever the pair", () => {
+    expect(plateModule.INTENTION_OPTIONS.map((option) => option.intention)).toEqual([
+      ...RELATION_INTENTIONS,
+    ]);
+    expect(plateModule.INTENTION_OPTIONS.map((option) => option.station)).toEqual([
+      "north",
+      "east",
+      "south",
+      "west",
+    ]);
+  });
+
+  it("gives every sigil the same hands and marks none of them by fit", () => {
+    const text = code(source());
+    expect(text).toContain("{...sigilHandlers(option.intention)}");
+    // Nothing the plate draws can know what the record prefers: no band, no
+    // resonance, no documented flag, no fit, no score reaches this module.
+    expect(text).not.toMatch(/\bband\b|resonance|documented|\bfit\b|score|evidence/i);
+    // The only per-sigil differences are the chosen one and the tab stop.
+    expect(text).toContain("aria-checked={checked}");
+    expect(text).toContain("aria-checked:border-glow");
+  });
+
+  it("is one stop in the tab order, as a radiogroup is", () => {
+    const text = code(source());
+    expect(text).toContain('role="radiogroup"');
+    expect(text).toContain("tabIndex={option.intention === tabStop ? 0 : -1}");
+    expect(text).toContain("const tabStop = selected ?? INTENTION_OPTIONS[0].intention;");
+  });
+
+  it("keeps every contract id the plate has ever carried", () => {
+    const text = source();
+    for (const id of [
+      'data-testid="intention-constellation"',
+      "data-testid={`intention-${option.intention}`}",
+      'data-testid="world-cancel-interpretation"',
+      'data-testid="world-inspect-attended"',
+      "data-world-intention={option.intention}",
+      "id={sigilControlId(option.intention)}",
+    ]) {
+      expect(text).toContain(id);
+    }
+  });
+
+  it("never lets a click on the rail reach the arena behind it", () => {
+    // Behind the plate a click is a background click (I-011) or a strand
+    // picked (I-019): the rail's two controls are neither.
+    const text = code(source());
+    const stopped = text.match(/onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/g) ?? [];
+    expect(stopped).toHaveLength(2);
   });
 });

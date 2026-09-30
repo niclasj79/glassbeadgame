@@ -34,11 +34,12 @@ const ALL: readonly CueChannel[] = Object.freeze([
   "caption",
 ]);
 
-const WORLD: readonly CueChannel[] = Object.freeze([
+/** Looking, not acting: no camera impact, no vibration. */
+const SIGHT: readonly CueChannel[] = Object.freeze([
   "scene",
-  "camera",
   "audio",
-  "haptics",
+  "ui",
+  "caption",
 ]);
 
 /**
@@ -155,31 +156,67 @@ export function planAttentionCleared(): CuePlan {
   ]);
 }
 
-export function planIntentionArmed(
-  payload: CuePayloadMap["intention.armed"]
+/**
+ * The lens settles on a bead, or leaves them all. Scene, sound, the column and
+ * the caption answer; the camera and the hand do not — a sweep is looking, and
+ * looking must not jolt anything (I-017).
+ */
+export function planSighting(
+  payload: CuePayloadMap["attention.sighted"]
 ): CuePlan {
-  // Arming must change the preview *immediately* — this is the moment the
-  // player learns that intention is a tool and not a label (I-012).
   return assemble(null, [
     draft({
-      type: "intention.armed",
+      type: "attention.sighted",
       startAt: 0,
-      duration: 0.5,
+      duration: 0.35,
+      channels: SIGHT,
+      payload,
+    }),
+  ]);
+}
+
+/** The second bead is fixed; the camera turns to frame the pair (I-016). */
+export function planPairLocked(payload: CuePayloadMap["pair.locked"]): CuePlan {
+  return assemble(null, [
+    draft({
+      type: "pair.locked",
+      startAt: 0,
+      duration: 0.6,
       channels: ALL,
       payload,
     }),
   ]);
 }
 
-export function planCandidateLatched(
-  payload: CuePayloadMap["candidate.latched"]
+/**
+ * A reading heard before it is made. A hovered preview reaches the scene, the
+ * sound and the caption only; a chosen reading also reaches the camera and the
+ * hand, because choosing is an act and hovering is not (I-012).
+ */
+export function planReadingPreviewed(
+  payload: CuePayloadMap["reading.previewed"]
 ): CuePlan {
   return assemble(null, [
     draft({
-      type: "candidate.latched",
+      type: "reading.previewed",
       startAt: 0,
-      duration: 0.3,
-      channels: WORLD,
+      duration: 0.5,
+      channels: payload.chosen ? ALL : SIGHT,
+      payload,
+    }),
+  ]);
+}
+
+/** A committed thread reopened for reading (I-019). */
+export function planThreadReopened(
+  payload: CuePayloadMap["thread.reopened"]
+): CuePlan {
+  return assemble(null, [
+    draft({
+      type: "thread.reopened",
+      startAt: 0,
+      duration: 0.8,
+      channels: ALL,
       payload,
     }),
   ]);

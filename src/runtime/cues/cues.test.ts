@@ -5,10 +5,12 @@ import { createCueBus } from "./createCueBus";
 import {
   gesturePhrasing,
   planAttention,
-  planCandidateLatched,
   planCommitMoment,
-  planIntentionArmed,
   planMotifCompleted,
+  planPairLocked,
+  planReadingPreviewed,
+  planSighting,
+  planThreadReopened,
 } from "./planCues";
 import type { CuePayloadMap, PresentationCue } from "./types";
 
@@ -168,22 +170,43 @@ describe("planCommitMoment", () => {
 });
 
 describe("ephemeral plans", () => {
-  it("never claims a durable source event", () => {
-    expect(
-      planIntentionArmed({ conceptId: A, intention: "tension" }).cues[0]
-        .sourceEventId
-    ).toBeNull();
-    expect(
-      planCandidateLatched({
-        pair: Object.freeze([A, B]) as readonly [typeof A, typeof B],
-        intention: "tension",
-      }).cues[0].sourceEventId
-    ).toBeNull();
+  it("never claims a durable source event for a look, a lock, a reading or a reopening", () => {
+    const pair = Object.freeze([A, B]) as readonly [typeof A, typeof B];
+    for (const plan of [
+      planSighting({ attendedConceptId: A, sighted: null }),
+      planPairLocked({ pair, sharedFacets: [] }),
+      planReadingPreviewed({ pair, intention: "tension", chosen: true }),
+      planThreadReopened({ threadId: THREAD, pair, intention: "echo" }),
+    ]) {
+      expect(plan.cues[0].sourceEventId).toBeNull();
+    }
   });
 
-  it("changes the preview immediately when an intention is armed", () => {
-    const plan = planIntentionArmed({ conceptId: A, intention: "tension" });
+  it("changes the preview immediately when a reading is heard (I-016)", () => {
+    const pair = Object.freeze([A, B]) as readonly [typeof A, typeof B];
+    const plan = planReadingPreviewed({ pair, intention: "tension", chosen: false });
     expect(plan.cues[0].startAt).toBe(0);
+  });
+
+  it("keeps a look off the camera and out of the hand; a choice reaches both", () => {
+    const pair = Object.freeze([A, B]) as readonly [typeof A, typeof B];
+    const looks = [
+      planSighting({ attendedConceptId: A, sighted: null }).cues[0],
+      planReadingPreviewed({ pair, intention: "echo", chosen: false }).cues[0],
+    ];
+    for (const cue of looks) {
+      expect(cue.channels).not.toContain("camera");
+      expect(cue.channels).not.toContain("haptics");
+    }
+    const acts = [
+      planPairLocked({ pair, sharedFacets: [] }).cues[0],
+      planReadingPreviewed({ pair, intention: "echo", chosen: true }).cues[0],
+    ];
+    for (const cue of acts) {
+      expect(cue.channels).toEqual(
+        expect.arrayContaining(["scene", "camera", "audio", "haptics", "caption"])
+      );
+    }
   });
 
   it("reaches every director when attention opens space", () => {
@@ -214,7 +237,9 @@ describe("createCueBus", () => {
     const audio = vi.fn();
     cueBus.subscribe("scene", scene);
     cueBus.subscribe("audio", audio);
-    cueBus.publish(planIntentionArmed({ conceptId: A, intention: "echo" }));
+    cueBus.publish(
+      planReadingPreviewed({ pair: Object.freeze([A, B]) as readonly [typeof A, typeof B], intention: "echo", chosen: true })
+    );
     expect(scene).toHaveBeenCalledTimes(1);
     expect(audio).toHaveBeenCalledTimes(1);
   });
@@ -307,8 +332,12 @@ describe("createCueBus", () => {
       calls.push(1);
       off();
     });
-    cueBus.publish(planIntentionArmed({ conceptId: A, intention: "echo" }));
-    cueBus.publish(planIntentionArmed({ conceptId: A, intention: "ground" }));
+    cueBus.publish(
+      planReadingPreviewed({ pair: Object.freeze([A, B]) as readonly [typeof A, typeof B], intention: "echo", chosen: true })
+    );
+    cueBus.publish(
+      planReadingPreviewed({ pair: Object.freeze([A, B]) as readonly [typeof A, typeof B], intention: "ground", chosen: true })
+    );
     expect(calls).toHaveLength(1);
   });
 

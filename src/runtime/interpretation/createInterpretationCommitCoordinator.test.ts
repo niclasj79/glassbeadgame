@@ -92,16 +92,16 @@ function loadEvents(
 
 function advanceDraft(
   store: InterpretationDraftStore,
-  stage: Exclude<InterpretationDraft["stage"], "inactive"> = "candidate-selected",
+  stage: Exclude<InterpretationDraft["stage"], "inactive"> = "reading",
   conceptIds: readonly ConceptId[] = SESSION_CONCEPT_IDS,
   attended = IDS.fibonacci,
   candidate = IDS.counterpoint
 ): void {
   store.getState().attend(attended, conceptIds);
   if (stage === "attending") return;
-  store.getState().armIntention("echo");
-  if (stage === "armed") return;
-  store.getState().selectCandidate(candidate, conceptIds);
+  store.getState().lockCandidate(candidate, conceptIds);
+  if (stage === "locked") return;
+  store.getState().chooseReading("echo");
 }
 
 function createHarness(nowValue = 250) {
@@ -222,7 +222,7 @@ describe("createInterpretationCommitCoordinator", () => {
     }
   );
 
-  it.each(["inactive", "attending", "armed"] as const)(
+  it.each(["inactive", "attending", "locked"] as const)(
     "preserves both stores when the draft is %s",
     (stage) => {
       const domainStore = createDomainSessionStore();
@@ -398,7 +398,7 @@ describe("createInterpretationCommitCoordinator", () => {
     loadEvents(domainStore, [START_EVENT, ATTEND_EVENT]);
     advanceDraft(
       draftStore,
-      "candidate-selected",
+      "reading",
       [IDS.unknown, IDS.counterpoint],
       IDS.unknown,
       IDS.counterpoint
@@ -439,10 +439,10 @@ describe("createInterpretationCommitCoordinator", () => {
       FULL_SESSION_FIXTURE_IDS.primeNumbersId,
     ];
     draftStore.getState().attend(FULL_SESSION_FIXTURE_IDS.primeNumbersId, conceptIds);
-    draftStore.getState().armIntention("ground");
     draftStore
       .getState()
-      .selectCandidate(FULL_SESSION_FIXTURE_IDS.counterpointId, conceptIds);
+      .lockCandidate(FULL_SESSION_FIXTURE_IDS.counterpointId, conceptIds);
+    draftStore.getState().chooseReading("ground");
     const domainBefore = domainStore.getState();
     const draftBefore = draftStore.getState();
     const reset = vi.spyOn(draftBefore, "reset");

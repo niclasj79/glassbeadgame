@@ -25,10 +25,18 @@
  * Captions are emitted for *every* plan, whether or not anything is audible.
  * That is what makes the muted path first-class: it is not a fallback that runs
  * when sound fails, it is the same information leaving by a second door.
+ *
+ * The exception is the four cues of the focus view — a bead sighted under the
+ * lens, a pair locked, a reading previewed, a thread reopened. They speak on a
+ * lane of their own (`focusLane.ts`, planned by `focusVoicing.ts`) and say
+ * nothing here, for the reason a weave landing never has: `src/runtime/captions`
+ * already captions each of them from the cue, in the player's vocabulary, and a
+ * second caption per hover would turn the track into noise. A track that can be
+ * ignored is not an accessible path.
  */
 import type { ConceptMotif } from "@/content/castalia/schema";
 import type { RelationIntention } from "@/domain/events";
-import type { PresentationCue } from "@/runtime/cues";
+import type { CuePayloadMap, PresentationCue } from "@/runtime/cues";
 import {
   ATTENTION_RELEASED,
   planAttentionSpace,
@@ -51,6 +59,14 @@ import {
   describeVoicePlan,
   type AudioNames,
 } from "./describe";
+import { admit, createFocusLane, type FocusVoiceKind } from "./focusLane";
+import {
+  FOCUS_VOICING,
+  planPairExchange,
+  planReadingBar,
+  planSightingAnswer,
+  scalePlanGain,
+} from "./focusVoicing";
 import { planRelationVoices } from "./grammar";
 import { applyIntensity, type AudioIntensity } from "./intensity";
 import {
@@ -63,7 +79,6 @@ import {
   CASTALIA_MODE,
   degreeFrequency,
   nearestStableDegree,
-  shiftRegister,
   type WorldMode,
 } from "./mode";
 import {
@@ -113,6 +128,30 @@ export interface AudioSink {
    * is rendering, not meaning.
    */
   readonly concludeAt: (atSeconds: number, fadeSeconds: number) => void;
+  /**
+   * TAKE BACK A PLAN THE SINK ALREADY HOLDS.
+   *
+   * Looking is not acting, and it repeats: a lens crossing a cluster or a pointer
+   * crossing four sigils asks for a new answer every few hundred milliseconds,
+   * and each answer is a plan already handed to `play`. Without a way to take one
+   * back, a sweep can only pile them up.
+   *
+   * Whatever of the plan called `planId` is sounding is faded to silence over
+   * `fadeSeconds` from `atSeconds` on the sink's clock, and whatever has not yet
+   * begun by then never does. It applies to what the sink holds *when it is
+   * called*: a later plan that happens to share the id is a new plan.
+   *
+   * Optional, because rendering is the sink's business and a sink that cannot
+   * fade a plan is still a lawful sink. The director then bounds the overlap
+   * itself — ducking what would stack and declining what would not fit — using
+   * its own ledger of what it has handed over (`focusLane.ts`). What it cannot do
+   * without this is make a superseded voice stop.
+   */
+  readonly retire?: (
+    planId: string,
+    atSeconds: number,
+    fadeSeconds: number
+  ) => void;
 }
 
 /**
@@ -186,70 +225,6 @@ export interface AudioDirector {
 const DEFAULT_SLOT_SECONDS = 2;
 
 // ─── Small structural plans ─────────────────────────────────────────────────
-
-/**
- * How arming an intention changes the sound *immediately* (I-012: arming is the
- * moment the player learns intention is a tool, not a label).
- *
- * One note, at the interval that intention's grammar is built on: Echo answers
- * at the fifth, Passage rises an octave toward its destination, Tension leans on
- * the compound minor ninth, Ground drops an octave. It asserts nothing about the
- * pair — no pair exists yet — and it is the shortest honest preview of what the
- * grammar will do.
- */
-const ARM_INTERVAL: Readonly<Record<RelationIntention, number>> = Object.freeze({
-  echo: 7,
-  passage: 12,
-  tension: 13,
-  ground: -12,
-});
-
-function planArming(
-  planId: string,
-  mode: WorldMode,
-  source: MotifSource,
-  intention: RelationIntention,
-  ambientGain: number
-): VoicePlan {
-  const degree = anchorDegree(source.motif) + ARM_INTERVAL[intention];
-  const register =
-    intention === "ground"
-      ? shiftRegister(source.motif.register, -1)
-      : source.motif.register;
-  const length = 0.9;
-  const note: PlannedNote = Object.freeze({
-    id: `${planId}:arm`,
-    conceptId: source.conceptId,
-    role: "subject" as const,
-    timbre: source.motif.timbre,
-    articulation: source.motif.articulation,
-    register,
-    degree,
-    frequency: degreeFrequency(mode, degree, register),
-    detuneCents: 0,
-    atSeconds: 0,
-    envelope: envelopeFor(source.motif.articulation, length),
-    gain: Number((ambientGain * SCORE.grammar.residueGain).toFixed(5)),
-    floorGain: 0,
-    openEnded: intention === "tension",
-    // One voice cannot be a tense simultaneity; arming asserts nothing.
-    tense: false,
-  });
-  return makeVoicePlan({
-    id: planId,
-    kind: "attention",
-    intention: null,
-    notes: [note],
-    meta: {
-      conceptIds: [source.conceptId],
-      grammar: `armed:${intention}`,
-      resolves: false,
-      interval: ARM_INTERVAL[intention],
-      beatingHz: null,
-      outcome: null,
-    },
-  });
-}
 
 /** The weave lands: both anchors in their own bodies, close together. */
 function planLanding(
@@ -521,6 +496,150 @@ export function createAudioDirector(
     return plan;
   };
 
+  // ─── The focus lane ───────────────────────────────────────────────────────
+  //
+  // What the score says while the player looks, chooses, and returns. The plans
+  // are `focusVoicing.ts`'s; this is the part that has to remember what is still
+  // sounding and decide what a new voice must do about it. Everything begins on
+  // the sink's own clock, a lead after the cue, so that a note is never already
+  // in the past by the time the scheduler's next tick finds it.
+
+  const focusLane = createFocusLane();
+
+  /**
+   * The last sighting handed to the sink: when it begins, and the moment its
+   * spacing was measured from. A sighting the lens leaves before it begins is
+   * dropped, and the one that replaces it is spaced from the last that really
+   * sounded — that is the `anchor`.
+   */
+  let lastSighting: { readonly onset: number; readonly anchor: number } | null =
+    null;
+
+  /**
+   * Fade a voice out, where the sink can take it back. Where it cannot, the
+   * ledger goes on counting it, because it goes on sounding.
+   */
+  const retireFocusVoice = (id: string, atSeconds: number): void => {
+    if (sink.retire === undefined) return;
+    sink.retire(id, atSeconds, FOCUS_VOICING.fadeSeconds);
+    focusLane.retire(id, atSeconds, FOCUS_VOICING.fadeSeconds);
+  };
+
+  /**
+   * Whatever the lane is saying yields to a moment that is not looking: a new
+   * Attend, attention released, a weave. The commit's own phrase must not begin
+   * under a preview the player was still hearing — least of all a Tension's.
+   */
+  const settleFocus = (): void => {
+    const now = sink.now();
+    for (const voice of focusLane.live(now)) {
+      if (voice.retiredAt === null) retireFocusVoice(voice.id, now);
+    }
+    lastSighting = null;
+  };
+
+  /** Hand a plan to the sink on the lane — unless the lane has no room for it. */
+  const speakOnLane = (
+    kind: FocusVoiceKind,
+    plan: VoicePlan,
+    onset: number
+  ): boolean => {
+    const rendered = applyIntensity(plan, intensity);
+    // At silent intensity there is nothing to hand over. The moment is still
+    // captioned, by the cue layer.
+    if (rendered.notes.length === 0) return false;
+    const admission = admit(rendered, focusLane, onset, bedGain());
+    if (!admission.play) return false;
+    const shaped = scalePlanGain(rendered, admission.scale);
+    sink.play(shaped, onset);
+    focusLane.add({ id: shaped.id, kind, onsetSeconds: onset, plan: shaped });
+    return true;
+  };
+
+  /**
+   * A voice that answers something the player did — the lock, a reading chosen or
+   * heard, a thread returned to. It begins at once and everything else on the
+   * lane yields.
+   */
+  const answerOnLane = (kind: FocusVoiceKind, plan: VoicePlan): void => {
+    const now = sink.now();
+    const live = focusLane.live(now);
+    // Already saying exactly this, and still sounding: nothing new to say.
+    if (live.some((voice) => voice.id === plan.id && voice.retiredAt === null)) {
+      return;
+    }
+    for (const voice of live) {
+      if (voice.retiredAt === null) retireFocusVoice(voice.id, now);
+    }
+    lastSighting = null;
+    speakOnLane(kind, plan, now + FOCUS_VOICING.leadSeconds);
+  };
+
+  /**
+   * The bead under the lens answers once, in its own voice — and at a rate a
+   * sweep can survive. A lens crossing a crowded cluster changes bead many times
+   * a second, and an answer for each would be a machine gun.
+   *
+   * Sightings begin at least a window apart. Where the sink can take a voice
+   * back, one that arrives inside the window *replaces* what was there: the
+   * earlier answer is let finish until the new one takes over (or dropped, if it
+   * has not begun), and the new one is deferred to the end of the window. The
+   * bead the lens comes to rest on is therefore always the one heard, and never
+   * more than one is. Where the sink cannot, an answer inside the window is
+   * declined, because the only alternative is to stack it.
+   */
+  const answerSighting = (payload: CuePayloadMap["attention.sighted"]): void => {
+    const sighted = payload.sighted;
+    // The lens has left every bead. The gap opening again is the scene's to show.
+    if (sighted === null) return;
+
+    const now = sink.now();
+    const conceptId = String(sighted.conceptId);
+    const plan = planSightingAnswer({
+      planId: `sighted:${conceptId}:${sighted.band}`,
+      mode,
+      sighted: source(conceptId),
+      band: sighted.band,
+      unitSeconds,
+      ambientGain: ambientGain(),
+    });
+    const live = focusLane.live(now);
+    // The same bead, still speaking: a lens that leaves and returns does not
+    // restart it.
+    if (live.some((voice) => voice.id === plan.id && voice.retiredAt === null)) {
+      return;
+    }
+
+    const earliest = now + FOCUS_VOICING.leadSeconds;
+    let onset = earliest;
+    let anchor = Number.NEGATIVE_INFINITY;
+    const previous = lastSighting;
+    if (previous !== null) {
+      const canTakeBack = sink.retire !== undefined;
+      anchor =
+        canTakeBack && previous.onset > now ? previous.anchor : previous.onset;
+      const spaced = anchor + FOCUS_VOICING.sighting.windowSeconds;
+      if (!canTakeBack) {
+        if (earliest < spaced) return;
+      } else {
+        onset = Math.max(earliest, spaced);
+      }
+    }
+
+    for (const voice of live) {
+      if (voice.retiredAt !== null) continue;
+      // A sighting already speaking is let finish until the new one takes over.
+      // Anything else — a sighting still to begin, a preview from the last stage —
+      // yields at once.
+      const speaking = voice.kind === "sighting" && voice.onsetSeconds <= now;
+      retireFocusVoice(
+        voice.id,
+        speaking ? Math.max(now, onset - FOCUS_VOICING.fadeSeconds) : now
+      );
+    }
+    if (speakOnLane("sighting", plan, onset)) lastSighting = { onset, anchor };
+  };
+
   const handleAttunement = (active: boolean): AttunementPlan | null => {
     if (!active) {
       setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
@@ -604,12 +723,16 @@ export function createAudioDirector(
   const handleCue = (cue: PresentationCue): void => {
     switch (cue.type) {
       case "attention.enter": {
+        // A new Attend begins a new moment: what was being heard about the last
+        // one yields to it.
+        settleFocus();
         attended = String(cue.payload.conceptId);
         handleAttention(attended);
         break;
       }
 
       case "attention.clear": {
+        settleFocus();
         attended = null;
         setSpace(
           ATTENTION_RELEASED.densityScale,
@@ -618,38 +741,86 @@ export function createAudioDirector(
         break;
       }
 
-      case "intention.armed": {
-        const conceptId = String(cue.payload.conceptId);
-        emit(
-          planArming(
-            `arm:${conceptId}:${cue.payload.intention}`,
+      case "attention.sighted": {
+        answerSighting(cue.payload);
+        break;
+      }
+
+      case "pair.locked": {
+        // The pair is the object (I-016): the attended figure calls, the second
+        // answers, never together — no reading has been chosen yet.
+        const [a, b] = cue.payload.pair.map(String);
+        answerOnLane(
+          "exchange",
+          planPairExchange({
+            planId: `locked:${a}:${b}`,
             mode,
-            source(conceptId),
-            cue.payload.intention,
-            ambientGain()
-          ),
-          sink.now()
+            attended: source(a),
+            second: source(b),
+            unitSeconds,
+            ambientGain: ambientGain(),
+          })
         );
         break;
       }
 
-      case "candidate.latched": {
-        const [a, b] = cue.payload.pair;
-        emit(
-          planLanding(
-            `latch:${String(a)}:${String(b)}`,
+      case "reading.previewed": {
+        // The reading heard before it is made (I-016): the pair, in the grammar
+        // of the intention being heard. Hovered is quieter and shorter than
+        // chosen. Nothing here says which reading the record prefers — the
+        // planner is never told (CAV-006).
+        const [a, b] = cue.payload.pair.map(String);
+        const { intention, chosen } = cue.payload;
+        answerOnLane(
+          "reading",
+          planReadingBar({
+            seed: `reading:${intention}:${a}:${b}`,
             mode,
-            source(String(a)),
-            source(String(b)),
-            ambientGain()
-          ),
-          sink.now()
+            intention,
+            a: source(a),
+            b: source(b),
+            weight: chosen ? "chosen" : "hover",
+            unitSeconds,
+            ambientGain: ambientGain(),
+            bedGain: bedGain(),
+          })
+        );
+        break;
+      }
+
+      case "thread.reopened": {
+        // Returning to a thought (I-019): the thread's own phrase, softly, once.
+        // It is the phrase the weave sounded — the same figures, the same
+        // interval, the same beating, the same humanising — and, like every
+        // preview, it does not close and is not told whether the record does.
+        const [a, b] = cue.payload.pair.map(String);
+        answerOnLane(
+          "recall",
+          planReadingBar({
+            seed: `relation:${String(cue.payload.threadId)}`,
+            mode,
+            intention: cue.payload.intention,
+            a: source(a),
+            b: source(b),
+            weight: "recall",
+            unitSeconds,
+            ambientGain: ambientGain(),
+            bedGain: bedGain(),
+          })
         );
         break;
       }
 
       case "weave.released":
       case "thread.woven": {
+        // The commit's phrase is unchanged, and it begins over silence: nothing
+        // the player was merely hearing sounds under it.
+        settleFocus();
+        // A weave ends the look that led to it: the draft is back to roaming
+        // and the fog lifts on its own (I-016), so the score comes back too
+        // rather than staying thinned until the next Attend.
+        attended = null;
+        setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
         const [a, b] = cue.payload.pair;
         const plan = planLanding(
           `woven:${String(cue.payload.threadId)}`,
@@ -777,6 +948,8 @@ export function createAudioDirector(
       attunementCycle = 0;
       attended = null;
       lastCaption = null;
+      focusLane.clear();
+      lastSighting = null;
       setSpace(
         ATTENTION_RELEASED.densityScale,
         ATTENTION_RELEASED.bedGainScale

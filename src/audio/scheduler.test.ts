@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { COMFORT } from "./comfort";
 import { CASTALIA_MODE, degreeFrequency } from "./mode";
-import { createPlanQueue } from "./scheduler";
-import { makeVoicePlan, type VoicePlan } from "./plan";
-import { createVoiceBudget } from "./voices";
+import { createPlanQueue, realizeVoicePlan } from "./scheduler";
+import { makeVoicePlan, type PlannedNote, type VoicePlan } from "./plan";
+import { createVoiceBudget, voiceBudget, type RetireVoice } from "./voices";
 
 const plan = (id: string): VoicePlan =>
   makeVoicePlan({
@@ -75,6 +75,19 @@ describe("the look-ahead queue", () => {
     queue.reset();
     expect(queue.pending()).toBe(0);
   });
+
+  it("drops the newest waiting plan with an id, and says whether there was one", () => {
+    const queue = createPlanQueue();
+    queue.push(plan("a"), 10);
+    queue.push(plan("b"), 20);
+    queue.push(plan("a"), 30);
+    expect(queue.remove("a")).toBe(true);
+    expect(queue.drain(100).map((entry) => [entry.plan.id, entry.at])).toEqual([
+      ["a", 10],
+      ["b", 20],
+    ]);
+    expect(queue.remove("nobody")).toBe(false);
+  });
 });
 
 describe("the voice budget", () => {
@@ -105,5 +118,131 @@ describe("the voice budget", () => {
     expect(budget.claim(0, 5)).toBe(false);
     budget.reset();
     expect(budget.active(0)).toBe(0);
+  });
+});
+
+// ─── Taking a plan back ─────────────────────────────────────────────────────
+
+interface Recorded {
+  readonly gains: { events: [string, number, number?][] }[];
+  readonly stops: number[];
+}
+
+/** The smallest AudioContext `playVoice` runs against, recording what a retirement asks of it. */
+function recordingContext(currentTime: number) {
+  const record: Recorded = { gains: [], stops: [] };
+  const param = (events: [string, number, number?][]) => ({
+    value: 1,
+    setValueAtTime: (v: number, t: number) => events.push(["set", v, t]),
+    linearRampToValueAtTime: (v: number, t: number) => events.push(["ramp", v, t]),
+    exponentialRampToValueAtTime: (v: number, t: number) => events.push(["exp", v, t]),
+    cancelScheduledValues: (t: number) => events.push(["cancel", t]),
+    setTargetAtTime: () => {},
+  });
+  const node = () => ({ connect: () => {}, disconnect: () => {} });
+  const ctx = {
+    currentTime,
+    createGain: () => {
+      const events: [string, number, number?][] = [];
+      record.gains.push({ events });
+      return { ...node(), gain: param(events) };
+    },
+    createOscillator: () => ({
+      ...node(),
+      type: "sine",
+      frequency: { value: 0 },
+      setPeriodicWave: () => {},
+      start: () => {},
+      stop: (t: number) => record.stops.push(t),
+      addEventListener: () => {},
+    }),
+    createPeriodicWave: () => ({}),
+    createBiquadFilter: () => ({ ...node(), type: "lowpass", frequency: { value: 0 }, Q: { value: 1 } }),
+  };
+  return { ctx: ctx as unknown as AudioContext, record };
+}
+
+const note = (id: string, atSeconds: number): PlannedNote => ({
+  id,
+  conceptId: "c",
+  role: "subject",
+  timbre: "glass",
+  articulation: "struck",
+  register: "mid",
+  degree: 0,
+  frequency: degreeFrequency(CASTALIA_MODE, 0, "mid"),
+  detuneCents: 0,
+  atSeconds,
+  envelope: { attack: 0.01, hold: 0.4, release: 0.8 },
+  gain: 0.05,
+  floorGain: 0,
+  openEnded: false,
+  tense: false,
+});
+
+const twoNotes = makeVoicePlan({
+  id: "retirable",
+  kind: "relation",
+  intention: null,
+  notes: [note("n0", 0), note("n1", 0.5)],
+  meta: {
+    conceptIds: ["c"],
+    grammar: "fixture",
+    resolves: false,
+    interval: null,
+    beatingHz: null,
+    outcome: null,
+  },
+});
+
+const buses = () => {
+  const bus = { connect: () => {}, disconnect: () => {} } as unknown as AudioNode;
+  return { music: bus, tension: bus, tensionCeiling: 1 };
+};
+
+describe("taking a plan back", () => {
+  beforeEach(() => voiceBudget.reset());
+
+  it("asks for no extra node from a plan nobody will retire", () => {
+    const plain = recordingContext(10);
+    realizeVoicePlan(plain.ctx, buses(), twoNotes, 10);
+    voiceBudget.reset();
+    const asked = recordingContext(10);
+    const retirers: RetireVoice[] = [];
+    realizeVoicePlan(asked.ctx, buses(), twoNotes, 10, retirers);
+    expect(retirers).toHaveLength(2);
+    // One gate per voice, and only for the caller that asked.
+    expect(asked.record.gains.length - plain.record.gains.length).toBe(2);
+  });
+
+  it("fades a voice that has begun, from where it is, and stops its source", () => {
+    const { ctx, record } = recordingContext(10);
+    const retirers: RetireVoice[] = [];
+    realizeVoicePlan(ctx, buses(), twoNotes, 10, retirers);
+    // The gate is the first gain each voice creates: it sits after the envelope.
+    retirers[0](10.2, 0.06);
+    const gate = record.gains[0].events;
+    expect(gate).toContainEqual(["set", 1, 10.2]);
+    expect(gate).toContainEqual(["ramp", 0, 10.26]);
+    expect(record.stops).toContain(10.28);
+  });
+
+  it("never lets a voice that has not begun begin", () => {
+    const { ctx, record } = recordingContext(10);
+    const retirers: RetireVoice[] = [];
+    realizeVoicePlan(ctx, buses(), twoNotes, 10, retirers);
+    retirers[1](10.2, 0.06); // due at 10.5
+    const gate = record.gains.find((g) => g.events.some((e) => e[0] === "set" && e[1] === 0))!.events;
+    expect(gate).toContainEqual(["set", 0, 10.2]);
+    expect(gate.some((e) => e[0] === "ramp")).toBe(false);
+  });
+
+  it("gives the voice budget back what a retired voice no longer uses", () => {
+    const { ctx } = recordingContext(10);
+    const retirers: RetireVoice[] = [];
+    realizeVoicePlan(ctx, buses(), twoNotes, 10, retirers);
+    expect(voiceBudget.active(10.3)).toBe(2);
+    retirers.forEach((retire) => retire(10.2, 0.06));
+    expect(voiceBudget.active(10.3)).toBe(0);
   });
 });

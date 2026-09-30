@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { RELATION_INTENTIONS, type RelationIntention } from "../../domain/events";
 import { toConceptId } from "../../domain/ids";
 import {
-  armDraftIntention,
   attendDraft,
   cancelDraft,
+  chooseDraftReading,
   createInterpretationDraft,
   INACTIVE_INTERPRETATION_DRAFT,
   INTERPRETATION_DRAFT_ERROR_CODES,
   INTERPRETATION_DRAFT_STAGES,
   InterpretationDraftError,
-  selectDraftCandidate,
+  lockDraftCandidate,
   type InterpretationDraft,
   type InterpretationDraftErrorCode,
 } from ".";
@@ -48,25 +48,25 @@ function attending() {
   return attendDraft(createInterpretationDraft(), IDS.fibonacci, SESSION_CONCEPT_IDS);
 }
 
-function armed(intention: RelationIntention = "echo") {
-  return armDraftIntention(attending(), intention);
+function locked(candidate = IDS.counterpoint) {
+  return lockDraftCandidate(attending(), candidate, SESSION_CONCEPT_IDS);
 }
 
-function selected(intention: RelationIntention = "echo") {
-  return selectDraftCandidate(armed(intention), IDS.counterpoint, SESSION_CONCEPT_IDS);
+function reading(intention: RelationIntention = "echo") {
+  return chooseDraftReading(locked(), intention);
 }
 
 function unsafeDraft(value: unknown): InterpretationDraft {
   return value as InterpretationDraft;
 }
 
-describe("interpretation draft", () => {
+describe("interpretation draft — pair before reading (I-016)", () => {
   it("exports closed frozen stage and error vocabularies", () => {
     expect(INTERPRETATION_DRAFT_STAGES).toEqual([
       "inactive",
       "attending",
-      "armed",
-      "candidate-selected",
+      "locked",
+      "reading",
     ]);
     expect(INTERPRETATION_DRAFT_ERROR_CODES).toEqual([
       "invalid-session-concepts",
@@ -107,11 +107,11 @@ describe("interpretation draft", () => {
     expect(Object.isFrozen(result)).toBe(true);
   });
 
-  it("re-Attend replaces every active stage and discards intention and candidate", () => {
+  it("re-Attend replaces every active stage and discards candidate and reading", () => {
     const activeDrafts: readonly InterpretationDraft[] = [
       attending(),
-      armed("passage"),
-      selected("tension"),
+      locked(),
+      reading("tension"),
     ];
 
     for (const draft of activeDrafts) {
@@ -125,74 +125,81 @@ describe("interpretation draft", () => {
     }
   });
 
-  it.each(RELATION_INTENTIONS)("arms the accepted %s intention", (intention) => {
-    const result = armDraftIntention(attending(), intention);
+  it("locks a distinct session candidate in attended-to-candidate order, with no reading", () => {
+    const draft = attending();
+    const result = lockDraftCandidate(draft, IDS.counterpoint, SESSION_CONCEPT_IDS);
 
     expect(result).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
-      intention,
-    });
-    expect(Object.isFrozen(result)).toBe(true);
-  });
-
-  it("replaces an armed intention without selecting a candidate", () => {
-    const first = armed("echo");
-    const result = armDraftIntention(first, "ground");
-
-    expect(result).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
-      intention: "ground",
-    });
-    expect(first).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
-      intention: "echo",
-    });
-  });
-
-  it("selects a distinct session candidate in attended-to-candidate order", () => {
-    const draft = armed("passage");
-    const result = selectDraftCandidate(
-      draft,
-      IDS.counterpoint,
-      SESSION_CONCEPT_IDS
-    );
-
-    expect(result).toEqual({
-      stage: "candidate-selected",
+      stage: "locked",
       attendedConceptId: IDS.fibonacci,
       candidateConceptId: IDS.counterpoint,
-      intention: "passage",
       pair: [IDS.fibonacci, IDS.counterpoint],
     });
-    expect(draft).toEqual({
-      stage: "armed",
-      attendedConceptId: IDS.fibonacci,
-      intention: "passage",
-    });
+    expect(Object.keys(result)).not.toContain("intention");
+    expect(draft).toEqual({ stage: "attending", attendedConceptId: IDS.fibonacci });
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.pair)).toBe(true);
   });
 
-  it("cancels exactly one provisional stage at a time", () => {
-    const candidateSelected = selected("tension");
-    const backToArmed = cancelDraft(candidateSelected);
-    const backToAttending = cancelDraft(backToArmed);
+  it("re-locks from locked and from reading, dropping the chosen reading (I-008)", () => {
+    const fromLocked = lockDraftCandidate(locked(), IDS.perspective, SESSION_CONCEPT_IDS);
+    const fromReading = lockDraftCandidate(
+      reading("ground"),
+      IDS.perspective,
+      SESSION_CONCEPT_IDS
+    );
+
+    for (const result of [fromLocked, fromReading]) {
+      expect(result).toEqual({
+        stage: "locked",
+        attendedConceptId: IDS.fibonacci,
+        candidateConceptId: IDS.perspective,
+        pair: [IDS.fibonacci, IDS.perspective],
+      });
+      expect(Object.keys(result)).not.toContain("intention");
+    }
+  });
+
+  it.each(RELATION_INTENTIONS)("chooses the accepted %s reading for a locked pair", (intention) => {
+    const result = chooseDraftReading(locked(), intention);
+
+    expect(result).toEqual({
+      stage: "reading",
+      attendedConceptId: IDS.fibonacci,
+      candidateConceptId: IDS.counterpoint,
+      intention,
+      pair: [IDS.fibonacci, IDS.counterpoint],
+    });
+    expect(Object.isFrozen(result)).toBe(true);
+  });
+
+  it("changes a chosen reading explicitly without touching the pair", () => {
+    const first = reading("echo");
+    const result = chooseDraftReading(first, "ground");
+
+    expect(result.intention).toBe("ground");
+    expect(result.pair).toBe(first.pair);
+    expect(first.intention).toBe("echo");
+  });
+
+  it("cancels exactly one provisional stage at a time: Read → Lock → Attend → Roam", () => {
+    const chosen = reading("tension");
+    const backToLocked = cancelDraft(chosen);
+    const backToAttending = cancelDraft(backToLocked);
     const backToInactive = cancelDraft(backToAttending);
 
-    expect(backToArmed).toEqual({
-      stage: "armed",
+    expect(backToLocked).toEqual({
+      stage: "locked",
       attendedConceptId: IDS.fibonacci,
-      intention: "tension",
+      candidateConceptId: IDS.counterpoint,
+      pair: [IDS.fibonacci, IDS.counterpoint],
     });
     expect(backToAttending).toEqual({
       stage: "attending",
       attendedConceptId: IDS.fibonacci,
     });
     expect(backToInactive).toBe(INACTIVE_INTERPRETATION_DRAFT);
-    expect(Object.isFrozen(backToArmed)).toBe(true);
+    expect(Object.isFrozen(backToLocked)).toBe(true);
     expect(Object.isFrozen(backToAttending)).toBe(true);
   });
 
@@ -221,7 +228,7 @@ describe("interpretation draft", () => {
       "unknown-concept"
     );
     expectErrorCode(
-      () => selectDraftCandidate(armed(), IDS.unknown, SESSION_CONCEPT_IDS),
+      () => lockDraftCandidate(attending(), IDS.unknown, SESSION_CONCEPT_IDS),
       "unknown-concept"
     );
   });
@@ -229,7 +236,7 @@ describe("interpretation draft", () => {
   it("rejects an attended concept missing from the candidate session context", () => {
     expectErrorCode(
       () =>
-        selectDraftCandidate(armed(), IDS.perspective, [
+        lockDraftCandidate(attending(), IDS.perspective, [
           IDS.counterpoint,
           IDS.perspective,
         ]),
@@ -237,32 +244,24 @@ describe("interpretation draft", () => {
     );
   });
 
-  it("rejects selecting the attended concept as its own candidate", () => {
+  it("rejects locking the attended concept as its own second bead", () => {
     expectErrorCode(
-      () => selectDraftCandidate(armed(), IDS.fibonacci, SESSION_CONCEPT_IDS),
+      () => lockDraftCandidate(attending(), IDS.fibonacci, SESSION_CONCEPT_IDS),
       "identical-concepts"
     );
   });
 
-  it("rejects unsupported intentions without coercion or defaults", () => {
+  it("rejects unsupported readings without coercion or defaults", () => {
     expectErrorCode(
-      () => armDraftIntention(attending(), "analogy" as RelationIntention),
+      () => chooseDraftReading(locked(), "analogy" as RelationIntention),
       "unsupported-intention"
     );
   });
 
-  it("rejects arm and candidate selection out of order", () => {
-    expectErrorCode(
-      () => armDraftIntention(createInterpretationDraft(), "echo"),
-      "invalid-transition-order"
-    );
-    expectErrorCode(
-      () => armDraftIntention(selected(), "ground"),
-      "invalid-transition-order"
-    );
+  it("rejects lock and reading out of order", () => {
     expectErrorCode(
       () =>
-        selectDraftCandidate(
+        lockDraftCandidate(
           createInterpretationDraft(),
           IDS.counterpoint,
           SESSION_CONCEPT_IDS
@@ -270,17 +269,26 @@ describe("interpretation draft", () => {
       "invalid-transition-order"
     );
     expectErrorCode(
-      () => selectDraftCandidate(attending(), IDS.counterpoint, SESSION_CONCEPT_IDS),
+      () => chooseDraftReading(createInterpretationDraft(), "echo"),
+      "invalid-transition-order"
+    );
+    expectErrorCode(
+      () => chooseDraftReading(attending(), "echo"),
       "invalid-transition-order"
     );
   });
 
   it("fails closed for an unrecognized runtime draft stage", () => {
-    const invalid = unsafeDraft({ stage: "weaving" });
+    const invalid = unsafeDraft({ stage: "armed", attendedConceptId: IDS.fibonacci });
     expectErrorCode(
       () => attendDraft(invalid, IDS.fibonacci, SESSION_CONCEPT_IDS),
       "invalid-transition-order"
     );
+    expectErrorCode(
+      () => lockDraftCandidate(invalid, IDS.counterpoint, SESSION_CONCEPT_IDS),
+      "invalid-transition-order"
+    );
+    expectErrorCode(() => chooseDraftReading(invalid, "echo"), "invalid-transition-order");
     expectErrorCode(() => cancelDraft(invalid), "invalid-transition-order");
   });
 
@@ -289,8 +297,8 @@ describe("interpretation draft", () => {
     const run = () => {
       const inactive = createInterpretationDraft();
       const attention = attendDraft(inactive, IDS.fibonacci, sessionConceptIds);
-      const intention = armDraftIntention(attention, "ground");
-      return selectDraftCandidate(intention, IDS.perspective, sessionConceptIds);
+      const pair = lockDraftCandidate(attention, IDS.perspective, sessionConceptIds);
+      return chooseDraftReading(pair, "ground");
     };
     const snapshot = [...sessionConceptIds];
     const first = run();
@@ -304,12 +312,7 @@ describe("interpretation draft", () => {
   });
 
   it("exposes no durable, temporal, store, gesture, resonance, or presentation fields", () => {
-    const drafts = [
-      createInterpretationDraft(),
-      attending(),
-      armed(),
-      selected(),
-    ];
+    const drafts = [createInterpretationDraft(), attending(), locked(), reading()];
     const forbiddenKeys = new Set([
       "event",
       "events",
@@ -321,6 +324,7 @@ describe("interpretation draft", () => {
       "time",
       "gesture",
       "resonance",
+      "sighted",
       "camera",
       "audio",
       "ui",

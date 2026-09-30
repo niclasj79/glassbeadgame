@@ -68,11 +68,16 @@ export function createHapticsDirector(stage: HapticsStage): HapticsDirector {
         // Deliberately silent. See the note above.
         break;
 
-      case "intention.armed":
-        stage.vibrate(HAPTIC_PATTERNS.arm);
+      case "attention.sighted":
+      case "thread.reopened":
+        // Looking is silent in the hand.
         break;
 
-      case "candidate.latched":
+      case "reading.previewed":
+        if (cue.payload.chosen) stage.vibrate(HAPTIC_PATTERNS.arm);
+        break;
+
+      case "pair.locked":
         stage.vibrate(HAPTIC_PATTERNS.latch);
         break;
 

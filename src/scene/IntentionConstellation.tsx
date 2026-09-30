@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -16,7 +17,9 @@ import {
 import { isCoarsePointer } from "@/lib/device";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { interpretationDraftStore } from "@/state/interactionDraft";
+import { useFocusView } from "@/state/interpretationPresentation";
 import { useCurrentTheme } from "@/themes/useTheme";
+import { previewMidpoint } from "./curves";
 import { frameState } from "./frameState";
 import {
   PLATE_STATIONS,
@@ -24,64 +27,56 @@ import {
   type PlateGeometry,
   type PlateStation,
 } from "./framing";
+import { isSightlineHeld, sigilControlId, sigilHandlers } from "./threading";
 
 /**
- * THE INTENTION PLATE
+ * THE SIGIL PLATE — FOUR READINGS ON THE THREAD BETWEEN THE PAIR (I-016)
  *
- * Four world-anchored stations engraved on a graduated ring around the
- * attended bead (I-006, I-014). The ring's centre is deliberately empty —
- * the bead itself is there — and the bead's own label steps aside while the
- * plate is open, which is what the previous fan got wrong.
+ * Echo, Passage, Tension and Ground bloom only once a pair is locked, and they
+ * bloom *on the preview thread between the two beads* — anchored halfway along
+ * the unread strand (`curves.previewMidpoint`) — because the pair is the
+ * object of the act and the reading is something said about the space between
+ * them. They used to ring the attended bead and ask for a verb before the
+ * object existed; five of nine September readings were Echo, chosen by
+ * default. The plate appears exactly when the focus view says the sigils are
+ * visible (`view.sigilsVisible`), and at no other time.
+ *
+ * Hovering a sigil *hears* its reading on the locked pair; pressing and
+ * holding it weaves; releasing over it commits (`threading.sigilHandlers`).
+ * All four are drawn identically. Nothing here knows a band, a fit, a facet or
+ * a documented relation, so nothing here can mark, order, size or colour a
+ * reading by what the record prefers: the only sigils ever drawn differently
+ * are the chosen one (`aria-checked`) and the one under the pointer.
  *
  * TWO REGISTERS, NOT ONE. The four verbs stand *on* the graduated circle.
- * Step-back and Details are not verbs, and they now hang on an index rail
+ * Step-back and Details are not verbs, and they hang on an index rail
  * *outside* it, on the upper diagonals, each on its own short arm. They used
- * to sit on the lower diagonals inside the same circle, which put six
- * controls in one diamond and — measured on a 414x896 touch viewport — left
- * 0.6 px between "Declare Tension" and "Step back". Two targets that close
- * are one target.
+ * to sit inside the same circle, which put six controls in one diamond and —
+ * measured on a 414x896 touch viewport — left 0.6 px between "Declare Tension"
+ * and "Step back". Two targets that close are one target.
  *
  * Every size here is a consequence of the clearance law in `scene/framing.ts`
- * rather than a chosen number, and the same module hands the camera the safe
- * area this plate needs, so the camera can compose a pose the plate fits in.
- * A narrow viewport now opens the plate instead of shrinking it: small screen,
- * same fingers.
+ * rather than a chosen number. A narrow viewport opens the plate instead of
+ * shrinking it: small screen, same fingers.
  *
- * THE PLATE OPENS IN THE POSE IT WILL BE AIMED AT — AND IT OPENS AT THE PRESS.
+ * THE PLATE OPENS IN THE POSE IT WILL BE AIMED AT.
  *
- * Attending performs a camera lean, and the plate is anchored to a bead in the
- * world, so for as long as the lean is in flight the plate is a moving target.
- * Measured on the running build: the plate appeared 18 ms after the press at
- * (170, 201), was carried to (-18, 258) — more than half of it off the left
- * edge of the viewport — and only came to rest at (423, 293), 294 px away,
- * after three and a half seconds. Everything the player could aim at was
- * travelling for the whole of that.
+ * The plate is anchored in the world, so for as long as a camera phrase is in
+ * flight it is a moving target — measured on an earlier build, a plate carried
+ * 294 px across three and a half seconds while the player tried to aim at it.
+ * So it waits for the pose: the camera settled for two frames, or the anchor
+ * itself still for four. And it waits for the hand that locked the pair to let
+ * go: a press holds the sightline (`threading.isSightlineHeld`), and a held
+ * camera reports itself settled, so without that a plate would open in the
+ * pose the press froze and then be carried off by the framing the lock asked
+ * for. Once open it is latched until the pair itself changes.
  *
- * Waiting for the pose fixed the travelling and produced something worse: a
- * click set attention, the live region said "Choose an intention", and for
- * about three and a half seconds there was nothing on screen to choose from.
- *
- * Both are answered by the same law, and it is the world's own: a press holds
- * the sightline (`threading.beginGesture`), a held camera is a settled camera,
- * and a pose queued while the camera is held is abandoned rather than
- * performed. So attention is set on the way *down*, and the plate opens around
- * the bead under the finger — measured at 115 ms — in the pose the press was
- * made in, and then does not move. What the lean used to buy, the plate now
- * does for itself: it slides, by the least it can, to stay on the page.
- * A keyboard attend still performs the whole lean, and its plate still waits
- * for the pose to arrive, because nobody is aiming a pointer at it.
- *
- * THE PLATE HAS A GROUND. The graduated circle used to be struck straight over
- * whatever beads happened to lie inside it — on a 1280x720 frame the Prime
- * Numbers bead sat 53 px from the attended bead, directly under the Ground
- * station, and the ring's engraving ran through it. The plate now dims its own
- * footprint: an annulus of the world's own ground colour, transparent at the
- * centre so the attended bead is untouched and transparent again at the rim so
- * the plate has no edge.
+ * THE PLATE HAS A GROUND — a thin one. The engraving is laid over the world,
+ * so it sinks a band beneath its own ring; the centre stays clear, because the
+ * preview thread runs straight through it and is the thing being heard.
  *
  * Every `data-testid`, element id, ARIA role and keyboard behaviour here is
- * part of the accepted interaction contract asserted by
- * `tests/browser/deterministic-mode.spec.ts`. The glyphs are string literals
+ * part of the accepted interaction contract. The glyphs are string literals
  * (a previous revision put an escape sequence in JSX text and shipped the
  * literal characters `×` to the screen).
  */
@@ -97,7 +92,7 @@ interface IntentionOption extends IntentionVocabulary {
  * the arena exists and a DOM screen must not import an R3F component to learn
  * what Echo is called. What is left here is the only part that is genuinely
  * about this instrument: where a station *is*, so the clearance law and the
- * rendered layout cannot drift apart.
+ * rendered layout cannot drift apart. The order never changes with the pair.
  */
 const STATIONS: Readonly<Record<RelationIntention, PlateStation>> = Object.freeze({
   echo: "north",
@@ -127,26 +122,18 @@ const PLATE_GROUND_ID = "intention-plate-ground-fill";
 /**
  * Consecutive frames the camera must report itself settled before the plate is
  * allowed to open. Two, because `frameState.cameraSettled` is written by
- * `CameraRig`'s frame callback and this component's runs first: on the frame an
- * attend is committed the flag still carries the previous frame's answer.
+ * `CameraRig`'s frame callback and this component's runs first: on the frame a
+ * lock is committed the flag still carries the previous frame's answer.
  */
 const POSE_SETTLE_FRAMES = 2;
 
 /**
  * …AND THE OTHER WAY THE POSE CAN ARRIVE.
  *
- * `cameraSettled` is `goal.current === null`, and a scripted move gives up its
- * goal either on arrival or after a 3.5 s timeout. A move whose pose the orbit
- * clamps cannot arrive: the camera comes to a complete stop within a second or
- * so and the flag stays false for the whole of the timeout, which is why a
- * keyboard attend left the plate unopened for three and a half seconds with
- * nothing moving on the screen at all.
- *
- * So the plate also opens when *the thing it is anchored to* has stopped. This
- * is the property that actually matters — the plate must open where it will
- * stay — and it is measured directly, in pixels, on the anchor itself. The
- * bound is tight on purpose: at a damped stop, a frame that moves less than
- * this has less than a handful of pixels of travel left in it.
+ * A scripted move whose pose the orbit clamps cannot arrive: the camera stops
+ * and `cameraSettled` stays false until the rig's timeout. So the plate also
+ * opens when *the thing it is anchored to* has stopped, measured directly, in
+ * pixels, on the anchor itself.
  */
 const STILL_PX = 0.14;
 const STILL_FRAMES = 4;
@@ -154,7 +141,7 @@ const STILL_FRAMES = 4;
 /** The band an engraved station name occupies beyond its own station. */
 const LABEL_BAND = 18;
 
-/** How long an armed intention waits before it begins to insist. */
+/** How long a chosen reading waits before it begins to insist. */
 export const INSIST_AFTER_SECONDS = 9;
 /** And how long it then takes to reach its full, still-quiet depth. */
 export const INSIST_RAMP_SECONDS = 5;
@@ -163,25 +150,36 @@ export const INSIST_DEPTH = 0.34;
 
 /** Scratch for the once-per-frame projection. Nothing here allocates. */
 const screen = new THREE.Vector3();
+const attendedAt = new THREE.Vector3();
+const secondAt = new THREE.Vector3();
+const midpoint = new THREE.Vector3();
 
 /**
  * Has the pose this plate will be aimed at arrived?
  *
  * `last` carries the previous frame's anchor point and whether there was one:
  * three numbers in an array the caller owns, so asking the question costs no
- * allocation on the frame path.
+ * allocation on the frame path. While a hand still holds the sightline nothing
+ * is counted at all.
  */
 function poseArrived(
   settledFrames: MutableRefObject<number>,
   stillFrames: MutableRefObject<number>,
   last: MutableRefObject<Float32Array>,
   x: number,
-  y: number
+  y: number,
+  sightlineHeld: boolean
 ): boolean {
+  const previous = last.current;
+  if (sightlineHeld) {
+    settledFrames.current = 0;
+    stillFrames.current = 0;
+    previous[2] = 0;
+    return false;
+  }
   settledFrames.current = frameState.cameraSettled
     ? settledFrames.current + 1
     : 0;
-  const previous = last.current;
   stillFrames.current =
     previous[2] > 0 && Math.hypot(x - previous[0], y - previous[1]) < STILL_PX
       ? stillFrames.current + 1
@@ -248,16 +246,18 @@ function Plate({
       viewBox={`${-box / 2} ${-box / 2} ${box} ${box}`}
       className="pointer-events-none absolute inset-0 h-full w-full"
     >
-      {/* The plate's own ground: it clears a radius for the instrument by
-          sinking whatever the arena has left inside the ring. Transparent at
-          the centre — the attended bead is there and must not be dimmed — and
-          transparent again at the rim, so the plate is a face and not a disc. */}
+      {/* The plate's own ground: a band of the world's ground colour beneath
+          the engraving, so the ring is not struck straight over whatever the
+          arena has left under it. Transparent through the centre — the
+          preview thread runs through there, and it is what is being heard —
+          and transparent again at the rim, so the plate is a face and not a
+          disc. */}
       <defs>
         <radialGradient id={PLATE_GROUND_ID}>
           <stop offset="0%" stopColor={ground} stopOpacity={0} />
-          <stop offset="26%" stopColor={ground} stopOpacity={0} />
-          <stop offset="52%" stopColor={ground} stopOpacity={0.62} />
-          <stop offset="92%" stopColor={ground} stopOpacity={0.62} />
+          <stop offset="58%" stopColor={ground} stopOpacity={0} />
+          <stop offset="76%" stopColor={ground} stopOpacity={0.5} />
+          <stop offset="94%" stopColor={ground} stopOpacity={0.5} />
           <stop offset="100%" stopColor={ground} stopOpacity={0} />
         </radialGradient>
       </defs>
@@ -314,11 +314,9 @@ function Plate({
 /**
  * How far the plate may slide to stay on the page, and what it protects first.
  *
- * The plate is anchored to a bead, and a bead near an edge is a plate over the
- * edge. The camera used to solve this by leaning until the plate fitted, and
- * paid for it with three and a half seconds in which the press that demanded
- * the plate was answered by nothing at all. The plate now opens where the bead
- * is and slides — by the least it can — until it is on the page.
+ * The plate is anchored between two beads, and a pair near an edge is a plate
+ * over the edge. It opens where the pair is and slides — by the least it can —
+ * until it is on the page.
  *
  * When the page is too small to hold the whole plate at all (a phone is), what
  * is protected is the four verbs and their engraved names; the index rail's two
@@ -337,8 +335,8 @@ function slide(centre: number, extent: number, size: number): number {
 /**
  * How much of that slide the plate may actually take.
  *
- * It stops when the attended bead would leave the ring drawn around it — a
- * plate that is not visibly *this bead's* plate is worse than a plate with a
+ * It stops when the thread's midpoint would leave the ring drawn around it — a
+ * plate that is not visibly *this pair's* plate is worse than a plate with a
  * clipped corner — and gives that bound up only for the one thing that may
  * never happen, which is a verb station over the edge of the page.
  */
@@ -348,13 +346,11 @@ function bounded(whole: number, verbs: number, ring: number): number {
 }
 
 /**
- * How hard an armed intention nobody has drawn is insisting, 0 to 1.
+ * How hard a chosen reading nobody weaves is insisting, 0 to 1.
  *
- * Measured naive: the ring was still open ninety seconds after the intention
- * was chosen, sixty-five of them after the last release, with no thread woven
- * and nothing on the screen changing. There is no timer in this Game and no
- * failure, so the intention is not taken away — it is still theirs, and they
- * have done nothing wrong. It says so instead, and it takes its time saying it.
+ * There is no timer in this Game and no failure, so a chosen reading is never
+ * taken away — it is still the player's, and they have done nothing wrong. It
+ * says so instead, and it takes its time saying it.
  */
 function insistence(armedSeconds: number): number {
   const over = (armedSeconds - INSIST_AFTER_SECONDS) / INSIST_RAMP_SECONDS;
@@ -368,7 +364,21 @@ function insistence(armedSeconds: number): number {
  */
 export const PLATE_PLACEMENT = Object.freeze({ slide, bounded, insistence });
 
-/** A temporary world-bound intention plate; it is never a persistent HUD. */
+/**
+ * Whether focus arrived by keyboard. A plate that closes under a pointer's
+ * focus has nothing to hand back; one that closes under the keyboard's must
+ * not drop it on the page.
+ */
+function focusIsVisible(target: EventTarget): boolean {
+  if (!(target instanceof Element)) return false;
+  try {
+    return target.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
+
+/** A temporary world-bound sigil plate; it is never a persistent HUD. */
 export function IntentionConstellation() {
   const anchor = useRef<THREE.Group>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -378,18 +388,28 @@ export function IntentionConstellation() {
     viewportWidth,
     typeof window === "undefined" ? false : isCoarsePointer()
   );
+  const view = useFocusView();
   const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
-  const attendedId =
-    draft.stage === "inactive" ? null : String(draft.attendedConceptId);
+
+  // The plate exists exactly when the focus view says the sigils are visible:
+  // a locked pair, with or without a chosen reading.
+  const attendedConcept = view.sigilsVisible ? view.attendedConceptId : null;
+  const secondConcept = view.sigilsVisible ? view.secondConceptId : null;
+  const attendedId = attendedConcept === null ? null : String(attendedConcept);
+  const secondId = secondConcept === null ? null : String(secondConcept);
+  const pairKey =
+    attendedId === null || secondId === null ? null : `${attendedId} ${secondId}`;
+  const selected = draft.stage === "reading" ? draft.intention : null;
 
   /**
    * Whether the pose this plate will be aimed at has arrived. Latched: once the
-   * plate is open, a later phrase — the breath on arming, a reveal — must never
-   * take it away again, and it is reset only when attention moves to another
-   * bead, which is the one case where the plate genuinely has to be re-placed.
+   * plate is open, a later phrase must never take it away again, and it is
+   * reset only when the pair changes — a re-lock is the one case where the
+   * plate genuinely has to be re-placed.
    */
   const [posed, setPosed] = useState(false);
-  const armedMark = useRef<HTMLDivElement>(null);
+  const armedMark = useRef<HTMLSpanElement | null>(null);
+  const armedFor = useRef<RelationIntention | null>(null);
   const armedSeconds = useRef(0);
   const settledFrames = useRef(0);
   const stillFrames = useRef(0);
@@ -399,29 +419,42 @@ export function IntentionConstellation() {
     stillFrames.current = 0;
     lastScreen.current[2] = 0;
     setPosed(false);
-  }, [attendedId]);
+  }, [pairKey]);
+
+  /**
+   * The chosen reading's glyph is the one mark that may insist. A callback
+   * ref, so a mark that stops being the chosen one also stops breathing
+   * instead of keeping whatever opacity it was last given.
+   */
+  const markArmed = useCallback((element: HTMLSpanElement | null) => {
+    const previous = armedMark.current;
+    if (previous !== null && previous !== element) previous.style.opacity = "";
+    armedMark.current = element;
+  }, []);
 
   useFrame((three, rawDt) => {
-    if (draft.stage === "inactive") {
+    if (attendedId === null || secondId === null) {
       armedSeconds.current = 0;
       return;
     }
     const dt = Math.min(rawDt, 1 / 20);
 
     /**
-     * AN ARMED INTENTION THAT NOBODY DRAWS MUST NOT SIT THERE FOR EVER.
+     * A CHOSEN READING THAT NOBODY WEAVES MUST NOT SIT THERE FOR EVER.
      *
-     * Measured naive: the ring was still open ninety seconds after the
-     * intention was chosen, sixty-five of them after the last release, with no
-     * thread woven and nothing on the screen changing. The Game has no timers
-     * and no failure, so the answer is not to take the intention away — the
-     * player has not done anything wrong and it is still theirs. It *insists*
-     * instead: after a while the armed mark begins to breathe, on the world's
-     * own breath, bounded, in light rather than travel, so it is legible under
-     * reduced motion and cannot become a flash. It says "this is still held",
-     * which is the truth, and it never says it faster.
+     * The Game has no timers and no failure, so the answer is not to take the
+     * reading away — the player has not done anything wrong and it is still
+     * theirs. It *insists* instead: after a while the chosen mark begins to
+     * breathe, on the world's own breath, bounded, in light rather than
+     * travel, so it is legible under reduced motion and cannot become a flash.
+     * It says "this is still held", which is the truth, and it never says it
+     * faster.
      */
-    if (draft.stage === "armed" && !frameState.aim.active) {
+    if (selected !== armedFor.current) {
+      armedFor.current = selected;
+      armedSeconds.current = 0;
+    }
+    if (selected !== null && !productionInterpretation.isHolding()) {
       armedSeconds.current += dt;
     } else {
       armedSeconds.current = 0;
@@ -432,33 +465,34 @@ export function IntentionConstellation() {
       const breath = (1 - Math.cos(frameState.breathPhase)) / 2;
       mark.style.opacity = String(1 - insist * INSIST_DEPTH * breath);
     }
-    const index = frameState.beadIndex.get(String(draft.attendedConceptId));
-    if (index === undefined) return;
+
+    const ia = frameState.beadIndex.get(attendedId);
+    const ib = frameState.beadIndex.get(secondId);
+    if (ia === undefined || ib === undefined) return;
     const rendered = frameState.rendered;
-    if (anchor.current) {
-      anchor.current.position.set(
-        rendered[index * 3],
-        rendered[index * 3 + 1],
-        rendered[index * 3 + 2]
-      );
-    }
+    attendedAt.set(rendered[ia * 3], rendered[ia * 3 + 1], rendered[ia * 3 + 2]);
+    secondAt.set(rendered[ib * 3], rendered[ib * 3 + 1], rendered[ib * 3 + 2]);
+    // Halfway along the unread strand between the pair — the same point
+    // whatever reading is being heard, so the sigil under the pointer never
+    // moves away from it.
+    previewMidpoint(attendedAt, secondAt, midpoint);
+    if (anchor.current) anchor.current.position.copy(midpoint);
 
     // Where the plate's anchor actually lands on the page, this frame.
-    screen
-      .set(rendered[index * 3], rendered[index * 3 + 1], rendered[index * 3 + 2])
-      .project(three.camera);
+    screen.copy(midpoint).project(three.camera);
     const x = ((screen.x + 1) / 2) * three.size.width;
     const y = ((1 - screen.y) / 2) * three.size.height;
 
     if (!posed) {
-      if (poseArrived(settledFrames, stillFrames, lastScreen, x, y)) {
+      if (poseArrived(settledFrames, stillFrames, lastScreen, x, y, isSightlineHeld())) {
         setPosed(true);
       }
       return;
     }
 
     // The plate keeps itself on the page. A ref write, never React state: this
-    // is solved on every frame and must not re-render the arena.
+    // is solved on every frame and must not re-render the arena. No easing:
+    // the correction is a placement, not a journey, under any motion setting.
     const element = pane.current;
     if (!element) return;
     const verb = plate.ring + plate.station / 2 + LABEL_BAND;
@@ -468,7 +502,7 @@ export function IntentionConstellation() {
       plate.ring
     );
     const dy = bounded(
-      slide(y, Math.max(plate.extentUp, plate.extentDown), three.size.height),
+      slide(y, Math.max(plate.extentUp, verb), three.size.height),
       slide(y, verb, three.size.height),
       plate.ring
     );
@@ -476,27 +510,29 @@ export function IntentionConstellation() {
       dx === 0 && dy === 0 ? "" : `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
   });
 
+  const candidateId =
+    draft.stage === "locked" || draft.stage === "reading"
+      ? String(draft.candidateConceptId)
+      : null;
   useEffect(() => {
-    if (draft.stage !== "attending" || !attendedId) return;
-    if (document.activeElement?.id !== `bead-control-${attendedId}`) return;
+    if (draft.stage !== "locked" || !candidateId) return;
+    if (document.activeElement?.id !== `bead-control-${candidateId}`) return;
     let request = 0;
     let attempts = 0;
     /**
+     * A KEYBOARD PLAYER ARRIVES ON THE PLATE THEY JUST OPENED.
+     *
      * Existing is not the same as focusable, and the difference is a whole
      * frame. The plate is carried by drei's `Html`, which mounts its wrapper
      * with `display: none` and only reveals it from its own frame callback —
      * and `focus()` on a display-none element does nothing at all, silently.
-     * This used to call `focus()` once the element existed and return whether
-     * or not the focus had been taken, so a keyboard player whose plate was one
-     * frame behind was simply left on the bead they had just opened.
+     * So this keeps asking until the focus has actually been taken.
      *
-     * The bound is generous rather than tight because the plate now waits for
-     * the attend pose to arrive, which is a whole camera phrase: sixty frames
-     * expired long before the plate existed and put the keyboard player back
-     * where the old bug had left them.
+     * The bound is generous rather than tight because the plate waits for the
+     * lock's pose to arrive, which is a whole camera phrase.
      */
     const focusWhenProjected = (): void => {
-      const control = document.getElementById("intention-control-echo");
+      const control = document.getElementById(sigilControlId("echo"));
       if (control) {
         control.focus();
         if (document.activeElement === control) return;
@@ -506,37 +542,47 @@ export function IntentionConstellation() {
     };
     request = window.requestAnimationFrame(focusWhenProjected);
     return () => window.cancelAnimationFrame(request);
-  }, [attendedId, draft.stage]);
+  }, [candidateId, draft.stage]);
 
-  if (draft.stage === "inactive" || !attendedId) return null;
-  const selected = draft.stage === "attending" ? null : draft.intention;
-  const selectedOption = INTENTION_OPTIONS.find(
-    (option) => option.intention === selected
-  );
-  const stationSize = { minWidth: plate.station, minHeight: plate.station };
-  const utilitySize = { width: plate.utility, height: plate.utility };
-  const restoreAttendedFocus = (): void => {
-    window.requestAnimationFrame(() => {
-      document.getElementById(`bead-control-${attendedId}`)?.focus();
+  /**
+   * …AND LEAVES IT WITHOUT BEING DROPPED ON THE PAGE.
+   *
+   * The plate closes under the keyboard's focus when Enter weaves, or when
+   * Escape or Step back returns to attending. Focus on a removed element falls
+   * to the document, and the next Tab starts from the top of the page. So the
+   * keyboard is handed back to the second bead's control in the accessible
+   * mirror — the bead it was last on — unless it has already gone somewhere
+   * on purpose.
+   */
+  const keyboardOnPlate = useRef(false);
+  const lastSecond = useRef<string | null>(null);
+  useEffect(() => {
+    if (secondId !== null) {
+      lastSecond.current = secondId;
+      return;
+    }
+    if (!keyboardOnPlate.current) return;
+    keyboardOnPlate.current = false;
+    const returnTo = lastSecond.current;
+    const active = document.activeElement;
+    if (returnTo === null || (active !== null && active !== document.body)) return;
+    const request = window.requestAnimationFrame(() => {
+      document.getElementById(`bead-control-${returnTo}`)?.focus();
     });
-  };
-  const choose = (intention: RelationIntention, restoreFocus: boolean): void => {
-    productionInterpretation.armIntention(intention);
-    if (restoreFocus) restoreAttendedFocus();
-  };
-  const focusIntentionAt = (index: number): void => {
-    const bounded =
-      (index + INTENTION_OPTIONS.length) % INTENTION_OPTIONS.length;
-    document
-      .getElementById(
-        `intention-control-${INTENTION_OPTIONS[bounded].intention}`
-      )
-      ?.focus();
-  };
+    return () => window.cancelAnimationFrame(request);
+  }, [secondId]);
+
+  if (attendedConcept === null || pairKey === null) return null;
 
   // The anchor group is always here so the plate has a world position the
   // instant it is allowed to open; only the plate itself waits for the pose.
   if (!posed) return <group ref={anchor} />;
+
+  const stationSize = { minWidth: plate.station, minHeight: plate.station };
+  const utilitySize = { width: plate.utility, height: plate.utility };
+  // One stop in the tab order, as a radiogroup has: the chosen reading, or the
+  // first when none is chosen. The arrows move within the group.
+  const tabStop = selected ?? INTENTION_OPTIONS[0].intention;
 
   return (
     <group ref={anchor}>
@@ -546,80 +592,63 @@ export function IntentionConstellation() {
           data-testid="intention-constellation"
           className="relative touch-none text-bright"
           style={{ width: plate.box, height: plate.box }}
+          onFocus={(event) => {
+            keyboardOnPlate.current = focusIsVisible(event.target);
+          }}
+          onBlur={(event) => {
+            const next = event.relatedTarget;
+            if (next instanceof Node && event.currentTarget.contains(next)) return;
+            // Focus leaving for nowhere is the plate closing under it (or the
+            // window going away), not the keyboard choosing to go elsewhere.
+            if (next !== null) keyboardOnPlate.current = false;
+          }}
         >
           <Plate
-            armed={selectedOption !== undefined}
+            armed={selected !== null}
             brass={theme.palette.brass}
             gold={theme.palette.gold}
             ground={theme.palette.ground}
             plate={plate}
           />
 
-          {draft.stage === "attending" ? (
-            <div
-              role="radiogroup"
-              aria-label="Choose an intention for the attended bead"
-              className="absolute inset-0"
-            >
-              {INTENTION_OPTIONS.map((option) => (
+          <div
+            role="radiogroup"
+            aria-label="Choose how you read the pair"
+            className="absolute inset-0"
+          >
+            {INTENTION_OPTIONS.map((option) => {
+              const checked = option.intention === selected;
+              return (
                 <button
                   key={option.intention}
-                  id={`intention-control-${option.intention}`}
+                  id={sigilControlId(option.intention)}
                   type="button"
                   role="radio"
-                  aria-checked={false}
+                  aria-checked={checked}
+                  tabIndex={option.intention === tabStop ? 0 : -1}
                   aria-label={`${option.label}: ${option.description}`}
                   title={`${option.label} — ${option.description}`}
                   data-world-intention={option.intention}
-                  data-direct-hover="false"
                   data-testid={`intention-${option.intention}`}
                   style={{
-                    ...station(
-                      PLATE_STATIONS[option.station].bearing,
-                      plate.ring
-                    ),
+                    ...station(PLATE_STATIONS[option.station].bearing, plate.ring),
                     ...stationSize,
                   }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => {
-                    const index = INTENTION_OPTIONS.indexOf(option);
-                    if (event.key === " ") {
-                      event.preventDefault();
-                      choose(option.intention, true);
-                    } else if (
-                      event.key === "ArrowRight" ||
-                      event.key === "ArrowDown"
-                    ) {
-                      event.preventDefault();
-                      focusIntentionAt(index + 1);
-                    } else if (
-                      event.key === "ArrowLeft" ||
-                      event.key === "ArrowUp"
-                    ) {
-                      event.preventDefault();
-                      focusIntentionAt(index - 1);
-                    } else if (event.key === "Home") {
-                      event.preventDefault();
-                      focusIntentionAt(0);
-                    } else if (event.key === "End") {
-                      event.preventDefault();
-                      focusIntentionAt(INTENTION_OPTIONS.length - 1);
-                    }
-                  }}
-                  onClick={(event) =>
-                    choose(option.intention, event.detail === 0)
-                  }
-                  className="group pointer-events-auto absolute grid place-items-center rounded-full border border-line/80 bg-void/85 text-bright shadow-[0_2px_14px_hsl(var(--void)/0.8)] backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow data-[direct-hover=true]:scale-125 data-[direct-hover=true]:border-glow data-[direct-hover=true]:bg-glow/20 [&:focus-visible_.gloss]:opacity-100 [&[data-direct-hover=true]_.gloss]:opacity-100"
+                  {...sigilHandlers(option.intention)}
+                  className="group pointer-events-auto absolute grid place-items-center rounded-full border border-line/80 bg-void/85 text-bright shadow-[0_2px_14px_hsl(var(--void)/0.8)] backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow aria-checked:border-glow aria-checked:bg-glow/15 [&:focus-visible_.gloss]:opacity-100"
                 >
-                  <span className="font-display text-xl leading-none" aria-hidden="true">
+                  <span
+                    ref={checked ? markArmed : undefined}
+                    className="font-display text-xl leading-none"
+                    aria-hidden="true"
+                  >
                     {option.icon}
                   </span>
                   {/*
                     Four abstract nouns with no verb attached is the single
                     thing a first-time player is most likely to stall on. The
                     gloss the pack already writes for each — "shares a form",
-                    "carries or transforms" — was reaching the accessible name
-                    and nothing else. It now appears under the sigil the moment
+                    "carries or transforms" — appears under the sigil the moment
                     the pointer or the keyboard reaches it, and disappears again
                     so it never becomes chrome.
                   */}
@@ -637,40 +666,19 @@ export function IntentionConstellation() {
                     </span>
                   </span>
                 </button>
-              ))}
-            </div>
-          ) : selectedOption ? (
-            <div
-              ref={armedMark}
-              aria-hidden="true"
-              data-testid="armed-intention"
-              title={`${selectedOption.label} armed`}
-              style={{
-                ...station(
-                  PLATE_STATIONS[selectedOption.station].bearing,
-                  plate.ring
-                ),
-                width: plate.station,
-                height: plate.station,
-              }}
-              className="pointer-events-none absolute grid place-items-center rounded-full border border-glow/80 bg-glow/15 font-display text-2xl text-bright shadow-[0_0_26px_hsl(var(--glow)/0.35)] backdrop-blur-[2px]"
-            >
-              {selectedOption.icon}
-            </div>
-          ) : null}
+              );
+            })}
+          </div>
 
           {/* The index rail: outside the graduated circle, on the upper
               diagonals, clear of every verb station and every engraved label
               by the clearance law in scene/framing.ts.
 
-              A SECOND REGISTER HAS TO LOOK LIKE ONE. These two used to be
-              44 px chips against the verbs' 48 px, with the same rule, the
-              same fill, the same blur — six near-identical discs of which four
-              were the interpretation and two were housekeeping. The *target*
-              is still a fingertip (framing.UTILITY_SIZE, and the clearance law
-              is measured against it); what is drawn inside it is now a mark
-              little more than half the size, with no fill of its own and no
-              shadow, so the eye reads four verbs and two indices. */}
+              A SECOND REGISTER HAS TO LOOK LIKE ONE. The *target* is still a
+              fingertip (framing.UTILITY_SIZE, and the clearance law is
+              measured against it); what is drawn inside it is a mark little
+              more than half the size, with no fill of its own and no shadow,
+              so the eye reads four verbs and two indices. */}
           <button
             type="button"
             data-testid="world-cancel-interpretation"
@@ -680,7 +688,10 @@ export function IntentionConstellation() {
               ...utilitySize,
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => productionInterpretation.cancel()}
+            onClick={(event) => {
+              event.stopPropagation();
+              productionInterpretation.cancel();
+            }}
             className={UTILITY_TARGET}
           >
             <span aria-hidden="true" className={`${UTILITY_MARK} font-ui`}>
@@ -696,9 +707,10 @@ export function IntentionConstellation() {
               ...utilitySize,
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() =>
-              productionInterpretation.inspect(draft.attendedConceptId)
-            }
+            onClick={(event) => {
+              event.stopPropagation();
+              productionInterpretation.inspect(attendedConcept);
+            }}
             className={UTILITY_TARGET}
           >
             <span aria-hidden="true" className={`${UTILITY_MARK} font-display italic`}>
