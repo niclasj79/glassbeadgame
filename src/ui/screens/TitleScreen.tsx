@@ -26,7 +26,7 @@ import { KeptGamesShelf } from "./KeptGames";
 import { TITLE_EPIGRAPH } from "./titleEpigraph";
 
 /**
- * One door.
+ * One door, and a second beneath it.
  *
  * The prototype's title offered four: Begin, Today's Draw, the Codex, and a
  * progress menu carrying a rank. Three of them were entrances to systems that
@@ -34,6 +34,14 @@ import { TITLE_EPIGRAPH } from "./titleEpigraph";
  * make, and the Codex and rank both counted curated connections against a
  * corpus that has been deleted. What is left is the only choice the Game ever
  * needed the player to make: start.
+ *
+ * The Studies (STUDIES-SPEC §7, ADR-015) are the second way to play, and their
+ * door stands beneath Begin in the same register, one weight quieter: Begin is
+ * still the Game, and nothing about the second door counts, ranks or promises
+ * anything. It opens a page and builds nothing, so it is taken on the click,
+ * which is also the keyboard's; it shares Begin's latch, so a press of one
+ * makes the other a no-op, and it is held shut with Begin until the world
+ * behind them is ready, because a Study opens into the same arena.
  *
  * WHAT HAPPENS WHEN IT IS PRESSED.
  *
@@ -210,6 +218,13 @@ export function TitleScreen() {
     setOpening(true);
   }, []);
 
+  /** The second door: the Studies list. No session exists until a Study is begun. */
+  const openStudies = useCallback(() => {
+    if (pressed.current) return;
+    pressed.current = true;
+    useStore.getState().openStudies();
+  }, []);
+
   /**
    * The threshold is opened two frames after the leaving state is committed —
    * long enough for the browser to have painted the acknowledgement, short
@@ -327,6 +342,18 @@ export function TitleScreen() {
           className="mt-5 h-px w-56 origin-center bg-gradient-to-r from-transparent via-glow to-transparent"
           style={{ transform: "scaleX(0)", opacity: 0 }}
         />
+        {/* The second door, held with the first. */}
+        <Button
+          variant="ghost"
+          data-testid="title-studies"
+          disabled={!armed}
+          tabIndex={armed ? undefined : -1}
+          aria-hidden={armed ? undefined : true}
+          onClick={openStudies}
+          className="mt-3"
+        >
+          Studies
+        </Button>
         {/* The shelf. Absent until a Game has been kept; leaves with the door. */}
         <KeptGamesShelf />
       </motion.div>

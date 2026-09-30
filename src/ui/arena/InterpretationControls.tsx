@@ -11,7 +11,10 @@ import {
   useFocusView,
 } from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
+import { useStudy } from "@/state/studies";
 import { reopenWovenThread, wovenThreadLabel } from "./columnPlan";
+import { useHeldWhileLeaving } from "./presence";
+import { declareSilence } from "./studyMode";
 
 const NO_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
 
@@ -61,11 +64,34 @@ export function WovenThreadList({
 }
 
 /**
+ * *IT CANNOT BE DONE*, IN THE MIRROR (STUDIES-SPEC §7).
+ *
+ * The silence control exists in the world's margin and here, on every Study,
+ * so a keyboard or a screen reader can give the same answer with no pointer.
+ * It is worded exactly as the margin words it, and what the Game answers —
+ * *not yet*, or the solved plate — is said by the margin's own line and by the
+ * plate, not repeated here. Hook-free, so what it does can be pressed.
+ */
+export function StudySilenceMirror() {
+  return (
+    <button
+      type="button"
+      data-testid="study-declare-silence-mirror"
+      onClick={() => declareSilence()}
+    >
+      It cannot be done
+    </button>
+  );
+}
+
+/**
  * A non-dominant semantic mirror of the world interaction. It supplies a
  * bounded keyboard/screen-reader path without putting a second arena on screen.
  */
 export function InterpretationControls() {
   const beadIds = useStore((state) => state.session?.beadIds ?? []);
+  // A Study adds one answer to the mirror; the Free Game's mirror is unchanged (R4).
+  const studying = useHeldWhileLeaving(useStudy((state) => state.studyId !== null));
   const focusedBeadId = useStore((state) => state.focusedBeadId);
   const setFocusedBead = useStore((state) => state.setFocusedBead);
   const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
@@ -238,6 +264,7 @@ export function InterpretationControls() {
       >
         Step back
       </button>
+      {studying && <StudySilenceMirror />}
       <WovenThreadList
         threads={threads}
         reopenedThreadId={reopenedThreadId}

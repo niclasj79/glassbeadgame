@@ -179,7 +179,12 @@ export {
 export * from "./schema";
 export {
   CASTALIA_LIMITS,
+  STUDY_ERROR_CODES,
+  STUDY_LIMITS,
   assertCastaliaPackValid,
   validateCastaliaPack,
+  validateStudies,
   type CastaliaValidationResult,
+  type StudyErrorCode,
+  type StudyIssue,
 } from "./validate";

@@ -912,6 +912,26 @@ export function createAudioDirector(
         break;
       }
 
+      case "study.solved": {
+        // A Study solved (M9-001) takes a seat the way a completed motif does:
+        // the answer's own beads, entering in turn. No new grammar, and nothing
+        // here can hear how any thread resolved, because the cue carries no
+        // outcome (CAV-006). A silence has no beads, and is answered by one.
+        const sources = cue.payload.conceptIds.map((id) => source(String(id)));
+        if (sources.length === 0) break;
+        emit(
+          planEnsemble(
+            `solved:${cue.payload.studyId}`,
+            mode,
+            sources,
+            unitSeconds,
+            ambientGain()
+          ),
+          sink.quantize()
+        );
+        break;
+      }
+
       case "attunement.changed": {
         handleAttunement(cue.payload.active);
         break;

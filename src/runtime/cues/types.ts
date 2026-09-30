@@ -31,6 +31,7 @@ import type {
   EvidenceClass,
   FacetId,
 } from "@/content/castalia/schema";
+import type { StudyMark } from "@/domain/studies/types";
 
 /** How the authored relation received the player's declared reading (CAV-002). */
 export type IntentionReception = "confirmed" | "refined" | "complicated";
@@ -152,6 +153,42 @@ export interface ConclusionPayload {
   readonly performance: unknown;
 }
 
+/**
+ * A Study solved (STUDIES-SPEC §6, §7): one coordinated moment, staged after
+ * the commit that completed the answer has settled, or at once for a declared
+ * silence. It carries the form of the answer and nothing else — no outcome,
+ * no documented flag — so no director can pay one kind of truth more than
+ * another (R2, CAV-006).
+ */
+export interface StudySolvedPayload {
+  readonly studyId: string;
+  readonly by: "threads" | "silence";
+  /** The player's answer, in line order. Empty for a silence. */
+  readonly threadIds: readonly ThreadId[];
+  /**
+   * The answer's beads in the order its line reads them, so the world and the
+   * score can answer at them without reading the session. Empty for a silence.
+   */
+  readonly conceptIds: readonly ConceptId[];
+  /** Marks of form: words, never points. Empty for a silence. */
+  readonly marks: readonly StudyMark[];
+  /**
+   * The brief as the margin shows it. The caption layer holds no Study, and
+   * must not (the Studies load with the Studies), so the words travel here.
+   */
+  readonly brief: string;
+}
+
+/**
+ * Silence declared on a Study that can be solved: "Not yet — it can be done
+ * with these beads", and nothing more (STUDIES-SPEC §5). A caption and a
+ * margin line; it never interrupts and never hints.
+ */
+export interface StudyNotYetPayload {
+  readonly studyId: string;
+  readonly statement: "can-be-done";
+}
+
 export interface CuePayloadMap {
   readonly "attention.enter": AttentionEnterPayload;
   readonly "attention.clear": Readonly<Record<string, never>>;
@@ -167,6 +204,8 @@ export interface CuePayloadMap {
   readonly "motif.completed": MotifCompletedPayload;
   readonly "attunement.changed": AttunementPayload;
   readonly "conclusion.perform": ConclusionPayload;
+  readonly "study.solved": StudySolvedPayload;
+  readonly "study.not-yet": StudyNotYetPayload;
 }
 
 export type CueType = keyof CuePayloadMap;

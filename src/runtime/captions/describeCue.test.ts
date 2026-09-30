@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { toConceptId, toEventId, toThreadId } from "@/domain/ids";
 import type { DocumentedRelation } from "@/content/castalia/schema";
+import { describeStudyStatus } from "@/domain/studies";
+import { planStudyNotYet, planStudySolved } from "../cues/planCues";
 import {
   planAttention,
   planCommitMoment,
@@ -254,6 +256,68 @@ describe("cue captions", () => {
     ];
     for (const cue of cues) {
       expect(describeCue(cue, context)!.urgency).toBe("polite");
+    }
+  });
+});
+
+describe("Study captions (M9-001)", () => {
+  const solved = (by: "threads" | "silence"): PresentationCue =>
+    planStudySolved(
+      by === "threads"
+        ? {
+            studyId: "study.eschholz-1",
+            by,
+            threadIds: [THREAD],
+            conceptIds: [A, B],
+            marks: ["economical", "varied"],
+            brief: "From The Möbius Band to Counterpoint in two threads",
+          }
+        : {
+            studyId: "study.eschholz-4",
+            by,
+            threadIds: [],
+            conceptIds: [],
+            marks: [],
+            brief: "Carry Proportion into Matter",
+          },
+      by === "threads" ? EVENT : null,
+      by === "threads" ? 2.4 : 0
+    ).cues[0];
+
+  const notYet = (): PresentationCue =>
+    planStudyNotYet({ studyId: "study.eschholz-1", statement: "can-be-done" }).cues[0];
+
+  /** STUDIES-SPEC §7 and the packet's constraints: no counter of any kind on a Study surface. */
+  const UNCOUNTED = /\d|%|percent|\b(score|scores|points?|rank|ranks|ranked|wrong|total)\b/i;
+
+  it("says a Study is solved in the brief's own words", () => {
+    expect(describeCue(solved("threads"), context)).toEqual({
+      text: "Solved: From The Möbius Band to Counterpoint in two threads.",
+      urgency: "polite",
+    });
+    expect(describeCue(solved("silence"), context)).toEqual({
+      text: "Solved: Carry Proportion into Matter — it cannot be done with these beads.",
+      urgency: "polite",
+    });
+  });
+
+  it("says not yet in the evaluator's own words, and nothing more: no bead, no hint", () => {
+    const words = describeStudyStatus(
+      { kind: "not-yet", statement: { kind: "can-be-done" } },
+      { conceptName: () => "", facetName: () => "", facultyName: () => "" }
+    );
+    expect(describeCue(notYet(), context)).toEqual({ text: words, urgency: "polite" });
+    expect(words).toBe("Not yet — it can be done with these beads.");
+  });
+
+  it("passes the copy rules: no praise, no count, no total, no percentage, no score", () => {
+    for (const cue of [solved("threads"), solved("silence"), notYet()]) {
+      const caption = describeCue(cue, context)!;
+      expect(caption.text).not.toMatch(FORBIDDEN);
+      expect(caption.text).not.toMatch(UNCOUNTED);
+      // The marks stay on the plate; the caption never grades the answer.
+      expect(caption.text).not.toMatch(/economical|wide|varied/i);
+      expect(caption.urgency).toBe("polite");
     }
   });
 });

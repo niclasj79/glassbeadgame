@@ -4,10 +4,13 @@ import { productionInterpretation } from "@/runtime/interpretation";
 import { sessionProgression } from "@/runtime/progression";
 import { LENS_DISCLOSURE, LENS_VIEWS } from "@/game/layout";
 import { useStore } from "@/state/store";
+import { useStudy } from "@/state/studies";
 import { OPENING_DEPARTURE_MS, arenaChromeVisible } from "@/scene/opening";
 import { CueCaptions } from "./CueCaptions";
 import { ArenaColumn } from "./FocusColumn";
 import { InterpretationControls } from "./InterpretationControls";
+import { useHeldWhileLeaving } from "./presence";
+import { leaveStudy, sessionPage } from "./studyMode";
 
 /**
  * THE CHROME WAITS FOR THE TITLE TO LEAVE.
@@ -38,11 +41,26 @@ function useChromeShown(): boolean {
   return shown;
 }
 
-/** The world remains primary; these controls mirror its interpretation actions accessibly. */
+/**
+ * The world remains primary; these controls mirror its interpretation actions accessibly.
+ *
+ * IN A STUDY (STUDIES-SPEC §7) the arena has one verb of its own, a quiet
+ * *Leave*, where the Free Game has the Lens and Conclude: the specification
+ * shows neither in Study mode, and a Study never concludes and is never kept
+ * (§10). The Attunement invitation is the world's, not the HUD's, and the
+ * Study runtime does not surface it. Everything else — the column, the
+ * captions and the mirror — is the Free Game's, with the brief written at the
+ * head of the column. With no Study being played this is the Free Game's HUD,
+ * unchanged (R4). Leaving a Study forgets it in the same act that changes the
+ * phase, so while this page fades out it keeps the Study it was showing
+ * (`useHeldWhileLeaving`) and never redraws itself as a Free Game on the way.
+ */
 export function ArenaHud() {
   const lensActive = useStore((state) => state.lensActive);
   const lensView = useStore((state) => state.lensView);
   const cycleLens = useStore((state) => state.cycleLens);
+  const session = useHeldWhileLeaving(useStore((state) => state.session));
+  const studying = useHeldWhileLeaving(useStudy((state) => state.studyId !== null));
   const shown = useChromeShown();
 
   /**
@@ -86,30 +104,36 @@ export function ArenaHud() {
           animate={{ opacity: shown ? 1 : 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          <button
-            type="button"
-            aria-pressed={lensActive}
-            title={
-              lensActive
-                ? `${LENS_VIEWS[lensView - 1]?.label ?? ""} — ${LENS_DISCLOSURE} Press again for the next pair.`
-                : `The Lens — lays the beads out along True, Beautiful and Good. ${LENS_DISCLOSURE}`
-            }
-            onClick={() => {
-              productionInterpretation.reset();
-              cycleLens();
-            }}
-            className="rounded-full border border-line/40 bg-surface/60 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.2em] text-dim backdrop-blur-md"
-          >
-            {lensActive ? "Close Lens" : "The Lens"}
-          </button>
-          <button
-            type="button"
-            onClick={conclude}
-            title="End this Game and read what it made"
-            className="rounded-full border border-line/40 bg-surface/60 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.2em] text-dim backdrop-blur-md transition-colors hover:border-brass/60 hover:text-bright"
-          >
-            Conclude
-          </button>
+          {studying ? (
+            <LeaveStudy />
+          ) : (
+            <>
+              <button
+                type="button"
+                aria-pressed={lensActive}
+                title={
+                  lensActive
+                    ? `${LENS_VIEWS[lensView - 1]?.label ?? ""} — ${LENS_DISCLOSURE} Press again for the next pair.`
+                    : `The Lens — lays the beads out along True, Beautiful and Good. ${LENS_DISCLOSURE}`
+                }
+                onClick={() => {
+                  productionInterpretation.reset();
+                  cycleLens();
+                }}
+                className="rounded-full border border-line/40 bg-surface/60 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.2em] text-dim backdrop-blur-md"
+              >
+                {lensActive ? "Close Lens" : "The Lens"}
+              </button>
+              <button
+                type="button"
+                onClick={conclude}
+                title="End this Game and read what it made"
+                className="rounded-full border border-line/40 bg-surface/60 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.2em] text-dim backdrop-blur-md transition-colors hover:border-brass/60 hover:text-bright"
+              >
+                Conclude
+              </button>
+            </>
+          )}
         </motion.div>
         {/*
           The Lens is the one arrangement in this game that cannot be sourced —
@@ -133,8 +157,9 @@ export function ArenaHud() {
             inspection and the margin, written on one page. It stays mounted
             while the Lens is open — the Lens silences the margin rather than
             unmounting it, so no reading kept this Game is lost to a glance at
-            the triptych. */}
-        <ArenaColumn />
+            the triptych. In a Study it is keyed on the session, so Again and
+            Next Study each open on a clean page (`studyMode.sessionPage`). */}
+        <ArenaColumn key={studying ? sessionPage(session) : undefined} />
       </div>
       {/* Outside the Lens gate on purpose. The Lens hides the interpretation
           controls because there is nothing to interpret while it is open, but
@@ -149,5 +174,27 @@ export function ArenaHud() {
       <CueCaptions />
       {!lensActive && <InterpretationControls />}
     </motion.div>
+  );
+}
+
+/**
+ * A STUDY'S WAY OUT: one plain word where the Free Game has two.
+ *
+ * It returns to the Studies, and says so where the pointer and the keyboard
+ * look for it — nothing is lost that a Study would have kept, because a Study
+ * keeps nothing (§10). Same mark and same place as Conclude, which it replaces.
+ * Hook-free, so what it does can be pressed in a test.
+ */
+export function LeaveStudy() {
+  return (
+    <button
+      type="button"
+      data-testid="study-leave"
+      onClick={() => leaveStudy()}
+      title="Leave this Study and return to the Studies"
+      className="rounded-full border border-line/40 bg-surface/60 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.2em] text-dim backdrop-blur-md transition-colors hover:border-brass/60 hover:text-bright"
+    >
+      Leave
+    </button>
   );
 }

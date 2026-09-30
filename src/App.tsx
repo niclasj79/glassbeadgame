@@ -2,10 +2,10 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
-import { ThresholdScreen } from "./ui/screens/ThresholdScreen";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
 import { useStore } from "./state/store";
+import { useStudy } from "./state/studies";
 import { probeWebGL } from "./lib/device";
 
 function WebGLFallback() {
@@ -74,21 +74,70 @@ const prefetchArenaHud = (): void => {
   void import("./ui/arena/ArenaHud");
 };
 
+/**
+ * The threshold is the page after Begin, so it loads with the arena's page:
+ * prefetched once the title has painted, a held blank if it ever is not there.
+ */
+const ThresholdScreen = lazy(async () => ({
+  default: (await import("./ui/screens/ThresholdScreen")).ThresholdScreen,
+}));
+
+const prefetchThreshold = (): void => {
+  void import("./ui/screens/ThresholdScreen");
+};
+
+/**
+ * THE STUDIES LOAD WITH THE STUDIES.
+ *
+ * The second door's page carries the twelve Studies, their chapters and the
+ * runtime that begins them, and none of it is needed to paint the title — so
+ * none of it may be in the first load (`scripts/bundle-budgets.json`). The page
+ * behind the door is prefetched once the title has painted, like the
+ * threshold behind the first; the solved plate is prefetched when a Study
+ * begins, as the conclusion is when a Game does. Both fall back to a held
+ * blank, never a spinner. Neither this file nor the title may import the
+ * Studies statically; the arena's page already loads after the title, so the
+ * margin's brief and the Leave control travel with it.
+ */
+const StudiesScreen = lazy(async () => ({
+  default: (await import("./ui/screens/StudiesScreen")).StudiesScreen,
+}));
+
+const prefetchStudies = (): void => {
+  void import("./ui/screens/StudiesScreen");
+};
+
+const StudyPlate = lazy(async () => ({
+  default: (await import("./ui/screens/StudyPlate")).StudyPlate,
+}));
+
+const prefetchStudyPlate = (): void => {
+  void import("./ui/screens/StudyPlate");
+};
+
 const prefetchConclusion = (): void => {
   void import("./ui/screens/ConclusionScreen");
 };
 
 export default function App() {
   const phase = useStore((s) => s.phase);
+  const studying = useStudy((s) => s.studyId !== null);
+  const plateOpen = useStudy((s) => s.plateOpen);
   const [webgl] = useState(probeWebGL);
 
   useEffect(() => {
+    prefetchThreshold();
     prefetchArenaHud();
+    prefetchStudies();
   }, []);
 
   useEffect(() => {
     if (phase === "arena") prefetchConclusion();
   }, [phase]);
+
+  useEffect(() => {
+    if (phase === "arena" && studying) prefetchStudyPlate();
+  }, [phase, studying]);
 
   if (!webgl) return <WebGLFallback />;
 
@@ -110,10 +159,26 @@ export default function App() {
          */}
         <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
-          {phase === "threshold" && <ThresholdScreen key="threshold" />}
+          {phase === "threshold" && (
+            <Suspense key="threshold" fallback={null}>
+              <ThresholdScreen />
+            </Suspense>
+          )}
+          {phase === "studies" && (
+            <Suspense key="studies" fallback={null}>
+              <StudiesScreen />
+            </Suspense>
+          )}
           {phase === "arena" && (
             <Suspense key="arena" fallback={null}>
               <ArenaHud />
+            </Suspense>
+          )}
+          {/* A Study's solved plate, over the arena it was solved in. Never
+              in a Free Game: it needs a Study being played (R4). */}
+          {phase === "arena" && studying && plateOpen && (
+            <Suspense key="study-plate" fallback={null}>
+              <StudyPlate />
             </Suspense>
           )}
           {phase === "conclusion" && (

@@ -1,10 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { RelationIntention } from "@/domain/events";
 import type { FacetId } from "@/content/castalia/schema";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { useFocusView } from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
+import { useStudy } from "@/state/studies";
 import {
   QUIET_CONTROL,
   READING_PLATE,
@@ -23,6 +24,9 @@ import {
 } from "./columnPlan";
 import { MarginSurface } from "./Marginalia";
 import { openReading, type MarginState } from "./marginState";
+import { useHeldWhileLeaving } from "./presence";
+import { StudyNote } from "./StudyNote";
+import { studyNote, type StudyNoteModel } from "./studyMode";
 
 /**
  * THE RIGHT COLUMN OF THE FOCUS VIEW (I-015, I-018, I-019).
@@ -46,6 +50,10 @@ import { openReading, type MarginState } from "./marginState";
  * holds; this file only sets it on the page. The world stays the primary
  * interface: nothing here counts, ranks, scores or hints at the record, and
  * the only help it offers waits to be needed.
+ *
+ * IN A STUDY the brief is the first note on the page, above all of it and in
+ * every one of these states (`StudyNote`, STUDIES-SPEC §7); in the Free Game
+ * there is no brief and the page is exactly as above (R4).
  */
 
 function entrance(reducedMotion: boolean) {
@@ -268,7 +276,13 @@ export interface ColumnSurfaceProps {
   readonly onToggleIndex: () => void;
   readonly onReadMore: () => void;
   readonly onReadLess: () => void;
+  /** The Study being played, as its brief's note; absent in the Free Game. */
+  readonly study?: StudyNoteModel | null;
+  /** Sets the brief aside, or reopens it. */
+  readonly onToggleBrief?: () => void;
 }
+
+const NOTHING_TO_TOGGLE = (): void => undefined;
 
 /**
  * The column with no store attached, so every state of the focus view can be
@@ -287,26 +301,37 @@ export function ColumnSurface({
   onToggleIndex,
   onReadMore,
   onReadLess,
+  study = null,
+  onToggleBrief = NOTHING_TO_TOGGLE,
 }: ColumnSurfaceProps) {
   const register = plan.kind === "inspection" ? "none" : plan.margin;
   const cardsWritten =
     plan.kind === "inspection" || plan.top !== null || plan.second !== null;
   const readingWritten = register !== "none" && openReading(margin) !== null;
+  const briefWritten = study !== null && (study.open || study.notYet !== null);
 
   // While the Lens is open it owns the page, as it always has: nothing is
-  // written in the column but a bead the player is looking at.
-  if (lensActive && !cardsWritten) return null;
+  // written in the column but a bead the player is looking at. (A Study has
+  // no Lens, and its brief is never taken off the page.)
+  if (lensActive && !cardsWritten && study === null) return null;
 
   return (
     <ReadingColumn
       label="The margin"
       testId="focus-column"
-      lit={cardsWritten || readingWritten}
+      lit={cardsWritten || readingWritten || briefWritten}
     >
       <div
         className={READING_STACK}
         data-mode={plan.kind === "inspection" ? "inspection" : plan.mode}
       >
+        {study !== null && (
+          <StudyNote
+            note={study}
+            reducedMotion={reducedMotion}
+            onToggleBrief={onToggleBrief}
+          />
+        )}
         {plan.kind === "inspection" ? (
           <BeadPlate
             concept={plan.concept}
@@ -345,6 +370,11 @@ export function ColumnSurface({
  * The arena's column: the focus view, the pinned inspection and the margin's
  * memory, read once and handed to `ColumnSurface`. Stays mounted for the whole
  * arena, so the margin's readings survive the Lens opening and closing.
+ *
+ * In a Study it also reads which Study is being played and its last *not yet*
+ * from the Study store, and holds whether the brief is open. A new Study
+ * session remounts it (`ArenaHud`), so a restarted Study opens with its brief
+ * open and its margin clean.
  */
 export function ArenaColumn() {
   const view = useFocusView();
@@ -353,6 +383,15 @@ export function ArenaColumn() {
   const reducedMotion = useStore((state) => state.settings.reducedMotion);
   const setFocusedBead = useStore((state) => state.setFocusedBead);
   const [margin, marginActions] = useMarginState();
+  // Held while the page leaves, so the brief does not lift off a fading column.
+  const studyId = useHeldWhileLeaving(useStudy((state) => state.studyId));
+  const notYet = useHeldWhileLeaving(useStudy((state) => state.notYet));
+  const [briefOpen, setBriefOpen] = useState(true);
+  const study = useMemo(
+    () => (studyId === null ? null : studyNote(studyId, notYet, briefOpen)),
+    [studyId, notYet, briefOpen]
+  );
+  const toggleBrief = useCallback(() => setBriefOpen((open) => !open), []);
 
   const plan = planColumn({ view, pinnedInspectId, lensActive });
   const gapFor =
@@ -383,6 +422,8 @@ export function ArenaColumn() {
       onToggleIndex={marginActions.toggleIndex}
       onReadMore={marginActions.readMore}
       onReadLess={marginActions.readLess}
+      study={study}
+      onToggleBrief={toggleBrief}
     />
   );
 }

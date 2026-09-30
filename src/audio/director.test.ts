@@ -1378,3 +1378,85 @@ describe("the focus voice on the captioned path", () => {
     expect(h.played).toHaveLength(0);
   });
 });
+
+describe("a Study solved (M9-001)", () => {
+  const solved = (
+    conceptIds: readonly string[],
+    overrides: Partial<CuePayloadMap["study.solved"]> = {}
+  ): PresentationCue =>
+    cue("study.solved", {
+      studyId: "study.eschholz-1",
+      by: "threads",
+      threadIds: [toThreadId("t1"), toThreadId("t2")],
+      conceptIds: conceptIds.map(toConceptId),
+      marks: ["economical"],
+      brief: "From Fibonacci Sequence to Prime Numbers in two threads",
+      ...overrides,
+    });
+
+  const ANSWER = [FIBONACCI, COUNTERPOINT, PRIME] as const;
+
+  it("takes a seat as an ensemble of the answer's own beads, as a completed motif does", () => {
+    const { director, played, captions } = harness();
+    director.handleCue(solved(ANSWER));
+    expect(played).toHaveLength(1);
+    const { plan } = played[0];
+    expect(plan.kind).toBe("ensemble");
+    expect(plan.meta.grammar).toBe("ensemble");
+    expect(plan.meta.conceptIds).toEqual([...ANSWER]);
+    expect(plan.notes.every((note) => note.role === "ensemble")).toBe(true);
+    expect(captions.at(-1)?.text).toBe(
+      "An ensemble enters: Fibonacci Sequence, Counterpoint, Prime Numbers."
+    );
+  });
+
+  it("invents no grammar: the notes a motif over the same beads would play", () => {
+    const study = harness();
+    study.director.handleCue(solved(ANSWER));
+    const motif = harness();
+    motif.director.handleCue(
+      cue("motif.completed", {
+        motifKindId: toMotifKindId("canon"),
+        conceptIds: ANSWER.map(toConceptId),
+        threadIds: [toThreadId("t1"), toThreadId("t2")],
+        reason: "A shared structure recurs across three concepts.",
+      })
+    );
+    // Everything but the identity and the humanising sway, which is seeded by
+    // the note's id and bounded to a fraction of a unit (`renderMotif`).
+    const voice = (plan: VoicePlan) =>
+      plan.notes.map(({ id: _id, atSeconds: _at, ...note }) => note);
+    const solvedPlan = study.played[0].plan;
+    const motifPlan = motif.played[0].plan;
+    expect(voice(solvedPlan)).toEqual(voice(motifPlan));
+    solvedPlan.notes.forEach((note, index) => {
+      expect(Math.abs(note.atSeconds - motifPlan.notes[index].atSeconds)).toBeLessThan(0.1);
+    });
+    expect(study.played[0].atSeconds).toBe(motif.played[0].atSeconds);
+  });
+
+  it("cannot hear how the answer was marked or reached (CAV-006): the beads alone decide it", () => {
+    const plain = harness();
+    plain.director.handleCue(solved(ANSWER, { marks: [] }));
+    const marked = harness();
+    marked.director.handleCue(solved(ANSWER, { marks: ["economical", "wide", "varied"] }));
+    expect(JSON.stringify(marked.played)).toBe(JSON.stringify(plain.played));
+  });
+
+  it("answers a silence with silence, and says nothing of its own", () => {
+    const { director, played, captions } = harness();
+    director.handleCue(solved([], { by: "silence", threadIds: [], marks: [] }));
+    expect(played).toHaveLength(0);
+    expect(captions).toHaveLength(0);
+  });
+
+  it("sounds nothing for a not yet: it is a caption, and the cue layer says it", () => {
+    const { director, played, captions, spaces } = harness();
+    director.handleCue(
+      cue("study.not-yet", { studyId: "study.eschholz-1", statement: "can-be-done" })
+    );
+    expect(played).toHaveLength(0);
+    expect(captions).toHaveLength(0);
+    expect(spaces).toHaveLength(0);
+  });
+});

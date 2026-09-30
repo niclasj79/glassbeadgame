@@ -6,7 +6,7 @@ import type { DisciplineId } from "@/content/types";
  * union only because `src/audio/useAudio.ts` and `src/scene/CameraRig.tsx`
  * still branch on it, and neither may be edited from here.
  */
-export type Phase = "title" | "threshold" | "arena" | "conclusion";
+export type Phase = "title" | "threshold" | "studies" | "arena" | "conclusion";
 
 export type ArenaMode = "idle" | "pressed" | "threading" | "reveal" | "concluding";
 

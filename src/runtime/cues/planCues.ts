@@ -43,6 +43,27 @@ const SIGHT: readonly CueChannel[] = Object.freeze([
 ]);
 
 /**
+ * A recognition of what is already woven: the world, the score, the page and
+ * the words answer; nothing strikes the camera or the hand.
+ */
+const RECOGNITION: readonly CueChannel[] = Object.freeze([
+  "scene",
+  "audio",
+  "ui",
+  "caption",
+]);
+
+/** Words only: an answer that changes nothing in the world. */
+const WORDS: readonly CueChannel[] = Object.freeze(["caption"]);
+
+/**
+ * How long a completed motif holds the stage. A Study solved by the same
+ * commit waits it out, so the motif and the solved moment are two moments
+ * rather than two ensembles sounding over each other.
+ */
+export const MOTIF_MOMENT_SECONDS = 4.5;
+
+/**
  * Gesture shapes how long a phrase takes to unfold, never what it means. A
  * slow deliberate weave earns a slower, wider resolution; a quick decisive one
  * lands sooner. Bounded tightly so the difference is felt, not fought.
@@ -318,8 +339,58 @@ export function planMotifCompleted(
     draft({
       type: "motif.completed",
       startAt: afterSeconds,
-      duration: 4.5,
+      duration: MOTIF_MOMENT_SECONDS,
       channels: ALL,
+      payload,
+    }),
+  ]);
+}
+
+// ─── Studies (STUDIES-SPEC §7) ──────────────────────────────────────────────
+
+/**
+ * A Study solved: one coordinated moment — the world, the score, the caption
+ * and the plate together (ADR-009).
+ *
+ * Solved by threads, it follows the commit that completed the answer, as a
+ * motif follows its outcome: the caller passes how long that commit takes to
+ * settle, so the moment never covers the outcome it grew out of. Solved by a
+ * declared silence, it is staged at once, because nothing precedes it.
+ *
+ * It is a recognition, not a new event in the web: it reaches no camera and
+ * no hand, and its span is the ensemble it reuses, a motif's.
+ */
+export function planStudySolved(
+  payload: CuePayloadMap["study.solved"],
+  sourceEventId: EventId | null,
+  afterSeconds = 0
+): CuePlan {
+  if (!Number.isFinite(afterSeconds) || afterSeconds < 0) {
+    throw new RangeError("a Study may not be solved on stage before the commit that solved it");
+  }
+  return assemble(sourceEventId, [
+    draft({
+      type: "study.solved",
+      startAt: afterSeconds,
+      duration: MOTIF_MOMENT_SECONDS,
+      channels: RECOGNITION,
+      payload,
+    }),
+  ]);
+}
+
+/**
+ * Silence declared where an answer exists: a caption and nothing else. The
+ * margin line is the page's; the world does not answer, because nothing in it
+ * changed, and the moment never interrupts (STUDIES-SPEC §7).
+ */
+export function planStudyNotYet(payload: CuePayloadMap["study.not-yet"]): CuePlan {
+  return assemble(null, [
+    draft({
+      type: "study.not-yet",
+      startAt: 0,
+      duration: 0.6,
+      channels: WORDS,
       payload,
     }),
   ]);

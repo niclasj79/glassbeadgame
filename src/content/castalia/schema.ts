@@ -19,6 +19,7 @@
  *     or to an honest unresolved state. Authoring nothing is always available.
  */
 import type { RelationIntention } from "@/domain/events";
+import type { StudyDefinition } from "@/domain/studies/types";
 
 // ─── Faculties ──────────────────────────────────────────────────────────────
 
@@ -322,6 +323,24 @@ export interface OpenThreadPrompt {
   readonly question: string;
 }
 
+// ─── Studies ────────────────────────────────────────────────────────────────
+
+/**
+ * A Study is an authored problem over eight beads (STUDIES-SPEC). Its types
+ * belong to the domain, whose solver and evaluator must import nothing from
+ * content; they are re-exported here because a Study is authored and validated
+ * as pack data like everything else in this file. What a Study may name is
+ * deliberately narrow: beads, facets, faculties and counts — never a relation,
+ * an evidence class or an Open Thread (R1).
+ */
+export type {
+  StudyAnswer,
+  StudyChapter,
+  StudyDefinition,
+  StudyGoal,
+  StudyId,
+} from "@/domain/studies/types";
+
 // ─── Pack ───────────────────────────────────────────────────────────────────
 
 export interface CastaliaPack {
@@ -333,6 +352,20 @@ export interface CastaliaPack {
   readonly relations: readonly DocumentedRelation[];
   readonly openThreads: readonly OpenThreadPrompt[];
 }
+
+/**
+ * What the validator reads: the pack, and the Studies authored over it.
+ *
+ * The Studies are deliberately not a field of the pack object. The runtime
+ * reads the pack from the first frame, so anything inside it is paid for
+ * before the title appears, and a Free Game never needs a Study; the Studies
+ * load with the Studies (`scripts/bundle-budgets.json`). The validator proves
+ * the authored set, in chapter order then by ordinal, unless a test hands it
+ * another.
+ */
+export type CastaliaPackForValidation = CastaliaPack & {
+  readonly studies?: readonly StudyDefinition[];
+};
 
 /** Canonical unordered-pair key for a documented relation. */
 export const relationKey = (a: string, b: string): string =>

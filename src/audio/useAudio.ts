@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { choirMustReset, roomIsEmpty } from "./roomLifecycle";
 import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
 import { interpretationPresentationStore } from "@/state/interpretationPresentation";
@@ -165,6 +166,7 @@ export function AudioBridge(): null {
   useEffect(() => {
     if (testMode.enabled) return;
     let seatedThreadIds: readonly string[] = EMPTY_THREAD_IDS;
+    let seatedSessionId: string | null = null;
 
     const unsubs = [
       // Ambient + binaural lifecycle follow the phase.
@@ -181,13 +183,15 @@ export function AudioBridge(): null {
             seatedThreadIds = (session?.threads ?? []).map((thread) =>
               String(thread.id)
             );
+            seatedSessionId = session === null ? null : String(session.sessionId);
             if (useStore.getState().settings.binaural) audio.startBinaural();
-          } else if (phase === "title" || phase === "threshold") {
+          } else if (roomIsEmpty(phase)) {
             ambient.stop();
             ambient.clearSpace();
             audio.stopBinaural();
             stopSemanticAudio();
             seatedThreadIds = EMPTY_THREAD_IDS;
+            seatedSessionId = null;
           }
           /*
            * conclusion: the bed keeps sounding *under the performance* and is
@@ -224,9 +228,27 @@ export function AudioBridge(): null {
         const session = state.session;
         if (session === null) {
           seatedThreadIds = EMPTY_THREAD_IDS;
+          seatedSessionId = null;
           return;
         }
+        const sessionId = String(session.sessionId);
         const ids = session.threads.map((thread) => String(thread.id));
+        if (
+          useStore.getState().phase === "arena" &&
+          choirMustReset(
+            { sessionId: seatedSessionId, threadIds: seatedThreadIds },
+            { sessionId, threadIds: ids }
+          )
+        ) {
+          // A new session in the same room, or the same one begun again (a
+          // Study's Next Study or Again): the last attempt's choir and
+          // ensemble leave with it.
+          ambient.stop();
+          stopSemanticAudio();
+          ambient.start();
+          seatedThreadIds = EMPTY_THREAD_IDS;
+        }
+        seatedSessionId = sessionId;
         const seated = new Set(seatedThreadIds);
         // A replay replaces the whole log at once, so this must be a set
         // difference and not a length comparison.

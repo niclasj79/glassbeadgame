@@ -41,6 +41,26 @@ import type { CueType, PresentationCue } from "@/runtime/cues";
  */
 
 /**
+ * A STUDY'S TWO ANSWERS (STUDIES-SPEC §5–§7).
+ *
+ * *Solved* and *not yet* are the world answering what the player composed, so
+ * they are spoken here like every other answer, in `describeCue`'s words:
+ * "Solved: <brief>." and "Not yet — it can be done with these beads." Neither
+ * may interrupt — *not yet* never interrupts, by specification, and a solved
+ * moment is a recognition, not an alarm — so both are held polite. And both
+ * are said again when they are given again (`SAID_AGAIN`): a second *not yet*
+ * has the same words and, being ephemeral, the same cue id as the first, and
+ * it is still a second answer. The margin's line and the plate are what the
+ * eye reads of them; this is what the ear is told, once per answer.
+ *
+ * Both cue types are in `CuePayloadMap`, so the names are checked.
+ */
+const STUDY_ANSWERS: readonly CueType[] = Object.freeze([
+  "study.solved",
+  "study.not-yet",
+] as const);
+
+/**
  * Cues whose caption is the world answering rather than the player's own action
  * being echoed back. Every one of them carries information no other surface
  * states in words.
@@ -53,16 +73,26 @@ export const WORLD_VOICE_CUES: ReadonlySet<CueType> = new Set<CueType>([
   "motif.completed",
   "attunement.changed",
   "conclusion.perform",
+  ...STUDY_ANSWERS,
 ]);
 
 /**
  * Cues that may never reach the assertive region, whatever `describeCue` says
  * of them: they arrive as fast as a lens can sweep, and an assertive region
- * interrupts whatever the reader was saying for every one.
+ * interrupts whatever the reader was saying for every one. A Study's answers
+ * join them because neither may interrupt at all.
  */
 export const NEVER_ASSERTIVE: ReadonlySet<CueType> = new Set<CueType>([
   "attention.sighted",
+  ...STUDY_ANSWERS,
 ]);
+
+/**
+ * Answers that are said again when they are given again, even in the same
+ * words. Every other caption is set exactly as it always was: a region whose
+ * words do not change says nothing new.
+ */
+export const SAID_AGAIN: ReadonlySet<CueType> = new Set<CueType>(STUDY_ANSWERS);
 
 /**
  * A LOCAL CORRECTION, AND WHY IT IS HERE.
