@@ -228,6 +228,23 @@ export function describeCue(
         urgency: "polite",
       };
 
+    // A Study's words (STUDIES-SPEC §5–§7). The brief is the Game's own
+    // sentence; nothing here counts, ranks or praises, and the marks and the
+    // counts stay on the plate, which is text already.
+    case "study.solved":
+      return {
+        text:
+          cue.payload.by === "silence"
+            ? `Solved: ${cue.payload.brief} — it cannot be done with these beads.`
+            : `Solved: ${cue.payload.brief}.`,
+        urgency: "polite",
+      };
+
+    case "study.not-yet":
+      // The same words the evaluator's statement renders to, and nothing more:
+      // it never names a bead and never hints.
+      return { text: "Not yet — it can be done with these beads.", urgency: "polite" };
+
     default:
       return null;
   }

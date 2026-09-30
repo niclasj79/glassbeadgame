@@ -88,6 +88,12 @@ const RESPONSE = Object.freeze({
   outcome: Object.freeze({ flare: 0.55, count: 14, speed: 1.15 }),
   /** A motif is structural: the whole web has said something. */
   motif: Object.freeze({ flare: 0.85, kick: 0.3, count: 10, speed: 1 }),
+  /**
+   * A Study solved (M9-001) is a recognition of what is already woven, so it
+   * adds no effect of its own: an outcome's light, and the arm's gentle stir at
+   * each bead of the answer. Quieter than a motif, and no camera impact.
+   */
+  solved: Object.freeze({ flare: 0.55, count: 6, speed: 0.5 }),
   attunementEnter: 0.7,
   attunementExit: 0.25,
   conclusion: Object.freeze({ flare: 1, kick: 0.4 }),
@@ -188,6 +194,17 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
       case "conclusion.perform":
         stage.setAttuned(false);
         stage.flare(RESPONSE.conclusion.flare);
+        break;
+
+      // The cue carries the answer's form and no outcome, so the world cannot
+      // pay a documented thread more than any other here (CAV-006). A silence
+      // has no beads: the sky answers alone.
+      case "study.solved":
+        stage.touch();
+        stage.flare(RESPONSE.solved.flare);
+        for (const conceptId of cue.payload.conceptIds) {
+          stage.burst(String(conceptId), RESPONSE.solved.count, RESPONSE.solved.speed);
+        }
         break;
 
       default:

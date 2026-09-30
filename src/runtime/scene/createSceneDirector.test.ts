@@ -19,9 +19,11 @@ import {
   planPairLocked,
   planReadingPreviewed,
   planAttunement,
+  type CuePayloadMap,
   type CuePlan,
   type PresentationCue,
 } from "../cues";
+import { planStudyNotYet, planStudySolved } from "../cues/planCues";
 import { createSceneDirector, type SceneStage } from "./createSceneDirector";
 
 const a = toConceptId("measure.fibonacci-sequence");
@@ -248,5 +250,83 @@ describe("createSceneDirector", () => {
       String(b),
     ]);
     expect(log.flare).toHaveLength(1);
+  });
+});
+
+describe("a Study solved (M9-001)", () => {
+  const c = toConceptId("matter.standing-wave");
+  const solved = (
+    overrides: Partial<CuePayloadMap["study.solved"]> = {}
+  ): CuePlan =>
+    planStudySolved(
+      {
+        studyId: "study.eschholz-2",
+        by: "threads",
+        threadIds: [threadId],
+        conceptIds: [a, b, c],
+        marks: ["economical"],
+        brief: "Carry Superposition through three faculties",
+        ...overrides,
+      },
+      eventId,
+      2.4
+    );
+
+  it("answers with an outcome's light and a gentle stir at each bead of the answer, and no impact", () => {
+    const outcome = recorder();
+    deliverAll(commitPlan("documented"), outcome.stage);
+    const { stage, log } = recorder();
+    deliverAll(solved(), stage);
+
+    expect(log.flare).toEqual([outcome.log.flare[0]]);
+    expect(log.bursts.map((entry) => entry.conceptId)).toEqual([
+      String(a),
+      String(b),
+      String(c),
+    ]);
+    expect(log.kick).toEqual([]);
+    expect(log.touched).toBe(1);
+
+    // Quieter than a motif: a recognition of the web, not a new structure in it.
+    const motif = recorder();
+    deliverAll(
+      planMotifCompleted(
+        {
+          motifKindId: toMotifKindId("canon"),
+          conceptIds: [a, b, c],
+          threadIds: [threadId],
+          reason: "Superposition recurs.",
+        },
+        eventId
+      ),
+      motif.stage
+    );
+    const particles = (entries: Recorded["bursts"]) =>
+      entries.reduce((sum, entry) => sum + entry.count, 0);
+    expect(log.flare[0]).toBeLessThan(motif.log.flare[0]);
+    expect(particles(log.bursts)).toBeLessThan(particles(motif.log.bursts));
+  });
+
+  it("answers a silence with the sky alone: there are no beads to stir", () => {
+    const { stage, log } = recorder();
+    deliverAll(solved({ by: "silence", threadIds: [], conceptIds: [], marks: [] }), stage);
+    expect(log.flare).toHaveLength(1);
+    expect(log.bursts).toEqual([]);
+    expect(log.kick).toEqual([]);
+  });
+
+  it("answers the same beads the same way, whatever the marks (CAV-006: no reward gradient)", () => {
+    const calls = (plan: CuePlan) => {
+      const { stage, log } = recorder();
+      deliverAll(plan, stage);
+      return JSON.stringify(log);
+    };
+    expect(calls(solved({ marks: [] }))).toBe(calls(solved({ marks: ["economical", "wide", "varied"] })));
+  });
+
+  it("does nothing for a not yet: the world did not change", () => {
+    const { stage, log } = recorder();
+    deliverAll(planStudyNotYet({ studyId: "study.eschholz-1", statement: "can-be-done" }), stage);
+    expect(log).toEqual({ flare: [], kick: [], bursts: [], attuned: [], touched: 0 });
   });
 });

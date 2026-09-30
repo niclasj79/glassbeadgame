@@ -3,6 +3,7 @@ import type { GestureProfile } from "@/domain/events";
 import { toConceptId, toEventId, toThreadId } from "@/domain/ids";
 import { createCueBus } from "./createCueBus";
 import {
+  MOTIF_MOMENT_SECONDS,
   gesturePhrasing,
   planAttention,
   planCommitMoment,
@@ -10,6 +11,8 @@ import {
   planPairLocked,
   planReadingPreviewed,
   planSighting,
+  planStudyNotYet,
+  planStudySolved,
   planThreadReopened,
 } from "./planCues";
 import type { CuePayloadMap, PresentationCue } from "./types";
@@ -407,5 +410,116 @@ describe("planMotifCompleted", () => {
 
   it("refuses to be staged before the commit that made it", () => {
     expect(() => planMotifCompleted(motif(), EVENT, -1)).toThrow(RangeError);
+  });
+});
+
+describe("the Studies' plans (M9-001)", () => {
+  const solved = (
+    overrides: Partial<CuePayloadMap["study.solved"]> = {}
+  ): CuePayloadMap["study.solved"] =>
+    Object.freeze({
+      studyId: "study.eschholz-1",
+      by: "threads" as const,
+      threadIds: Object.freeze([THREAD]),
+      conceptIds: Object.freeze([A, B]),
+      marks: Object.freeze(["economical" as const]),
+      brief: "From The Möbius Band to Counterpoint in two threads",
+      ...overrides,
+    });
+
+  const silence = (): CuePayloadMap["study.solved"] =>
+    solved({ by: "silence", threadIds: [], conceptIds: [], marks: [], brief: "Carry Proportion into Matter" });
+
+  const commitMoment = () =>
+    planCommitMoment({
+      woven: woven(600),
+      wovenEventId: EVENT,
+      outcome: {
+        kind: "unresolved",
+        payload: Object.freeze({
+          threadId: THREAD,
+          pair: Object.freeze([A, B]) as readonly [typeof A, typeof B],
+          intention: "echo" as const,
+          statement: "Nothing grounded yet.",
+        }),
+      },
+    });
+
+  it("stages a solved Study after the commit that solved it, when told how long that is", () => {
+    const moment = commitMoment();
+    const plan = planStudySolved(solved(), EVENT, moment.duration);
+    expect(plan.cues).toHaveLength(1);
+    expect(plan.cues[0].type).toBe("study.solved");
+    expect(plan.cues[0].startAt).toBeCloseTo(moment.duration, 6);
+    expect(plan.duration).toBeCloseTo(moment.duration + MOTIF_MOMENT_SECONDS, 6);
+  });
+
+  it("stages a declared silence at once, from no durable event", () => {
+    const [cue] = planStudySolved(silence(), null).cues;
+    expect(cue.startAt).toBe(0);
+    expect(cue.sourceEventId).toBeNull();
+    expect(cue.id).toContain("ephemeral");
+  });
+
+  it("reaches the world, the score, the page and the words, and never the camera or the hand", () => {
+    for (const plan of [planStudySolved(solved(), EVENT, 1), planStudySolved(silence(), null)]) {
+      expect(plan.cues[0].channels).toEqual(["scene", "audio", "ui", "caption"]);
+    }
+  });
+
+  it("refuses to be staged before the commit that solved it", () => {
+    expect(() => planStudySolved(solved(), EVENT, -1)).toThrow(RangeError);
+    expect(() => planStudySolved(solved(), EVENT, Number.NaN)).toThrow(RangeError);
+  });
+
+  it("carries the answer's form and nothing of how its threads resolved (R2)", () => {
+    const [cue] = planStudySolved(solved(), EVENT).cues;
+    expect(Object.keys(cue.payload).sort()).toEqual([
+      "brief",
+      "by",
+      "conceptIds",
+      "marks",
+      "studyId",
+      "threadIds",
+    ]);
+  });
+
+  it("derives its identity from the staged event, so replay is stable", () => {
+    const build = () => planStudySolved(solved(), EVENT, 1.5);
+    expect(JSON.stringify(build())).toBe(JSON.stringify(build()));
+    expect(build().cues[0].id).toContain(String(EVENT));
+  });
+
+  it("answers a not yet in words alone, at once, from no durable event", () => {
+    const plan = planStudyNotYet({ studyId: "study.eschholz-1", statement: "can-be-done" });
+    expect(plan.cues).toHaveLength(1);
+    expect(plan.cues[0]).toMatchObject({
+      type: "study.not-yet",
+      startAt: 0,
+      sourceEventId: null,
+      channels: ["caption"],
+    });
+
+    const bus = createCueBus({ now: () => 0 });
+    const reached: string[] = [];
+    for (const channel of ["scene", "camera", "audio", "ui", "haptics", "caption"] as const) {
+      bus.subscribe(channel, () => reached.push(channel));
+    }
+    bus.publish(plan);
+    expect(reached).toEqual(["caption"]);
+  });
+
+  it("leaves a motif the span it always had", () => {
+    const plan = planMotifCompleted(
+      Object.freeze({
+        motifKindId: "canon" as CuePayloadMap["motif.completed"]["motifKindId"],
+        conceptIds: Object.freeze([A, B]),
+        threadIds: Object.freeze([THREAD]),
+        reason: "Superposition recurs.",
+      }),
+      EVENT
+    );
+    expect(MOTIF_MOMENT_SECONDS).toBe(4.5);
+    expect(plan.duration).toBe(MOTIF_MOMENT_SECONDS);
   });
 });

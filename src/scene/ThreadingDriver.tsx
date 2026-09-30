@@ -53,7 +53,7 @@ import {
   type TestSessionSnapshot,
   type TestStudySnapshot,
 } from "@/runtime/testMode";
-import { studyStore } from "@/state/studies";
+import { isStudyMode, studyStore, useStudy } from "@/state/studies";
 
 function testSnapshot(): TestSessionSnapshot {
   const state = useStore.getState();
@@ -204,9 +204,13 @@ const worldDirectors = {
  * being composed, and it never counts down toward anything. Accepting it is one
  * click or one Tab and Enter; ignoring it costs nothing and it never asks
  * twice.
+ *
+ * A Study is not invited at all (STUDIES-SPEC §7): no mark, and no sky, glint
+ * or notes announcing one.
  */
 function AttunementInvitation() {
   const [available, setAvailable] = useState(false);
+  const studying = useStudy((state) => state.studyId !== null);
   const attuned = useVanillaStore(
     domainSessionStore,
     (state) => state.session?.attunementActive ?? false
@@ -220,7 +224,7 @@ function AttunementInvitation() {
     () =>
       sessionProgression.onInvitationChanged((next) => {
         setAvailable(next);
-        if (!next) return;
+        if (!next || isStudyMode()) return;
         // The world notices before the interface does: the sky answers, the
         // arena's centre breathes out once, and two quiet notes rise. Nothing
         // interrupts, and nothing waits for a response.
@@ -231,7 +235,7 @@ function AttunementInvitation() {
     []
   );
 
-  if (composing) return null;
+  if (studying || composing) return null;
   if (!available && !attuned) return null;
 
   return (
