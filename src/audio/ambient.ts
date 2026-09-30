@@ -10,6 +10,8 @@ import { currentTheme } from "@/themes/useTheme";
 import { SCORE } from "./score";
 import type { TimbreId } from "@/content/castalia/schema";
 import type { MotifKind } from "@/domain/motifs";
+import type { AudioIntensity } from "./intensity";
+import type { PulseOnset } from "./pulse";
 
 /**
  * The generative soundtrack that grows with the web.
@@ -54,6 +56,44 @@ interface Motif {
 /** A choir note with the moment it was scheduled for. */
 type ScheduledNote = SimpleVoiceOptions & { readonly at: number };
 
+/**
+ * THE PULSE LOADS AFTER THE TITLE (ADR-017).
+ *
+ * The pulse's patterns and bodies (`pulse.ts`, `pulseBodies.ts`) are a chunk of
+ * their own, fetched when the bed first starts — the first press into a room,
+ * never the title — so the first load keeps its ceiling with the bed in it.
+ * Until they arrive the bed writes its slots without a pulse, and from the
+ * first slot after, the pulse is under them. A chunk that cannot be fetched
+ * leaves the bed as it was, and the next room asks again.
+ */
+export interface PulseModules {
+  readonly pattern: typeof import("./pulse");
+  readonly bodies: typeof import("./pulseBodies");
+}
+let pulseModules: PulseModules | null = null;
+let pulseLoading: Promise<PulseModules | null> | null = null;
+
+/** Fetch the pulse, once. Resolves with it, or with null if it could not be fetched. */
+export function loadPulse(): Promise<PulseModules | null> {
+  pulseLoading ??= Promise.all([import("./pulse"), import("./pulseBodies")]).then(
+    ([pattern, bodies]) => {
+      pulseModules = { pattern, bodies };
+      return pulseModules;
+    },
+    () => {
+      pulseLoading = null;
+      return null;
+    }
+  );
+  return pulseLoading;
+}
+
+/**
+ * How many written slots the bed remembers the pulse of: enough for a weave
+ * landing inside the lookahead to add its fill to the slot it belongs to.
+ */
+const PULSE_MEMORY_SLOTS = 3;
+
 class AmbientEngine {
   private timer: number | null = null;
   private nextSlotTime = 0;
@@ -89,6 +129,17 @@ class AmbientEngine {
   private silenceFrom: number | null = null;
   /** From here the loop schedules nothing new; the bed is already ramping out. */
   private lastSlotBefore = Number.POSITIVE_INFINITY;
+  /** The profile the director's plans are heard at; the pulse follows it (CAV-007). */
+  private intensity: AudioIntensity = "full";
+  /** Slots not yet written that a weave has asked to roll into their closing boundary. */
+  private fillSlots = new Set<number>();
+  /** The pulse carries its second voice on every slot before this one. */
+  private secondVoiceUntil = 0;
+  /** The pulse of the last few written slots, by slot, and when each began. */
+  private pulseWritten = new Map<
+    number,
+    { readonly t: number; onsets: readonly PulseOnset[] }
+  >();
 
   start(): void {
     const ctx = audio.ensure();
@@ -120,6 +171,12 @@ class AmbientEngine {
     audio.setBedScale(1);
     this.timer = window.setInterval(() => this.tick(), TICK_MS);
     this.startAirBed(ctx);
+    // The pulse (ADR-017) is fetched now, after the title, and a new session
+    // owes no fill and no second voice to the last one.
+    this.fillSlots.clear();
+    this.secondVoiceUntil = 0;
+    this.pulseWritten.clear();
+    void loadPulse();
   }
 
   /**
@@ -129,6 +186,10 @@ class AmbientEngine {
   stop(): void {
     this.halt();
     conductor.disarm();
+    // The pulse leaves with the bed: nothing it was asked for outlives the room.
+    this.fillSlots.clear();
+    this.secondVoiceUntil = 0;
+    this.pulseWritten.clear();
   }
 
   /**
@@ -259,6 +320,72 @@ class AmbientEngine {
    */
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * The profile the director's plans are heard at, which the pulse follows
+   * (CAV-007): reduced keeps the skin on the downbeats, silent keeps nothing.
+   * The bridge sets it where it sets the director's, from the same settings.
+   */
+  setIntensity(intensity: AudioIntensity): void {
+    this.intensity = intensity;
+  }
+
+  /**
+   * A WEAVE HAS LANDED, AND THE PULSE ROLLS INTO A BOUNDARY (ADR-017).
+   *
+   * `atSeconds` is the landing on the audio clock. The fill belongs to the first
+   * slot whose last half begins at or after it — never earlier, because a fill
+   * begun before the thread landed would anticipate the act — and lands its bell
+   * on that slot's closing boundary. A slot not yet written is marked, and its
+   * cell carries the fill. A slot already written (the lookahead is more than
+   * half a slot, so it usually is) has the fill's own onsets added now, on the
+   * sixteenths it left free, as its cell with the fill would have struck them.
+   * Once the ending has been asked for, nothing new is added under it.
+   */
+  requestFill(atSeconds: number): void {
+    if (!this.running || this.silenceFrom !== null || !Number.isFinite(atSeconds)) {
+      return;
+    }
+    const ctx = audio.get();
+    if (!ctx) return;
+    // Slot `this.slot` is the next to be written and begins at `nextSlotTime`;
+    // each slot's last half begins half a slot after its start.
+    const ahead = Math.ceil(
+      (atSeconds - this.nextSlotTime) / this.slotS - 0.5 - 1e-6
+    );
+    const slot = this.slot + ahead;
+    if (slot < 0) return;
+    if (ahead >= 0) {
+      this.fillSlots.add(slot);
+      return;
+    }
+    const written = this.pulseWritten.get(slot);
+    const pulse = pulseModules;
+    if (written === undefined || pulse === null) return;
+    const fill = pulse.pattern.pulseFill(slot, {
+      awakening: frameState.awakening,
+      density: this.densityScale,
+      intensity: this.intensity,
+    });
+    const onsets = pulse.pattern.mergePulse(written.onsets, fill);
+    const added = onsets.filter((onset) => !written.onsets.includes(onset));
+    written.onsets = onsets;
+    this.playPulse(ctx, pulse, written.t, slot, added);
+  }
+
+  /**
+   * A COMPLETED MOTIF, OR A SOLVED STUDY (ADR-017): the pulse gains its second
+   * voice — the brush on every other eighth — for the next `slots` slots the bed
+   * writes, which the director asks for as one phrase. A second completion
+   * inside the phrase extends it; nothing shortens it.
+   */
+  requestSecondVoice(slots: number): void {
+    if (!this.running || !Number.isFinite(slots) || slots <= 0) return;
+    this.secondVoiceUntil = Math.max(
+      this.secondVoiceUntil,
+      this.slot + Math.floor(slots)
+    );
   }
 
   /** Camera azimuth → gentle stereo drift of the room tone. */
@@ -542,6 +669,66 @@ class AmbientEngine {
         };
         if (playNote(ctx, bus, "glass", first * 2, lift)) this.conduct(concept1, lift);
       }
+    }
+    this.schedulePulse(ctx, t, slot);
+  }
+
+  /**
+   * THE PULSE UNDER THE SLOT (ADR-017).
+   *
+   * The slot's cell, from the bed's own state — how far the web has woken, the
+   * space the score is leaving, the profile it is heard at, a completed motif's
+   * second voice, a weave's fill — on the grid of the slot's sixteenths. Until
+   * the pulse has loaded, a slot has none.
+   */
+  private schedulePulse(ctx: AudioContext, t: number, slot: number): void {
+    const fill = this.fillSlots.delete(slot);
+    for (const marked of this.fillSlots) {
+      if (marked < slot) this.fillSlots.delete(marked);
+    }
+    for (const kept of this.pulseWritten.keys()) {
+      if (kept <= slot - PULSE_MEMORY_SLOTS) this.pulseWritten.delete(kept);
+    }
+    const pulse = pulseModules;
+    if (pulse === null) return;
+    const onsets = pulse.pattern.pulseCell(slot, {
+      awakening: frameState.awakening,
+      density: this.densityScale,
+      intensity: this.intensity,
+      secondVoice: slot < this.secondVoiceUntil,
+      fill,
+    });
+    this.pulseWritten.set(slot, { t, onsets });
+    this.playPulse(ctx, pulse, t, slot, onsets);
+  }
+
+  /**
+   * Each onset on its body, at its sixteenth of the slot that began at `t`, at
+   * its weight of the body's ceiling under the bed's scale, through the ambient
+   * bus that reach and space already scale. It carries no concept, so it
+   * lights nothing. An onset whose moment has passed is not played late.
+   */
+  private playPulse(
+    ctx: AudioContext,
+    pulse: PulseModules,
+    t: number,
+    slot: number,
+    onsets: readonly PulseOnset[]
+  ): void {
+    const bus = audio.ambientBus;
+    if (bus === null) return;
+    const step = this.slotS / pulse.pattern.PULSE_DIVISION;
+    for (const onset of onsets) {
+      const at = t + onset.sixteenth * step;
+      if (at < ctx.currentTime) continue;
+      pulse.bodies.playPulseBody(
+        ctx,
+        bus,
+        onset.body,
+        at,
+        onset.weight * pulse.bodies.PULSE_GAIN[onset.body] * this.bedScale,
+        `pulse:${slot}:${onset.sixteenth}`
+      );
     }
   }
 

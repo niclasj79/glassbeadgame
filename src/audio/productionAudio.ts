@@ -57,6 +57,10 @@ export const semanticScheduler = createLookaheadScheduler({
  * conductor, before the plan is played, muted or not — the near ones at once,
  * the far ones as they near. Muted, nothing is played and so nothing else would
  * start the scheduler's loop that brings them; conducting starts it.
+ *
+ * `pulseFill()` and `pulseSecondVoice()` hand the bed's pulse its highlights
+ * (ADR-017): the bed decides which slot a weave's fill rolls into, and what the
+ * space and the intensity leave of it.
  */
 const sink: AudioSink = {
   now: () => audio.now(),
@@ -78,6 +82,8 @@ const sink: AudioSink = {
   activeVoiceCount: () => ambient.activeVoiceCount(),
   concludeAt: (atSeconds, fadeSeconds) =>
     ambient.concludeAt(atSeconds, fadeSeconds),
+  pulseFill: (atSeconds) => ambient.requestFill(atSeconds),
+  pulseSecondVoice: (untilSlots) => ambient.requestSecondVoice(untilSlots),
 };
 
 export const productionSink: AudioSink = Object.freeze(sink);
