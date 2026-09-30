@@ -25,6 +25,8 @@ export const frameState = {
    *  cresting on the bar (ADR-016); without a grid it runs at ~0.1 Hz of
    *  dilated time. Radians. */
   breathPhase: 0,
+  /** How the breath catches the conductor's phase when the grid arms. */
+  breathFollow: { offset: 0, armed: false } as BreathFollow,
   /** 0..1 — eased down during reveals and to 0 under reduced motion. */
   breathDepth: 1,
   /** True while a layout morph (lens toggle) is in flight; threads re-sample curves. */
@@ -123,23 +125,58 @@ export interface BreathGrid {
 
 /** The breath's rate when no grid is kept, in cycles per dilated second. */
 export const FREE_BREATH_HZ = 0.1;
+/**
+ * How fast the breath closes on the conductor's phase once the grid arms, per
+ * second of exponential approach: about a second and a half to arrive.
+ * Nothing flickers (spec §6): the grid arming is a moment the player does not
+ * see, so the breath may not step to it.
+ */
+export const BREATH_CATCH_RATE = 2;
+
+/** What the breath remembers between frames about catching the grid. */
+export interface BreathFollow {
+  /** The conductor's phase less the breath's, decaying to nothing. */
+  offset: number;
+  /** Whether the grid was armed on the last frame. */
+  armed: boolean;
+}
 
 /**
  * THE BREATH, ONE FRAME ON.
  *
  * While the conductor keeps the world's time the breath is the conductor's
- * four-slot phase, cresting on the bar (ADR-016). With no grid it integrates
- * dilated time at `FREE_BREATH_HZ` from wherever it stands, so it slows with a
- * reveal and takes up from the conductor's last phase when the grid lets go.
+ * four-slot phase, cresting on the bar (ADR-016) — reached without a step: on
+ * the frame the grid arms, the distance between the free breath and the grid
+ * is remembered and then closed exponentially, so the bloom, the bed and the
+ * lens glide onto the bar. With no grid it integrates dilated time at
+ * `FREE_BREATH_HZ` from wherever it stands, so it slows with a reveal and takes
+ * up from the conductor's last phase when the grid lets go.
  */
 export function breathPhaseAfter(
   phase: number,
   dt: number,
   timeScale: number,
-  grid: BreathGrid
+  grid: BreathGrid,
+  follow: BreathFollow
 ): number {
-  if (grid.armed()) return grid.breathPhase();
-  return phase + dt * timeScale * Math.PI * 2 * FREE_BREATH_HZ;
+  if (!grid.armed()) {
+    follow.armed = false;
+    follow.offset = 0;
+    return phase + dt * timeScale * Math.PI * 2 * FREE_BREATH_HZ;
+  }
+  const target = grid.breathPhase();
+  if (!follow.armed) {
+    follow.armed = true;
+    // Whole turns are nothing to a breath that is read through sine and
+    // cosine, so the distance closed is the short way round: at most half a
+    // turn, whatever the two clocks' absolute values.
+    const turn = Math.PI * 2;
+    follow.offset =
+      ((((target - phase + Math.PI) % turn) + turn) % turn) - Math.PI;
+  }
+  follow.offset *= Math.exp(-dt * BREATH_CATCH_RATE);
+  if (Math.abs(follow.offset) < 1e-6) follow.offset = 0;
+  return target - follow.offset;
 }
 
 export function setMorphTargets(targets: Float32Array): void {

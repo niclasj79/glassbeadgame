@@ -4,10 +4,17 @@ import { createConductor } from "@/audio/conductor";
 import { THEMES } from "@/themes";
 import {
   FREE_BREATH_HZ,
+  BREATH_CATCH_RATE,
   breathPhaseAfter,
   frameState,
   initFramePositions,
+  type BreathFollow,
 } from "./frameState";
+
+/** A follow state that has already caught the grid: no distance left to close. */
+function caught(): BreathFollow {
+  return { offset: 0, armed: true };
+}
 import { COMFORT } from "./threadGrammar";
 
 /**
@@ -161,10 +168,10 @@ describe("the breath is on the bar", () => {
     grid.arm({ slotSeconds: 2, origin: 10 });
     for (const t of [10, 10.5, 12, 17.3, 18, 40.25]) {
       clock.set(t);
-      expect(breathPhaseAfter(3.1, 1 / 60, 1, grid)).toBe(grid.breathPhase());
+      expect(breathPhaseAfter(3.1, 1 / 60, 1, grid, caught())).toBe(grid.breathPhase());
       // Music's time does not dilate: neither the frame's length nor a
       // reveal's slow motion moves it.
-      expect(breathPhaseAfter(-7, 1 / 20, 0.15, grid)).toBe(grid.breathPhase());
+      expect(breathPhaseAfter(-7, 1 / 20, 0.15, grid, caught())).toBe(grid.breathPhase());
     }
   });
 
@@ -176,10 +183,10 @@ describe("the breath is on the bar", () => {
       grid.arm({ slotSeconds: slot, origin: 10 });
       for (let group = 0; group < 3; group++) {
         clock.set(10 + group * 4 * slot);
-        expect(Math.sin(breathPhaseAfter(0, 1 / 60, 1, grid))).toBeCloseTo(1, 9);
+        expect(Math.sin(breathPhaseAfter(0, 1 / 60, 1, grid, caught()))).toBeCloseTo(1, 9);
         // …and is at its lowest two slots on, on a slot boundary too.
         clock.set(10 + group * 4 * slot + 2 * slot);
-        expect(Math.sin(breathPhaseAfter(0, 1 / 60, 1, grid))).toBeCloseTo(-1, 9);
+        expect(Math.sin(breathPhaseAfter(0, 1 / 60, 1, grid, caught()))).toBeCloseTo(-1, 9);
       }
     }
   });
@@ -192,9 +199,9 @@ describe("the breath is on the bar", () => {
     for (const world of THEMES) {
       grid.arm({ slotSeconds: world.music.slotSeconds, origin: 0 });
       clock.set(0);
-      const before = breathPhaseAfter(0, 0, 1, grid);
+      const before = breathPhaseAfter(0, 0, 1, grid, caught());
       clock.set(1);
-      const hz = (breathPhaseAfter(0, 0, 1, grid) - before) / (2 * Math.PI);
+      const hz = (breathPhaseAfter(0, 0, 1, grid, caught()) - before) / (2 * Math.PI);
       expect(hz).toBeCloseTo(1 / (4 * world.music.slotSeconds), 12);
       expect(hz).toBeLessThan(0.15);
       expect(hz).toBeLessThan(COMFORT.maxLuminanceHz / 20);
@@ -205,9 +212,9 @@ describe("the breath is on the bar", () => {
     const grid = createConductor(clockAt(5));
     expect(grid.armed()).toBe(false);
     expect(FREE_BREATH_HZ).toBe(0.1);
-    expect(breathPhaseAfter(1, 0.5, 1, grid)).toBeCloseTo(1 + 0.5 * 2 * Math.PI * 0.1, 12);
+    expect(breathPhaseAfter(1, 0.5, 1, grid, caught())).toBeCloseTo(1 + 0.5 * 2 * Math.PI * 0.1, 12);
     // A reveal's slow motion slows it, as it always has.
-    expect(breathPhaseAfter(1, 0.5, 0.15, grid)).toBeCloseTo(
+    expect(breathPhaseAfter(1, 0.5, 0.15, grid, caught())).toBeCloseTo(
       1 + 0.5 * 0.15 * 2 * Math.PI * 0.1,
       12
     );
@@ -217,10 +224,10 @@ describe("the breath is on the bar", () => {
     const clock = clockAt(30);
     const grid = createConductor(clock);
     grid.arm({ slotSeconds: 2.4, origin: 29.85 });
-    const held = breathPhaseAfter(0, 1 / 60, 1, grid);
+    const held = breathPhaseAfter(0, 1 / 60, 1, grid, caught());
     grid.disarm();
     const dt = 1 / 60;
-    const next = breathPhaseAfter(held, dt, 1, grid);
+    const next = breathPhaseAfter(held, dt, 1, grid, caught());
     // No jump where the grid is left: one ordinary frame's step.
     expect(next - held).toBeCloseTo(dt * 2 * Math.PI * FREE_BREATH_HZ, 12);
   });
@@ -229,7 +236,7 @@ describe("the breath is on the bar", () => {
     const text = withoutImports(code(source("Cosmos.tsx")));
     const loop = frameLoop(text);
     expect(loop).toMatch(
-      /frameState\.breathPhase = breathPhaseAfter\(\s*frameState\.breathPhase,\s*dt,\s*frameState\.timeScale,\s*conductor\s*\);/
+      /frameState\.breathPhase = breathPhaseAfter\(\s*frameState\.breathPhase,\s*dt,\s*frameState\.timeScale,\s*conductor,\s*frameState\.breathFollow\s*\);/
     );
     // The conductor is handed over in the frame loop and nowhere else.
     expect(count(text, /\bconductor\b/g)).toBeGreaterThan(0);
@@ -299,5 +306,62 @@ describe("the camera counts the world's slot", () => {
       .filter((file) => /\.tsx?$/.test(file) && !file.endsWith(".test.ts"))
       .filter((file) => source(file).includes("CAMERA_BEAT_SECONDS"));
     expect(fixed).toEqual([]);
+  });
+});
+
+describe("the breath catching the grid", () => {
+  function gridAt(phaseOf: () => number, armed = true) {
+    return { armed: () => armed, breathPhase: phaseOf };
+  }
+
+  it("does not step when the grid arms: it closes the distance over about a second and a half", () => {
+    let t = 0;
+    const omega = (2 * Math.PI) / 8; // one breath per four 2 s slots
+    const grid = gridAt(() => 10 + omega * t);
+    const follow: BreathFollow = { offset: 0, armed: false };
+    const dt = 1 / 60;
+    let phase = 3;
+    // The free breath stood at 3; the grid says 10, which is 0.72 rad past a
+    // whole turn. The first armed frame moves by a frame's share of that short
+    // distance, not by the gap — and the whole turn is never walked.
+    const gap = 10 - 3 - 2 * Math.PI;
+    const first = breathPhaseAfter(phase, dt, 1, grid, follow);
+    expect(first - phase).toBeGreaterThan(0);
+    expect(first - phase).toBeLessThan(gap * dt * BREATH_CATCH_RATE * 1.01);
+    phase = first;
+    let largestStep = 0;
+    for (let i = 0; i < 60 * 3; i += 1) {
+      t += dt;
+      const next = breathPhaseAfter(phase, dt, 1, grid, follow);
+      largestStep = Math.max(largestStep, Math.abs(next - phase));
+      phase = next;
+    }
+    // Caught: within a hundredth of a radian of the grid after three seconds…
+    // (up to the whole turn it never had to close)
+    const turns = Math.round((grid.breathPhase() - phase) / (2 * Math.PI));
+    expect(Math.abs(phase + turns * 2 * Math.PI - grid.breathPhase())).toBeLessThan(0.01);
+    // …and no frame moved more than a tenth of a radian on the way.
+    expect(largestStep).toBeLessThan(0.1);
+    // Once caught, the breath is the grid's phase exactly.
+    for (let i = 0; i < 60 * 3; i += 1) {
+      t += dt;
+      phase = breathPhaseAfter(phase, dt, 1, grid, follow);
+    }
+    expect(Math.sin(phase)).toBeCloseTo(Math.sin(grid.breathPhase()), 12);
+    expect(follow.offset).toBe(0);
+  });
+
+  it("forgets the catch when the grid lets go, and starts a new one when it arms again", () => {
+    const follow: BreathFollow = { offset: 4, armed: true };
+    const free = gridAt(() => 99, false);
+    const held = breathPhaseAfter(1, 1 / 60, 1, free, follow);
+    expect(follow.armed).toBe(false);
+    expect(follow.offset).toBe(0);
+    expect(held).toBeCloseTo(1 + (1 / 60) * 2 * Math.PI * 0.1, 12);
+    const armed = gridAt(() => 50);
+    breathPhaseAfter(held, 1 / 60, 1, armed, follow);
+    expect(follow.armed).toBe(true);
+    expect(follow.offset).toBeGreaterThan(0);
+    expect(follow.offset).toBeLessThan(50 - held);
   });
 });

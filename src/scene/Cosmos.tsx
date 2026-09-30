@@ -102,7 +102,8 @@ export function Cosmos() {
       frameState.breathPhase,
       dt,
       frameState.timeScale,
-      conductor
+      conductor,
+      frameState.breathFollow
     );
     const st = useStore.getState();
     const depthTarget = st.settings.reducedMotion
