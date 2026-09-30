@@ -9,13 +9,28 @@ import {
   type InterpretationDraftErrorCode,
 } from "./InterpretationDraftError";
 import type {
-  ArmedInterpretationDraft,
   AttendingInterpretationDraft,
-  CandidateSelectedInterpretationDraft,
   InactiveInterpretationDraft,
   InterpretationDraft,
+  LockedInterpretationDraft,
+  ReadingInterpretationDraft,
 } from "./types";
 
+/**
+ * THE EPHEMERAL INTERPRETATION DRAFT — pair first (I-016).
+ *
+ *   inactive ──Attend──▶ attending ──Lock──▶ locked ──Choose──▶ reading
+ *       ▲                   │  ▲                │  ▲                │
+ *       └──────Cancel───────┘  └────Cancel──────┘  └────Cancel──────┘
+ *
+ * One Cancel steps back exactly one stage (I-010 as adapted by I-016), and
+ * nothing here ever reaches the durable log: the pair, the hypothesis and the
+ * thread are published together, later, by the commit coordinator.
+ *
+ * Re-locking from `locked` or `reading` replaces the second bead and drops any
+ * chosen reading — a reading belongs to a pair, and I-008 forbids silently
+ * carrying one across to another.
+ */
 export const INACTIVE_INTERPRETATION_DRAFT: InactiveInterpretationDraft =
   Object.freeze({ stage: "inactive" });
 
@@ -67,8 +82,8 @@ function assertKnownDraft(draft: InterpretationDraft): void {
   switch (draft.stage) {
     case "inactive":
     case "attending":
-    case "armed":
-    case "candidate-selected":
+    case "locked":
+    case "reading":
       return;
     default:
       fail("invalid-transition-order", "the draft stage is not supported");
@@ -79,6 +94,7 @@ export function createInterpretationDraft(): InactiveInterpretationDraft {
   return INACTIVE_INTERPRETATION_DRAFT;
 }
 
+/** Attend from any stage. A new Attend discards the whole draft (I-004). */
 export function attendDraft(
   draft: InterpretationDraft,
   attendedConceptId: ConceptId,
@@ -91,38 +107,22 @@ export function attendDraft(
   return Object.freeze({ stage: "attending", attendedConceptId });
 }
 
-export function armDraftIntention(
-  draft: InterpretationDraft,
-  intention: RelationIntention
-): ArmedInterpretationDraft {
-  if (draft.stage !== "attending" && draft.stage !== "armed") {
-    return fail(
-      "invalid-transition-order",
-      "an intention can only be armed after attending and before candidate selection"
-    );
-  }
-  if (!isRelationIntention(intention)) {
-    return fail("unsupported-intention", "the relation intention is not supported");
-  }
-
-  return Object.freeze({
-    stage: "armed",
-    attendedConceptId: draft.attendedConceptId,
-    intention,
-  });
-}
-
-export function selectDraftCandidate(
+/**
+ * Fix the second bead. Allowed while attending, and while locked or reading
+ * to replace the second bead — which drops the chosen reading.
+ */
+export function lockDraftCandidate(
   draft: InterpretationDraft,
   candidateConceptId: ConceptId,
   sessionConceptIds: readonly ConceptId[]
-): CandidateSelectedInterpretationDraft {
-  if (draft.stage !== "armed") {
+): LockedInterpretationDraft {
+  if (draft.stage === "inactive") {
     return fail(
       "invalid-transition-order",
-      "a candidate can only be selected after arming an intention"
+      "a second bead can only be locked after attending"
     );
   }
+  assertKnownDraft(draft);
 
   const concepts = validateSessionConcepts(sessionConceptIds);
   requireSessionConcept(concepts, draft.attendedConceptId);
@@ -136,30 +136,55 @@ export function selectDraftCandidate(
     candidateConceptId,
   ]);
   return Object.freeze({
-    stage: "candidate-selected",
+    stage: "locked",
     attendedConceptId: draft.attendedConceptId,
     candidateConceptId,
-    intention: draft.intention,
     pair,
   });
 }
 
+/** Choose — or change — the reading of a locked pair. */
+export function chooseDraftReading(
+  draft: InterpretationDraft,
+  intention: RelationIntention
+): ReadingInterpretationDraft {
+  if (draft.stage !== "locked" && draft.stage !== "reading") {
+    return fail(
+      "invalid-transition-order",
+      "a reading can only be chosen once a second bead is locked"
+    );
+  }
+  if (!isRelationIntention(intention)) {
+    return fail("unsupported-intention", "the relation intention is not supported");
+  }
+
+  return Object.freeze({
+    stage: "reading",
+    attendedConceptId: draft.attendedConceptId,
+    candidateConceptId: draft.candidateConceptId,
+    intention,
+    pair: draft.pair,
+  });
+}
+
+/** One step back: reading → locked → attending → inactive. */
 export function cancelDraft(draft: InterpretationDraft): InterpretationDraft {
   switch (draft.stage) {
     case "inactive":
       return INACTIVE_INTERPRETATION_DRAFT;
     case "attending":
       return INACTIVE_INTERPRETATION_DRAFT;
-    case "armed":
+    case "locked":
       return Object.freeze({
         stage: "attending",
         attendedConceptId: draft.attendedConceptId,
       });
-    case "candidate-selected":
+    case "reading":
       return Object.freeze({
-        stage: "armed",
+        stage: "locked",
         attendedConceptId: draft.attendedConceptId,
-        intention: draft.intention,
+        candidateConceptId: draft.candidateConceptId,
+        pair: draft.pair,
       });
     default:
       return fail("invalid-transition-order", "the draft stage is not supported");

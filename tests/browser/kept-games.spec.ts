@@ -54,7 +54,7 @@ async function weaveOne(page: Page): Promise<void> {
   await expect.poll(async () => (await snapshot(page)).weaving).toBe(true);
   await page.evaluate(() => window.__gbgTest!.advanceClock(125));
   await page.mouse.move(to.x, to.y, { steps: 4 });
-  await expect.poll(async () => (await snapshot(page)).snappedConceptId).toBe(TARGET_ID);
+  await expect.poll(async () => (await snapshot(page)).sightedConceptId).toBe(TARGET_ID);
   await page.evaluate(() => window.__gbgTest!.advanceClock(125));
   await page.mouse.up();
   await expect.poll(async () => (await snapshot(page)).draftStage).toBe("inactive");

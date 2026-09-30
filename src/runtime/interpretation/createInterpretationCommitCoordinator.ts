@@ -13,7 +13,7 @@ import {
   type BuildGestureProfileInput,
 } from "../gestureProfile";
 import type {
-  CandidateSelectedInterpretationDraft,
+  ReadingInterpretationDraft,
   InactiveInterpretationDraft,
 } from "../interactionDraft";
 
@@ -23,7 +23,7 @@ export interface CommitInterpretivelyInput {
 }
 
 export interface InterpretiveCommitResult {
-  readonly committedDraft: CandidateSelectedInterpretationDraft;
+  readonly committedDraft: ReadingInterpretationDraft;
   readonly gesture: GestureProfile;
   readonly events: InterpretationCommitEventsV1;
   readonly eventLog: SessionEventLogV1;
@@ -51,7 +51,7 @@ export function createInterpretationCommitCoordinator(
 
   return (input) => {
     const committedDraft = dependencies.draftStore.getState()
-      .draft as CandidateSelectedInterpretationDraft;
+      .draft as ReadingInterpretationDraft;
     const gesture = buildGestureProfile(input.gesture);
     const committed = commitInterpretation({
       draft: committedDraft,

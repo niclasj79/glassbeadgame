@@ -17,9 +17,23 @@ export interface NormalizedGestureSample {
 
 export interface BuildGestureProfileInput {
   readonly inputModality: InputModality;
+  /** The hold: when the reading's sigil was pressed … */
   readonly startedAtMs: number;
+  /** … and released. `durationMs` is this interval (I-020). */
   readonly endedAtMs: number;
+  /** Samples taken during the hold, inside [startedAtMs, endedAtMs]. */
   readonly samples?: readonly NormalizedGestureSample[];
+  /**
+   * The approach: the lens path from Attend to Lock (I-020).
+   *
+   * Under pair-first nothing is dragged from bead to bead, so the expressive
+   * sweep happens *before* the hold — the player looking across the arena and
+   * honing in. When it carries two or more coordinate samples it supplies the
+   * path geometry (length, curvature, speed, variance); the hold still supplies
+   * the duration. Every sample must precede or meet the hold's start. The
+   * profile's fields do not change, only where two of them are measured.
+   */
+  readonly approach?: readonly NormalizedGestureSample[];
 }
 
 interface PathSegment {
@@ -53,6 +67,53 @@ function requireSamples(
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     fail("invalid-samples", "gesture samples must be an array when supplied");
+  }
+  return value;
+}
+
+/**
+ * The approach is validated on its own terms: strictly increasing, every
+ * sample carrying both coordinates, and none later than the hold's start.
+ */
+function requireApproach(
+  value: readonly NormalizedGestureSample[] | undefined,
+  startedAtMs: number
+): readonly NormalizedGestureSample[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    fail("invalid-samples", "approach samples must be an array when supplied");
+  }
+  let previous: number | undefined;
+  for (const sample of value) {
+    if (sample === null || typeof sample !== "object" || Array.isArray(sample)) {
+      fail("invalid-samples", "every approach sample must be an object");
+    }
+    if (
+      typeof sample.atMs !== "number" ||
+      !Number.isFinite(sample.atMs) ||
+      sample.atMs < 0 ||
+      sample.atMs > startedAtMs
+    ) {
+      fail(
+        "invalid-sample-time",
+        "approach samples must be finite and must not follow the hold's start"
+      );
+    }
+    if (previous !== undefined && sample.atMs <= previous) {
+      fail("non-monotonic-samples", "approach sample times must be strictly increasing");
+    }
+    previous = sample.atMs;
+    if (
+      sample.xViewport === undefined ||
+      sample.yViewport === undefined ||
+      !Number.isFinite(sample.xViewport) ||
+      !Number.isFinite(sample.yViewport)
+    ) {
+      fail(
+        "invalid-sample-coordinates",
+        "every approach sample must carry finite viewport coordinates"
+      );
+    }
   }
   return value;
 }
@@ -239,10 +300,13 @@ export function buildGestureProfile(
     }
   }
 
+  const approach = requireApproach(input.approach, startedAtMs);
   const geometry =
-    coordinatesAvailable === true && samples.length >= 2
-      ? calculateGeometry(samples)
-      : {};
+    approach.length >= 2
+      ? calculateGeometry(approach)
+      : coordinatesAvailable === true && samples.length >= 2
+        ? calculateGeometry(samples)
+        : {};
   const profile: GestureProfile = {
     inputModality: input.inputModality,
     durationMs: endedAtMs - startedAtMs,

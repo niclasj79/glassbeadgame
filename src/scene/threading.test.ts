@@ -35,7 +35,6 @@ import {
   handlePointerMove,
   handlePointerUp,
   handleWindowBlur,
-  isRecoiling,
   threadingEnv,
 } from "./threading";
 
@@ -204,105 +203,24 @@ describe("threading — the primary verb", () => {
   });
 
   /**
-   * GAP-B3, second half. A released weave that misses was as silent as an
-   * unarmed drag: `commitDirectionalWeave` was skipped, `cancelWeave()` dropped
-   * the capture, and the preview disappeared between two frames. `cancelGliss`
-   * had zero callers despite a comment in `useAudio.ts` claiming this exact
-   * path fired it.
+   * The lens (I-017). While a bead is attended the pointer sights the nearest
+   * bead within its disc: its own sound (never hover's), its own staged moment,
+   * the lens position written to the frame, and the path kept as the weave's
+   * approach (I-020).
    */
-  it("recoils the ribbon and sounds the cancel when a weave misses", () => {
-    const source = beadIds[0];
-    productionInterpretation.activateConcept(toConceptId(source));
-    productionInterpretation.armIntention("echo");
-
-    beadPointerHandlers(source).onPointerDown(
-      threeEvent({ clientX: 400, clientY: 400 })
-    );
-    expect(productionInterpretation.isWeaving()).toBe(true);
-    expect(setSilkActive).toHaveBeenCalledWith(true);
-
-    handlePointerMove(domEvent({ clientX: 520, clientY: 500 }));
-    // No camera is wired in this harness, so nothing can be acquired — which is
-    // exactly the case under test: a weave released onto nothing.
-    expect(frameState.snapId).toBeNull();
-
-    // The aim is somewhere out in the world, away from the source bead.
-    frameState.aim.x = 12;
-    frameState.aim.y = 4;
-    frameState.aim.z = -3;
-    frameState.aim.active = true;
-
-    handlePointerUp(domEvent({ clientX: 520, clientY: 500 }));
-
-    expect(cancelGliss).toHaveBeenCalledTimes(1);
-    expect(isRecoiling()).toBe(true);
-    // The preview is still drawn while the ink runs back down the thread.
-    expect(frameState.aim.active).toBe(true);
-    expect(productionInterpretation.isWeaving()).toBe(true);
-
-    const startedAt = frameState.aim.x;
-    advanceRecoil(1 / 60);
-    expect(frameState.aim.x).toBeLessThan(startedAt);
-
-    for (let frame = 0; frame < 40; frame += 1) advanceRecoil(1 / 60);
-
-    expect(isRecoiling()).toBe(false);
-    expect(frameState.aim.active).toBe(false);
-    expect(productionInterpretation.isWeaving()).toBe(false);
-    // Nothing was lost: the intention is still held, ready to be drawn again.
-    expect(interpretationDraftStore.getState().draft).toMatchObject({
-      stage: "armed",
-      intention: "echo",
-    });
-    expect(useStore.getState().session?.threads ?? []).toHaveLength(0);
-  });
-
-  it("lands the recoil immediately when the player presses again", () => {
-    const source = beadIds[0];
-    productionInterpretation.activateConcept(toConceptId(source));
-    productionInterpretation.armIntention("ground");
-    beadPointerHandlers(source).onPointerDown(
-      threeEvent({ clientX: 400, clientY: 400 })
-    );
-    handlePointerMove(domEvent({ clientX: 520, clientY: 500 }));
-    handlePointerUp(domEvent({ clientX: 520, clientY: 500 }));
-    expect(isRecoiling()).toBe(true);
-
-    beadPointerHandlers(source).onPointerDown(
-      threeEvent({ pointerId: 2, clientX: 400, clientY: 400 })
-    );
-    // The new gesture begins on the same frame rather than waiting out an
-    // animation that was only ever an explanation.
-    expect(isRecoiling()).toBe(false);
-    expect(productionInterpretation.isWeaving()).toBe(true);
-  });
-
-  /**
-   * GAP-B2. `threading.ts` fired `hoverPing` on the snap transition — the same
-   * function, the same gain and the same timbre as moving the mouse across a
-   * bead — so acquiring the other end of a weave was sonically identical to
-   * pointing at something. And `planCandidateLatched` was published by nothing,
-   * so the scene, the camera and the haptics channel never learned it happened.
-   */
-  it("gives a latched candidate its own sound and its own staged moment", () => {
+  function withCamera<T>(run: (screenPointOf: (id: string) => { clientX: number; clientY: number }) => T): T {
     const camera = new THREE.PerspectiveCamera(50, 1280 / 800, 0.1, 200);
     camera.position.set(0, 0, 24);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld();
     threadingEnv.camera = camera;
     threadingEnv.dom = {
-      getBoundingClientRect: () => ({
-        left: 0,
-        top: 0,
-        width: 1280,
-        height: 800,
-      }),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 800 }),
       setPointerCapture: () => undefined,
       hasPointerCapture: () => false,
       releasePointerCapture: () => undefined,
       style: {} as CSSStyleDeclaration,
     } as unknown as HTMLCanvasElement;
-
     const screenPointOf = (id: string) => {
       const index = frameState.beadIndex.get(id)!;
       const point = new THREE.Vector3(
@@ -315,28 +233,67 @@ describe("threading — the primary verb", () => {
         clientY: ((1 - point.y) / 2) * 800,
       };
     };
+    try {
+      return run(screenPointOf);
+    } finally {
+      threadingEnv.camera = null;
+      threadingEnv.dom = null;
+    }
+  }
 
-    const staged: string[] = [];
-    const detach = cueBus.subscribe("scene", (cue) => staged.push(cue.type));
+  it("sights the nearest bead under the lens with its own sound and staged moment", () => {
+    withCamera((screenPointOf) => {
+      const staged: string[] = [];
+      const detach = cueBus.subscribe("scene", (cue) => staged.push(cue.type));
+      const source = beadIds[0];
+      const target = beadIds[1];
 
-    const source = beadIds[0];
-    const target = beadIds[1];
-    productionInterpretation.activateConcept(toConceptId(source));
-    productionInterpretation.armIntention("passage");
+      beadPointerHandlers(source).onPointerDown(threeEvent(screenPointOf(source)));
+      handlePointerUp(domEvent(screenPointOf(source)));
+      expect(interpretationDraftStore.getState().draft.stage).toBe("attending");
 
-    beadPointerHandlers(source).onPointerDown(threeEvent(screenPointOf(source)));
-    expect(frameState.snapId).toBeNull();
+      handlePointerMove(domEvent(screenPointOf(target)));
 
-    handlePointerMove(domEvent(screenPointOf(target)));
+      expect(frameState.snapId).toBe(target);
+      expect(frameState.lens.active).toBe(true);
+      expect(latchTick).toHaveBeenCalledWith(target);
+      expect(hoverPing).not.toHaveBeenCalled();
+      expect(staged).toContain("attention.sighted");
+      detach();
+    });
+  });
 
-    expect(frameState.snapId).toBe(target);
-    expect(latchTick).toHaveBeenCalledWith(target);
-    // Never the hover voice — that is the confusion this replaced.
-    expect(hoverPing).not.toHaveBeenCalled();
-    expect(staged).toContain("candidate.latched");
+  it("locks the second bead on a press, and replaces it on another", () => {
+    const [first, second, third] = beadIds;
+    beadPointerHandlers(first).onPointerDown(threeEvent({ clientX: 400, clientY: 400 }));
+    handlePointerUp(domEvent({ clientX: 400, clientY: 400 }));
 
-    detach();
-    threadingEnv.camera = null;
-    threadingEnv.dom = null;
+    beadPointerHandlers(second).onPointerDown(
+      threeEvent({ pointerId: 2, clientX: 500, clientY: 400 })
+    );
+    handlePointerUp(domEvent({ pointerId: 2, clientX: 500, clientY: 400 }));
+    expect(interpretationDraftStore.getState().draft).toMatchObject({
+      stage: "locked",
+      pair: [toConceptId(first), toConceptId(second)],
+    });
+
+    beadPointerHandlers(third).onPointerDown(
+      threeEvent({ pointerId: 3, clientX: 600, clientY: 400 })
+    );
+    handlePointerUp(domEvent({ pointerId: 3, clientX: 600, clientY: 400 }));
+    expect(interpretationDraftStore.getState().draft).toMatchObject({
+      stage: "locked",
+      pair: [toConceptId(first), toConceptId(third)],
+    });
+    // Nothing provisional reaches the log.
+    expect(useStore.getState().session?.threads ?? []).toHaveLength(0);
+  });
+
+  it("puts the lens down and leaves the draft alone when no bead is attended", () => {
+    handlePointerMove(domEvent({ clientX: 10, clientY: 10 }));
+    expect(frameState.lens.active).toBe(false);
+    expect(interpretationDraftStore.getState().draft.stage).toBe("inactive");
+    expect(cancelGliss).not.toHaveBeenCalled();
+    expect(setSilkActive).not.toHaveBeenCalledWith(true);
   });
 });

@@ -618,8 +618,11 @@ export function createAudioDirector(
         break;
       }
 
-      case "intention.armed": {
-        const conceptId = String(cue.payload.conceptId);
+      case "reading.previewed": {
+        // The reading heard before it is made: the attended motif transformed
+        // by the previewed grammar (I-016). Placeholder for the M2-012 audio
+        // workstream, which answers with both motifs in that grammar.
+        const conceptId = String(cue.payload.pair[0]);
         emit(
           planArming(
             `arm:${conceptId}:${cue.payload.intention}`,
@@ -633,7 +636,7 @@ export function createAudioDirector(
         break;
       }
 
-      case "candidate.latched": {
+      case "pair.locked": {
         const [a, b] = cue.payload.pair;
         emit(
           planLanding(

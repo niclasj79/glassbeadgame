@@ -393,7 +393,9 @@ export function Beads() {
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
   live.current.attendedId = attendedId;
   live.current.candidateId =
-    draft.stage === "candidate-selected" ? String(draft.candidateConceptId) : null;
+    draft.stage === "locked" || draft.stage === "reading"
+      ? String(draft.candidateConceptId)
+      : null;
 
   /**
    * How woven each bead is. The count of threads at a bead is a working

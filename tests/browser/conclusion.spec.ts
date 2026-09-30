@@ -65,7 +65,7 @@ async function weaveOne(page: Page): Promise<void> {
   // advances is dropped by the recorder as a non-gesture.
   await page.evaluate(() => window.__gbgTest!.advanceClock(125));
   await page.mouse.move(to.x, to.y, { steps: 4 });
-  await expect.poll(async () => (await snapshot(page)).snappedConceptId).toBe(TARGET_ID);
+  await expect.poll(async () => (await snapshot(page)).sightedConceptId).toBe(TARGET_ID);
   await page.evaluate(() => window.__gbgTest!.advanceClock(125));
   await page.mouse.up();
   await expect.poll(async () => (await snapshot(page)).draftStage).toBe("inactive");

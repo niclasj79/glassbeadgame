@@ -1,22 +1,9 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import {
-  cancelGliss,
-  hoverPing,
-  latchTick,
-  selectTick,
-  setSilkActive,
-  updateSilk,
-} from "@/audio/sfx";
-import {
-  RELATION_INTENTIONS,
-  type ConceptPair,
-  type InputModality,
-  type RelationIntention,
-} from "@/domain/events";
+import { cancelGliss, hoverPing, latchTick, selectTick, setSilkActive } from "@/audio/sfx";
+import type { InputModality } from "@/domain/events";
 import { toConceptId } from "@/domain/ids";
 import { isCoarsePointer } from "@/lib/device";
-import { cueBus, planCandidateLatched } from "@/runtime/cues";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { presentationNow } from "@/runtime/testMode";
 import { interpretationDraftStore } from "@/state/interactionDraft";
@@ -25,24 +12,17 @@ import { frameState } from "./frameState";
 
 const DRAG_THRESHOLD_PX = 6;
 const LONG_PRESS_MS = 600;
-const MOUSE_SNAP_RADIUS_PX = 48;
-const TOUCH_SNAP_RADIUS_PX = 72;
-
 /**
- * How long the ribbon takes to fall back into the bead it left.
- *
- * A weave released onto nothing used to be *completely* silent: the capture was
- * discarded, the preview vanished between two frames, and the player was given
- * no evidence that the game had even seen the gesture. The recoil is the
- * refusal, said in the material the player was already holding — the ink runs
- * back down the thread — and it is short enough that it reads as a spring
- * rather than as a wait.
+ * How far from the pointer the lens still sights a bead (I-017). The lens is a
+ * disc, not a crosshair: nothing here asks for aim.
  */
-const RECOIL_SECONDS = 0.26;
+const MOUSE_SIGHT_RADIUS_PX = 64;
+const TOUCH_SIGHT_RADIUS_PX = 88;
+
 /** Time constant of the fall-back ease, in seconds. */
 const RECOIL_TAU = 0.075;
 
-type GestureMode = "idle" | "tap" | "load" | "aim";
+type GestureMode = "idle" | "tap";
 
 interface PointerPosition {
   readonly clientX: number;
@@ -82,21 +62,11 @@ export const threadingEnv = {
   controls: null as { enabled: boolean } | null,
 };
 
-const ndc = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
-const aimPlane = new THREE.Plane();
-const cameraDirection = new THREE.Vector3();
 const cameraPosition = new THREE.Vector3();
-const sourcePosition = new THREE.Vector3();
 const candidatePosition = new THREE.Vector3();
 const projected = new THREE.Vector3();
 const cameraSpace = new THREE.Vector3();
-const freeAim = new THREE.Vector3();
 let ignoreArenaMissUntil = 0;
-let loadHoverElement: HTMLElement | null = null;
-let lastMoveX = 0;
-let lastMoveY = 0;
-let smoothedSpeed = 0;
 
 /**
  * A released weave falling back to its source. While this is live the capture
@@ -127,59 +97,33 @@ function normalizedPoint(position: PointerPosition) {
   };
 }
 
-function setAimToBead(id: string): void {
-  const index = frameState.beadIndex.get(id);
-  if (index === undefined) return;
-  const rendered = frameState.rendered;
-  frameState.aim.x = rendered[index * 3];
-  frameState.aim.y = rendered[index * 3 + 1];
-  frameState.aim.z = rendered[index * 3 + 2];
-  frameState.aim.active = true;
-}
-
-function updateAim(position: PointerPosition): void {
+/**
+ * The bead nearest the pointer on screen, within the lens's radius — or none.
+ * Nearer to the camera wins a tie, so the bead you can see is the one sighted.
+ */
+function nearestBeadAt(
+  position: PointerPosition,
+  pointerType: string,
+  excludeId: string | null
+): string | null {
   const camera = threadingEnv.camera;
   const dom = threadingEnv.dom;
-  const sourceId = gesture.sourceBeadId;
-  if (!camera || !dom || !sourceId) return;
-  const sourceIndex = frameState.beadIndex.get(sourceId);
-  if (sourceIndex === undefined) return;
-
+  if (!camera || !dom) return null;
   const rect = dom.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return;
-  ndc.set(
-    ((position.clientX - rect.left) / rect.width) * 2 - 1,
-    -((position.clientY - rect.top) / rect.height) * 2 + 1
-  );
+  if (rect.width <= 0 || rect.height <= 0) return null;
   camera.updateMatrixWorld();
-  raycaster.setFromCamera(ndc, camera);
-
-  const rendered = frameState.rendered;
-  sourcePosition.set(
-    rendered[sourceIndex * 3],
-    rendered[sourceIndex * 3 + 1],
-    rendered[sourceIndex * 3 + 2]
-  );
-  camera.getWorldDirection(cameraDirection);
-  aimPlane.setFromNormalAndCoplanarPoint(cameraDirection, sourcePosition);
-  if (raycaster.ray.intersectPlane(aimPlane, freeAim)) {
-    frameState.aim.x = freeAim.x;
-    frameState.aim.y = freeAim.y;
-    frameState.aim.z = freeAim.z;
-  }
-  frameState.aim.active = true;
-
   camera.getWorldPosition(cameraPosition);
   const radius =
-    gesture.pointerType === "touch" || gesture.pointerType === "pen"
-      ? TOUCH_SNAP_RADIUS_PX
-      : MOUSE_SNAP_RADIUS_PX;
+    pointerType === "touch" || pointerType === "pen"
+      ? TOUCH_SIGHT_RADIUS_PX
+      : MOUSE_SIGHT_RADIUS_PX;
+  const rendered = frameState.rendered;
   let nearestId: string | null = null;
   let nearestScreenDistance = radius;
   let nearestCameraDistance = Number.POSITIVE_INFINITY;
 
   for (const [id, index] of frameState.beadIndex) {
-    if (id === sourceId) continue;
+    if (id === excludeId) continue;
     candidatePosition.set(
       rendered[index * 3],
       rendered[index * 3 + 1],
@@ -213,59 +157,39 @@ function updateAim(position: PointerPosition): void {
       nearestCameraDistance = distanceToCamera;
     }
   }
+  return nearestId;
+}
 
-  if (nearestId !== frameState.snapId) {
-    frameState.snapId = nearestId;
-    if (nearestId) {
-      useStore.getState().setFocusedBead(nearestId);
-      // Its own sound, not hover's (see sfx.latchTick) …
-      latchTick(nearestId);
-      // … and its own staged moment. `planCandidateLatched` was exported,
-      // tested and never once published, so the scene, the camera and the
-      // haptics channel had no idea the aim had acquired its other end.
-      const draft = interpretationDraftStore.getState().draft;
-      if (draft.stage === "armed") {
-        const pair: ConceptPair = [
-          draft.attendedConceptId,
-          toConceptId(nearestId),
-        ];
-        cueBus.publish(
-          planCandidateLatched({ pair, intention: draft.intention })
-        );
-      }
-    }
+/**
+ * THE LENS (I-017). While a bead is attended the pointer is a lens: its
+ * position is written to the frame (never to a store), the nearest bead under
+ * it is sighted, and its path is kept as the weave's approach (I-020).
+ */
+function updateLens(event: PointerEvent): void {
+  const draft = interpretationDraftStore.getState().draft;
+  if (
+    draft.stage !== "attending" ||
+    productionInterpretation.isHolding() ||
+    useStore.getState().phase !== "arena"
+  ) {
+    frameState.lens.active = false;
+    return;
   }
-}
-
-function intentionElementAtPoint(
-  position: PointerPosition
-): HTMLElement | null {
-  return (
-    document
-    .elementFromPoint(position.clientX, position.clientY)
-      ?.closest<HTMLElement>("[data-world-intention]") ?? null
+  const point = normalizedPoint(event);
+  frameState.lens.x = point.xViewport;
+  frameState.lens.y = point.yViewport;
+  frameState.lens.active = true;
+  productionInterpretation.recordApproach(point, inputModality(event.pointerType));
+  const sighted = nearestBeadAt(
+    event,
+    event.pointerType || "mouse",
+    String(draft.attendedConceptId)
   );
-}
-
-function updateLoadHover(position: PointerPosition): void {
-  const next = intentionElementAtPoint(position);
-  if (next === loadHoverElement) return;
-  if (loadHoverElement) loadHoverElement.dataset.directHover = "false";
-  loadHoverElement = next;
-  if (loadHoverElement) loadHoverElement.dataset.directHover = "true";
-}
-
-function clearLoadHover(): void {
-  if (loadHoverElement) loadHoverElement.dataset.directHover = "false";
-  loadHoverElement = null;
-}
-
-function intentionAtPoint(position: PointerPosition): RelationIntention | null {
-  const element = intentionElementAtPoint(position);
-  const value = element?.dataset.worldIntention;
-  return (RELATION_INTENTIONS as readonly string[]).includes(value ?? "")
-    ? (value as RelationIntention)
-    : null;
+  if (sighted !== frameState.snapId) {
+    frameState.snapId = sighted;
+    if (sighted) latchTick(sighted);
+  }
+  productionInterpretation.sight(sighted === null ? null : toConceptId(sighted));
 }
 
 function clearPressTimer(): void {
@@ -326,16 +250,6 @@ function advanceCameraHold(): void {
 }
 
 /**
- * Begin the fall-back. The capture stays open on purpose: `ThreadPreview`
- * renders while the draft is armed *and* the presentation store says a weave is
- * in flight, so closing it here would delete the ribbon on the same frame the
- * refusal was supposed to be legible in.
- */
-function beginRecoil(sourceId: string): void {
-  recoil = { sourceId, remaining: RECOIL_SECONDS };
-}
-
-/**
  * End it — either because the ribbon arrived home, or because the player did
  * something else and no longer cares. Idempotent: every abort path calls it.
  */
@@ -343,8 +257,8 @@ export function finishRecoil(): void {
   if (!recoil) return;
   recoil = null;
   frameState.aim.active = false;
-  if (productionInterpretation.isWeaving()) {
-    productionInterpretation.cancelWeave();
+  if (productionInterpretation.isHolding()) {
+    productionInterpretation.cancelHold();
   }
 }
 
@@ -378,14 +292,9 @@ export function advanceRecoil(dt: number): void {
 export const isRecoiling = (): boolean => recoil !== null;
 
 function endGesture(): void {
-  const suppressMiss =
-    gesture.mode === "aim" ||
-    gesture.mode === "load" ||
-    gesture.moved;
+  const suppressMiss = gesture.moved;
   clearPressTimer();
-  clearLoadHover();
   setSilkActive(false);
-  smoothedSpeed = 0;
   releaseCameraHold();
   if (threadingEnv.dom && gesture.pointerId >= 0) {
     try {
@@ -406,7 +315,6 @@ function endGesture(): void {
   // A recoil owns the aim point until it lands; clearing it here would snap the
   // ribbon out of existence on the frame the fall-back begins.
   if (!recoil) frameState.aim.active = false;
-  frameState.snapId = null;
   if (suppressMiss) ignoreArenaMissUntil = performance.now() + 250;
   refreshCursor();
 }
@@ -417,11 +325,11 @@ function cancelActiveGesture(): void {
     endGesture();
     return;
   }
-  if (productionInterpretation.isWeaving()) {
+  if (productionInterpretation.isHolding()) {
     // Makes true a claim `useAudio.ts` has carried since the prototype: "the
     // cancel gliss is fired directly by threading.cancelGesture". It was not.
     cancelGliss();
-    productionInterpretation.cancelWeave();
+    productionInterpretation.cancelHold();
   }
   endGesture();
 }
@@ -496,14 +404,11 @@ export function beadPointerHandlers(id: string) {
       // The player has moved on: land the ribbon immediately rather than making
       // them wait out an animation that was only ever an explanation.
       if (recoil) finishRecoil();
-      if (gesture.mode !== "idle" || productionInterpretation.isWeaving()) {
+      if (gesture.mode !== "idle" || productionInterpretation.isHolding()) {
         event.nativeEvent.preventDefault();
         return;
       }
       frameState.idleSince = presentationNow();
-      lastMoveX = event.clientX;
-      lastMoveY = event.clientY;
-      smoothedSpeed = 0;
       state.setFocusedBead(id);
       productionInterpretation.closeInspection();
       selectTick(id);
@@ -511,58 +416,15 @@ export function beadPointerHandlers(id: string) {
       const draft = interpretationDraftStore.getState().draft;
       const attendedId =
         draft.stage === "inactive" ? null : String(draft.attendedConceptId);
-      if (draft.stage === "armed") {
-        const sourceId = String(draft.attendedConceptId);
-        beginGesture(event, id, "aim", sourceId);
-        setAimToBead(sourceId);
-        try {
-          productionInterpretation.beginDirectionalWeave(
-            inputModality(event.pointerType),
-            normalizedPoint(event)
-          );
-          updateAim(event);
-          // The drawn thread has a texture under the finger while it is being
-          // drawn, and silence when the hand is still.
-          setSilkActive(true);
-        } catch (error) {
-          endGesture();
-          throw error;
-        }
-        return;
-      }
       /**
-       * THE PRESS *IS* THE ATTENDING.
-       *
-       * Attention used to be set on the way back up, and only if the hand had
-       * not moved. Timed on the running build with a fresh profile: a click at
-       * T+20.6 s set attention, the live region said "Attention set. Choose an
-       * intention." — and no intention affordance appeared on screen for about
-       * three and a half seconds, because the attend phrase re-frames the
-       * camera and the plate waits for the pose. The player was asked to choose
-       * with nothing to choose from.
-       *
-       * Setting it on the way down closes that window completely, and it does
-       * it with the world's existing law rather than a special case: a gesture
-       * holds the sightline for its whole duration (`beginGesture` disables the
-       * controls), a held camera is a settled camera, and the plate opens in
-       * the pose the camera already has — around the bead under the finger,
-       * within a frame of the press, where it will stay. The same press then
-       * continues straight into the plate's four stations as a `load`, which is
-       * the gesture an attended bead already supported: a player who pulls is
-       * handed the missing step mid-motion, in the world's own material,
-       * without a word of instruction. A player who lets go simply keeps the
-       * open plate, which is still an answer and still progress.
+       * THE PRESS *IS* THE ACT (I-016). Roaming, it attends; attending, it
+       * locks the second bead; with a pair held, it replaces the second bead.
+       * Setting it on the way down means the camera is held by the gesture
+       * while the new pose is composed, so the world never moves out from
+       * under the finger and then back.
        */
       beginGesture(event, id, "tap", attendedId);
       productionInterpretation.activateConcept(toConceptId(id));
-      const opened = interpretationDraftStore.getState().draft;
-      if (
-        opened.stage === "attending" &&
-        String(opened.attendedConceptId) === id
-      ) {
-        gesture.mode = "load";
-        gesture.sourceBeadId = id;
-      }
       // A finger held still on a bead asks for the bead itself. The press has
       // already opened it; this adds the reading, and never a weave.
       if (event.pointerType === "touch" || isCoarsePointer()) {
@@ -579,6 +441,7 @@ export function beadPointerHandlers(id: string) {
 }
 
 export function handlePointerMove(event: PointerEvent): void {
+  updateLens(event);
   if (event.pointerId !== gesture.pointerId || !gesture.pressedBeadId) return;
   const crossed =
     Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >=
@@ -587,52 +450,14 @@ export function handlePointerMove(event: PointerEvent): void {
     gesture.moved = true;
     clearPressTimer();
   }
-
-  const step = Math.hypot(event.clientX - lastMoveX, event.clientY - lastMoveY);
-  lastMoveX = event.clientX;
-  lastMoveY = event.clientY;
-  smoothedSpeed += (step - smoothedSpeed) * 0.35;
-
-  if (gesture.mode === "aim") {
-    productionInterpretation.updateWeave(normalizedPoint(event));
-    updateAim(event);
-    updateSilk(smoothedSpeed);
-  } else if (gesture.mode === "load") {
-    updateLoadHover(event);
-  }
 }
 
 export function handlePointerUp(event: PointerEvent): void {
   if (event.pointerId !== gesture.pointerId || !gesture.pressedBeadId) return;
-  const mode = gesture.mode;
   const beadId = gesture.pressedBeadId;
   const activate = !gesture.moved && !gesture.longPressed;
-  const point = normalizedPoint(event);
   try {
-    if (mode === "aim") {
-      productionInterpretation.updateWeave(point);
-      updateAim(event);
-      const targetId = frameState.snapId;
-      if (targetId) {
-        productionInterpretation.commitDirectionalWeave(
-          toConceptId(targetId),
-          point
-        );
-      } else if (gesture.sourceBeadId) {
-        // A weave released onto nothing. It is not an error and it costs the
-        // player nothing — the armed draft is still held — but it must be
-        // *answered*, or the game has ignored a deliberate gesture.
-        cancelGliss();
-        beginRecoil(gesture.sourceBeadId);
-      } else {
-        productionInterpretation.cancelWeave();
-      }
-    } else if (mode === "load") {
-      const intention = intentionAtPoint(event);
-      if (intention) productionInterpretation.armIntention(intention);
-    } else if (activate) {
-      productionInterpretation.activateConcept(toConceptId(beadId));
-    }
+    if (activate) productionInterpretation.activateConcept(toConceptId(beadId));
   } finally {
     endGesture();
   }
@@ -643,7 +468,7 @@ export function handlePointerCancel(event: PointerEvent): void {
 }
 
 export function handleWindowBlur(): void {
-  if (gesture.mode !== "idle" || productionInterpretation.isWeaving()) {
+  if (gesture.mode !== "idle" || productionInterpretation.isHolding()) {
     cancelActiveGesture();
   }
 }
@@ -652,7 +477,7 @@ export function handleArenaMiss(): void {
   if (
     useStore.getState().phase !== "arena" ||
     isSceneGestureActive() ||
-    productionInterpretation.isWeaving() ||
+    productionInterpretation.isHolding() ||
     performance.now() < ignoreArenaMissUntil
   ) {
     return;
@@ -662,7 +487,7 @@ export function handleArenaMiss(): void {
 
 export function handleKeyDown(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
-  if (gesture.mode !== "idle" || productionInterpretation.isWeaving()) {
+  if (gesture.mode !== "idle" || productionInterpretation.isHolding()) {
     cancelActiveGesture();
     return;
   }

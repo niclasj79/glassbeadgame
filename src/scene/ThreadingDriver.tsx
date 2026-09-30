@@ -29,7 +29,11 @@ import {
   serializeSessionEventLogV1,
 } from "@/domain/replay";
 import { interpretationDraftStore } from "@/state/interactionDraft";
-import { interpretationPresentationStore } from "@/state/interpretationPresentation";
+import {
+  focusPresentationStore,
+  interpretationPresentationStore,
+  readFocusView,
+} from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
 import type { DisciplineId } from "@/content/types";
 import { cueBus } from "@/runtime/cues";
@@ -62,6 +66,8 @@ function testSnapshot(): TestSessionSnapshot {
   }
   const draft = interpretationDraftStore.getState().draft;
   const presentation = interpretationPresentationStore.getState();
+  const focus = focusPresentationStore.getState();
+  const view = readFocusView();
   return {
     phase: state.phase,
     seed: session.seed,
@@ -85,12 +91,9 @@ function testSnapshot(): TestSessionSnapshot {
     draftStage: draft.stage,
     draftAttendedConceptId:
       draft.stage === "inactive" ? null : String(draft.attendedConceptId),
-    draftIntention:
-      draft.stage === "armed" || draft.stage === "candidate-selected"
-        ? draft.intention
-        : null,
+    draftIntention: draft.stage === "reading" ? draft.intention : null,
     draftCandidateConceptId:
-      draft.stage === "candidate-selected"
+      draft.stage === "locked" || draft.stage === "reading"
         ? String(draft.candidateConceptId)
         : null,
     candidateResonance: presentation.candidateResonance.map((candidate) => ({
@@ -98,7 +101,25 @@ function testSnapshot(): TestSessionSnapshot {
       band: candidate.band,
     })),
     weaving: presentation.weaving,
-    snappedConceptId: frameState.snapId,
+    sightedConceptId: focus.sightedConceptId === null ? null : String(focus.sightedConceptId),
+    previewIntention: focus.previewIntention,
+    reopenedThreadId: focus.reopened === null ? null : String(focus.reopened.threadId),
+    focus: {
+      mode: view.mode,
+      fogActive: view.fog.active,
+      blurActive: view.fog.blur,
+      lensActive: view.lensActive,
+      sigilsVisible: view.sigilsVisible,
+      attendedCardOpen:
+        view.column.top.kind === "bead" && view.column.top.role !== "dwell",
+      gapOpen: view.column.second.kind === "gap",
+      sightedCardOpen:
+        view.column.second.kind === "bead" && view.column.second.role === "sighted",
+      dwellCardConceptId:
+        view.column.top.kind === "bead" && view.column.top.role === "dwell"
+          ? String(view.column.top.conceptId)
+          : null,
+    },
     message: presentation.message,
     failureMessage: presentation.failureMessage,
     now: gameNow(),

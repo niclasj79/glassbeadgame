@@ -109,17 +109,27 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
         stage.touch();
         break;
 
-      case "intention.armed": {
+      case "attention.sighted":
+      case "thread.reopened":
+        // Looking and re-reading keep the world awake; neither is an event
+        // the world should flash at.
         stage.touch();
-        stage.burst(
-          String(cue.payload.conceptId),
-          RESPONSE.arm.count,
-          RESPONSE.arm.speed
-        );
+        break;
+
+      case "reading.previewed": {
+        stage.touch();
+        // A hovered preview is a look; only a chosen reading lets the ink stir.
+        if (cue.payload.chosen) {
+          stage.burst(
+            String(cue.payload.pair[0]),
+            RESPONSE.arm.count,
+            RESPONSE.arm.speed
+          );
+        }
         break;
       }
 
-      case "candidate.latched": {
+      case "pair.locked": {
         stage.touch();
         stage.burst(
           String(cue.payload.pair[1]),
@@ -193,10 +203,10 @@ export function createSceneDirector(stage: SceneStage): SceneDirector {
    */
   const handleCamera = (cue: PresentationCue): void => {
     switch (cue.type) {
-      case "intention.armed":
-        stage.kick(RESPONSE.arm.kick);
+      case "reading.previewed":
+        if (cue.payload.chosen) stage.kick(RESPONSE.arm.kick);
         break;
-      case "candidate.latched":
+      case "pair.locked":
         stage.kick(RESPONSE.latch.kick);
         break;
       case "weave.released":

@@ -57,15 +57,13 @@ export const EMPTY_MARGIN: MarginState = Object.freeze({
 });
 
 /**
- * Cues that mean the player has picked the thread of play back up. Three of
- * these publish nothing today — the loop's attention, armed and latched moments
- * are being restored elsewhere — and they are listed anyway so the margin
- * behaves correctly the moment they arrive rather than needing a second pass.
+ * Cues that mean the player has picked the thread of play back up: attending
+ * a bead, locking a second, or weaving. Each is the player's next act, which
+ * is the one thing allowed to close a reading (I-018).
  */
 export const RESUMES_COMPOSING: ReadonlySet<CueType> = new Set<CueType>([
   "attention.enter",
-  "intention.armed",
-  "candidate.latched",
+  "pair.locked",
   "thread.woven",
 ]);
 

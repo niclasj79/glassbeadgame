@@ -7,7 +7,7 @@ import type { ThreadId } from "../../../domain/ids";
 import type { SessionStateV1 } from "../../../domain/model";
 import type { SessionEventLogV1 } from "../../../domain/replay";
 import type { DomainSessionStore } from "../../../state/domainSession";
-import type { CandidateSelectedInterpretationDraft } from "../../interactionDraft";
+import type { ReadingInterpretationDraft } from "../../interactionDraft";
 import { InterpretationCommitCommandError } from "./InterpretationCommitCommandError";
 
 export type PairSelectedEventV1 = Extract<
@@ -32,7 +32,7 @@ export type InterpretationCommitEventsV1 = readonly [
 ];
 
 export interface CommitInterpretationInput {
-  readonly draft: CandidateSelectedInterpretationDraft;
+  readonly draft: ReadingInterpretationDraft;
   readonly threadId: ThreadId;
   readonly gesture: GestureProfile;
 }
@@ -52,14 +52,14 @@ export type CommitInterpretation = (
   input: CommitInterpretationInput
 ) => CommitInterpretationResult;
 
-function isCandidateSelectedDraft(
+function isReadingDraft(
   value: unknown
-): value is CandidateSelectedInterpretationDraft {
+): value is ReadingInterpretationDraft {
   return (
     value !== null &&
     typeof value === "object" &&
     "stage" in value &&
-    value.stage === "candidate-selected"
+    value.stage === "reading"
   );
 }
 
@@ -74,10 +74,10 @@ export function createInterpretationCommitCommand(
         "cannot commit an interpretation without an active canonical session"
       );
     }
-    if (!isCandidateSelectedDraft(input?.draft)) {
+    if (!isReadingDraft(input?.draft)) {
       throw new InterpretationCommitCommandError(
         "draft-not-ready",
-        "interpretation commit requires a candidate-selected draft"
+        "interpretation commit requires a reading draft: a locked pair and a chosen reading"
       );
     }
 

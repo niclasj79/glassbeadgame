@@ -45,7 +45,22 @@ export interface TestSessionSnapshot {
     band: "weak" | "medium" | "high";
   }>;
   weaving: boolean;
-  snappedConceptId: string | null;
+  /** The bead settled under the lens while attending (I-017). */
+  sightedConceptId: string | null;
+  previewIntention: string | null;
+  reopenedThreadId: string | null;
+  /** The focus view as every surface derives it (deriveFocusView). */
+  focus: {
+    mode: "roaming" | "focus" | "locked" | "held";
+    fogActive: boolean;
+    blurActive: boolean;
+    lensActive: boolean;
+    sigilsVisible: boolean;
+    attendedCardOpen: boolean;
+    gapOpen: boolean;
+    sightedCardOpen: boolean;
+    dwellCardConceptId: string | null;
+  };
   message: string;
   failureMessage: string | null;
   now: number;

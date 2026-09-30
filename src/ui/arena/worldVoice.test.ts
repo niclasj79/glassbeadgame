@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planAttention, planIntentionArmed } from "@/runtime/cues";
+import { planAttention, planReadingPreviewed } from "@/runtime/cues";
 import { toConceptId, toEventId } from "@/domain/ids";
 import type { CaptionContext } from "@/runtime/captions";
 import { WORLD_VOICE_CUES, worldVoiceCaption } from "./worldVoice";
@@ -79,9 +79,13 @@ describe("the world's voice", () => {
       },
       toEventId("event:1")
     ).cues[0];
-    const armed = planIntentionArmed({
-      conceptId: toConceptId("measure.fibonacci-sequence"),
+    const armed = planReadingPreviewed({
+      pair: [
+        toConceptId("measure.fibonacci-sequence"),
+        toConceptId("sound.counterpoint"),
+      ],
       intention: "echo",
+      chosen: true,
     }).cues[0];
 
     expect(worldVoiceCaption(attention, context)).toBeNull();

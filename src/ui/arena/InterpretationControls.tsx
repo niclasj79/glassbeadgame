@@ -34,9 +34,9 @@ export function InterpretationControls() {
       }
       event.preventDefault();
       keyboardCaptureActive.current = false;
-      if (!productionInterpretation.isWeaving()) return;
+      if (!productionInterpretation.isHolding()) return;
       suppressCommitClick.current = true;
-      productionInterpretation.commitWeave();
+      productionInterpretation.commitHold();
       window.queueMicrotask(() => {
         suppressCommitClick.current = false;
       });
@@ -51,7 +51,7 @@ export function InterpretationControls() {
       window.removeEventListener("blur", clearKeyboardCapture);
       if (keyboardCaptureActive.current) {
         keyboardCaptureActive.current = false;
-        productionInterpretation.cancelWeave();
+        productionInterpretation.cancelHold();
       }
     };
   }, []);
@@ -59,7 +59,7 @@ export function InterpretationControls() {
   const attendedId =
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
   const candidateId =
-    draft.stage === "candidate-selected"
+    draft.stage === "locked" || draft.stage === "reading"
       ? String(draft.candidateConceptId)
       : null;
   const rovingId = focusedBeadId ?? candidateId ?? attendedId ?? beadIds[0];
@@ -94,9 +94,15 @@ export function InterpretationControls() {
               aria-pressed={selected}
               aria-label={`${concept?.name ?? id}${band ? `, ${band} resonance` : ""}`}
               tabIndex={id === rovingId ? 0 : -1}
-              onFocus={() => setFocusedBead(id)}
+              onFocus={() => {
+                setFocusedBead(id);
+                // The keyboard's lens: focusing a bead while attending sights it.
+                if (draft.stage === "attending") {
+                  productionInterpretation.sight(toConceptId(id));
+                }
+              }}
               onClick={() => {
-                if (productionInterpretation.isWeaving()) return;
+                if (productionInterpretation.isHolding()) return;
                 productionInterpretation.activateConcept(toConceptId(id));
                 setFocusedBead(id);
               }}
@@ -128,14 +134,14 @@ export function InterpretationControls() {
       <button
         type="button"
         data-testid="keyboard-weave-confirm"
-        disabled={draft.stage !== "candidate-selected"}
+        disabled={draft.stage !== "reading"}
         onKeyDown={(event) => {
           if (
             (event.key === "Enter" || event.key === " ") &&
-            !productionInterpretation.isWeaving()
+            !productionInterpretation.isHolding()
           ) {
             event.preventDefault();
-            productionInterpretation.beginWeave("keyboard");
+            productionInterpretation.beginHold("keyboard");
             keyboardCaptureActive.current = true;
           }
         }}

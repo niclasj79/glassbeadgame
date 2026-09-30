@@ -141,7 +141,11 @@ describe("the audio director", () => {
     const heard: number[] = [];
     for (const intention of ["echo", "passage", "tension", "ground"] as const) {
       director.handleCue(
-        cue("intention.armed", { conceptId: toConceptId(FIBONACCI), intention })
+        cue("reading.previewed", {
+          pair: [toConceptId(FIBONACCI), toConceptId(COUNTERPOINT)],
+          intention,
+          chosen: false,
+        })
       );
       heard.push(played.at(-1)!.plan.notes[0].degree);
     }

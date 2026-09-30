@@ -14,10 +14,10 @@ import {
 import {
   planAttention,
   planAttentionCleared,
-  planCandidateLatched,
   planCommitMoment,
-  planIntentionArmed,
   planMotifCompleted,
+  planPairLocked,
+  planReadingPreviewed,
   planAttunement,
   type CuePlan,
   type PresentationCue,
@@ -138,8 +138,8 @@ describe("createSceneDirector", () => {
   it("answers every moment of the loop, not only the commit", () => {
     const moments: PresentationCue[] = [
       planAttention({ conceptId: a, candidates: [] }, null).cues[0],
-      planIntentionArmed({ conceptId: a, intention: "tension" }).cues[0],
-      planCandidateLatched({ pair: [a, b], intention: "tension" }).cues[0],
+      planReadingPreviewed({ pair: [a, b], intention: "tension", chosen: true }).cues[0],
+      planPairLocked({ pair: [a, b], sharedFacets: [] }).cues[0],
       ...commitPlan("documented").cues,
     ];
     for (const cue of moments) {
@@ -168,13 +168,13 @@ describe("createSceneDirector", () => {
   it("gives a latch a world response distinct from arming", () => {
     const { stage: armStage, log: armLog } = recorder();
     createSceneDirector(armStage).handleScene(
-      planIntentionArmed({ conceptId: a, intention: "echo" }).cues[0]
+      planReadingPreviewed({ pair: [a, b], intention: "echo", chosen: true }).cues[0]
     );
     const { stage: latchStage, log: latchLog } = recorder();
     createSceneDirector(latchStage).handleScene(
-      planCandidateLatched({ pair: [a, b], intention: "echo" }).cues[0]
+      planPairLocked({ pair: [a, b], sharedFacets: [] }).cues[0]
     );
-    // Arming answers at the attended bead; latching answers at the candidate.
+    // A chosen reading stirs the attended bead; a lock answers at the second.
     expect(armLog.bursts.map((entry) => entry.conceptId)).toEqual([String(a)]);
     expect(latchLog.bursts.map((entry) => entry.conceptId)).toEqual([String(b)]);
   });

@@ -421,7 +421,7 @@ export function IntentionConstellation() {
      * reduced motion and cannot become a flash. It says "this is still held",
      * which is the truth, and it never says it faster.
      */
-    if (draft.stage === "armed" && !frameState.aim.active) {
+    if (draft.stage === "reading" && !productionInterpretation.isHolding()) {
       armedSeconds.current += dt;
     } else {
       armedSeconds.current = 0;
@@ -476,9 +476,13 @@ export function IntentionConstellation() {
       dx === 0 && dy === 0 ? "" : `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
   });
 
+  const candidateId =
+    draft.stage === "locked" || draft.stage === "reading"
+      ? String(draft.candidateConceptId)
+      : null;
   useEffect(() => {
-    if (draft.stage !== "attending" || !attendedId) return;
-    if (document.activeElement?.id !== `bead-control-${attendedId}`) return;
+    if (draft.stage !== "locked" || !candidateId) return;
+    if (document.activeElement?.id !== `bead-control-${candidateId}`) return;
     let request = 0;
     let attempts = 0;
     /**
@@ -506,10 +510,12 @@ export function IntentionConstellation() {
     };
     request = window.requestAnimationFrame(focusWhenProjected);
     return () => window.cancelAnimationFrame(request);
-  }, [attendedId, draft.stage]);
+  }, [candidateId, draft.stage]);
 
-  if (draft.stage === "inactive" || !attendedId) return null;
-  const selected = draft.stage === "attending" ? null : draft.intention;
+  if ((draft.stage !== "locked" && draft.stage !== "reading") || !attendedId) {
+    return null;
+  }
+  const selected = draft.stage === "reading" ? draft.intention : null;
   const selectedOption = INTENTION_OPTIONS.find(
     (option) => option.intention === selected
   );
@@ -521,17 +527,19 @@ export function IntentionConstellation() {
     });
   };
   const choose = (intention: RelationIntention, restoreFocus: boolean): void => {
-    productionInterpretation.armIntention(intention);
+    productionInterpretation.chooseReading(intention);
     if (restoreFocus) restoreAttendedFocus();
   };
+  const pointerModality = (pointerType: string): "mouse" | "touch" | "pen" =>
+    pointerType === "touch" ? "touch" : pointerType === "pen" ? "pen" : "mouse";
   const focusIntentionAt = (index: number): void => {
     const bounded =
       (index + INTENTION_OPTIONS.length) % INTENTION_OPTIONS.length;
-    document
-      .getElementById(
-        `intention-control-${INTENTION_OPTIONS[bounded].intention}`
-      )
-      ?.focus();
+    const intention = INTENTION_OPTIONS[bounded].intention;
+    document.getElementById(`intention-control-${intention}`)?.focus();
+    // A radiogroup's selection follows its focus: the reading is chosen, and
+    // heard, as the keyboard reaches it (I-016).
+    productionInterpretation.chooseReading(intention);
   };
 
   // The anchor group is always here so the plate has a world position the
@@ -555,10 +563,9 @@ export function IntentionConstellation() {
             plate={plate}
           />
 
-          {draft.stage === "attending" ? (
-            <div
+          <div
               role="radiogroup"
-              aria-label="Choose an intention for the attended bead"
+              aria-label="Choose how you read the pair"
               className="absolute inset-0"
             >
               {INTENTION_OPTIONS.map((option) => (
@@ -567,7 +574,7 @@ export function IntentionConstellation() {
                   id={`intention-control-${option.intention}`}
                   type="button"
                   role="radio"
-                  aria-checked={false}
+                  aria-checked={option.intention === selected}
                   aria-label={`${option.label}: ${option.description}`}
                   title={`${option.label} — ${option.description}`}
                   data-world-intention={option.intention}
@@ -580,12 +587,50 @@ export function IntentionConstellation() {
                     ),
                     ...stationSize,
                   }}
-                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerEnter={() =>
+                    productionInterpretation.previewReading(option.intention)
+                  }
+                  onPointerLeave={() => productionInterpretation.previewReading(null)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    try {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    } catch {
+                      // Pointer capture is best effort.
+                    }
+                    productionInterpretation.beginHold(
+                      pointerModality(event.pointerType),
+                      undefined,
+                      option.intention
+                    );
+                  }}
+                  onPointerUp={(event) => {
+                    event.stopPropagation();
+                    if (productionInterpretation.isHolding()) {
+                      productionInterpretation.commitHold();
+                    }
+                  }}
+                  onPointerCancel={() => productionInterpretation.cancelHold()}
+                  onKeyUp={(event) => {
+                    if (event.key === "Enter" && productionInterpretation.isHolding()) {
+                      event.preventDefault();
+                      productionInterpretation.commitHold();
+                    }
+                  }}
                   onKeyDown={(event) => {
                     const index = INTENTION_OPTIONS.indexOf(option);
-                    if (event.key === " ") {
+                    if (event.key === "Enter") {
                       event.preventDefault();
-                      choose(option.intention, true);
+                      if (!event.repeat && !productionInterpretation.isHolding()) {
+                        productionInterpretation.beginHold(
+                          "keyboard",
+                          undefined,
+                          option.intention
+                        );
+                      }
+                    } else if (event.key === " ") {
+                      event.preventDefault();
+                      choose(option.intention, false);
                     } else if (
                       event.key === "ArrowRight" ||
                       event.key === "ArrowDown"
@@ -606,9 +651,11 @@ export function IntentionConstellation() {
                       focusIntentionAt(INTENTION_OPTIONS.length - 1);
                     }
                   }}
-                  onClick={(event) =>
-                    choose(option.intention, event.detail === 0)
-                  }
+                  onClick={(event) => {
+                    // Pointer presses weave through the hold; only a
+                    // coordinate-free activation chooses here.
+                    if (event.detail === 0) choose(option.intention, false);
+                  }}
                   className="group pointer-events-auto absolute grid place-items-center rounded-full border border-line/80 bg-void/85 text-bright shadow-[0_2px_14px_hsl(var(--void)/0.8)] backdrop-blur-[2px] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow data-[direct-hover=true]:scale-125 data-[direct-hover=true]:border-glow data-[direct-hover=true]:bg-glow/20 [&:focus-visible_.gloss]:opacity-100 [&[data-direct-hover=true]_.gloss]:opacity-100"
                 >
                   <span className="font-display text-xl leading-none" aria-hidden="true">
@@ -639,25 +686,6 @@ export function IntentionConstellation() {
                 </button>
               ))}
             </div>
-          ) : selectedOption ? (
-            <div
-              ref={armedMark}
-              aria-hidden="true"
-              data-testid="armed-intention"
-              title={`${selectedOption.label} armed`}
-              style={{
-                ...station(
-                  PLATE_STATIONS[selectedOption.station].bearing,
-                  plate.ring
-                ),
-                width: plate.station,
-                height: plate.station,
-              }}
-              className="pointer-events-none absolute grid place-items-center rounded-full border border-glow/80 bg-glow/15 font-display text-2xl text-bright shadow-[0_0_26px_hsl(var(--glow)/0.35)] backdrop-blur-[2px]"
-            >
-              {selectedOption.icon}
-            </div>
-          ) : null}
 
           {/* The index rail: outside the graduated circle, on the upper
               diagonals, clear of every verb station and every engraved label

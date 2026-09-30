@@ -171,9 +171,11 @@ scope; propose anything else in the implementation notes.
       "docs/TESTER-BRIEF.md",
       "src/runtime/interactionDraft/**",
       "src/runtime/interpretation/**",
+      "src/runtime/commands/interpretationCommit/**",
       "src/runtime/gestureProfile/**",
       "src/runtime/cues/**",
       "src/runtime/captions/**",
+      "src/runtime/scene/**",
       "src/runtime/testMode.ts",
       "src/state/interactionDraft/**",
       "src/state/interpretationPresentation/**",
@@ -181,7 +183,9 @@ scope; propose anything else in the implementation notes.
       "src/state/types.ts",
       "src/scene/**",
       "src/audio/attention.ts",
+      "src/audio/attention.test.ts",
       "src/audio/director.ts",
+      "src/audio/director.test.ts",
       "src/audio/useAudio.ts",
       "src/ui/arena/**",
       "src/ui/components/inspection.ts",
@@ -232,9 +236,11 @@ scope; propose anything else in the implementation notes.
 - `docs/TESTER-BRIEF.md`
 - `src/runtime/interactionDraft/**`
 - `src/runtime/interpretation/**`
+- `src/runtime/commands/interpretationCommit/**`
 - `src/runtime/gestureProfile/**`
 - `src/runtime/cues/**`
 - `src/runtime/captions/**`
+- `src/runtime/scene/**`
 - `src/runtime/testMode.ts`
 - `src/state/interactionDraft/**`
 - `src/state/interpretationPresentation/**`
@@ -242,7 +248,9 @@ scope; propose anything else in the implementation notes.
 - `src/state/types.ts`
 - `src/scene/**`
 - `src/audio/attention.ts`
+- `src/audio/attention.test.ts`
 - `src/audio/director.ts`
+- `src/audio/director.test.ts`
 - `src/audio/useAudio.ts`
 - `src/ui/arena/**`
 - `src/ui/components/inspection.ts`
@@ -509,6 +517,23 @@ fallbacks; they cannot establish comfort or legibility.
 
 ## Implementation notes
 
+- Stage 1 (core contract) landed first on `codex/M2-012-focus-view`: the
+  pair-first draft (`inactive`/`attending`/`locked`/`reading`), the commit
+  command accepting only a `reading` draft, the gesture builder's `approach`
+  input (lens path supplies geometry, the hold supplies duration; payload
+  fields unchanged), a focus presentation store (sighted, dwell, hovered
+  reading, reopened thread), one pure `deriveFocusView` read by every surface,
+  the cue vocabulary (`attention.sighted`, `pair.locked`, `reading.previewed`,
+  `thread.reopened`; `intention.armed` and `candidate.latched` retired, their
+  director behaviour re-pointed), captions, and the production interpretation
+  API. Scene and UI callers were adapted to a working baseline only.
+- Declared paths corrected in stage 1: the commit command
+  (`src/runtime/commands/interpretationCommit/**`) had to accept the new draft
+  type, the cue directors (`src/runtime/scene/**`) consume the vocabulary, the
+  audio director's test drives it. No path outside this list changed.
+  `README.md`'s Play section still describes the intention-first loop; README
+  is owned by M0-008 (in Review), so its update is left for a change after
+  M0-008 closes rather than claimed here.
 - Directly assigned by the game design director on 2026-09-30 with I-015
   through I-020 and the spec amendments reviewed in one pull request. Not
   selected by the autonomous loop: while M2-011 remains in Review without a

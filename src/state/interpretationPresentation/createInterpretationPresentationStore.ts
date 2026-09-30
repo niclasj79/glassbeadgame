@@ -36,7 +36,7 @@ export function createInterpretationPresentationStore(): InterpretationPresentat
     publishAttention: (candidateResonance) =>
       set({
         candidateResonance,
-        message: "Attention set. Choose an intention.",
+        message: "Attention set. Find a second bead.",
         failureMessage: null,
         weaving: false,
         lastCommittedThreadId: null,

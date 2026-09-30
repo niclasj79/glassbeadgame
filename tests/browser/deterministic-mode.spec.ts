@@ -104,7 +104,7 @@ async function composeWithMouse(
   await page.evaluate(() => window.__gbgTest!.advanceClock(125));
   await page.mouse.move(target.x, target.y, { steps: 4 });
   await expect
-    .poll(async () => (await snapshot(page)).snappedConceptId)
+    .poll(async () => (await snapshot(page)).sightedConceptId)
     .toBe(targetId);
   const latched = await snapshot(page);
   expect(latched.draftStage).toBe("armed");
@@ -245,7 +245,7 @@ test("touch-emulated direct weaving preserves the same decisions", async ({
       touchPoints: [{ x: target.x, y: target.y, id: 1, force: 0.7 }],
     });
     await expect
-      .poll(async () => (await snapshot(page)).snappedConceptId)
+      .poll(async () => (await snapshot(page)).sightedConceptId)
       .toBe(targetId);
     await page.evaluate(() => window.__gbgTest!.advanceClock(140));
     await cdp.send("Input.dispatchTouchEvent", {

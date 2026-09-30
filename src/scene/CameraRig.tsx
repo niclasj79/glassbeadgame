@@ -321,7 +321,7 @@ export function CameraRig() {
   const draft = useVanillaStore(interpretationDraftStore, (state) => state.draft);
   const attendedId =
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
-  const armed = draft.stage === "armed" || draft.stage === "candidate-selected";
+  const armed = draft.stage === "locked" || draft.stage === "reading";
   const lensActive = useStore((s) => s.lensActive);
   const lensView = useStore((s) => s.lensView);
 
