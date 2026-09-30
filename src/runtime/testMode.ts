@@ -90,10 +90,31 @@ export interface TestSessionSnapshot {
   };
 }
 
+/** What a browser test may know about a Study: form and outcome, never a count of Studies. */
+export interface TestStudySnapshot {
+  readonly studyId: string | null;
+  readonly kind: "not-yet" | "solved" | null;
+  readonly by: "threads" | "silence" | null;
+  readonly threadIds: readonly string[];
+  readonly marks: readonly string[];
+  readonly notYet: "no-answer-yet" | "can-be-done" | null;
+  readonly plateOpen: boolean;
+}
+
 export interface BrowserTestAdapter {
   readonly seedText: string;
   readonly seed: number;
   startSession(picks: DisciplineId[]): TestSessionSnapshot;
+  /**
+   * Begin a Study (M9-001) on the reset test runtime: its own session, built
+   * without the draw, opened straight into the arena. The Studies load with the
+   * Studies, so this resolves once their chunk has arrived.
+   */
+  startStudy(studyId: string): Promise<TestSessionSnapshot>;
+  /** The Study being played and the evaluator's latest word, or none. */
+  studyStatus(): TestStudySnapshot;
+  /** "It cannot be done", as the silence control says it. */
+  declareSilence(): Promise<TestStudySnapshot>;
   snapshot(): TestSessionSnapshot;
   advanceClock(milliseconds: number): number;
   /**

@@ -51,7 +51,9 @@ import {
   startFrameSample,
   testMode,
   type TestSessionSnapshot,
+  type TestStudySnapshot,
 } from "@/runtime/testMode";
+import { studyStore } from "@/state/studies";
 
 function testSnapshot(): TestSessionSnapshot {
   const state = useStore.getState();
@@ -148,6 +150,38 @@ function startTestSession(picks: DisciplineId[]): TestSessionSnapshot {
   resetTestRuntime();
   startSession(picks, { seed: testMode.seed! });
   return testSnapshot();
+}
+
+/**
+ * The Studies load with the Studies (`scripts/bundle-budgets.json`), so the
+ * adapter reaches them through the same dynamic import the screens use.
+ */
+async function startTestStudy(studyId: string): Promise<TestSessionSnapshot> {
+  const { studies } = await import("@/runtime/studies");
+  resetTestRuntime();
+  studies.start(studyId);
+  return testSnapshot();
+}
+
+function testStudySnapshot(): TestStudySnapshot {
+  const state = studyStore.getState();
+  const status = state.status;
+  return {
+    studyId: state.studyId,
+    kind: status === null ? null : status.kind,
+    by: status !== null && status.kind === "solved" ? status.by : null,
+    threadIds:
+      status !== null && status.kind === "solved" ? status.threadIds.map(String) : [],
+    marks: status !== null && status.kind === "solved" ? [...status.marks] : [],
+    notYet: state.notYet?.kind ?? null,
+    plateOpen: state.plateOpen,
+  };
+}
+
+async function declareTestSilence(): Promise<TestStudySnapshot> {
+  const { studies } = await import("@/runtime/studies");
+  studies.declareSilence();
+  return testStudySnapshot();
 }
 
 const worldDirectors = {
@@ -327,6 +361,9 @@ export function ThreadingDriver() {
       seedText: testMode.seedText!,
       seed: testMode.seed!,
       startSession: startTestSession,
+      startStudy: startTestStudy,
+      studyStatus: testStudySnapshot,
+      declareSilence: declareTestSilence,
       snapshot: testSnapshot,
       advanceClock: advanceTestClock,
       beadScreen: (id: string, options?: { readonly evenIfUnsettled?: boolean }) => {

@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
-import { ThresholdScreen } from "./ui/screens/ThresholdScreen";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
 import { useStore } from "./state/store";
@@ -74,6 +73,18 @@ const prefetchArenaHud = (): void => {
   void import("./ui/arena/ArenaHud");
 };
 
+/**
+ * The threshold is the page after Begin, so it loads with the arena's page:
+ * prefetched once the title has painted, a held blank if it ever is not there.
+ */
+const ThresholdScreen = lazy(async () => ({
+  default: (await import("./ui/screens/ThresholdScreen")).ThresholdScreen,
+}));
+
+const prefetchThreshold = (): void => {
+  void import("./ui/screens/ThresholdScreen");
+};
+
 const prefetchConclusion = (): void => {
   void import("./ui/screens/ConclusionScreen");
 };
@@ -83,6 +94,7 @@ export default function App() {
   const [webgl] = useState(probeWebGL);
 
   useEffect(() => {
+    prefetchThreshold();
     prefetchArenaHud();
   }, []);
 
@@ -110,7 +122,11 @@ export default function App() {
          */}
         <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
-          {phase === "threshold" && <ThresholdScreen key="threshold" />}
+          {phase === "threshold" && (
+            <Suspense key="threshold" fallback={null}>
+              <ThresholdScreen />
+            </Suspense>
+          )}
           {phase === "arena" && (
             <Suspense key="arena" fallback={null}>
               <ArenaHud />

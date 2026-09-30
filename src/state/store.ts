@@ -53,6 +53,12 @@ interface GBGState {
    * session exists yet; the draw is built when the player leaves it.
    */
   crossToThreshold: () => void;
+  /**
+   * Opens the Studies (STUDIES-SPEC §7): the second door at the title. No
+   * session exists here; a Study's own session is built when one is begun,
+   * and it opens straight into the arena without the threshold.
+   */
+  openStudies: () => void;
   applySessionStart: (projection: SessionStartProjection) => void;
   /** The Lens is a triptych: off → Good×True → Good×Beautiful → True×Beautiful → off. */
   cycleLens: () => void;
@@ -124,6 +130,16 @@ export const useStore = create<GBGState>()(
           }),
 
         crossToThreshold: () => set({ phase: "threshold" }),
+
+        openStudies: () =>
+          set({
+            phase: "studies",
+            session: null,
+            lensActive: false,
+            focusedBeadId: null,
+            pinnedInspectId: null,
+            viewingKept: false,
+          }),
 
         applySessionStart: (projection) => {
           set({

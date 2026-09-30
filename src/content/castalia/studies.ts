@@ -388,3 +388,10 @@ export function castaliaStudyById(id: string): StudyDefinition | undefined {
   byId ??= new Map(castaliaStudies().map((study) => [String(study.id), study]));
   return byId.get(id);
 }
+
+/** The chapters' names as the Studies list shows them, in the order shown. */
+export const STUDY_CHAPTER_NAMES: Readonly<Record<StudyChapter, string>> = Object.freeze({
+  eschholz: "Eschholz",
+  waldzell: "Waldzell",
+  "vicus-lusorum": "Vicus Lusorum",
+});
