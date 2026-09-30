@@ -142,7 +142,7 @@ test("keyboard controls mirror the complete action path", async ({ page }) => {
 
   // After a keyboard lock the first reading receives focus; a radiogroup's
   // selection follows its focus, so the arrow chooses the reading.
-  await expect(page.getByTestId("intention-echo")).toBeFocused();
+  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 15_000 });
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("intention-passage")).toBeFocused();
   await waitForDraft(page, "reading");
@@ -175,7 +175,7 @@ test("the assistive confirm weaves the chosen reading without a hold", async ({
   await page.keyboard.press("Enter");
   await waitForDraft(page, "locked");
   await expect(page.getByTestId("keyboard-weave-confirm")).toBeDisabled();
-  await expect(page.getByTestId("intention-echo")).toBeFocused();
+  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 15_000 });
   await page.keyboard.press("Space");
   await waitForDraft(page, "reading");
   expect((await snapshot(page)).draftIntention).toBe("echo");
@@ -494,6 +494,55 @@ test.describe("the focus view", () => {
     const after = await snapshot(page);
     expect(after.focus.mode).toBe("roaming");
     expect(after.domainSession.eventCount).toBe(eventCount);
+  });
+
+  test("a woven strand in the world can be picked up again", async ({ page }) => {
+    const initial = await openSession(page);
+    const woven = await weaveGoldenPairWithMouse(page, "ground");
+    const threadId = woven.domainSession.threads[0].id;
+    const eventCount = woven.domainSession.eventCount;
+
+    // A point on the strand that is clear of every bead and of every page
+    // control above the canvas, so the press can only mean the strand.
+    const clearOfBeads = async (point: { x: number; y: number }): Promise<boolean> => {
+      for (const id of initial.beadIds) {
+        const bead = await page.evaluate((conceptId) => window.__gbgTest!.beadScreen(conceptId), id);
+        if (bead && !bead.behind && Math.hypot(bead.x - point.x, bead.y - point.y) < 40) {
+          return false;
+        }
+      }
+      return page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.tagName === "CANVAS",
+        point
+      );
+    };
+    let target: { x: number; y: number } | null = null;
+    await expect
+      .poll(
+        async () => {
+          for (const at of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+            const point = await page.evaluate(
+              ({ id, t }) => window.__gbgTest!.threadScreen(id, t),
+              { id: threadId, t: at }
+            );
+            if (point && !point.behind && (await clearOfBeads(point))) {
+              target = { x: point.x, y: point.y };
+              return true;
+            }
+          }
+          return false;
+        },
+        { timeout: 10_000 }
+      )
+      .toBe(true);
+    await page.mouse.click(target!.x, target!.y);
+    await expect.poll(async () => (await snapshot(page)).reopenedThreadId).toBe(threadId);
+    expect((await snapshot(page)).focus.mode).toBe("held");
+    expect((await snapshot(page)).draftStage).toBe("inactive");
+
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await snapshot(page)).reopenedThreadId).toBe(null);
+    expect((await snapshot(page)).domainSession.eventCount).toBe(eventCount);
   });
 
   test("full motion on the base tier fogs with blur and brings the bead close", async ({

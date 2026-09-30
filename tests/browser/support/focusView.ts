@@ -17,6 +17,18 @@ export const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
 export const SOURCE_ID = "measure.fibonacci-sequence";
 export const TARGET_ID = "sound.counterpoint";
 
+/**
+ * How long a sigil must stay put before a hand reaches for it, and how far it
+ * may creep between reads and still count as put. A plate that jumps (a pose
+ * arriving) is waited out; a plate that creeps a pixel as the world eases is
+ * pressed, because a pixel is nothing on a sigil the width of a fingertip.
+ */
+const SIGIL_REST_MS = 600;
+const SIGIL_READ_INTERVAL_MS = 150;
+const SIGIL_CREEP_PX = 2;
+/** First frames on a software renderer, after a cold compile, can be slow. */
+const SETTLE_TIMEOUT_MS = 15_000;
+
 export interface ScreenPoint {
   readonly x: number;
   readonly y: number;
@@ -36,13 +48,16 @@ export async function advanceClock(page: Page, milliseconds: number): Promise<vo
 
 export async function beadPoint(page: Page, id: string): Promise<ScreenPoint> {
   await expect
-    .poll(async () => {
-      const result = await page.evaluate(
-        (conceptId) => window.__gbgTest!.beadScreen(conceptId),
-        id
-      );
-      return result === null || result.behind;
-    })
+    .poll(
+      async () => {
+        const result = await page.evaluate(
+          (conceptId) => window.__gbgTest!.beadScreen(conceptId),
+          id
+        );
+        return result === null || result.behind;
+      },
+      { timeout: SETTLE_TIMEOUT_MS }
+    )
     .toBe(false);
   const result = await page.evaluate(
     (conceptId) => window.__gbgTest!.beadScreen(conceptId),
@@ -125,9 +140,6 @@ export async function lockWithMouse(page: Page, id: string): Promise<void> {
   await waitForDraft(page, "locked");
 }
 
-/** How long a sigil must stay put before a hand reaches for it. */
-const SIGIL_REST_MS = 900;
-const SIGIL_READ_INTERVAL_MS = 150;
 
 /**
  * The centre of a sigil once the plate has come to rest. The plate is carried
@@ -140,7 +152,7 @@ export async function sigilPoint(
   intention: "echo" | "passage" | "tension" | "ground"
 ): Promise<ScreenPoint> {
   const sigil = page.getByTestId(`intention-${intention}`);
-  await expect(sigil).toBeVisible();
+  await expect(sigil).toBeVisible({ timeout: SETTLE_TIMEOUT_MS });
   const needed = Math.ceil(SIGIL_REST_MS / SIGIL_READ_INTERVAL_MS);
   let point: ScreenPoint | null = null;
   let unchanged = 0;
@@ -152,13 +164,13 @@ export async function sigilPoint(
         unchanged =
           next !== null &&
           point !== null &&
-          Math.hypot(next.x - point.x, next.y - point.y) < 0.5
+          Math.hypot(next.x - point.x, next.y - point.y) < SIGIL_CREEP_PX
             ? unchanged + 1
             : 0;
         point = next;
         return unchanged >= needed;
       },
-      { intervals: [SIGIL_READ_INTERVAL_MS], timeout: 15_000 }
+      { intervals: [SIGIL_READ_INTERVAL_MS], timeout: SETTLE_TIMEOUT_MS }
     )
     .toBe(true);
   if (!point) throw new Error(`sigil ${intention} has no box`);

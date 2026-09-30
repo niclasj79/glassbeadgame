@@ -13,6 +13,8 @@ import {
   handleWindowBlur,
 } from "./threading";
 import { emitBurst, frameState, frameStateStage } from "./frameState";
+import { arcPoint } from "./curves";
+import { threadCurves } from "./threadPicking";
 import { attunementInvitation } from "@/audio/sfx";
 import {
   attachWorldDirectors,
@@ -291,6 +293,32 @@ export function ThreadingDriver() {
     if (!testMode.enabled) return;
     const v = new THREE.Vector3();
     const view = new THREE.Vector3();
+    /**
+     * A world point on the page, or "behind" while it cannot be trusted. A
+     * camera mid-transit, or a layout the scene has not drawn yet, would
+     * report a point that is already wrong by the time anyone acts on it —
+     * and on a slow software renderer "not yet" can be a second.
+     */
+    const screenOf = (
+      point: THREE.Vector3
+    ): { x: number; y: number; behind: boolean } => {
+      if (!frameState.cameraSettled || frameState.framesSinceLayout < 3) {
+        return { x: 0, y: 0, behind: true };
+      }
+      view.copy(point).applyMatrix4(camera.matrixWorldInverse);
+      point.project(camera);
+      const rect = gl.domElement.getBoundingClientRect();
+      return {
+        x: rect.left + ((point.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - point.y) / 2) * rect.height,
+        behind:
+          view.z >= 0 ||
+          point.z < -1 ||
+          point.z > 1 ||
+          Math.abs(point.x) > 1 ||
+          Math.abs(point.y) > 1,
+      };
+    };
     window.__gbgTest = {
       seedText: testMode.seedText!,
       seed: testMode.seed!,
@@ -300,30 +328,18 @@ export function ThreadingDriver() {
       beadScreen: (id: string) => {
         const i = frameState.beadIndex.get(id);
         if (i === undefined) return null;
-        // A camera mid-transit, or a layout the scene has not drawn yet,
-        // would report a point that is already wrong by the time anyone acts
-        // on it — and on a slow software renderer "not yet" can be a second.
-        if (!frameState.cameraSettled || frameState.framesSinceLayout < 3) {
-          return { x: 0, y: 0, behind: true };
-        }
         v.set(
           frameState.rendered[i * 3],
           frameState.rendered[i * 3 + 1],
           frameState.rendered[i * 3 + 2]
         );
-        view.copy(v).applyMatrix4(camera.matrixWorldInverse);
-        v.project(camera);
-        const rect = gl.domElement.getBoundingClientRect();
-        return {
-          x: rect.left + ((v.x + 1) / 2) * rect.width,
-          y: rect.top + ((1 - v.y) / 2) * rect.height,
-          behind:
-            view.z >= 0 ||
-            v.z < -1 ||
-            v.z > 1 ||
-            Math.abs(v.x) > 1 ||
-            Math.abs(v.y) > 1,
-        };
+        return screenOf(v);
+      },
+      threadScreen: (threadId: string, at = 0.5) => {
+        const curve = threadCurves.get(threadId);
+        if (curve === undefined) return null;
+        arcPoint(curve.a, curve.m, curve.b, Math.min(1, Math.max(0, at)), v);
+        return screenOf(v);
       },
       beadIds: () => [...frameState.beadIndex.keys()],
       canonicalEventLog: () => {

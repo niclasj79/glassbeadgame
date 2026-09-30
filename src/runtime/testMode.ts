@@ -97,6 +97,15 @@ export interface BrowserTestAdapter {
   snapshot(): TestSessionSnapshot;
   advanceClock(milliseconds: number): number;
   beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
+  /**
+   * A point along a committed thread's drawn strand (`at` from 0 at its first
+   * bead to 1 at its second; the middle by default), in page pixels, or null
+   * when no strand with that id is drawn (I-019: the world can be pointed at).
+   */
+  threadScreen(
+    threadId: string,
+    at?: number
+  ): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
   canonicalEventLog(): string;
   reloadCanonical(): TestSessionSnapshot;
