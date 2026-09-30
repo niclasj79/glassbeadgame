@@ -4,6 +4,9 @@ import {
   INVITATION_REACH,
   MID_FRACTION,
   NEAR_CAP,
+  PROMOTE_ATTENDED,
+  PROMOTE_NOTICED,
+  PROMOTE_SECOND,
   SEPARATION_CLEARANCE,
   SEPARATION_LIMIT,
   TIER_FAR,
@@ -11,6 +14,7 @@ import {
   TIER_NEAR,
   assignSalience,
   invitationWeights,
+  promotionFor,
   separateOnScreen,
   tierCounts,
   tierWeights,
@@ -143,6 +147,106 @@ describe("the focal hierarchy", () => {
   it("answers safely for an empty draw", () => {
     expect(() => tiers([])).not.toThrow();
     expect(tierCounts(0)).toEqual({ near: 0, mid: 0, far: 0 });
+  });
+});
+
+/**
+ * I-017 — THE FOCUS VIEW EXTENDS THE HIERARCHY; IT DOES NOT BUILD A SECOND ONE
+ *
+ * The attended bead and the second — sighted, locked, or the other end of a
+ * reopened thread — are the subject of the frame, in that order, and a bead
+ * under the lens is named. Promotion is therefore a level. And the hierarchy
+ * still answers to attention and depth alone: the only thing in the focus view
+ * that answers to the bands is the fog.
+ */
+describe("the focus view's order of attention", () => {
+  const beadsSource = (): string =>
+    readFileSync(new URL("./Beads.tsx", import.meta.url), "utf8");
+
+  it("ranks the attended bead, then the second, then anything else looked at", () => {
+    expect(promotionFor(true, true, true)).toBe(PROMOTE_ATTENDED);
+    expect(promotionFor(false, true, true)).toBe(PROMOTE_SECOND);
+    expect(promotionFor(false, false, true)).toBe(PROMOTE_NOTICED);
+    expect(promotionFor(false, false, false)).toBe(0);
+    expect(PROMOTE_ATTENDED).toBeGreaterThan(PROMOTE_SECOND);
+    expect(PROMOTE_SECOND).toBeGreaterThan(PROMOTE_NOTICED);
+    expect(PROMOTE_NOTICED).toBeGreaterThan(0);
+  });
+
+  it("gives the near tier's two places to the pair, however far they stand", () => {
+    const depth = spread(COUNT);
+    const promoted = new Array(COUNT).fill(0);
+    // The two furthest beads are the pair; three nearer ones are under the lens.
+    promoted[COUNT - 1] = PROMOTE_ATTENDED;
+    promoted[COUNT - 2] = PROMOTE_SECOND;
+    promoted[0] = PROMOTE_NOTICED;
+    promoted[1] = PROMOTE_NOTICED;
+    promoted[2] = PROMOTE_NOTICED;
+    const out = tiers(depth, promoted);
+    expect(out[COUNT - 1]).toBe(TIER_NEAR);
+    expect(out[COUNT - 2]).toBe(TIER_NEAR);
+    // The cap is still a cap: looked-at beads come next, not alongside.
+    expect([...out].filter((t) => t === TIER_NEAR)).toHaveLength(NEAR_CAP);
+    for (const i of [0, 1, 2]) expect(out[i]).toBe(TIER_MID);
+  });
+
+  it("keeps the attended bead first even when the second stands nearer", () => {
+    const depth = spread(COUNT);
+    const promoted = new Array(COUNT).fill(0);
+    promoted[COUNT - 1] = PROMOTE_ATTENDED;
+    promoted[0] = PROMOTE_SECOND;
+    const order = new Int32Array(COUNT);
+    const out = new Float32Array(COUNT);
+    assignSalience(
+      Float32Array.from(depth),
+      Float32Array.from(promoted),
+      COUNT,
+      order,
+      out
+    );
+    expect(order[0]).toBe(COUNT - 1);
+    expect(order[1]).toBe(0);
+  });
+
+  it("promotes by attention alone in the arena, never by band", () => {
+    const source = beadsSource();
+    expect(source).toContain(
+      "focal.promoted[i] = promotionFor(attended, second, lensed || hovered || focused);"
+    );
+    // The bands reach the glass's graduations and the fog — not the rank.
+    expect(source).not.toMatch(/promotionFor\([^)]*resonance/);
+  });
+
+  it("draws the attended bead largest of all, with scale doing more when the camera may not travel", () => {
+    // The constants are read from the source so this suite never loads a
+    // renderer (see cameraHold.test.ts).
+    const source = beadsSource();
+    const constant = (name: string): number => {
+      const found = new RegExp(`export const ${name} = ([\\d.]+);`).exec(source);
+      expect(found).not.toBeNull();
+      return Number(found![1]);
+    };
+    const attended = constant("ATTENDED_SCALE");
+    const still = constant("ATTENDED_SCALE_STILL");
+    const dominance = constant("ATTENDED_DOMINANCE");
+    const second = constant("SECOND_SCALE");
+    const hover = constant("HOVER_SCALE");
+    expect(attended).toBeGreaterThan(second);
+    expect(attended).toBeGreaterThan(hover);
+    expect(still).toBeGreaterThan(attended);
+    expect(dominance).toBeGreaterThan(1);
+    // …and the floor is a dominance as well: from wherever the camera stands,
+    // the attended bead out-draws every other bead on the screen.
+    expect(source).toMatch(
+      /let attendedScale = reducedMotion \? ATTENDED_SCALE_STILL : ATTENDED_SCALE;/
+    );
+    expect(source).toMatch(
+      /ATTENDED_DOMINANCE \* rival \* focal\.depth\[attendedAt\]/
+    );
+    // Light follows the same order as size.
+    expect(source).toMatch(/const emphasis = attended\s*\?\s*1/);
+    expect(constant("SECOND_EMPHASIS")).toBeGreaterThan(constant("LENS_EMPHASIS"));
+    expect(constant("SECOND_EMPHASIS")).toBeLessThan(1);
   });
 });
 

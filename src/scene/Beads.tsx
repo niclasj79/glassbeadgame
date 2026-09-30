@@ -30,7 +30,8 @@ import {
   wovenLight,
 } from "./glass";
 import { presentationProfile } from "./quality";
-import { ARENA_FOV, plateGeometry, worldSafeArea } from "./framing";
+import { ARENA_FOV, worldSafeArea } from "./framing";
+import { focusFrame, sampleFocusView, sizeFocusFrame } from "./focusFrame";
 import { idleClock, kindling } from "./idle";
 import { arrivalDurationMs, beadArrival } from "./opening";
 import {
@@ -48,8 +49,10 @@ import {
   type LabelScratch,
 } from "./labels";
 import {
+  PROMOTE_SECOND,
   assignSalience,
   invitationWeights,
+  promotionFor,
   separateOnScreen,
   tierWeights,
 } from "./salience";
@@ -82,22 +85,20 @@ const GLASS_SCALE = 1.72;
  * the top of it, because the name was offset by the bead's own glass and the
  * dial is a hundred and sixty pixels wider than that in every direction.
  *
- * Attending now promotes the name in three ways at once, none of them colour:
- * it is lifted clear of the whole dial, it is set larger than every other name
- * in the frame, and it is struck on a field of the world's own ground rather
- * than on whatever happens to be behind it.
+ * Attending promotes the name in two ways at once, neither of them colour: it
+ * is set larger than every other name in the frame, and it is struck on a field
+ * of the world's own ground rather than on whatever happens to be behind it.
  *
- * "Clear of the dial" is the circle that contains everything the plate draws,
- * asked of the plate's own geometry rather than copied from it. A first pass
- * here reserved the drop beneath the plate — 148 px, the number the plate's
- * *vertical* box is solved from — and the name then landed to the *side*, where
- * the plate reaches 181 px because a verb's engraved caption stands out there:
- * on the running build "Fibonacci Sequence" was struck through the word
- * PASSAGE. A name may hang on any of four sides, so the reservation has to be
- * the widest of them.
+ * It used to be lifted clear of a dial as well — the intention plate drawn
+ * round the attended bead — and every name in the frame kept clear of that
+ * dial's widest reach. The plate has left the attended bead: under the focus
+ * view the sigils bloom on the preview thread between the locked pair (I-016),
+ * so nothing is drawn round the attended bead but its own glass, and its name
+ * hangs off that glass like any other bead's — larger, grounded, and cleared
+ * of the fog with its bead (`focusFog.ts`).
  *
- * The three registers the promotion is spent in — the setting, the ground and
- * its opacity — are in `labels.ts` beside the solver, because how a name is set
+ * The registers the promotion is spent in — the setting, the ground and its
+ * opacity — are in `labels.ts` beside the solver, because how a name is set
  * and where it goes are one question.
  */
 
@@ -118,10 +119,38 @@ const GLASS_SCALE = 1.72;
 export const HOVER_SCALE = 1.28;
 /** Emphasis handed to the material on hover — light, not just size. */
 export const HOVER_EMPHASIS = 0.82;
-/** The attended bead, which also wears the gold rule and the plate. */
-export const ATTENDED_SCALE = 1.24;
-/** The other end of a weave, once the aim has acquired it. */
-export const SNAPPED_SCALE = 1.34;
+
+/**
+ * THE ATTENDED BEAD IS UNMISTAKABLY THE LARGEST THING IN THE FRAME (I-017).
+ *
+ * The camera closes in so the attended bead is near and large; these are the
+ * bead's own half of that promise, and the half that has to carry it alone
+ * under reduced motion, where the camera does not travel and the bead is set
+ * apart by scale and brightness instead.
+ *
+ * A floor is not enough on its own. The attended bead is turned to the
+ * lower-left of the sphere, so a bead facing the eye can stand nearer than it
+ * does — and under reduced motion the attended bead may be on the far side of
+ * the instrument altogether. So the scale is also a *dominance*: whatever the
+ * pose, the attended bead is drawn at least `ATTENDED_DOMINANCE` times the
+ * apparent size of every other bead in the frame, up to a ceiling.
+ */
+export const ATTENDED_SCALE = 1.42;
+/** Under reduced motion, where scale and brightness carry the whole promise. */
+export const ATTENDED_SCALE_STILL = 1.62;
+export const ATTENDED_DOMINANCE = 1.12;
+export const ATTENDED_SCALE_CEILING = 2.2;
+/**
+ * The second bead: settled under the lens, locked as the pair, or the other end
+ * of a reopened thread. Present, lit, and always smaller than the first.
+ */
+export const SECOND_SCALE = 1.22;
+/** Light, not size: the second bead's glass, and a bead under the lens. */
+export const SECOND_EMPHASIS = 0.86;
+export const LENS_EMPHASIS = 0.55;
+/** A bead with keyboard focus while roaming. */
+const FOCUSED_SCALE = 1.16;
+const FOCUSED_EMPHASIS = 0.5;
 
 /**
  * How quickly the invitation lets go once the player has touched the draw.
@@ -325,18 +354,15 @@ export function Beads() {
       anchor: new Float32Array(n * 2),
       beadRadius: new Float32Array(n),
       /**
-       * What a bead's *own* name is offset by — its glass, never the plate
-       * around it. See `labels.ts`: the two radii are different questions, and
-       * this one has been answered wrongly (by the other) since the solver
-       * landed, which is why an attended bead carried no name at all.
+       * What a bead's *own* name is offset by — its glass. See `labels.ts`: the
+       * clearance every other name keeps from a bead and the offset of the
+       * bead's own name are different questions.
        */
       ownRadius: new Float32Array(n),
-      /** How far the drawn form reaches between the cardinals. See labels.ts. */
-      ownBetween: new Float32Array(n),
-      /** 1 for the bead whose name hangs on its dial rather than beside it. */
-      anchored: new Float32Array(n),
       /** Drawn silhouette radius, in the same isotropic screen units. */
       glassRadius: new Float32Array(n),
+      /** 1 for a bead inside the lens's disc this frame (I-017). */
+      lensed: new Float32Array(n),
       /**
        * The opening's own three arrivals, per bead: where it stands in the
        * salience order the world assembles in, and this frame's condensation.
@@ -377,25 +403,19 @@ export function Beads() {
     resonance: new Map<string, number>(),
     /** Committed thread endpoints, flattened: a, b, a, b… */
     threads: [] as string[],
-    attendedId: null as string | null,
-    candidateId: null as string | null,
     focusedId: null as string | null,
   });
 
   live.current.focusedId = focusedBeadId;
   /**
-   * Which bead the player is attending. Read during render as well as through
-   * the ref, because the promotion attending performs on that bead's name is a
-   * change of *type* — a larger setting on a ground of its own — and that is a
-   * property of the label, not a number the frame loop can write.
+   * Which bead the player is attending, read during render because the
+   * promotion attending performs on that bead's *name* is a change of type — a
+   * larger setting on a ground of its own — and that is a property of the
+   * label, not a number the frame loop can write. Everything the frame loop
+   * needs about attention it reads from the one focus view (`sampleFocusView`).
    */
   const attendedId =
     draft.stage === "inactive" ? null : String(draft.attendedConceptId);
-  live.current.attendedId = attendedId;
-  live.current.candidateId =
-    draft.stage === "locked" || draft.stage === "reading"
-      ? String(draft.candidateConceptId)
-      : null;
 
   /**
    * How woven each bead is. The count of threads at a bead is a working
@@ -449,14 +469,6 @@ export function Beads() {
    */
   const arrival = useRef({ elapsed: 0, ranked: false });
 
-  /**
-   * The radius of the circle that contains the whole intention dial, in CSS
-   * pixels. Solved from the plate's own geometry and cached against the width
-   * it was solved for: the frame loop must not allocate, and a viewport only
-   * changes when somebody drags a window edge.
-   */
-  const plate = useRef({ width: -1, radius: 0, between: 0 });
-
   // These are built during render, not in an effect: ref callbacks fire before
   // effects, so allocating them afterwards would wipe every handle React had
   // just given us — and the labels would silently never appear.
@@ -469,6 +481,9 @@ export function Beads() {
     labelOpacity.current = new Float32Array(Math.max(1, count));
     hits.current = new Array(count).fill(null);
     labels.current = ids.map(() => ({ group: null, text: null }));
+    // What the fog reads of each bead — its drawn size and its name — is sized
+    // with the draw, never on a frame.
+    sizeFocusFrame(count);
     // A new draw is a new invitation: the world offers again, once, to a
     // player who has not yet touched *this* arena.
     invite.current.unresolved = 1;
@@ -555,13 +570,43 @@ export function Beads() {
     const aspect = three.size.width / Math.max(1, three.size.height);
     const spark = kindling(idleClock(), count);
 
+    // ── the focus view, as the hierarchy reads it (I-017) ───────────────
+    // One derivation for every surface; sampled, so an unchanged world costs
+    // four comparisons and no allocation. `held` — a reopened thread — has a
+    // pair and no attended bead: nothing is being made, so nothing wears the
+    // gold rule, and both ends of the thread are the pair.
+    const view = sampleFocusView();
+    const composing = view.mode !== "roaming";
+    const attendingId =
+      view.mode === "focus" || view.mode === "locked" ? view.attendedConceptId : null;
+    const secondId = composing ? view.secondConceptId : null;
+    const heldId = view.mode === "held" ? view.attendedConceptId : null;
+
+    // The attended bead's scale is a floor *and* a dominance: at least
+    // `ATTENDED_DOMINANCE` times the apparent size of every other bead, from
+    // wherever the camera stands. Measured on last frame's depths and sizes,
+    // which is a frame the eye cannot tell from this one.
+    const attendedAt = attendingId === null ? -1 : (indexOf.get(attendingId) ?? -1);
+    let attendedScale = reducedMotion ? ATTENDED_SCALE_STILL : ATTENDED_SCALE;
+    if (attendedAt >= 0 && focal.depth[attendedAt] > 0) {
+      let rival = 0;
+      for (let k = 0; k < count; k++) {
+        if (k === attendedAt || focal.hidden[k] > 0 || !(focal.depth[k] > 0)) continue;
+        rival = Math.max(rival, focal.drawn[k] / focal.depth[k]);
+      }
+      attendedScale = Math.min(
+        ATTENDED_SCALE_CEILING,
+        Math.max(attendedScale, ATTENDED_DOMINANCE * rival * focal.depth[attendedAt])
+      );
+    }
+
     // ── the invitation, and whether it has been accepted ────────────────
     // The first hover, press, latch or focus ends it, once, for the session.
     if (
       !invite.current.touched &&
       (frameState.hoveredId !== null ||
         frameState.snapId !== null ||
-        now.attendedId !== null ||
+        composing ||
         now.focusedId !== null)
     ) {
       invite.current.touched = true;
@@ -595,34 +640,73 @@ export function Beads() {
       const y = positions[index * 3 + 1] + bob;
       const z = positions[index * 3 + 2];
 
-      const attended = now.attendedId === id;
-      const snapped = frameState.snapId === id || now.candidateId === id;
+      originVec.set(x, y, z);
+      // ── the frame's hierarchy, measured ───────────────────────────────
+      const eyeDistance = three.camera.position.distanceTo(originVec);
+      focal.depth[i] = eyeDistance;
+      projectVec.set(x, y, z).project(three.camera);
+      const behind = projectVec.z < -1 || projectVec.z > 1;
+      focal.anchor[i * 2] = projectVec.x * aspect;
+      focal.anchor[i * 2 + 1] = projectVec.y;
+      focal.hidden[i] =
+        behind || Math.abs(projectVec.x) > 1.4 || Math.abs(projectVec.y) > 1.4
+          ? 1
+          : 0;
+
+      // Who this bead is to the focus view. The second bead is the one settled
+      // under the lens, the locked candidate, or the other end of a reopened
+      // thread; a bead inside the lens's disc is the lens's, and comes sharp and
+      // named (the fog clears it; this names it).
+      const attended = attendingId === id;
+      const second =
+        !attended &&
+        (secondId === id ||
+          heldId === id ||
+          (view.mode === "focus" && frameState.snapId === id));
       const hovered = frameState.hoveredId === id;
       const focused = now.focusedId === id;
+      // Measured by the fog from inside the render, against the lens as it is
+      // drawn — a frame old, which no eye can tell — so the names the lens is
+      // over are exactly the beads it is clearing.
+      const lensed =
+        composing &&
+        focal.hidden[i] === 0 &&
+        index < focusFrame.lensed.length &&
+        focusFrame.lensed[index] > 0;
+      focal.lensed[i] = lensed ? 1 : 0;
+      // Attention promotes a bead out of turn, and in order: the attended bead,
+      // then the second, then whatever else the player's attention is on.
+      // Attention is not content, and nothing here ranks a bead by its band.
+      focal.promoted[i] = promotionFor(attended, second, lensed || hovered || focused);
+
       // The invitation is a *scale*, so it stands down the moment the player's
       // own attention arrives — a reached-for bead is never also an offer. It
       // is suppressed entirely under reduced motion, where the same invitation
       // is carried by light alone (see the kindling below).
       const invited = spark.index === i;
       const offered =
-        reducedMotion || attended || snapped || hovered || focused
+        reducedMotion || attended || second || hovered || focused
           ? 1
           : invited
             ? offer.reach
             : offer.recede;
+      // Under the focus view the pointer is a lens, not a hover: a bead under
+      // it is sharp and named, never swollen past the second bead.
       const target =
-        (snapped
-          ? SNAPPED_SCALE
-          : attended
-            ? ATTENDED_SCALE
-            : hovered
-              ? HOVER_SCALE
-              : focused
-                ? 1.16
-                : 1) * offered;
+        (attended
+          ? attendedScale
+          : second
+            ? SECOND_SCALE
+            : composing
+              ? 1
+              : hovered
+                ? HOVER_SCALE
+                : focused
+                  ? FOCUSED_SCALE
+                  : 1) * offered;
       const current = scales.current[i] ?? 1;
       // Hover answers faster than it lets go: the arrival is the message.
-      const rate = hovered || snapped || attended ? 13 : 8;
+      const rate = hovered || second || attended ? 13 : 8;
       const next = current + (target - current) * Math.min(1, dt * rate);
       scales.current[i] = next;
 
@@ -639,23 +723,6 @@ export function Beads() {
       focal.gather[i] = condensing.gather;
       const drawn = next * condensing.scale;
       focal.drawn[i] = drawn;
-
-      originVec.set(x, y, z);
-      // ── the frame's hierarchy, measured ───────────────────────────────
-      const eyeDistance = three.camera.position.distanceTo(originVec);
-      focal.depth[i] = eyeDistance;
-      // Attention promotes a bead out of turn. Attention is not content: a
-      // bead the player has reached for is the subject of the frame.
-      focal.promoted[i] = attended || snapped || hovered || focused ? 1 : 0;
-
-      projectVec.set(x, y, z).project(three.camera);
-      const behind = projectVec.z < -1 || projectVec.z > 1;
-      focal.anchor[i * 2] = projectVec.x * aspect;
-      focal.anchor[i * 2 + 1] = projectVec.y;
-      focal.hidden[i] =
-        behind || Math.abs(projectVec.x) > 1.4 || Math.abs(projectVec.y) > 1.4
-          ? 1
-          : 0;
 
       const halfAtBead = Math.max(0.001, eyeDistance * tanHalfFov);
       focal.glassRadius[i] = (BEAD_RADIUS * GLASS_SCALE * drawn) / halfAtBead;
@@ -702,31 +769,11 @@ export function Beads() {
     }
 
     // ── pass three: place the glass, the targets and the names ──────────
-    if (plate.current.width !== three.size.width) {
-      const geometry = plateGeometry(three.size.width, COARSE_POINTER);
-      plate.current.width = three.size.width;
-      plate.current.radius = Math.max(
-        geometry.extentUp,
-        geometry.extentDown,
-        geometry.extentSide
-      );
-      // Between the cardinals there is nothing but the graduated circle and the
-      // band its stations sit in: the four verbs and their engraved captions
-      // are on the cardinals, the two utilities on the upper diagonals. A point
-      // at 45° on this radius is outside every station box, and reserving the
-      // widest reach there instead is what left a phone with nowhere to put the
-      // name at all — the plate is 350 px across on a 414 px page.
-      plate.current.between = geometry.ring + geometry.station / 2;
-    }
-    const halfFrame = three.size.height * 0.5;
-    const plateRadius = plate.current.radius / halfFrame;
-    const plateBetween = plate.current.between / halfFrame;
-
     for (let i = 0; i < count; i++) {
       const id = ids[i];
       const index = frameState.beadIndex.get(id) ?? i;
-      const attended = now.attendedId === id;
-      const snapped = frameState.snapId === id || now.candidateId === id;
+      const attended = attendingId === id;
+      const promotion = focal.promoted[i];
       const hovered = frameState.hoveredId === id;
       const focused = now.focusedId === id;
       const drawn = focal.drawn[i];
@@ -763,16 +810,22 @@ export function Beads() {
       scaleVec.setScalar(radius);
       matrix.compose(originVec, identityQuat, scaleVec);
       mesh.setMatrixAt(i, matrix);
+      // The fog clears exactly the glass that is drawn.
+      if (index < focusFrame.radius.length) focusFrame.radius[index] = radius;
 
-      const emphasis = snapped
+      // Light follows the same order as size: the attended bead brightest, the
+      // second next, a bead under the lens lit; roaming, a hover still answers.
+      const emphasis = attended
         ? 1
-        : attended
-          ? 0.78
-          : hovered
-            ? HOVER_EMPHASIS
-            : focused
-              ? 0.5
-              : 0;
+        : promotion >= PROMOTE_SECOND
+          ? SECOND_EMPHASIS
+          : focal.lensed[i] > 0
+            ? LENS_EMPHASIS
+            : !composing && hovered
+              ? HOVER_EMPHASIS
+              : focused
+                ? FOCUSED_EMPHASIS
+                : 0;
       const resonance = now.resonance.get(id) ?? 0;
       state[i * 4] += (emphasis - state[i * 4]) * Math.min(1, dt * 11);
       state[i * 4 + 1] += (resonance - state[i * 4 + 1]) * Math.min(1, dt * 4);
@@ -812,25 +865,12 @@ export function Beads() {
       }
 
       // Screen size, in half-frame-heights, of everything drawn *around* this
-      // bead. For the attended one that is the intention plate, not the glass:
-      // the plate is what a neighbouring name would actually collide with.
-      focal.beadRadius[i] = attended
-        ? plateRadius
-        : focal.glassRadius[i] + 0.06 / halfAtBead;
-      // …and the attended bead's *own* name is offset by the same plate,
-      // because the dial is drawn over the canvas and a name hung off the glass
-      // is a name underneath the instrument. Every other bead draws nothing but
-      // itself, and is not further from its own name for it.
-      focal.ownRadius[i] = attended
-        ? plateRadius
-        : focal.glassRadius[i] + 0.02;
-      focal.ownBetween[i] = attended
-        ? plateBetween
-        : focal.glassRadius[i] + 0.02;
-      // …and it is the dial's caption rather than a caption competing with the
-      // rest of the frame on proximity, which is the one thing the solver has
-      // to be told (see `labels.ts`). Exactly one bead is ever attended.
-      focal.anchored[i] = attended ? 1 : 0;
+      // bead, which every other name keeps clear of — and the offset of the
+      // bead's own name. Nothing is drawn round any bead but its glass now,
+      // the attended one included (I-016), so both are the glass: the first
+      // with air to spare, the second hung just off it.
+      focal.beadRadius[i] = focal.glassRadius[i] + 0.06 / halfAtBead;
+      focal.ownRadius[i] = focal.glassRadius[i] + 0.02;
 
       const label = labels.current[i];
       // Type stays the same size on screen whatever the orbit distance — and
@@ -898,8 +938,6 @@ export function Beads() {
         anchor: focal.anchor,
         beadRadius: focal.beadRadius,
         ownRadius: focal.ownRadius,
-        ownRadiusBetween: focal.ownBetween,
-        anchored: focal.anchored,
         half: focal.half,
         tier: focal.tierTarget,
         hidden: focal.hidden,
@@ -979,7 +1017,7 @@ export function Beads() {
         beadDir.set(x, y, z).normalize();
         const facing = smoothstep(-0.1, 0.34, camDir.dot(beadDir));
         const emphasised = focal.promoted[i] > 0;
-        const attended = now.attendedId === id;
+        const attended = attendingId === id;
         // A name with nowhere legible to go is suppressed outright. Half a name
         // running off the page tells the player the world is broken; no name
         // tells them this bead is crowded, which is true and recoverable.
@@ -1008,6 +1046,18 @@ export function Beads() {
           next *
           (attended ? ATTENDED_NAME_OUTLINE_OPACITY : NAME_OUTLINE_OPACITY);
         label.text.visible = next > 0.02;
+      }
+
+      // What the fog reads of this bead's name: the box the solver placed, for
+      // as long as the name is drawn, so a sharp bead's caption comes sharp
+      // with it. A suppressed or faded name is no box at all.
+      const named = index * 4 + 3 < focusFrame.names.length;
+      if (named) {
+        const shown = focal.code[i] !== SUPPRESSED && labelOpacity.current[i] > 0.05;
+        focusFrame.names[index * 4] = shown ? focal.offset[i * 2] : 0;
+        focusFrame.names[index * 4 + 1] = shown ? focal.offset[i * 2 + 1] : 0;
+        focusFrame.names[index * 4 + 2] = shown ? focal.half[i * 2] : 0;
+        focusFrame.names[index * 4 + 3] = shown ? focal.half[i * 2 + 1] : 0;
       }
     }
 

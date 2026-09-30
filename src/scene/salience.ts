@@ -91,10 +91,41 @@ export function tierWeights(tier: number): TierWeights {
 }
 
 /**
+ * ATTENTION HAS AN ORDER (I-017).
+ *
+ * The focus view names up to two beads as the subject of the frame — the
+ * attended bead, and the second one: settled under the lens, locked as the
+ * pair, or the other end of a reopened thread. A hover, a keyboard focus or
+ * the lens passing over a bead is attention too, but lesser. So promotion is a
+ * level, not a flag: the near tier's two places go to the attended bead and
+ * then the second, whatever else is nearer the eye, and only then to anything
+ * else the player is looking at.
+ *
+ * Still nothing here reads a band, a sigil or a documented flag. The only
+ * thing in the focus view that answers to the bands is the fog's clarity
+ * (`focusFog.ts`); the hierarchy answers to attention and to depth alone.
+ */
+export const PROMOTE_NOTICED = 1;
+export const PROMOTE_SECOND = 2;
+export const PROMOTE_ATTENDED = 3;
+
+/** The promotion level for a bead in these roles. The strongest role wins. */
+export function promotionFor(
+  attended: boolean,
+  second: boolean,
+  noticed: boolean
+): number {
+  if (attended) return PROMOTE_ATTENDED;
+  if (second) return PROMOTE_SECOND;
+  return noticed ? PROMOTE_NOTICED : 0;
+}
+
+/**
  * Rank the draw and write one tier value per bead.
  *
- * `depth` is the distance from the eye — smaller is nearer. `promoted` is 1 for
- * a bead the player is working with; those are ranked ahead of everything else,
+ * `depth` is the distance from the eye — smaller is nearer. `promoted` is the
+ * bead's promotion level (`promotionFor`), 0 for a bead nobody is attending to;
+ * promoted beads are ranked ahead of everything else, higher levels first,
  * because attention is the subject of the frame and the frame should say so.
  *
  * `order` is scratch the caller owns, at least `count` long. Nothing allocates.
@@ -108,10 +139,10 @@ export function assignSalience(
 ): void {
   if (count <= 0) return;
 
-  // Insertion sort: promoted first, then nearest first. At two dozen beads this
-  // is a few hundred comparisons and no allocation, and it is stable, which
-  // matters — an unstable sort makes two equidistant beads trade the near tier
-  // back and forth every frame.
+  // Insertion sort: the most promoted first, then nearest first. At two dozen
+  // beads this is a few hundred comparisons and no allocation, and it is
+  // stable, which matters — an unstable sort makes two equidistant beads trade
+  // the near tier back and forth every frame.
   for (let i = 0; i < count; i++) {
     let j = i - 1;
     const candidate = i;
@@ -137,8 +168,8 @@ function after(
   depth: ArrayLike<number>,
   promoted: ArrayLike<number>
 ): boolean {
-  const pa = promoted[a] > 0 ? 1 : 0;
-  const pb = promoted[b] > 0 ? 1 : 0;
+  const pa = promoted[a] > 0 ? promoted[a] : 0;
+  const pb = promoted[b] > 0 ? promoted[b] : 0;
   if (pa !== pb) return pa < pb;
   return depth[a] > depth[b];
 }

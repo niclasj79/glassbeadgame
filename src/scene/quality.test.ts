@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QualityTier } from "@/lib/device";
-import { presentationProfile, sceneBudget } from "./quality";
+import { fogBlurAllowed, presentationProfile, sceneBudget } from "./quality";
 
 const TIERS: readonly QualityTier[] = ["high", "base", "potato"];
 
@@ -46,6 +46,22 @@ describe("scene budgets", () => {
       if (budget.engravedGlass) continue;
       expect(budget.glassSteps).toBeGreaterThan(0);
     }
+  });
+
+  it("softens the focus fog on every tier but the engraved one (I-017)", () => {
+    // The low tier's fog is dim-only: not a blur turned down, a blur that is
+    // never compiled, so it costs the engraved tier nothing at all.
+    expect(sceneBudget("potato").fogBlurTaps).toBe(0);
+    expect(fogBlurAllowed("potato")).toBe(false);
+    for (const tier of ["high", "base"] as const) {
+      expect(sceneBudget(tier).fogBlurTaps).toBeGreaterThanOrEqual(9);
+      expect(sceneBudget(tier).fogBlurTaps).toBeLessThanOrEqual(13);
+      expect(fogBlurAllowed(tier)).toBe(true);
+    }
+    // Never more work lower down.
+    expect(sceneBudget("high").fogBlurTaps).toBeGreaterThanOrEqual(
+      sceneBudget("base").fogBlurTaps
+    );
   });
 });
 

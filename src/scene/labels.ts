@@ -75,6 +75,14 @@ import type { SafeArea } from "./framing";
  *                 every other name. A bead sitting on the caption still refuses
  *                 it, and it is still suppressed rather than fudged.
  *
+ *                 UNDER THE FOCUS VIEW NO BEAD WEARS A DIAL. The sigils bloom
+ *                 on the preview thread between the locked pair (I-016), so the
+ *                 attended bead is a point like every other and its name —
+ *                 still set larger, still on its own ground — is a floating
+ *                 caption again, held to the point law. `anchored` remains the
+ *                 solver's law for a name hung on a drawn instrument; the arena
+ *                 simply has none to declare at present.
+ *
  * Pure and allocation-free on the frame path: every array is the caller's.
  */
 
@@ -211,9 +219,9 @@ export interface LabelRequest {
   /** Bead centres in NDC, xy interleaved. */
   readonly anchor: Float32Array;
   /**
-   * The radius every *other* name must keep clear of this bead, in NDC. It is
-   * not always the glass: an attended bead reserves the whole intention plate,
-   * because the plate is what a neighbouring name would actually collide with.
+   * The radius every *other* name must keep clear of this bead, in NDC: the
+   * glass and whatever the arena draws round it, because that is what a
+   * neighbouring name would actually collide with.
    */
   readonly beadRadius: Float32Array;
   /**
@@ -240,11 +248,12 @@ export interface LabelRequest {
   readonly ownRadiusBetween?: Float32Array;
   /**
    * 1 for a bead whose name is anchored to something the arena actually draws
-   * around it — in practice the attended bead's intention dial, and nothing
-   * else. Such a name is that instrument's caption rather than a floating one,
-   * so the "nearest bead wins" law above does not govern it. Every other
-   * clearance still does. Absent means nothing is anchored, which is the law
-   * unchanged.
+   * around it — an instrument such as the intention dial the attended bead
+   * wore before I-016 moved the sigils onto the preview thread. Such a name is
+   * that instrument's caption rather than a floating one, so the "nearest bead
+   * wins" law above does not govern it. Every other clearance still does.
+   * Absent means nothing is anchored, which is the law unchanged — and the
+   * arena's case under the focus view.
    */
   readonly anchored?: Float32Array;
   /** Half-width and half-height of each name's box, in NDC, xy interleaved. */

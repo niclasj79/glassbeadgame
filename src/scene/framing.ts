@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { ARENA_RADIUS } from "@/game/layout";
+import type { FocusView } from "@/runtime/interactionDraft";
 import { MAX_BEAD_EXTENT } from "./rings";
 
 /**
  * HOW THE WORLD IS COMPOSED ON THE SCREEN
  *
- * Five things live here, and they live together because they are one problem:
+ * Six things live here, and they live together because they are one problem:
  * a frame is only well composed if the camera, the instrument, the plate and
  * the phrasing of the move all agree about where the edges are.
  *
@@ -21,6 +22,8 @@ import { MAX_BEAD_EXTENT } from "./rings";
  *   5. THE PHRASING  one tempo, and every camera move a whole or half multiple
  *                    of it, damped in orbit coordinates so a move is always a
  *                    turn of the instrument and never a cut through it.
+ *   6. THE FOCUS     the focus view's two postures (I-017): closer, with the
+ *                    attended bead lower-left, and the pair turned to.
  *
  * All of it is pure, and therefore testable without a renderer. Nothing here
  * allocates on a frame path: the dampers write through carriers the caller
@@ -987,6 +990,13 @@ export interface AttendedFramingRequest {
   readonly safeArea?: SafeArea;
   /** How far back the camera may stand to make the plate fit. */
   readonly maxDistance?: number;
+  /**
+   * The most the aim point may leave the arena's centre. Defaults to
+   * `maxTargetOffset` at the solved distance. The focus view passes 0: an aim
+   * offset carries the whole sphere across the screen, and at the focus
+   * distance the sphere has no room to be carried.
+   */
+  readonly maxLift?: number;
 }
 
 export interface AttendedFraming {
@@ -1018,16 +1028,17 @@ function solvePose(
   aspect: number,
   ndcX: number,
   ndcY: number,
-  fov: number
+  fov: number,
+  maxLift: number | undefined
 ): { position: THREE.Vector3; target: THREE.Vector3 } | null {
   let asked = ndcX;
-  let pose = solveOnce(bead, distance, aspect, asked, ndcY, fov);
+  let pose = solveOnce(bead, distance, aspect, asked, ndcY, fov, maxLift);
   for (let pass = 0; pass < 7 && pose; pass++) {
     const landed = projectFromPose(bead, pose.position, pose.target, aspect, fov);
     const error = ndcX - landed.x;
     if (Math.abs(error) < 2e-4) break;
     asked = clamp(asked + error, -1.4, 1.4);
-    pose = solveOnce(bead, distance, aspect, asked, ndcY, fov);
+    pose = solveOnce(bead, distance, aspect, asked, ndcY, fov, maxLift);
   }
   return pose;
 }
@@ -1038,7 +1049,8 @@ function solveOnce(
   aspect: number,
   ndcX: number,
   ndcY: number,
-  fov: number
+  fov: number,
+  maxLift: number | undefined
 ): { position: THREE.Vector3; target: THREE.Vector3 } | null {
   const radius = bead.length();
   if (radius < 1e-4 || distance <= 0) return null;
@@ -1103,7 +1115,10 @@ function solveOnce(
   // bead is nearer the camera than the arena's centre, so the frame is
   // narrower where it sits, and a lift computed at the centre's depth
   // consistently undershoots. Four passes converge well inside a pixel.
-  const bound = maxTargetOffset(distance, fov);
+  const bound = Math.min(
+    maxTargetOffset(distance, fov),
+    maxLift === undefined ? Number.POSITIVE_INFINITY : Math.max(0, maxLift)
+  );
   const up = cameraUp(position, ORIGIN_READONLY, new THREE.Vector3());
   const target = new THREE.Vector3();
   const viewDepth = distance - bead.dot(position.clone().normalize());
@@ -1143,7 +1158,15 @@ export function attendedFraming(
   let solved: AttendedFraming | null = null;
 
   for (let pass = 0; pass < 4; pass++) {
-    const pose = solvePose(bead, distance, aspect, wanted.x, wanted.y, fov);
+    const pose = solvePose(
+      bead,
+      distance,
+      aspect,
+      wanted.x,
+      wanted.y,
+      fov,
+      request.maxLift
+    );
     if (!pose) return null;
     const landed = projectFromPose(bead, pose.position, pose.target, aspect, fov);
     const safe = safeArea
@@ -1237,8 +1260,9 @@ export function projectFromPose(
  * or half multiple of a single beat, so the moves are *related* to each other
  * the way the intervals of a scale are.
  *
- *   breath   ½   arming: a short inward breath, no re-framing
- *   lean     1   attending: the instrument turns toward an idea
+ *   breath   ½   a held breath inward, no re-framing (the conclusion's hold)
+ *   lean     1   attending: the instrument turns and closes in on an idea
+ *   frame    1   locking: the instrument turns to hold the pair (I-017)
  *   release  1   the same length, reversed: attention let go of
  *   square   1   the Lens: squaring up to a plane reading
  *   settle  1½   a phase arriving
@@ -1251,6 +1275,7 @@ export const CAMERA_BEAT_SECONDS = 0.7;
 export type CameraPhrase =
   | "breath"
   | "lean"
+  | "frame"
   | "release"
   | "square"
   | "settle"
@@ -1260,6 +1285,7 @@ export type CameraPhrase =
 const PHRASE_BEATS: Readonly<Record<CameraPhrase, number>> = Object.freeze({
   breath: 0.5,
   lean: 1,
+  frame: 1,
   release: 1,
   square: 1,
   settle: 1.5,
@@ -1423,4 +1449,155 @@ export function dampOrbitToward(
     dt
   );
   return positionFromOrbit(scratch, out);
+}
+
+/* ────────────────────────────────────────────────────────────────────── *
+ * 6. THE FOCUS VIEW — CLOSER, LOWER-LEFT, AND THE PAIR (I-017)
+ * ────────────────────────────────────────────────────────────────────── */
+
+/**
+ * ATTENTION IS A PLACE THE CAMERA GOES.
+ *
+ * The lean this module used to solve for an attended bead stood the camera
+ * *further* back than rest — 1.18 of it, so a plate drawn round the bead had
+ * room — and kept the bead on whichever side of the frame it was already on.
+ * Played end to end, Attend was not visibly different from roaming: the
+ * posture existed in code and did not carry the frame. The plate has left the
+ * attended bead (the sigils bloom on the preview thread, I-016), and I-017
+ * asks for the opposite of a lean:
+ *
+ *   CLOSER. As close as the frame allows and no closer: the whole bead shell
+ *   stays inside the viewport and out of the reading column, so the sphere is
+ *   still legible while the attended bead — nearest the eye of anything the
+ *   camera is turned toward — is drawn larger than it ever is at rest. The
+ *   shell may cross the page's inner ruling here, which is the world coming
+ *   nearer; it may never cross the page.
+ *
+ *   LOWER-LEFT, ALWAYS. The instrument turns so the attended bead sits on the
+ *   lower-left of the sphere's own disc, wherever it was before — a turn, never
+ *   a lurch, because every move is damped in orbit coordinates (§5). A bead
+ *   on the crown of the instrument lands as low as the level allows (§3).
+ *
+ *   THE PAIR, TURNED TO. On Lock, and when a thread is reopened, the camera
+ *   turns once more so the attended bead stays lower-left and the second rises
+ *   up and to the right where the sphere allows it — at the same distance, so
+ *   the lock reads as a turn of the same look rather than a new shot.
+ *
+ * Every number below is the director's to tune, and each is held by a test
+ * that states what it is for rather than what it happens to be. The solvers
+ * that spend them are in `focusPosture.ts`, which the camera fetches after the
+ * first paint: nothing in them is needed until a bead is attended, and the
+ * first download is a budget (`scripts/bundle-budgets.json`).
+ */
+
+/**
+ * How much of the half-frame the bead shell keeps clear of the viewport's own
+ * edge in the focus view. Smaller than the rest frame's clearance on purpose:
+ * this is the posture that comes closer.
+ */
+export const FOCUS_EDGE_CLEARANCE = 0.035;
+
+/**
+ * THE CARDS TAKE MORE OF A PHONE'S FOOT THAN THE READINGS DO.
+ *
+ * On a narrow page the reading column is a band along the foot, and in the
+ * focus view it carries the attended card and the gap — or the second card —
+ * side by side: roughly a third of the page's height with its padding. The
+ * rest composition reserves `READING_FOOT_VH` for it, which is the band at
+ * rest; the focus view keeps its sphere clear of this much instead. Roaming is
+ * untouched.
+ *
+ * The band only exists below the column's own breakpoint (Tailwind's `md`, the
+ * width at which `ui/components/ReadingColumn` moves the column to the right).
+ */
+export const FOCUS_FOOT_VH = 0.4;
+export const READING_COLUMN_BREAKPOINT_PX = 768;
+
+/**
+ * The nearest the focus view may stand, as a fraction of the rest distance. A
+ * page with room to spare still gets a close look rather than a claustrophobic
+ * one.
+ */
+export const FOCUS_NEAREST_RATIO = 0.72;
+
+/**
+ * Where the attended bead is carried: a bearing on the bead sphere's projected
+ * disc, in degrees counter-clockwise from the right (225 is lower-left), and
+ * how far out along it as a fraction of the disc's radius. Far enough out to
+ * read as a corner, near enough in that the bead still faces the eye.
+ */
+export const FOCUS_ATTENDED_BEARING = 225;
+export const FOCUS_ATTENDED_REACH = 0.58;
+
+/** Where a pair's second bead is carried: up and to the right. */
+export const PAIR_SECOND_BEARING = 45;
+export const PAIR_SECOND_REACH = 0.52;
+
+/**
+ * How the pair framing weighs its wishes.
+ *
+ *   DIRECTION  the second bead up and to the right *of the attended one*. The
+ *              camera's level is bounded (§3), so the screen's up is nearly
+ *              the world's: a second bead lower in the world than the attended
+ *              one cannot be carried above it, and "where the sphere allows"
+ *              means exactly that. To the right is nearly always possible.
+ *   CORNERS    the attended bead at its lower-left anchor, the second at the
+ *              upper-right one, the first weighted more.
+ *   NEAR SIDE  the attended bead on the side of the instrument facing the eye,
+ *              strongly — it is the subject — and the second where it can be.
+ *              Chasing "up" with the far side of the sphere is a perspective
+ *              trick that shrinks the bead it was meant to show.
+ *   TURN       of two framings nearly as good, the smaller turn wins, so the
+ *              lock is the least move that frames the pair.
+ *
+ * Measured over every ordered pair of a twelve-bead draw, turning from the
+ * attended posture: the second lands right of the attended bead in 98% of
+ * pairs, up and to the right in 97% of those where it is the higher bead, and
+ * the attended bead stays on the near side in 95%, for a mean turn of 36°.
+ */
+export const PAIR_DIRECTION_WEIGHT = 1;
+export const PAIR_ATTENDED_WEIGHT = 1;
+export const PAIR_SECOND_WEIGHT = 0.4;
+export const PAIR_ATTENDED_NEAR_WEIGHT = 4;
+export const PAIR_SECOND_NEAR_WEIGHT = 1;
+export const PAIR_TURN_WEIGHT = 0.02;
+
+/**
+ * What the focus view asks of the camera. A *look* is not a request: while
+ * attending, the bead under the lens changes nothing here, because sighting
+ * reaches neither the camera nor the hand (the cue plan says so too). Only
+ * Attend, Lock and a reopened thread move the camera.
+ */
+export type FocusPoseRequest =
+  | Readonly<{ kind: "rest" }>
+  | Readonly<{ kind: "attend"; attended: string }>
+  | Readonly<{ kind: "pair"; attended: string; second: string }>;
+
+const REST_REQUEST: FocusPoseRequest = Object.freeze({ kind: "rest" });
+
+export function focusPoseRequest(
+  view: Pick<FocusView, "mode" | "attendedConceptId" | "secondConceptId">
+): FocusPoseRequest {
+  if (view.mode === "focus" && view.attendedConceptId !== null) {
+    return Object.freeze({ kind: "attend", attended: String(view.attendedConceptId) });
+  }
+  if (
+    (view.mode === "locked" || view.mode === "held") &&
+    view.attendedConceptId !== null &&
+    view.secondConceptId !== null
+  ) {
+    return Object.freeze({
+      kind: "pair",
+      attended: String(view.attendedConceptId),
+      second: String(view.secondConceptId),
+    });
+  }
+  return REST_REQUEST;
+}
+
+/** A request as a key: equal keys ask for the same pose. */
+export function focusPoseKey(request: FocusPoseRequest): string {
+  if (request.kind === "attend") return `attend:${request.attended}`;
+  if (request.kind === "pair") return `pair:${request.attended}:${request.second}`;
+  return "rest";
 }
