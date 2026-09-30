@@ -137,6 +137,36 @@ export interface BrowserTestAdapter {
     at?: number
   ): { x: number; y: number; behind: boolean } | null;
   beadIds(): string[];
+  /**
+   * Musical time (M4-001): the conductor's grid, armed with the world's slot on
+   * the controlled clock while the arena is up. Seconds on that clock.
+   */
+  musicalTime(): {
+    now: number;
+    armed: boolean;
+    slotSeconds: number;
+    slotPhase: number;
+    breathPhase: number;
+    nextHandAt: number;
+    nextAnswerAt: number;
+  };
+  /** Schedule a note on a concept `inMs` ahead, as a scheduler would. */
+  conduct(onset: {
+    conceptId: string;
+    inMs: number;
+    durationMs: number;
+    weight?: number;
+  }): void;
+  /**
+   * The light on a bead: what the bead pass wrote into the glass's kindling
+   * lane on its last frame, the conductor's own light for the concept, and
+   * whether the idle score has kindled this bead within the last moment. The
+   * lane is a `max` of both, and the idle score keeps the frame clock, which
+   * the controlled clock does not move.
+   */
+  beadLight(
+    conceptId: string
+  ): { written: number; note: number; kindled: boolean } | null;
   canonicalEventLog(): string;
   reloadCanonical(): TestSessionSnapshot;
   startFrameSample(): void;
