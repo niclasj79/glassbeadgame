@@ -19,6 +19,7 @@
  *     or to an honest unresolved state. Authoring nothing is always available.
  */
 import type { RelationIntention } from "@/domain/events";
+import type { StudyDefinition } from "@/domain/studies/types";
 
 // ─── Faculties ──────────────────────────────────────────────────────────────
 
@@ -322,6 +323,24 @@ export interface OpenThreadPrompt {
   readonly question: string;
 }
 
+// ─── Studies ────────────────────────────────────────────────────────────────
+
+/**
+ * A Study is an authored problem over eight beads (STUDIES-SPEC). Its types
+ * belong to the domain, whose solver and evaluator must import nothing from
+ * content; they are re-exported here because a Study is authored and validated
+ * as pack data like everything else in this file. What a Study may name is
+ * deliberately narrow: beads, facets, faculties and counts — never a relation,
+ * an evidence class or an Open Thread (R1).
+ */
+export type {
+  StudyAnswer,
+  StudyChapter,
+  StudyDefinition,
+  StudyGoal,
+  StudyId,
+} from "@/domain/studies/types";
+
 // ─── Pack ───────────────────────────────────────────────────────────────────
 
 export interface CastaliaPack {
@@ -332,6 +351,8 @@ export interface CastaliaPack {
   readonly sources: readonly Source[];
   readonly relations: readonly DocumentedRelation[];
   readonly openThreads: readonly OpenThreadPrompt[];
+  /** In chapter order, then by ordinal. */
+  readonly studies: readonly StudyDefinition[];
 }
 
 /** Canonical unordered-pair key for a documented relation. */

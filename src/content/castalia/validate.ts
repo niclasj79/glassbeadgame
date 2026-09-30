@@ -1,4 +1,10 @@
 import { RELATION_INTENTIONS, type RelationIntention } from "@/domain/events";
+import type { ConceptId } from "@/domain/ids";
+import type { ConceptStructureLookup } from "@/domain/outcomes/lookup";
+import { sharedFacetsOf } from "@/domain/outcomes/resolveThreadOutcome";
+import { studyCount, studyIdFor } from "@/domain/studies/goal";
+import { containsAnswer, solveStudy } from "@/domain/studies/solveStudy";
+import { STUDY_CHAPTERS } from "@/domain/studies/types";
 import {
   CONCEPT_KINDS,
   EVIDENCE_CLASSES,
@@ -15,6 +21,7 @@ import {
   type CastaliaPack,
   type DocumentedRelation,
   type OpenThreadPrompt,
+  type StudyDefinition,
 } from "./schema";
 
 /**
@@ -519,7 +526,319 @@ export function validateCastaliaPack(pack: CastaliaPack): CastaliaValidationResu
     }
   }
 
+  // ── studies ──────────────────────────────────────────────────────────────
+  for (const issue of validateStudies(pack)) {
+    errors.push(`${issue.subject}: ${issue.message} [${issue.code}]`);
+  }
+
   return { errors, warnings };
+}
+
+// ─── Studies ────────────────────────────────────────────────────────────────
+
+/** Authored bounds for Studies (STUDIES-SPEC §9). Changing one is a content decision. */
+export const STUDY_LIMITS = {
+  beads: 8,
+  facultiesMin: 3,
+  passageAnswersMax: 4,
+  studiesPerChapter: 4,
+} as const;
+
+/** One code per rule a Study must satisfy, so a test can name the rule it breaks. */
+export const STUDY_ERROR_CODES = [
+  /** The id is not `study.<chapter>-<ordinal>`. */
+  "study-id",
+  /** The Study does not hold exactly eight beads. */
+  "study-bead-count",
+  /** A bead is repeated or out of pack order. */
+  "study-bead-order",
+  /** A bead the pack does not hold. */
+  "study-unknown-concept",
+  /** Fewer than three faculties among the beads. */
+  "study-faculties",
+  /** A bead that shares no facet with any other bead of the Study. */
+  "study-distractor",
+  /** The same set of beads as an earlier Study. */
+  "study-duplicate-beads",
+  /** A goal naming what the Study cannot hold: a bead outside it, an unknown facet or faculty, a count out of range. */
+  "study-goal",
+  /** The Magister's line is not an answer of the brief's exact count. */
+  "study-answer",
+  /** The Magister's line is not written bead to bead as it is read. */
+  "study-answer-line",
+  /** An answer shorter than the brief's count exists within the beads. */
+  "study-shorter-answer",
+  /** A passage with more than four answers within the beads. */
+  "study-passage-answers",
+  /** A silence Study that has an answer within the beads. */
+  "study-silence-answer",
+  /** A passage silence with no way of the count plus one. */
+  "study-silence-longer-way",
+  /** Chapters and ordinals not complete, unique and listed in order. */
+  "study-sequence",
+] as const;
+export type StudyErrorCode = (typeof STUDY_ERROR_CODES)[number];
+
+export interface StudyIssue {
+  readonly code: StudyErrorCode;
+  /** The Study's id, or the chapter, the issue is about. */
+  readonly subject: string;
+  readonly message: string;
+}
+
+/**
+ * The structure of this pack's concepts, as the domain reads it. Built from the
+ * pack being validated rather than from the shipped one, so a broken fixture
+ * is judged by its own beads.
+ */
+function structureLookupFor(pack: CastaliaPack): ConceptStructureLookup {
+  const byId = new Map(pack.concepts.map((concept) => [concept.id, concept]));
+  return {
+    conceptName: (id) => byId.get(id)?.name ?? id,
+    conceptFaculty: (id) => byId.get(id)?.faculty ?? FACULTY_IDS[0],
+    conceptFacets: (id) => byId.get(id)?.facets ?? [],
+  };
+}
+
+function goalProblems(
+  study: StudyDefinition,
+  facetIds: ReadonlySet<string>
+): readonly string[] {
+  const problems: string[] = [];
+  const { goal } = study;
+  switch (goal.kind) {
+    case "passage":
+      for (const end of [goal.from, goal.to]) {
+        if (!study.conceptIds.includes(end)) {
+          problems.push(`passage names ${end}, which is not one of its beads`);
+        }
+      }
+      if (goal.from === goal.to) problems.push("passage begins and ends at the same bead");
+      if (!Number.isInteger(goal.threads) || goal.threads < 1) {
+        problems.push(`passage must name a whole number of threads, found ${goal.threads}`);
+      }
+      break;
+    case "canon":
+      if (!facetIds.has(goal.facet)) problems.push(`canon names unknown facet ${goal.facet}`);
+      if (
+        !Number.isInteger(goal.faculties) ||
+        goal.faculties < 2 ||
+        goal.faculties > FACULTY_IDS.length
+      ) {
+        problems.push(
+          `canon must reach 2–${FACULTY_IDS.length} faculties, found ${goal.faculties}`
+        );
+      }
+      break;
+    case "carry":
+      if (!facetIds.has(goal.facet)) problems.push(`carry names unknown facet ${goal.facet}`);
+      if (!(FACULTY_IDS as readonly string[]).includes(goal.into)) {
+        problems.push(`carry names unknown faculty ${goal.into}`);
+      }
+      break;
+    default: {
+      const exhaustive: never = goal;
+      return exhaustive;
+    }
+  }
+  return problems;
+}
+
+/** Why a line is not written bead to bead as it is read, or null when it is. */
+function lineProblem(
+  study: StudyDefinition,
+  pairs: readonly (readonly [ConceptId, ConceptId])[],
+  lookup: ConceptStructureLookup
+): string | null {
+  const first = pairs[0];
+  const last = pairs[pairs.length - 1];
+  if (first === undefined || last === undefined) return "the Magister's line names no thread";
+  for (let index = 1; index < pairs.length; index += 1) {
+    if (pairs[index]?.[0] !== pairs[index - 1]?.[1]) {
+      return `the Magister's thread ${index + 1} does not begin where thread ${index} ends`;
+    }
+  }
+  const { goal } = study;
+  if (goal.kind === "passage" && (first[0] !== goal.from || last[1] !== goal.to)) {
+    return `the Magister's line must run from ${goal.from} to ${goal.to}`;
+  }
+  if (goal.kind === "carry" && lookup.conceptFaculty(last[1]) !== goal.into) {
+    return `the Magister's line must end in ${goal.into}`;
+  }
+  return null;
+}
+
+function sequenceProblems(
+  studies: readonly StudyDefinition[],
+  report: (subject: string, code: StudyErrorCode, message: string) => void
+): void {
+  const chapters = STUDY_CHAPTERS as readonly string[];
+  const seen = new Set<string>();
+  for (const study of studies) {
+    if (seen.has(study.id)) report(study.id, "study-sequence", "duplicate id");
+    seen.add(study.id);
+    if (!chapters.includes(study.chapter)) {
+      report(study.id, "study-sequence", `unknown chapter ${study.chapter}`);
+    }
+  }
+
+  const expected = Array.from({ length: STUDY_LIMITS.studiesPerChapter }, (_, index) => index + 1);
+  for (const chapter of STUDY_CHAPTERS) {
+    const ordinals = studies
+      .filter((study) => study.chapter === chapter)
+      .map((study) => study.ordinal);
+    const complete =
+      ordinals.length === expected.length &&
+      expected.every((ordinal) => ordinals.includes(ordinal));
+    if (!complete) {
+      report(
+        `chapter ${chapter}`,
+        "study-sequence",
+        `holds ordinals ${ordinals.join(", ") || "none"}; expected ${expected.join(", ")}, each once`
+      );
+    }
+  }
+
+  for (let index = 1; index < studies.length; index += 1) {
+    const previous = studies[index - 1] as StudyDefinition;
+    const current = studies[index] as StudyDefinition;
+    const before = chapters.indexOf(previous.chapter);
+    const after = chapters.indexOf(current.chapter);
+    if (after < before || (after === before && current.ordinal <= previous.ordinal)) {
+      report(
+        current.id,
+        "study-sequence",
+        `is listed after ${previous.id}; Studies are listed in chapter order, then by ordinal`
+      );
+    }
+  }
+}
+
+/**
+ * THE STUDIES, PROVED.
+ *
+ * Every rule of STUDIES-SPEC §9, checked against the pack's own beads with the
+ * domain's solver: a Study that is not what it claims to be cannot ship. The
+ * solver reads facets and faculties only, so these proofs rest on exactly the
+ * information a player has (R1).
+ */
+export function validateStudies(pack: CastaliaPack): readonly StudyIssue[] {
+  const issues: StudyIssue[] = [];
+  const report = (subject: string, code: StudyErrorCode, message: string): void => {
+    issues.push({ code, subject, message });
+  };
+  const L = STUDY_LIMITS;
+  const packIndex = new Map(pack.concepts.map((concept, index) => [concept.id, index]));
+  const facetIds = new Set<string>(pack.facets.map((facet) => facet.id));
+  const lookup = structureLookupFor(pack);
+  const beadSets = new Map<string, string>();
+
+  for (const study of pack.studies) {
+    const where = String(study.id);
+
+    const expectedId = studyIdFor(study.chapter, study.ordinal);
+    if (study.id !== expectedId) {
+      report(where, "study-id", `id must be ${expectedId}`);
+    }
+
+    if (study.conceptIds.length !== L.beads) {
+      report(where, "study-bead-count", `has ${study.conceptIds.length} beads, expected ${L.beads}`);
+    }
+
+    const unknown = study.conceptIds.filter((bead) => !packIndex.has(bead));
+    for (const bead of unknown) report(where, "study-unknown-concept", `unknown concept ${bead}`);
+    const known = study.conceptIds.filter((bead) => packIndex.has(bead));
+
+    const order = known.map((bead) => packIndex.get(bead) ?? -1);
+    if (order.some((position, index) => index > 0 && position <= (order[index - 1] ?? -1))) {
+      report(where, "study-bead-order", "beads must be listed once each, in pack order");
+    }
+
+    const faculties = new Set(known.map((bead) => lookup.conceptFaculty(bead)));
+    if (faculties.size < L.facultiesMin) {
+      report(
+        where,
+        "study-faculties",
+        `spans ${faculties.size} faculties, expected at least ${L.facultiesMin}`
+      );
+    }
+
+    const key = [...new Set(study.conceptIds)].sort().join("+");
+    const twin = beadSets.get(key);
+    if (twin === undefined) beadSets.set(key, where);
+    else report(where, "study-duplicate-beads", `uses the same beads as ${twin}`);
+
+    const answerBeads = new Set<ConceptId>(
+      study.answer.kind === "threads" ? study.answer.pairs.flat() : []
+    );
+    for (const bead of known) {
+      if (answerBeads.has(bead)) continue;
+      const shares = known.some(
+        (other) => other !== bead && sharedFacetsOf(bead, other, lookup).length > 0
+      );
+      if (!shares) {
+        report(where, "study-distractor", `${bead} shares no facet with any other bead`);
+      }
+    }
+
+    const problems = goalProblems(study, facetIds);
+    for (const problem of problems) report(where, "study-goal", problem);
+
+    // A proof needs a well-formed Study over beads the pack actually holds.
+    if (unknown.length > 0 || problems.length > 0) continue;
+
+    const solution = solveStudy(study, lookup);
+    const count = studyCount(study.goal);
+    const answers = solution.answers.length;
+
+    if (study.answer.kind === "threads") {
+      const { pairs } = study.answer;
+      if (pairs.length !== count || !containsAnswer(solution, pairs)) {
+        report(
+          where,
+          "study-answer",
+          `the Magister's line is not an answer of the brief's ${count} threads`
+        );
+      }
+      const problem = lineProblem(study, pairs, lookup);
+      if (problem !== null) report(where, "study-answer-line", problem);
+      if (solution.shortest !== null && solution.shortest < count) {
+        report(
+          where,
+          "study-shorter-answer",
+          `an answer of ${solution.shortest} threads exists; the brief names ${count}`
+        );
+      }
+      if (study.goal.kind === "passage" && answers > L.passageAnswersMax) {
+        report(
+          where,
+          "study-passage-answers",
+          `has ${answers} answers within its beads, at most ${L.passageAnswersMax}`
+        );
+      }
+    } else {
+      if (answers > 0) {
+        report(
+          where,
+          "study-silence-answer",
+          `is authored as silence but has ${answers} answers within its beads`
+        );
+      }
+      if (
+        study.goal.kind === "passage" &&
+        (solution.shortest === null || solution.shortest > count + 1)
+      ) {
+        report(
+          where,
+          "study-silence-longer-way",
+          `a passage silence needs a way of ${count + 1} threads within its beads`
+        );
+      }
+    }
+  }
+
+  sequenceProblems(pack.studies, report);
+  return issues;
 }
 
 function validateMotif(concept: CastaliaConcept, errors: string[]): void {

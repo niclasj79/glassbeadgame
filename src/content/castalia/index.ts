@@ -7,6 +7,7 @@ import { FACULTIES, facultyById } from "./faculties";
 import { CASTALIA_OPEN_THREADS } from "./openThreads";
 import { CASTALIA_RELATIONS, relationById } from "./relations";
 import { CASTALIA_SOURCES, sourceById } from "./sources";
+import { CASTALIA_STUDIES } from "./studies";
 import {
   FACULTY_IDS,
   relationKey,
@@ -16,6 +17,7 @@ import {
   type FacetId,
   type FacultyId,
   type OpenThreadPrompt,
+  type StudyDefinition,
 } from "./schema";
 
 /**
@@ -41,10 +43,20 @@ export const CASTALIA_PACK: CastaliaPack = Object.freeze({
   sources: CASTALIA_SOURCES,
   relations: CASTALIA_RELATIONS,
   openThreads: CASTALIA_OPEN_THREADS,
+  studies: CASTALIA_STUDIES,
 });
 
 const byId = (a: { id: string }, b: { id: string }): number =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/**
+ * Study id → Study. The Studies themselves are exported in the order they are
+ * shown — chapter order, then ordinal — which the validator enforces, so no
+ * surface has to sort them.
+ */
+export const castaliaStudyById: ReadonlyMap<string, StudyDefinition> = new Map(
+  CASTALIA_STUDIES.map((study) => [study.id, study])
+);
 
 /** Canonical unordered-pair key → the documented relation for that pair. */
 export const relationByKey: ReadonlyMap<string, DocumentedRelation> = new Map(
@@ -168,6 +180,7 @@ export {
   CASTALIA_OPEN_THREADS,
   CASTALIA_RELATIONS,
   CASTALIA_SOURCES,
+  CASTALIA_STUDIES,
   FACETS,
   FACULTIES,
   castaliaConceptById,
@@ -179,7 +192,12 @@ export {
 export * from "./schema";
 export {
   CASTALIA_LIMITS,
+  STUDY_ERROR_CODES,
+  STUDY_LIMITS,
   assertCastaliaPackValid,
   validateCastaliaPack,
+  validateStudies,
   type CastaliaValidationResult,
+  type StudyErrorCode,
+  type StudyIssue,
 } from "./validate";

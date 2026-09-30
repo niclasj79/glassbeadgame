@@ -4,13 +4,33 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { RELATION_INTENTIONS, type RelationIntention } from "@/domain/events";
-import { toConceptId } from "@/domain/ids";
-import type { RelationLookup } from "@/domain/outcomes/lookup";
+import type { ConceptPair } from "@/domain/events";
+import { toConceptId, type ConceptId } from "@/domain/ids";
+import type { ConceptStructureLookup, RelationLookup } from "@/domain/outcomes/lookup";
+import {
+  FACULTY_COUNT,
+  answerKey,
+  describeStudyStatus,
+  evaluateStudy,
+  magisterLine,
+  renderStudyBrief,
+  solveStudy,
+  studyCount,
+  toStudyId,
+  type StudyNames,
+  type StudyStatus,
+} from "@/domain/studies";
+import { buildStudySession } from "@/domain/studies/testing/buildStudySession";
 
 import {
   CASTALIA_LOOKUP,
   CASTALIA_PACK,
+  CASTALIA_STUDIES,
   CONTENT_PACK_VERSION,
+  FACULTIES,
+  castaliaStudyById,
+  facetById,
+  facultyById,
   findRelation,
   openThreadPromptFor,
   openThreadsByIntention,
@@ -18,12 +38,20 @@ import {
   relationsByConcept,
 } from "./index";
 import {
+  FACULTY_IDS,
   relationKey,
   toFacetId,
   type CastaliaPack,
   type DocumentedRelation,
+  type StudyDefinition,
 } from "./schema";
-import { validateCastaliaPack } from "./validate";
+import {
+  STUDY_ERROR_CODES,
+  assertCastaliaPackValid,
+  validateCastaliaPack,
+  validateStudies,
+  type StudyErrorCode,
+} from "./validate";
 
 const relationFor = (a: string, b: string): DocumentedRelation => {
   const relation = findRelation(a, b);
@@ -788,5 +816,654 @@ describe("the relations file introduces the pack it actually holds", () => {
     // of every one of them.
     expect(conceding).toBe(total);
     expect(text).toContain(`All ${numberWord(total)} carry a \`counterpoint\``);
+  });
+});
+
+// ─── Studies ────────────────────────────────────────────────────────────────
+
+const conceptIdByName = new Map(
+  CASTALIA_PACK.concepts.map((concept) => [concept.name, toConceptId(concept.id)])
+);
+
+const bead = (name: string): ConceptId => {
+  const id = conceptIdByName.get(name);
+  if (id === undefined) throw new RangeError(`the pack holds no bead named ${name}`);
+  return id;
+};
+
+/** A line of threads through the named beads, bead to bead. */
+const lineOf = (...names: string[]): readonly ConceptPair[] =>
+  names.slice(1).map((name, index) => [bead(names[index] as string), bead(name)] as const);
+
+/** Names as a presentation surface supplies them, from the pack. */
+const STUDY_NAMES: StudyNames = {
+  conceptName: (id) => CASTALIA_LOOKUP.conceptName(id),
+  facetName: (id) => facetById.get(id)?.name ?? String(id),
+  facultyName: (id) => facultyById.get(id)?.name ?? String(id),
+};
+
+/**
+ * The pack's structure and nothing else: faculties and facets, with concept
+ * names stubbed out. What a player can read from the beads, minus even the
+ * names, so a test comparing it with the full lookup proves a Study never
+ * leans on anything more.
+ */
+const STRUCTURE: ConceptStructureLookup = (() => {
+  const byId = new Map(CASTALIA_PACK.concepts.map((concept) => [concept.id, concept]));
+  return Object.freeze({
+    conceptName: () => "",
+    conceptFaculty: (id: ConceptId) => byId.get(id)?.faculty ?? FACULTY_IDS[0],
+    conceptFacets: (id: ConceptId) => byId.get(id)?.facets ?? [],
+  });
+})();
+
+const studyNamed = (id: string): StudyDefinition => {
+  const study = castaliaStudyById.get(id);
+  if (study === undefined) throw new RangeError(`no Study ${id}`);
+  return study;
+};
+
+/**
+ * The twelve Studies as the Studies spike (M9-001) fixes them: each brief, and
+ * each Magister's line with the facet the packet names for every thread.
+ */
+const SPIKE_TABLE: ReadonlyArray<{
+  readonly id: string;
+  readonly brief: string;
+  readonly line: readonly string[] | "silence";
+  readonly carried?: readonly string[];
+}> = [
+  {
+    id: "study.eschholz-1",
+    brief: "From The Möbius Band to Counterpoint in two threads",
+    line: ["The Möbius Band", "Continuous Symmetry", "Counterpoint"],
+    carried: ["Continuity", "Invariance"],
+  },
+  {
+    id: "study.eschholz-2",
+    brief: "Carry Superposition through three faculties",
+    line: ["The Fourier Series", "Counterpoint", "The Standing Wave"],
+    carried: ["Superposition", "Superposition"],
+  },
+  {
+    id: "study.eschholz-3",
+    brief: "Carry Threshold into Matter",
+    line: ["Cantor's Diagonal Argument", "Diffraction"],
+    carried: ["Threshold"],
+  },
+  { id: "study.eschholz-4", brief: "Carry Proportion into Matter", line: "silence" },
+  {
+    id: "study.waldzell-1",
+    brief: "From The Möbius Band to Polyrhythm in three threads",
+    line: ["The Möbius Band", "Cantor's Diagonal Argument", "Prime Numbers", "Polyrhythm"],
+    carried: ["Self-Reference", "Discreteness", "No Common Measure"],
+  },
+  {
+    id: "study.waldzell-2",
+    brief: "Carry Decomposition through all four faculties",
+    line: ["Prime Numbers", "The Overtone Series", "Conservation of Energy", "Divisionism"],
+    carried: ["Decomposition", "Decomposition", "Decomposition"],
+  },
+  {
+    id: "study.waldzell-3",
+    brief: "From Just Intonation to Polyrhythm in two threads",
+    line: "silence",
+  },
+  {
+    id: "study.waldzell-4",
+    brief: "From Girih Tiling to Polyrhythm in two threads",
+    line: ["Girih Tiling", "Isorhythm", "Polyrhythm"],
+    carried: ["Recursion", "No Common Measure"],
+  },
+  {
+    id: "study.vicus-lusorum-1",
+    brief: "From Coupled Pendulums to The Möbius Band in three threads",
+    line: ["Coupled Pendulums", "Diffraction", "Cantor's Diagonal Argument", "The Möbius Band"],
+    carried: ["Interference", "Threshold", "Self-Reference"],
+  },
+  {
+    id: "study.vicus-lusorum-2",
+    brief: "Carry Return through three faculties",
+    line: ["The Fourier Series", "Polyrhythm", "Coupled Pendulums"],
+    carried: ["Return", "Return"],
+  },
+  { id: "study.vicus-lusorum-3", brief: "Carry No Common Measure into Image", line: "silence" },
+  {
+    id: "study.vicus-lusorum-4",
+    brief: "Carry Discreteness through all four faculties",
+    line: ["Fibonacci Sequence", "Equal Temperament", "The Crystal Lattice", "Divisionism"],
+    carried: ["Discreteness", "Discreteness", "Discreteness"],
+  },
+];
+
+/**
+ * What the solver finds within each authored bead set. Pinned, so a change to
+ * a set — or to a bead's facets — that alters a Study is seen and reviewed.
+ */
+const PROOFS: Readonly<
+  Record<string, { readonly answers: number; readonly shortest: number | null }>
+> = {
+  "study.eschholz-1": { answers: 1, shortest: 2 },
+  "study.eschholz-2": { answers: 3, shortest: 2 },
+  "study.eschholz-3": { answers: 2, shortest: 1 },
+  "study.eschholz-4": { answers: 0, shortest: null },
+  "study.waldzell-1": { answers: 1, shortest: 3 },
+  "study.waldzell-2": { answers: 16, shortest: 3 },
+  "study.waldzell-3": { answers: 0, shortest: 3 },
+  "study.waldzell-4": { answers: 1, shortest: 2 },
+  "study.vicus-lusorum-1": { answers: 1, shortest: 3 },
+  "study.vicus-lusorum-2": { answers: 3, shortest: 2 },
+  "study.vicus-lusorum-3": { answers: 0, shortest: null },
+  "study.vicus-lusorum-4": { answers: 16, shortest: 3 },
+};
+
+/** The marks the Magister's own line earns when it is all a session weaves. */
+const MAGISTER_MARKS: Readonly<Record<string, readonly string[]>> = {
+  "study.eschholz-1": ["economical", "varied"],
+  "study.eschholz-2": ["economical"],
+  "study.eschholz-3": ["economical"],
+  "study.waldzell-1": ["economical", "varied"],
+  "study.waldzell-2": ["economical", "wide"],
+  "study.waldzell-4": ["economical", "varied"],
+  "study.vicus-lusorum-1": ["economical", "varied"],
+  "study.vicus-lusorum-2": ["economical"],
+  "study.vicus-lusorum-4": ["economical", "wide"],
+};
+
+/** Why each silence holds, in the words the plate uses. */
+const SILENCE_REASONS: Readonly<Record<string, string>> = {
+  "study.eschholz-4": "No Matter bead here carries Proportion.",
+  "study.waldzell-3":
+    "No bead here carries a facet of both Just Intonation and Polyrhythm; the shortest way needs three.",
+  "study.vicus-lusorum-3": "No Image bead here carries No Common Measure.",
+};
+
+const SOLVABLE = CASTALIA_STUDIES.filter((study) => study.answer.kind === "threads");
+const SILENT = CASTALIA_STUDIES.filter((study) => study.answer.kind === "silence");
+
+const magisterPairs = (study: StudyDefinition): readonly ConceptPair[] =>
+  study.answer.kind === "threads" ? study.answer.pairs : [];
+
+/** Every pair of the Study's beads: the most a session over them can weave once each. */
+const everyPair = (study: StudyDefinition): readonly ConceptPair[] =>
+  study.conceptIds.flatMap((a, index) =>
+    study.conceptIds.slice(index + 1).map((b) => [a, b] as const)
+  );
+
+function studySession(
+  study: StudyDefinition,
+  pairs: readonly ConceptPair[],
+  outcome?: "documented" | "open-thread"
+) {
+  return buildStudySession({
+    studyId: study.id,
+    conceptIds: study.conceptIds,
+    contentPackVersion: String(CONTENT_PACK_VERSION),
+    threads: pairs.map(([a, b]) => ({ a, b, outcome })),
+  });
+}
+
+describe("Studies — the twelve", () => {
+  it("holds twelve Studies in chapter order, then by ordinal", () => {
+    expect(CASTALIA_STUDIES.map((study) => study.id)).toEqual(SPIKE_TABLE.map((row) => row.id));
+    expect(CASTALIA_PACK.studies).toBe(CASTALIA_STUDIES);
+    for (const study of CASTALIA_STUDIES) expect(castaliaStudyById.get(study.id)).toBe(study);
+  });
+
+  it.each(SPIKE_TABLE)("$id poses its brief and holds the Magister's answer", (row) => {
+    const study = studyNamed(row.id);
+    expect(renderStudyBrief(study.goal, STUDY_NAMES)).toBe(row.brief);
+
+    if (row.line === "silence") {
+      expect(study.answer).toEqual({ kind: "silence" });
+      expect(magisterLine(study, STRUCTURE)).toBeNull();
+      return;
+    }
+    expect(study.answer).toEqual({ kind: "threads", pairs: lineOf(...row.line) });
+    const steps = magisterLine(study, STRUCTURE) ?? [];
+    expect(steps).toHaveLength(row.carried?.length ?? -1);
+    steps.forEach((step, index) => {
+      expect(step.facets.map((facet) => STUDY_NAMES.facetName(facet))).toContain(
+        row.carried?.[index]
+      );
+    });
+  });
+
+  it("gives each Study eight beads of its own, in pack order, across at least three faculties", () => {
+    const packOrder = new Map(CASTALIA_PACK.concepts.map((concept, index) => [concept.id, index]));
+    const sets = new Set<string>();
+    for (const study of CASTALIA_STUDIES) {
+      expect(study.conceptIds, study.id).toHaveLength(8);
+      const order = study.conceptIds.map((id) => packOrder.get(id) ?? -1);
+      expect(order, study.id).toEqual([...order].sort((a, b) => a - b));
+      expect(order, study.id).not.toContain(-1);
+      const faculties = new Set(study.conceptIds.map((id) => STRUCTURE.conceptFaculty(id)));
+      expect(faculties.size, study.id).toBeGreaterThanOrEqual(3);
+      sets.add([...study.conceptIds].sort().join("+"));
+    }
+    expect(sets.size).toBe(CASTALIA_STUDIES.length);
+  });
+
+  it("raises no Study issue in the shipped pack", () => {
+    expect(validateStudies(CASTALIA_PACK)).toEqual([]);
+  });
+
+  it.each(CASTALIA_STUDIES.map((study) => ({ id: study.id, study })))(
+    "$id is proved by the solver as authored",
+    ({ study }) => {
+      const solution = solveStudy(study, STRUCTURE);
+      expect({ answers: solution.answers.length, shortest: solution.shortest }).toEqual(
+        PROOFS[study.id]
+      );
+      expect(solution.count).toBe(studyCount(study.goal));
+      if (study.answer.kind === "threads") {
+        expect(study.answer.pairs).toHaveLength(solution.count);
+        expect(solution.answers.map(answerKey)).toContain(answerKey(study.answer.pairs));
+      }
+    }
+  );
+
+  it("counts the pack's faculties as the domain does", () => {
+    expect(FACULTY_IDS).toHaveLength(FACULTY_COUNT);
+    expect(FACULTIES).toHaveLength(FACULTY_COUNT);
+    expect(CASTALIA_PACK.faculties).toHaveLength(FACULTY_COUNT);
+  });
+});
+
+describe("Studies — the spike's claims about the whole pack", () => {
+  const everyBead = CASTALIA_PACK.concepts.map((concept) => toConceptId(concept.id));
+  const overThePack = (id: string) =>
+    solveStudy({ ...studyNamed(id), conceptIds: everyBead }, STRUCTURE);
+  const keys = (answers: readonly (readonly ConceptPair[])[]) => answers.map(answerKey).sort();
+
+  it("eschholz-1's line is the only two-thread way in the pack", () => {
+    expect(keys(overThePack("study.eschholz-1").answers)).toEqual(
+      keys([lineOf("The Möbius Band", "Continuous Symmetry", "Counterpoint")])
+    );
+  });
+
+  it.each([
+    { id: "study.waldzell-1", ways: 4, shortest: 3 },
+    { id: "study.waldzell-4", ways: 2, shortest: 2 },
+    { id: "study.vicus-lusorum-1", ways: 3, shortest: 3 },
+  ])("$id has $ways ways in the pack, the Magister's among them", ({ id, ways, shortest }) => {
+    const solution = overThePack(id);
+    expect(solution.answers).toHaveLength(ways);
+    expect(solution.shortest).toBe(shortest);
+    expect(keys(solution.answers)).toContain(answerKey(magisterPairs(studyNamed(id))));
+  });
+
+  it("waldzell-3: no bead in the pack carries a facet of both, and the shortest way needs three", () => {
+    const solution = overThePack("study.waldzell-3");
+    expect(solution.answers).toEqual([]);
+    expect(solution.shortest).toBe(3);
+    const facetsOf = (name: string) =>
+      new Set(CASTALIA_PACK.concepts.find((concept) => concept.name === name)?.facets ?? []);
+    const just = facetsOf("Just Intonation");
+    const polyrhythm = facetsOf("Polyrhythm");
+    const bridges = CASTALIA_PACK.concepts.filter(
+      (concept) =>
+        concept.facets.some((facet) => just.has(facet)) &&
+        concept.facets.some((facet) => polyrhythm.has(facet))
+    );
+    expect(bridges).toEqual([]);
+  });
+
+  it.each([
+    { id: "study.eschholz-4", facet: "proportion", faculty: "matter" },
+    { id: "study.vicus-lusorum-3", facet: "incommensurability", faculty: "image" },
+  ])("$id: no bead of the faculty carries the facet, anywhere in the pack", ({ id, facet, faculty }) => {
+    expect(overThePack(id).answers).toEqual([]);
+    const carriers = CASTALIA_PACK.concepts.filter(
+      (concept) => concept.faculty === faculty && concept.facets.includes(toFacetId(facet))
+    );
+    expect(carriers).toEqual([]);
+  });
+});
+
+describe("Studies — solved by the Magister's line, or by silence", () => {
+  it.each(SOLVABLE.map((study) => ({ id: study.id, study })))(
+    "$id is solved by the Magister's own line, read as it is written",
+    ({ study }) => {
+      const session = studySession(study, magisterPairs(study));
+      const status = evaluateStudy(session.state, study, CASTALIA_LOOKUP, false);
+      if (status.kind !== "solved" || status.by !== "threads") {
+        throw new Error(`${study.id} was not solved by threads`);
+      }
+      expect(status.threadIds).toEqual(session.threadIds);
+      expect(status.explanation.steps).toEqual(magisterLine(study, STRUCTURE));
+      expect(status.explanation.count).toBe(studyCount(study.goal));
+      expect(status.marks).toEqual(MAGISTER_MARKS[study.id]);
+    }
+  );
+
+  it.each(SILENT.map((study) => ({ id: study.id, study })))(
+    "$id is solved by declaring silence, and says why",
+    ({ study }) => {
+      const status = evaluateStudy(studySession(study, []).state, study, CASTALIA_LOOKUP, true);
+      expect(status.kind === "solved" && status.by === "silence").toBe(true);
+      expect(describeStudyStatus(status, STUDY_NAMES)).toBe(SILENCE_REASONS[study.id]);
+    }
+  );
+
+  it.each(SILENT.map((study) => ({ id: study.id, study })))(
+    "$id is never solved by threads, whatever is woven",
+    ({ study }) => {
+      const status = evaluateStudy(
+        studySession(study, everyPair(study)).state,
+        study,
+        CASTALIA_LOOKUP,
+        false
+      );
+      expect(status).toEqual({ kind: "not-yet", statement: { kind: "no-answer-yet" } });
+    }
+  );
+
+  it.each(SOLVABLE.map((study) => ({ id: study.id, study })))(
+    "$id meets a declared silence with not yet, and nothing more",
+    ({ study }) => {
+      const status = evaluateStudy(studySession(study, []).state, study, CASTALIA_LOOKUP, true);
+      expect(status).toEqual({ kind: "not-yet", statement: { kind: "can-be-done" } });
+      expect(describeStudyStatus(status, STUDY_NAMES)).toBe(
+        "Not yet — it can be done with these beads."
+      );
+    }
+  );
+});
+
+describe("Studies — the honesty rules against the shipped pack", () => {
+  const sessionsFor = (study: StudyDefinition): readonly (readonly ConceptPair[])[] => [
+    [],
+    magisterPairs(study),
+    everyPair(study),
+  ];
+
+  it("R1: the full lookup and structure alone give byte-identical status", () => {
+    // The pack's full lookup — names, relations, prompts — narrowed only by the parameter type.
+    const full: ConceptStructureLookup = CASTALIA_LOOKUP;
+    for (const study of CASTALIA_STUDIES) {
+      for (const pairs of sessionsFor(study)) {
+        const state = studySession(study, pairs).state;
+        for (const declared of [false, true]) {
+          const status: StudyStatus = evaluateStudy(state, study, full, declared);
+          expect(JSON.stringify(status), study.id).toBe(
+            JSON.stringify(evaluateStudy(state, study, STRUCTURE, declared))
+          );
+        }
+      }
+    }
+  });
+
+  it("R2: every outcome documented, every one an Open Thread, or none — the same status", () => {
+    for (const study of CASTALIA_STUDIES) {
+      for (const pairs of sessionsFor(study)) {
+        for (const declared of [false, true]) {
+          const statuses = (["documented", "open-thread", undefined] as const).map((outcome) =>
+            JSON.stringify(
+              evaluateStudy(
+                studySession(study, pairs, outcome).state,
+                study,
+                CASTALIA_LOOKUP,
+                declared
+              )
+            )
+          );
+          expect(new Set(statuses).size, study.id).toBe(1);
+        }
+      }
+    }
+  });
+});
+
+describe("Studies — the validator refuses a Study that is not what it claims", () => {
+  const replace = (
+    id: string,
+    change: (study: StudyDefinition) => StudyDefinition
+  ): CastaliaPack => ({
+    ...CASTALIA_PACK,
+    studies: CASTALIA_STUDIES.map((study) => (study.id === id ? change(study) : study)),
+  });
+  const beadsOf = (...names: string[]): readonly ConceptId[] => names.map(bead);
+  const codes = (pack: CastaliaPack): readonly StudyErrorCode[] =>
+    validateStudies(pack).map((issue) => issue.code);
+  const ESCHHOLZ_1 = "study.eschholz-1";
+  const chiaroscuro = (): ConceptId => bead("Chiaroscuro");
+
+  const CASES: ReadonlyArray<{
+    readonly code: StudyErrorCode;
+    readonly pack: () => CastaliaPack;
+  }> = [
+    {
+      code: "study-id",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({ ...study, id: toStudyId("study.eschholz-one") })),
+    },
+    {
+      code: "study-bead-count",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          conceptIds: study.conceptIds.filter((id) => id !== chiaroscuro()),
+        })),
+    },
+    {
+      code: "study-bead-order",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({ ...study, conceptIds: [...study.conceptIds].reverse() })),
+    },
+    {
+      code: "study-unknown-concept",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          conceptIds: study.conceptIds.map((id) =>
+            id === chiaroscuro() ? toConceptId("image.nowhere") : id
+          ),
+        })),
+    },
+    {
+      code: "study-faculties",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          conceptIds: beadsOf(
+            "Fibonacci Sequence",
+            "Continuous Symmetry",
+            "The Möbius Band",
+            "Cantor's Diagonal Argument",
+            "Counterpoint",
+            "Just Intonation",
+            "Equal Temperament",
+            "The Overtone Series"
+          ),
+        })),
+    },
+    {
+      // Coupled Pendulums shares no facet with any bead of eschholz-1.
+      code: "study-distractor",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          conceptIds: study.conceptIds.map((id) =>
+            id === chiaroscuro() ? bead("Coupled Pendulums") : id
+          ),
+        })),
+    },
+    {
+      code: "study-duplicate-beads",
+      pack: () =>
+        replace("study.eschholz-2", (study) => ({
+          ...study,
+          conceptIds: studyNamed(ESCHHOLZ_1).conceptIds,
+        })),
+    },
+    {
+      code: "study-goal",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          goal: {
+            kind: "passage",
+            from: bead("Girih Tiling"),
+            to: bead("Counterpoint"),
+            threads: 2,
+          },
+        })),
+    },
+    {
+      // A line from the right bead to the right bead, through a bead that carries nothing.
+      code: "study-answer",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          answer: {
+            kind: "threads",
+            pairs: lineOf("The Möbius Band", "Fibonacci Sequence", "Counterpoint"),
+          },
+        })),
+    },
+    {
+      // The right threads, written from the wrong end.
+      code: "study-answer-line",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          answer: {
+            kind: "threads",
+            pairs: lineOf("Counterpoint", "Continuous Symmetry", "The Möbius Band"),
+          },
+        })),
+    },
+    {
+      code: "study-shorter-answer",
+      pack: () =>
+        replace(ESCHHOLZ_1, (study) => ({
+          ...study,
+          goal: {
+            kind: "passage",
+            from: bead("The Möbius Band"),
+            to: bead("Counterpoint"),
+            threads: 3,
+          },
+          answer: {
+            kind: "threads",
+            pairs: lineOf("The Möbius Band", "Chiaroscuro", "Continuous Symmetry", "Counterpoint"),
+          },
+        })),
+    },
+    {
+      // Six ways of three from Just Intonation to Polyrhythm, and none shorter.
+      code: "study-passage-answers",
+      pack: () =>
+        replace("study.waldzell-3", (study) => ({
+          ...study,
+          conceptIds: beadsOf(
+            "Fibonacci Sequence",
+            "Prime Numbers",
+            "The Fourier Series",
+            "Counterpoint",
+            "Polyrhythm",
+            "Just Intonation",
+            "The Overtone Series",
+            "Conservation of Energy"
+          ),
+          goal: {
+            kind: "passage",
+            from: bead("Just Intonation"),
+            to: bead("Polyrhythm"),
+            threads: 3,
+          },
+          answer: {
+            kind: "threads",
+            pairs: lineOf("Just Intonation", "Fibonacci Sequence", "Prime Numbers", "Polyrhythm"),
+          },
+        })),
+    },
+    {
+      code: "study-silence-answer",
+      pack: () =>
+        replace("study.eschholz-3", (study) => ({ ...study, answer: { kind: "silence" } })),
+    },
+    {
+      // Nothing here joins Just Intonation to Polyrhythm at all.
+      code: "study-silence-longer-way",
+      pack: () =>
+        replace("study.waldzell-3", (study) => ({
+          ...study,
+          conceptIds: beadsOf(
+            "Continuous Symmetry",
+            "The Möbius Band",
+            "Polyrhythm",
+            "Isorhythm",
+            "Just Intonation",
+            "Conservation of Energy",
+            "Coupled Pendulums",
+            "Linear Perspective"
+          ),
+        })),
+    },
+    {
+      code: "study-sequence",
+      pack: () => ({
+        ...CASTALIA_PACK,
+        studies: [
+          studyNamed("study.eschholz-2"),
+          studyNamed(ESCHHOLZ_1),
+          ...CASTALIA_STUDIES.slice(2),
+        ],
+      }),
+    },
+  ];
+
+  it("exercises every rule once", () => {
+    expect(CASES.map((entry) => entry.code).sort()).toEqual([...STUDY_ERROR_CODES].sort());
+  });
+
+  it.each(CASES)("rejects a Study that breaks $code", ({ code, pack }) => {
+    expect(codes(pack())).toContain(code);
+  });
+
+  it("reports exactly the broken rule where only one is broken", () => {
+    const exact: readonly StudyErrorCode[] = [
+      "study-id",
+      "study-bead-count",
+      "study-bead-order",
+      "study-unknown-concept",
+      "study-faculties",
+      "study-distractor",
+      "study-goal",
+      "study-answer",
+      "study-answer-line",
+      "study-passage-answers",
+      "study-silence-answer",
+      "study-silence-longer-way",
+      "study-sequence",
+    ];
+    for (const entry of CASES.filter((candidate) => exact.includes(candidate.code))) {
+      expect(codes(entry.pack()), entry.code).toEqual([entry.code]);
+    }
+  });
+
+  it("fails the pack, and so the build, on a broken Study", () => {
+    const broken = replace("study.eschholz-3", (study) => ({
+      ...study,
+      answer: { kind: "silence" },
+    }));
+    expect(
+      validateCastaliaPack(broken).errors.some(
+        (error) =>
+          error.startsWith("study.eschholz-3: ") && error.endsWith("[study-silence-answer]")
+      )
+    ).toBe(true);
+    expect(() => assertCastaliaPackValid(broken)).toThrow(/study-silence-answer/);
+  });
+
+  it("gives every broken rule a message a content author can act on", () => {
+    for (const entry of CASES) {
+      for (const issue of validateStudies(entry.pack())) {
+        expect(issue.message.trim().length, entry.code).toBeGreaterThan(10);
+        expect(issue.subject, entry.code).toMatch(/^(study\.|chapter )/);
+      }
+    }
   });
 });
