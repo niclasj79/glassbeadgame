@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import type { TestSessionSnapshot } from "../../src/runtime/testMode";
 import {
   PICKS,
   SECOND_SOURCE_ID,
@@ -588,5 +589,146 @@ test.describe("the focus view", () => {
         { timeout: 20_000 }
       )
       .toBe(true);
+  });
+});
+
+/**
+ * STUDIES (M9-001), BY KEYBOARD, IN A REAL BROWSER.
+ *
+ * A Study is an ordinary session over authored beads (STUDIES-SPEC §8), so the
+ * same verbs weave it; what it adds is a brief, a rule that checks it, the
+ * silence answer and one solved moment. Everything here is reached by the
+ * keyboard, and the adapter only starts the session and reads what the
+ * evaluator said.
+ */
+test.describe("Studies", () => {
+  const MOBIUS = "measure.mobius-band";
+  const CONTINUOUS_SYMMETRY = "measure.continuous-symmetry";
+  const COUNTERPOINT = "sound.counterpoint";
+  const ESCHHOLZ_1_BEADS = [
+    "measure.fibonacci-sequence",
+    CONTINUOUS_SYMMETRY,
+    MOBIUS,
+    "measure.cantor-diagonal",
+    COUNTERPOINT,
+    "sound.just-intonation",
+    "matter.conservation-of-energy",
+    "image.chiaroscuro",
+  ];
+  const STUDY_SURFACE_FORBIDDEN = /\d|%|\bscore\b|\bpoints?\b|\brank\b|\bwrong\b/i;
+
+  async function openStudy(page: Page, studyId: string): Promise<TestSessionSnapshot> {
+    await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato&reducedMotion=1");
+    await page.waitForFunction(() => Boolean(window.__gbgTest));
+    return page.evaluate((id) => window.__gbgTest!.startStudy(id), studyId);
+  }
+
+  async function studyStatus(page: Page) {
+    return page.evaluate(() => window.__gbgTest!.studyStatus());
+  }
+
+  /** Attend, lock, and hold Echo to weave — the keyboard's whole route. */
+  async function weaveByKeyboard(page: Page, fromId: string, toId: string): Promise<void> {
+    await page.getByTestId(`bead-control-${fromId}`).focus();
+    await page.keyboard.press("Enter");
+    await waitForDraft(page, "attending");
+    await page.getByTestId(`bead-control-${toId}`).focus();
+    await page.keyboard.press("Enter");
+    await waitForDraft(page, "locked");
+    await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 15_000 });
+    await page.keyboard.down("Enter");
+    await expect.poll(async () => (await snapshot(page)).weaving).toBe(true);
+    await advanceClock(page, 250);
+    await page.keyboard.up("Enter");
+    await waitForDraft(page, "inactive");
+  }
+
+  test("a passage is woven by keyboard, and the plate reads both lines", async ({ page }) => {
+    const started = await openStudy(page, "study.eschholz-1");
+    // An ordinary session, built without the draw (§8).
+    expect(started.beadIds).toEqual(ESCHHOLZ_1_BEADS);
+    expect(started.domainSession.seed).toBe("study:study.eschholz-1");
+    expect(started.domainSession.sessionId).toBe("session:castalia.v1:study:study.eschholz-1");
+    expect(started.domainSession.eventTypes).toEqual(["session.started"]);
+
+    // Study mode: the brief is pinned, and there is no Conclude and no Lens.
+    await expect(page.getByTestId("study-brief")).toContainText(
+      "From The Möbius Band to Counterpoint in two threads"
+    );
+    await expect(page.getByRole("button", { name: "Conclude" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Lens/ })).toHaveCount(0);
+
+    await weaveByKeyboard(page, MOBIUS, CONTINUOUS_SYMMETRY);
+    await advanceClock(page, 5_000);
+    expect((await studyStatus(page)).kind).toBe("not-yet");
+    await expect(page.getByTestId("study-plate")).toHaveCount(0);
+
+    await weaveByKeyboard(page, CONTINUOUS_SYMMETRY, COUNTERPOINT);
+    // The solved moment follows the commit's own moment on the cue clock.
+    await advanceClock(page, 8_000);
+    await expect(page.getByTestId("study-plate")).toBeVisible({ timeout: 15_000 });
+    expect(await studyStatus(page)).toMatchObject({ kind: "solved", by: "threads", plateOpen: true });
+    await expect(page.getByTestId("study-plate-player-line")).toContainText("Continuous Symmetry");
+    await expect(page.getByTestId("study-plate-magister-line")).toContainText("Counterpoint");
+    await expect(page.getByTestId("study-plate-counts")).toBeVisible();
+    await expect(page.getByTestId("study-plate-marks")).toContainText(/economical/i);
+    await expect(page.getByTestId("study-plate-marks")).not.toContainText(STUDY_SURFACE_FORBIDDEN);
+
+    // Again: a new session with the same seed, and nothing carried over.
+    await page.getByTestId("study-plate-again").focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(async () => (await snapshot(page)).domainSession.eventCount).toBe(1);
+    const again = await snapshot(page);
+    expect(again.domainSession.sessionId).toBe(started.domainSession.sessionId);
+    expect(again.domainSession.seed).toBe(started.domainSession.seed);
+    expect((await studyStatus(page)).plateOpen).toBe(false);
+  });
+
+  test("silence answers a Study that cannot be done, and only that one", async ({ page }) => {
+    await openStudy(page, "study.eschholz-1");
+    await page.getByTestId("study-declare-silence-mirror").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-not-yet")).toHaveText(
+      "Not yet — it can be done with these beads."
+    );
+    expect(await studyStatus(page)).toMatchObject({
+      kind: "not-yet",
+      notYet: "can-be-done",
+      plateOpen: false,
+    });
+    await advanceClock(page, 5_000);
+    await expect(page.getByTestId("study-plate")).toHaveCount(0);
+
+    await openStudy(page, "study.eschholz-4");
+    await page.getByTestId("study-declare-silence-mirror").focus();
+    await page.keyboard.press("Enter");
+    await advanceClock(page, 5_000);
+    await expect(page.getByTestId("study-plate")).toBeVisible({ timeout: 15_000 });
+    expect(await studyStatus(page)).toMatchObject({ kind: "solved", by: "silence" });
+    await expect(page.getByTestId("study-plate-player-line")).toContainText("Proportion");
+    await expect(page.getByTestId("study-plate-counts")).toHaveCount(0);
+  });
+
+  test("the Studies door leads to the list and a Study opens without the threshold", async ({
+    page,
+  }) => {
+    await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato&reducedMotion=1");
+    await page.waitForFunction(() => Boolean(window.__gbgTest));
+    await page.getByTestId("title-studies").focus();
+    await page.keyboard.press("Enter");
+    const list = page.getByTestId("studies-screen");
+    await expect(list).toBeVisible({ timeout: 15_000 });
+    for (const chapter of ["Eschholz", "Waldzell", "Vicus Lusorum"]) {
+      await expect(list).toContainText(chapter);
+    }
+    await expect(list).not.toContainText(STUDY_SURFACE_FORBIDDEN);
+    await page.getByTestId("study-begin-study.waldzell-4").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-brief")).toContainText(
+      "From Girih Tiling to Polyrhythm in two threads",
+      { timeout: 15_000 }
+    );
+    await expect(page.getByTestId("bead-control-image.girih-tiling")).toBeAttached();
+    expect((await studyStatus(page)).studyId).toBe("study.waldzell-4");
   });
 });
