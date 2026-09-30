@@ -617,6 +617,26 @@ export interface SimpleVoiceOptions {
 }
 
 /**
+ * What `playNote` fills in for an option left out. One table, so that a caller
+ * which needs to know how long a note sounds reads the numbers it is played with.
+ */
+const NOTE_DEFAULTS = Object.freeze({
+  gain: 0.2,
+  attack: 0.02,
+  hold: 0.1,
+  release: 1.2,
+});
+
+/** How long a `playNote` voice sounds, attack through release, in seconds. */
+export function noteSeconds(options: SimpleVoiceOptions = {}): number {
+  return (
+    (options.attack ?? NOTE_DEFAULTS.attack) +
+    (options.hold ?? NOTE_DEFAULTS.hold) +
+    (options.release ?? NOTE_DEFAULTS.release)
+  );
+}
+
+/**
  * The convenience form, for callers that only want a note and sensible
  * defaults. It is a thin adapter over `playVoice()` and adds no synthesis of its
  * own — there is still exactly one place a note is born.
@@ -631,11 +651,11 @@ export function playNote(
   return playVoice(ctx, dest, {
     timbre,
     frequency,
-    gain: options.gain ?? 0.2,
+    gain: options.gain ?? NOTE_DEFAULTS.gain,
     at: options.at ?? ctx.currentTime,
-    attack: options.attack ?? 0.02,
-    hold: options.hold ?? 0.1,
-    release: options.release ?? 1.2,
+    attack: options.attack ?? NOTE_DEFAULTS.attack,
+    hold: options.hold ?? NOTE_DEFAULTS.hold,
+    release: options.release ?? NOTE_DEFAULTS.release,
     detuneCents: options.detuneCents,
     floorGain: options.floorGain,
     pan: options.pan,
