@@ -5,6 +5,7 @@ import {
 } from "../../content/castalia/studies";
 import {
   STUDY_CHAPTERS,
+  describeStudyStatus,
   renderStudyBrief,
   type StudyDefinition,
   type StudyStatus,
@@ -243,6 +244,13 @@ const plate = (): StudyPlateModel | null => {
   return model;
 };
 
+/**
+ * A *not yet* names nothing and hints nothing (§5): the renderer is handed the
+ * pack's names only because its signature asks for them.
+ */
+const notYetLine = (kind: "no-answer-yet" | "can-be-done"): string =>
+  describeStudyStatus({ kind: "not-yet", statement: { kind } }, studyNames);
+
 export const studies: StudiesRuntime = Object.freeze({
   chapters,
   briefOf,
@@ -252,4 +260,5 @@ export const studies: StudiesRuntime = Object.freeze({
   leave,
   declareSilence: () => progression.declareSilence(),
   plate,
+  notYetLine,
 });

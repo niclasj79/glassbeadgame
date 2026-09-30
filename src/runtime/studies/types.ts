@@ -56,4 +56,9 @@ export interface StudiesRuntime {
   readonly declareSilence: () => void;
   /** The plate for the current solved status, or null when not solved. */
   readonly plate: () => StudyPlateModel | null;
+  /**
+   * The words of a *not yet*: "Not yet — it can be done with these beads." It
+   * names nothing and hints nothing (§5); the margin and the caption say it.
+   */
+  readonly notYetLine: (kind: "no-answer-yet" | "can-be-done") => string;
 }

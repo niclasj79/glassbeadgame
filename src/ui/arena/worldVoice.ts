@@ -53,14 +53,12 @@ import type { CueType, PresentationCue } from "@/runtime/cues";
  * it is still a second answer. The margin's line and the plate are what the
  * eye reads of them; this is what the ear is told, once per answer.
  *
- * The two cue types are added to `CuePayloadMap` by the Study runtime. They
- * are named here as strings so this table does not depend on the order the
- * two halves of M9-001 land in; nothing but the names is assumed.
+ * Both cue types are in `CuePayloadMap`, so the names are checked.
  */
-const STUDY_ANSWERS = Object.freeze([
+const STUDY_ANSWERS: readonly CueType[] = Object.freeze([
   "study.solved",
   "study.not-yet",
-]) as readonly string[] as readonly CueType[];
+] as const);
 
 /**
  * Cues whose caption is the world answering rather than the player's own action

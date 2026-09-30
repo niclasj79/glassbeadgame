@@ -1,4 +1,3 @@
-import { describeStudyStatus, type StudyNames } from "@/domain/studies";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { studies, type StudyChapterListing } from "@/runtime/studies";
 import type { StudyNotYetAnswer, StudyNotYetKind } from "@/state/studies";
@@ -32,25 +31,11 @@ export interface StudyNoteModel {
 }
 
 /**
- * The *not yet* statement names nothing — it never names a bead and never
- * hints (§5) — so the domain's renderer is given no names to use.
- */
-const unnamed = (id: string): string => id;
-const NAMELESS: StudyNames = Object.freeze({
-  conceptName: unnamed,
-  facetName: unnamed,
-  facultyName: unnamed,
-});
-
-/**
- * The words of a *not yet*, from the one function that says them
- * (`describeStudyStatus`): "Not yet — it can be done with these beads."
+ * The words of a *not yet*, from the runtime that says them for the caption
+ * too: "Not yet — it can be done with these beads."
  */
 export function notYetLine(kind: StudyNotYetKind): string {
-  return describeStudyStatus(
-    { kind: "not-yet", statement: { kind } },
-    NAMELESS
-  );
+  return studies.notYetLine(kind);
 }
 
 /** The name of the chapter a Study stands in, or null for an id no chapter holds. */
