@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -571,6 +571,10 @@ the absence of counters; they cannot establish that Studies are fun. That
 judgement is the milestone gate.
 
 ## Implementation notes
+
+- Accepted and merged in PR #62 on 2026-09-30. The exact `main` merge commit
+  `ee9402b` passed Quality Gates run `36729346643` and Pages deployment run
+  `36730339337`.
 
 - Directly assigned by the game design director on 2026-09-30 after ADR-015,
   with the packet, the specification and the roadmap entry reviewed in one
