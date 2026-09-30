@@ -31,6 +31,12 @@ export const COMFORT = Object.freeze({
   maxBeatHz: 6.5,
   /** No luminance flicker above 3 Hz at any amplitude. */
   maxLuminanceHz: 3,
+  /**
+   * The most the world's breath may move the camera's field of view, as a
+   * share of it (ADR-016): 0.6 %, a quarter of a degree at 42°. Felt, never
+   * watched; off under reduced motion and on the engraved tier.
+   */
+  cameraBreath: 0.006,
   /** Instability persists, but its amplitude decays to a floor by ~12 s. */
   unrestSettleSeconds: 12,
   /** The floor the unrest decays to — legible, never resolved to zero. */

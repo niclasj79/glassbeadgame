@@ -106,9 +106,38 @@ export interface AudioContentLookup {
 export interface AudioSink {
   /** Absolute time in the sink's clock — the Web Audio clock in production. */
   readonly now: () => number;
-  /** The next musically sensible moment at or after now. */
+  /**
+   * The next musically sensible moment at or after now: the answer grid, the
+   * eighth of the world's slot, where relations, the attended figure, the weave
+   * landing, ensembles, Attunement and the conclusion begin.
+   */
   readonly quantize: () => number;
+  /**
+   * THE HAND GRID (ADR-016): the next point on the sixteenth of the world's slot
+   * at least `leadSeconds` ahead of now, on the sink's clock. The focus lane —
+   * sighting, lock, preview, reopen — begins there, so what the player hears
+   * while looking lands on the same grid as the sounds their hand makes. A sink
+   * that keeps no grid answers "soon"; the director never begins a focus voice
+   * sooner than the lead, whatever the sink answers.
+   */
+  readonly quantizeHand: (leadSeconds: number) => number;
+  /**
+   * The world's slot, in seconds. The director's rhythm unit is its sixteenth
+   * (`unitSecondsFor`), read per plan, so a motif keeps the gait of the world it
+   * is heard in rather than Castalia's in every world.
+   */
+  readonly slotSeconds: () => number;
   readonly play: (plan: VoicePlan, atSeconds: number) => void;
+  /**
+   * THE SCORE AS WRITTEN, FOR THE EYE (ADR-016).
+   *
+   * Every plan the director schedules is handed over here whole, at the time it
+   * is scheduled for and before it is played — at every intensity, silent
+   * included, because muting strips the sound and never the schedule. The
+   * production sink puts its notes on the conductor, which the scene reads as
+   * light on the beads they belong to. Nothing heard depends on it.
+   */
+  readonly conduct: (plan: VoicePlan, atSeconds: number) => void;
   /** Density and bed multipliers. See `ambient.setSpace`. */
   readonly setSpace: (density: number, bed: number) => void;
   /** Thread voices currently able to speak. Decides which kind of space to open. */
@@ -199,8 +228,6 @@ export interface AudioDirectorOptions {
   readonly sink: AudioSink;
   readonly lookup: AudioContentLookup;
   readonly mode?: WorldMode;
-  /** Phrase slot length for the active world. Sets the rhythmic unit. */
-  readonly slotSeconds?: number;
   readonly intensity?: AudioIntensity;
 }
 
@@ -222,6 +249,7 @@ export interface AudioDirector {
   readonly reset: () => void;
 }
 
+/** A sink that reports no usable slot keeps the two seconds the director always assumed. */
 const DEFAULT_SLOT_SECONDS = 2;
 
 // ─── Small structural plans ─────────────────────────────────────────────────
@@ -350,8 +378,19 @@ export function createAudioDirector(
 ): AudioDirector {
   const { sink, lookup } = options;
   const mode = options.mode ?? CASTALIA_MODE;
-  const unitSeconds = unitSecondsFor(options.slotSeconds ?? DEFAULT_SLOT_SECONDS);
   const names: AudioNames = { conceptName: (id) => lookup.conceptName(id) };
+
+  /**
+   * One rhythm unit in the world in the room: a sixteenth of its slot (ADR-016).
+   * Read per plan from the sink, which knows the world; a slot that is not a
+   * positive number of seconds is no slot, and the director keeps its old two.
+   */
+  const rhythmUnit = (): number => {
+    const slot = sink.slotSeconds();
+    return unitSecondsFor(
+      Number.isFinite(slot) && slot > 0 ? slot : DEFAULT_SLOT_SECONDS
+    );
+  };
 
   let intensity: AudioIntensity = options.intensity ?? "full";
   let attended: string | null = null;
@@ -417,14 +456,29 @@ export function createAudioDirector(
     for (const listener of [...captionListeners]) listener(caption);
   };
 
+  /**
+   * Hand a plan to the sink at `atSeconds`: the plan as written, to be conducted
+   * (ADR-016), and then what intensity leaves of it, to be heard. The score the
+   * scene reads is the written one at every intensity, the way the caption is:
+   * a muted player sees the same notes land that a hearing player hears, and an
+   * unresolved outcome, heard thinner, lights exactly as a documented one does
+   * (CAV-006).
+   */
+  const schedule = (
+    written: VoicePlan,
+    heard: VoicePlan,
+    atSeconds: number
+  ): void => {
+    sink.conduct(written, atSeconds);
+    if (heard.notes.length > 0) sink.play(heard, atSeconds);
+  };
+
   const emit = (plan: VoicePlan, atSeconds: number): void => {
     // The caption describes the plan as *planned*, before intensity thins it.
     // A reduced-intensity player is told the same thing a full-intensity player
     // is told; what changes is how much of it they hear.
     say(plan.id, describeVoicePlan(plan, names), plan.kind, plan.meta.outcome);
-    const rendered = applyIntensity(plan, intensity);
-    if (rendered.notes.length === 0) return;
-    sink.play(rendered, atSeconds);
+    schedule(plan, applyIntensity(plan, intensity), atSeconds);
   };
 
   const rememberThread = (
@@ -457,7 +511,7 @@ export function createAudioDirector(
       intention,
       a: source(pair[0]),
       b: source(pair[1]),
-      unitSeconds,
+      unitSeconds: rhythmUnit(),
       ambientGain: ambientGain(),
       bedGain: bedGain(),
       // Only a documented relation closes (CAV-006). The other two states are
@@ -485,14 +539,17 @@ export function createAudioDirector(
       planId: `attention:${conceptId}`,
       mode,
       attended: source(conceptId),
-      unitSeconds,
+      unitSeconds: rhythmUnit(),
       ambientGain: ambientGain(),
       activeThreadCount: sink.activeVoiceCount(),
     });
     setSpace(plan.densityScale, plan.bedGainScale);
     say(plan.foreground.id, describeAttentionSpace(plan, names), "attention");
-    const rendered = applyIntensity(plan.foreground, intensity);
-    if (rendered.notes.length > 0) sink.play(rendered, sink.quantize());
+    schedule(
+      plan.foreground,
+      applyIntensity(plan.foreground, intensity),
+      sink.quantize()
+    );
     return plan;
   };
 
@@ -501,10 +558,21 @@ export function createAudioDirector(
   // What the score says while the player looks, chooses, and returns. The plans
   // are `focusVoicing.ts`'s; this is the part that has to remember what is still
   // sounding and decide what a new voice must do about it. Everything begins on
-  // the sink's own clock, a lead after the cue, so that a note is never already
-  // in the past by the time the scheduler's next tick finds it.
+  // the sink's own clock, on the hand grid (ADR-016) and at least a lead after
+  // the cue, so that a note is never already in the past by the time the
+  // scheduler's next tick finds it.
 
   const focusLane = createFocusLane();
+
+  /**
+   * Where a focus voice may begin: the first point on the hand grid at least
+   * `lead` ahead — and never sooner than `lead`, whatever the sink's grid says.
+   * The lead is scheduling room, and it is also the time a superseded voice takes
+   * to fade (`FOCUS_VOICING`): a voice begun inside it would begin under the one
+   * it replaces, and the lane would duck it or turn it away.
+   */
+  const handOnset = (now: number, lead: number): number =>
+    Math.max(now + lead, sink.quantizeHand(lead));
 
   /**
    * The last sighting handed to the sink: when it begins, and the moment its
@@ -545,13 +613,18 @@ export function createAudioDirector(
     onset: number
   ): boolean => {
     const rendered = applyIntensity(plan, intensity);
-    // At silent intensity there is nothing to hand over. The moment is still
-    // captioned, by the cue layer.
-    if (rendered.notes.length === 0) return false;
+    // At silent intensity there is nothing to hand over to be heard, and nothing
+    // takes the lane, so no later answer is spaced or ducked on its account. The
+    // moment is still captioned, by the cue layer, and still on the score: its
+    // notes are conducted, as a muted player's world still keeps time.
+    if (rendered.notes.length === 0) {
+      sink.conduct(plan, onset);
+      return false;
+    }
     const admission = admit(rendered, focusLane, onset, bedGain());
     if (!admission.play) return false;
     const shaped = scalePlanGain(rendered, admission.scale);
-    sink.play(shaped, onset);
+    schedule(plan, shaped, onset);
     focusLane.add({ id: shaped.id, kind, onsetSeconds: onset, plan: shaped });
     return true;
   };
@@ -572,7 +645,7 @@ export function createAudioDirector(
       if (voice.retiredAt === null) retireFocusVoice(voice.id, now);
     }
     lastSighting = null;
-    speakOnLane(kind, plan, now + FOCUS_VOICING.leadSeconds);
+    speakOnLane(kind, plan, handOnset(now, FOCUS_VOICING.leadSeconds));
   };
 
   /**
@@ -600,7 +673,7 @@ export function createAudioDirector(
       mode,
       sighted: source(conceptId),
       band: sighted.band,
-      unitSeconds,
+      unitSeconds: rhythmUnit(),
       ambientGain: ambientGain(),
     });
     const live = focusLane.live(now);
@@ -610,7 +683,7 @@ export function createAudioDirector(
       return;
     }
 
-    const earliest = now + FOCUS_VOICING.leadSeconds;
+    const earliest = handOnset(now, FOCUS_VOICING.leadSeconds);
     let onset = earliest;
     let anchor = Number.NEGATIVE_INFINITY;
     const previous = lastSighting;
@@ -621,8 +694,9 @@ export function createAudioDirector(
       const spaced = anchor + FOCUS_VOICING.sighting.windowSeconds;
       if (!canTakeBack) {
         if (earliest < spaced) return;
-      } else {
-        onset = Math.max(earliest, spaced);
+      } else if (earliest < spaced) {
+        // Deferred to the end of the window, and onto the hand grid from there.
+        onset = handOnset(now, spaced - now);
       }
     }
 
@@ -654,7 +728,7 @@ export function createAudioDirector(
       planId: `attunement:${attunementCycle}`,
       mode,
       threads,
-      unitSeconds,
+      unitSeconds: rhythmUnit(),
       ambientGain: ambientGain(),
       cycleIndex: attunementCycle,
     });
@@ -665,8 +739,11 @@ export function createAudioDirector(
     say(`attunement:${attunementCycle}`, describeAttunement(plan, names), "attunement");
     const start = sink.quantize();
     for (const channel of plan.channels) {
-      const rendered = applyIntensity(channel.plan, intensity);
-      if (rendered.notes.length > 0) sink.play(rendered, start + channel.atSeconds);
+      schedule(
+        channel.plan,
+        applyIntensity(channel.plan, intensity),
+        start + channel.atSeconds
+      );
       // Spec §13's first clause, made visible: the world can now show which
       // single thread is speaking, because the director says so on the same
       // clock it scheduled the notes on. Published even at silent intensity —
@@ -701,8 +778,11 @@ export function createAudioDirector(
     say(`conclusion:${plan.sessionId}`, describeConclusion(plan, names), "conclusion");
     const start = sink.quantize();
     for (const section of plan.sections) {
-      const rendered = applyIntensity(section.plan, intensity);
-      if (rendered.notes.length > 0) sink.play(rendered, start + section.atSeconds);
+      schedule(
+        section.plan,
+        applyIntensity(section.plan, intensity),
+        start + section.atSeconds
+      );
     }
     /*
      * THE ENDING IS AN ENDING.
@@ -757,7 +837,7 @@ export function createAudioDirector(
             mode,
             attended: source(a),
             second: source(b),
-            unitSeconds,
+            unitSeconds: rhythmUnit(),
             ambientGain: ambientGain(),
           })
         );
@@ -780,7 +860,7 @@ export function createAudioDirector(
             a: source(a),
             b: source(b),
             weight: chosen ? "chosen" : "hover",
-            unitSeconds,
+            unitSeconds: rhythmUnit(),
             ambientGain: ambientGain(),
             bedGain: bedGain(),
           })
@@ -803,7 +883,7 @@ export function createAudioDirector(
             a: source(a),
             b: source(b),
             weight: "recall",
-            unitSeconds,
+            unitSeconds: rhythmUnit(),
             ambientGain: ambientGain(),
             bedGain: bedGain(),
           })
@@ -889,7 +969,9 @@ export function createAudioDirector(
           intensity === "silent" ? "silent" : "reduced"
         );
         const at = sink.quantize();
-        if (thinned.notes.length > 0) sink.play(thinned, at);
+        // Heard thinned; conducted as written, so its beads light as a
+        // documented relation's do.
+        schedule(plan, thinned, at);
         // The strand lights for the same span as any other outcome. An
         // Unresolved thread is quieter, never dimmer (CAV-006).
         lightThread(threadId, at, planDurationSeconds(plan.notes, plan.beatings));
@@ -904,7 +986,7 @@ export function createAudioDirector(
             `motif:${String(cue.payload.motifKindId)}:${sources.length}`,
             mode,
             sources,
-            unitSeconds,
+            rhythmUnit(),
             ambientGain()
           ),
           sink.quantize()
@@ -924,7 +1006,7 @@ export function createAudioDirector(
             `solved:${cue.payload.studyId}`,
             mode,
             sources,
-            unitSeconds,
+            rhythmUnit(),
             ambientGain()
           ),
           sink.quantize()

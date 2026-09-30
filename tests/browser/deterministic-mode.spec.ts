@@ -18,6 +18,7 @@ import {
   sweepTo,
   waitForDraft,
   weaveGoldenPairByKeyboard,
+  SETTLE_TIMEOUT_MS,
 } from "./support/focusView";
 
 /**
@@ -797,5 +798,91 @@ test.describe("Studies", () => {
     await expect(page.getByTestId("studies-screen")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("study-begin-study.eschholz-1")).toBeVisible();
     expect(errors()).toEqual([]);
+  });
+});
+
+test.describe("the conductor", () => {
+  const SLOT_MS = 2000;
+  const TAU = Math.PI * 2;
+
+  async function musicalTime(page: Page) {
+    return page.evaluate(() => window.__gbgTest!.musicalTime());
+  }
+
+  async function beadLight(page: Page, conceptId: string) {
+    return page.evaluate((id) => window.__gbgTest!.beadLight(id), conceptId);
+  }
+
+  /** Dark in the glass, or lit by the idle score, which keeps its own clock. */
+  async function darkOrKindled(page: Page, conceptId: string): Promise<boolean> {
+    const light = await beadLight(page, conceptId);
+    return light !== null && (light.written < 0.1 || light.kindled);
+  }
+
+  test("the world keeps one time: the grid, a note's light and the breath (ADR-016)", async ({ page }) => {
+    await openSession(page);
+    // The grid is armed with the world's slot on the controlled clock, by the
+    // room lifecycle, once the arena is up.
+    await expect.poll(async () => (await musicalTime(page)).armed).toBe(true);
+    const armed = await musicalTime(page);
+    expect(armed.slotSeconds).toBeCloseTo(SLOT_MS / 1000, 9);
+    // The hand grid and the answer grid nest: the next hand point is at least
+    // the lead ahead and within a sixteenth of it, the next answer point within
+    // an eighth, and the two differ by whole sixteenths.
+    expect(armed.nextHandAt - armed.now).toBeGreaterThanOrEqual(0.03 - 1e-9);
+    expect(armed.nextHandAt - armed.now).toBeLessThanOrEqual(0.03 + SLOT_MS / 16_000 + 1e-9);
+    expect(armed.nextAnswerAt - armed.now).toBeLessThanOrEqual(0.03 + SLOT_MS / 8_000 + 1e-9);
+    const sixteenths = (armed.nextAnswerAt - armed.nextHandAt) / (SLOT_MS / 16_000);
+    expect(Math.abs(sixteenths - Math.round(sixteenths))).toBeLessThan(1e-6);
+
+    // Half a slot on, the slot phase has advanced by half.
+    await advanceClock(page, SLOT_MS / 2);
+    const later = await musicalTime(page);
+    expect((((later.slotPhase - armed.slotPhase) % 1) + 1) % 1).toBeCloseTo(0.5, 6);
+
+    // The breath crests on a slot boundary: move the clock to the next crest.
+    const toCrest = (((Math.PI / 2 - later.breathPhase) % TAU) + TAU) % TAU;
+    await advanceClock(page, Math.round((toCrest / TAU) * 4 * SLOT_MS));
+    const crest = await musicalTime(page);
+    expect(Math.sin(crest.breathPhase)).toBeGreaterThan(0.999);
+    expect(Math.min(crest.slotPhase, 1 - crest.slotPhase)).toBeLessThan(0.002);
+
+    // A note scheduled on a concept lights that bead from its onset, and only
+    // that bead. The glass takes it through the kindling lane on the next frame.
+    await beadPoint(page, SOURCE_ID);
+    await expect
+      .poll(() => darkOrKindled(page, SOURCE_ID), { timeout: SETTLE_TIMEOUT_MS })
+      .toBe(true);
+    expect((await beadLight(page, SOURCE_ID))?.note).toBe(0);
+    await page.evaluate(
+      (id) => window.__gbgTest!.conduct({ conceptId: id, inMs: 200, durationMs: 600 }),
+      SOURCE_ID
+    );
+    await advanceClock(page, 100);
+    expect((await beadLight(page, SOURCE_ID))?.note).toBe(0);
+    await advanceClock(page, 160);
+    expect((await beadLight(page, SOURCE_ID))?.note).toBeCloseTo(1, 6);
+    await expect
+      .poll(async () => (await beadLight(page, SOURCE_ID))?.written ?? 0, {
+        timeout: SETTLE_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(0.9);
+    expect((await beadLight(page, TARGET_ID))?.note).toBe(0);
+    // Past its decay the note is dark again, in the model and in the glass.
+    await advanceClock(page, 700);
+    expect((await beadLight(page, SOURCE_ID))?.note).toBeCloseTo(0, 6);
+    await expect
+      .poll(() => darkOrKindled(page, SOURCE_ID), { timeout: SETTLE_TIMEOUT_MS })
+      .toBe(true);
+  });
+
+  test("leaving to the Studies list disarms the grid", async ({ page }) => {
+    await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato&reducedMotion=1");
+    await page.waitForFunction(() => Boolean(window.__gbgTest));
+    await page.evaluate(() => window.__gbgTest!.startStudy("study.eschholz-1"));
+    await expect.poll(async () => (await musicalTime(page)).armed).toBe(true);
+    await page.getByTestId("study-leave").click();
+    await expect(page.getByTestId("studies-screen")).toBeVisible({ timeout: 15_000 });
+    await expect.poll(async () => (await musicalTime(page)).armed).toBe(false);
   });
 });

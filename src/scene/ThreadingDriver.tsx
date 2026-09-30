@@ -16,6 +16,8 @@ import { emitBurst, frameState, frameStateStage } from "./frameState";
 import { arcPoint } from "./curves";
 import { threadCurves } from "./threadPicking";
 import { attunementInvitation } from "@/audio/sfx";
+import { conductor } from "@/audio/conductor";
+import { idleClock, kindling } from "./idle";
 import {
   attachWorldDirectors,
   createHapticsDirector,
@@ -387,6 +389,32 @@ export function ThreadingDriver() {
         return screenOf(v);
       },
       beadIds: () => [...frameState.beadIndex.keys()],
+      musicalTime: () => ({ now: conductor.now(), ...conductor.report() }),
+      conduct: ({ conceptId, inMs, durationMs, weight = 1 }) =>
+        conductor.sound({
+          conceptId,
+          at: conductor.now() + inMs / 1000,
+          duration: durationMs / 1000,
+          weight,
+        }),
+      beadLight: (id: string) => {
+        const i = frameState.beadIndex.get(id);
+        if (i === undefined) return null;
+        // The idle score's kindling is a pure function of the idle clock and
+        // the draw, so whether it has had this bead lately can be asked again
+        // here — the eased lane it leaves behind lasts about a second.
+        const ids = useStore.getState().session?.beadIds ?? [];
+        const instance = ids.indexOf(id);
+        const now = idleClock();
+        let kindled = false;
+        for (let back = 0; back <= 1.5; back += 0.25) {
+          if (kindling(now - back, ids.length).index === instance) {
+            kindled = true;
+            break;
+          }
+        }
+        return { written: frameState.kindling[i], note: conductor.light(id), kindled };
+      },
       canonicalEventLog: () => {
         const eventLog = domainSessionStore.getState().eventLog;
         if (!eventLog) throw new Error("canonical event log is unavailable");

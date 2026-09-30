@@ -19,9 +19,14 @@ export const frameState = {
   timeScaleTarget: 1,
   /** Dilated elapsed time — advances by dt * timeScale; drives bobbing and drift. */
   clock: 0,
-  /** The Breath: one ~0.1 Hz meditative oscillation shared by bloom, halos,
-   *  lattice, and (via a throttled bridge) the ambient bus. Radians. */
+  /** The Breath: one slow oscillation shared by bloom, halos, lattice, the
+   *  camera's lens, and (via a throttled bridge) the ambient bus. While the
+   *  conductor keeps the world's time it is the conductor's four-slot breath,
+   *  cresting on the bar (ADR-016); without a grid it runs at ~0.1 Hz of
+   *  dilated time. Radians. */
   breathPhase: 0,
+  /** How the breath catches the conductor's phase when the grid arms. */
+  breathFollow: { offset: 0, armed: false } as BreathFollow,
   /** 0..1 — eased down during reveals and to 0 under reduced motion. */
   breathDepth: 1,
   /** True while a layout morph (lens toggle) is in flight; threads re-sample curves. */
@@ -64,6 +69,14 @@ export const frameState = {
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
   /**
+   * The kindling lane as the glass was last handed it, one per bead, indexed
+   * like `beadIndex`: the idle score's light, the opening's gather and the
+   * light of the bead's own scheduled notes (ADR-016), folded by `max`.
+   * Written by Beads every frame so the test adapter can read back what was
+   * drawn; nothing decides anything from it.
+   */
+  kindling: new Float32Array(0),
+  /**
    * False while a scripted camera transit is in flight, and from the moment a
    * new layout is published until the first frame has been drawn with it. A
    * bead's screen position is meaningless before then — it would be reported
@@ -84,6 +97,7 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.positions = initial.slice();
   frameState.targets = initial.slice();
   frameState.rendered = initial.slice();
+  frameState.kindling = new Float32Array(beadIds.length);
   frameState.snapId = null;
   frameState.beadIndex = new Map(beadIds.map((id, i) => [id, i]));
   frameState.morphActive = false;
@@ -100,6 +114,71 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.cameraSettled = false;
   frameState.framesSinceLayout = 0;
   frameState.idleSince = presentationNow();
+}
+
+/** What the breath follows while the world keeps time: the conductor's grid. */
+export interface BreathGrid {
+  armed(): boolean;
+  /** 2π per four slots, cresting on the bar. */
+  breathPhase(): number;
+}
+
+/** The breath's rate when no grid is kept, in cycles per dilated second. */
+export const FREE_BREATH_HZ = 0.1;
+/**
+ * How fast the breath closes on the conductor's phase once the grid arms, per
+ * second of exponential approach: about a second and a half to arrive.
+ * Nothing flickers (spec §6): the grid arming is a moment the player does not
+ * see, so the breath may not step to it.
+ */
+export const BREATH_CATCH_RATE = 2;
+
+/** What the breath remembers between frames about catching the grid. */
+export interface BreathFollow {
+  /** The conductor's phase less the breath's, decaying to nothing. */
+  offset: number;
+  /** Whether the grid was armed on the last frame. */
+  armed: boolean;
+}
+
+/**
+ * THE BREATH, ONE FRAME ON.
+ *
+ * While the conductor keeps the world's time the breath is the conductor's
+ * four-slot phase, cresting on the bar (ADR-016) — reached without a step: on
+ * the frame the grid arms, the distance between the free breath and the grid
+ * is remembered and then closed exponentially, so the bloom, the bed and the
+ * lens glide onto the bar. With no grid it integrates dilated time at
+ * `FREE_BREATH_HZ` from wherever it stands, so it slows with a reveal and takes
+ * up from the conductor's last phase when the grid lets go.
+ */
+export function breathPhaseAfter(
+  phase: number,
+  dt: number,
+  timeScale: number,
+  grid: BreathGrid,
+  follow: BreathFollow
+): number {
+  if (!grid.armed()) {
+    follow.armed = false;
+    follow.offset = 0;
+    return phase + dt * timeScale * Math.PI * 2 * FREE_BREATH_HZ;
+  }
+  const target = grid.breathPhase();
+  if (!follow.armed) {
+    follow.armed = true;
+    // Whole turns are nothing to a breath that is read through sine and
+    // cosine, so the distance closed is the short way round: at most half a
+    // turn, whatever the two clocks' absolute values.
+    const turn = Math.PI * 2;
+    follow.offset =
+      ((((target - phase + Math.PI) % turn) + turn) % turn) - Math.PI;
+  }
+  follow.offset *= Math.exp(-dt * BREATH_CATCH_RATE);
+  // A ten-thousandth of a radian is nothing to any reader; from there the
+  // breath is the grid's phase exactly.
+  if (Math.abs(follow.offset) < 1e-4) follow.offset = 0;
+  return target - follow.offset;
 }
 
 export function setMorphTargets(targets: Float32Array): void {

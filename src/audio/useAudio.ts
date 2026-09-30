@@ -7,17 +7,35 @@ import { cueBus } from "@/runtime/cues";
 import { MOTIF_KINDS, type MotifKind } from "@/domain/motifs";
 import type { SessionStateV1 } from "@/domain/model";
 import { frameState } from "@/scene/frameState";
+import { currentTheme } from "@/themes/useTheme";
 import { audio } from "./engine";
 import { ambient } from "./ambient";
+import { conductor, gridAhead } from "./conductor";
 import { setAimTension } from "./sfx";
 import { compositionReach } from "./reach";
-import {
-  attachAudioDirector,
-  audioDirector,
-  onThreadVoice,
-  stopSemanticAudio,
-} from "./productionAudio";
-import { testMode } from "@/runtime/testMode";
+import { presentationNow, testMode } from "@/runtime/testMode";
+
+/**
+ * THE SEMANTIC LAYER LOADS AFTER THE TITLE.
+ *
+ * The director, its planners and its scheduler answer cues, and the first cue
+ * comes after the first press; the title needs none of it. So the wiring is a
+ * chunk of its own, fetched the moment the bridge mounts and awaited where it
+ * is used — which keeps the first load under its ceiling with the conductor
+ * (ADR-016) in it, as the packet prescribed: another dynamic import, not
+ * another number. The bed, the hand's sounds and the conductor stay in the
+ * first load, because the first press starts them.
+ */
+type SemanticAudio = typeof import("./productionAudio");
+let semantic: Promise<SemanticAudio> | null = null;
+function semanticAudio(): Promise<SemanticAudio> {
+  semantic ??= import("./productionAudio");
+  return semantic;
+}
+/** Stop the semantic scheduler, once the layer is there to stop. */
+function stopSemanticAudio(): void {
+  void semanticAudio().then((layer) => layer.stopSemanticAudio());
+}
 
 /**
  * The single React↔audio contact point. Mounted once in App; drives the engine
@@ -50,6 +68,20 @@ import { testMode } from "@/runtime/testMode";
  */
 
 const EMPTY_THREAD_IDS: readonly string[] = Object.freeze([]);
+
+/**
+ * THE GRID WITHOUT A BED (ADR-016).
+ *
+ * Deterministic test mode creates no AudioContext, so no bed starts and none
+ * arms the conductor. The room arms it here instead, where a starting bed would
+ * have put it — the world's slot, a first slot ahead — on the controlled clock
+ * the conductor reads in test mode. In production the bed arms it.
+ */
+function armControlledGrid(): void {
+  conductor.arm(
+    gridAhead(currentTheme().music.slotSeconds, presentationNow() / 1000)
+  );
+}
 
 /** A motif family the ensemble knows, or nothing. Never a guess. */
 function asMotifKind(value: string): MotifKind | null {
@@ -105,17 +137,22 @@ export function AudioBridge(): null {
    * slower-beating, gentler onsets, with the Tension still present.
    */
   useEffect(() => {
-    audioDirector.setIntensity(
-      muted ? "silent" : reducedMotion ? "reduced" : "full"
-    );
+    const intensity = muted ? "silent" : reducedMotion ? "reduced" : "full";
+    void semanticAudio().then((layer) => layer.audioDirector.setIntensity(intensity));
   }, [muted, reducedMotion]);
 
   /** The semantic layer's only subscription. */
   useEffect(() => {
     if (testMode.enabled) return;
-    const detach = attachAudioDirector(cueBus);
+    let detach: (() => void) | null = null;
+    let gone = false;
+    void semanticAudio().then((layer) => {
+      if (gone) return;
+      detach = layer.attachAudioDirector(cueBus);
+    });
     return () => {
-      detach();
+      gone = true;
+      detach?.();
       stopSemanticAudio();
     };
   }, []);
@@ -131,20 +168,29 @@ export function AudioBridge(): null {
    */
   useEffect(() => {
     if (testMode.enabled) return;
-    return onThreadVoice((light) => {
-      frameState.pulses.push({
-        threadId: light.threadId,
-        atAudioTime: light.atSeconds,
-        duration: light.durationSeconds,
-        // The relation grammar always states subject then answer, so a
-        // director-published voice never reads from the far end. Only the
-        // choir alternates, and it writes its own pulses.
-        flip: false,
+    let unlisten: (() => void) | null = null;
+    let gone = false;
+    void semanticAudio().then((layer) => {
+      if (gone) return;
+      unlisten = layer.onThreadVoice((light) => {
+        frameState.pulses.push({
+          threadId: light.threadId,
+          atAudioTime: light.atSeconds,
+          duration: light.durationSeconds,
+          // The relation grammar always states subject then answer, so a
+          // director-published voice never reads from the far end. Only the
+          // choir alternates, and it writes its own pulses.
+          flip: false,
+        });
+        if (frameState.pulses.length > 24) {
+          frameState.pulses.splice(0, frameState.pulses.length - 24);
+        }
       });
-      if (frameState.pulses.length > 24) {
-        frameState.pulses.splice(0, frameState.pulses.length - 24);
-      }
     });
+    return () => {
+      gone = true;
+      unlisten?.();
+    };
   }, []);
 
   // Unlock on the first gesture anywhere (autoplay policy).
@@ -163,8 +209,12 @@ export function AudioBridge(): null {
     };
   }, []);
 
+  /*
+   * THE ROOM'S LIFECYCLE. In test mode there is no audio, but there is still a
+   * room and still a grid: the same transitions arm and disarm the conductor on
+   * the controlled clock (ADR-016), and everything else stays skipped.
+   */
   useEffect(() => {
-    if (testMode.enabled) return;
     let seatedThreadIds: readonly string[] = EMPTY_THREAD_IDS;
     let seatedSessionId: string | null = null;
 
@@ -174,22 +224,30 @@ export function AudioBridge(): null {
         (s) => s.phase,
         (phase) => {
           if (phase === "arena") {
-            ambient.start();
-            // Re-seat the canonical session's existing voices — a mid-session
-            // reload, or a replayed event log, arrives with threads already
-            // committed and they must be audible without being re-woven.
             const session = domainSessionStore.getState().session;
-            seatSession(session);
+            if (testMode.enabled) {
+              armControlledGrid();
+            } else {
+              ambient.start();
+              // Re-seat the canonical session's existing voices — a mid-session
+              // reload, or a replayed event log, arrives with threads already
+              // committed and they must be audible without being re-woven.
+              seatSession(session);
+              if (useStore.getState().settings.binaural) audio.startBinaural();
+            }
             seatedThreadIds = (session?.threads ?? []).map((thread) =>
               String(thread.id)
             );
             seatedSessionId = session === null ? null : String(session.sessionId);
-            if (useStore.getState().settings.binaural) audio.startBinaural();
           } else if (roomIsEmpty(phase)) {
-            ambient.stop();
-            ambient.clearSpace();
-            audio.stopBinaural();
-            stopSemanticAudio();
+            if (testMode.enabled) {
+              conductor.disarm();
+            } else {
+              ambient.stop();
+              ambient.clearSpace();
+              audio.stopBinaural();
+              stopSemanticAudio();
+            }
             seatedThreadIds = EMPTY_THREAD_IDS;
             seatedSessionId = null;
           }
@@ -210,6 +268,7 @@ export function AudioBridge(): null {
       useStore.subscribe(
         (s) => s.settings.binaural,
         (on) => {
+          if (testMode.enabled) return;
           const inCosmos =
             useStore.getState().phase === "arena" ||
             useStore.getState().phase === "conclusion";
@@ -242,10 +301,15 @@ export function AudioBridge(): null {
         ) {
           // A new session in the same room, or the same one begun again (a
           // Study's Next Study or Again): the last attempt's choir and
-          // ensemble leave with it.
-          ambient.stop();
-          stopSemanticAudio();
-          ambient.start();
+          // ensemble leave with it, and its grid with them.
+          if (testMode.enabled) {
+            conductor.disarm();
+            armControlledGrid();
+          } else {
+            ambient.stop();
+            stopSemanticAudio();
+            ambient.start();
+          }
           seatedThreadIds = EMPTY_THREAD_IDS;
         }
         seatedSessionId = sessionId;
@@ -253,7 +317,7 @@ export function AudioBridge(): null {
         // A replay replaces the whole log at once, so this must be a set
         // difference and not a length comparison.
         const isNew = ids.length !== seatedThreadIds.length || ids.some((id) => !seated.has(id));
-        if (isNew) seatSession(session);
+        if (isNew && !testMode.enabled) seatSession(session);
         seatedThreadIds = ids;
       }),
 
@@ -270,12 +334,13 @@ export function AudioBridge(): null {
        * to the presentation state this subscription reads.
        */
       interpretationPresentationStore.subscribe((state, previous) => {
+        if (testMode.enabled) return;
         if (state.weaving !== previous.weaving) setAimTension(state.weaving);
       }),
     ];
     return () => {
       unsubs.forEach((u) => u());
-      setAimTension(false);
+      if (!testMode.enabled) setAimTension(false);
     };
   }, []);
 

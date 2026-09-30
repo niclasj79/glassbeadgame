@@ -41,6 +41,13 @@ export interface SceneBudget {
    * every tier, because it is the channel that says what is attended.
    */
   readonly fogBlurTaps: number;
+  /**
+   * Whether the camera's field of view breathes with the world (ADR-016), by
+   * at most `COMFORT.cameraBreath` of itself. The engraved tier holds its lens
+   * still: a plate is looked at, not breathed with. Reduced motion stills it on
+   * every tier.
+   */
+  readonly cameraBreath: boolean;
 }
 
 const HIGH: SceneBudget = Object.freeze({
@@ -55,6 +62,7 @@ const HIGH: SceneBudget = Object.freeze({
   marginRule: true,
   grain: 0.035,
   fogBlurTaps: 13,
+  cameraBreath: true,
 });
 
 const BASE: SceneBudget = Object.freeze({
@@ -69,6 +77,7 @@ const BASE: SceneBudget = Object.freeze({
   marginRule: true,
   grain: 0.022,
   fogBlurTaps: 9,
+  cameraBreath: true,
 });
 
 /**
@@ -88,6 +97,7 @@ const POTATO: SceneBudget = Object.freeze({
   marginRule: true,
   grain: 0,
   fogBlurTaps: 0,
+  cameraBreath: false,
 });
 
 const BUDGETS: Readonly<Record<QualityTier, SceneBudget>> = Object.freeze({

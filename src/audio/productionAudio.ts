@@ -13,7 +13,9 @@
  */
 import { CASTALIA_LOOKUP } from "@/content/castalia";
 import type { CueBus } from "@/runtime/cues";
+import { currentTheme } from "@/themes/useTheme";
 import { ambient } from "./ambient";
+import { HAND_DIVISION, conductor } from "./conductor";
 import {
   createAudioDirector,
   type AudioCaption,
@@ -24,9 +26,19 @@ import {
 } from "./director";
 import { audio } from "./engine";
 import { CASTALIA_MODE } from "./mode";
+import { createScoreFeed, publishPlanLights } from "./planLights";
 import { createLookaheadScheduler } from "./scheduler";
 
-export const semanticScheduler = createLookaheadScheduler();
+/**
+ * The conductor's score, fed a little ahead: what the director writes far
+ * ahead (Attunement, the conclusion) goes on as it nears, pumped by the semantic
+ * scheduler's own loop.
+ */
+const scoreFeed = createScoreFeed(conductor);
+
+export const semanticScheduler = createLookaheadScheduler({
+  onTick: scoreFeed.pump,
+});
 
 /**
  * The production sink.
@@ -34,11 +46,27 @@ export const semanticScheduler = createLookaheadScheduler();
  * `quantize()` defers to the ambient engine's grid, so a relation lands in time
  * with the piece rather than wherever the pointer happened to be released — the
  * same behaviour the prototype's discovery chord already had, extended to
- * everything the semantic layer plays.
+ * everything the semantic layer plays. `quantizeHand()` asks the conductor for
+ * the same grid's sixteenth, where the focus lane answers the hand (ADR-016).
+ *
+ * `slotSeconds()` is the world's slot: the grid's while the bed keeps it, the
+ * world's own before the bed has started, so the director's rhythm unit is the
+ * sixteenth of the world in the room and not of Castalia in every world.
+ *
+ * `conduct()` puts every note of every plan the director schedules on the
+ * conductor, before the plan is played, muted or not — the near ones at once,
+ * the far ones as they near. Muted, nothing is played and so nothing else would
+ * start the scheduler's loop that brings them; conducting starts it.
  */
 const sink: AudioSink = {
   now: () => audio.now(),
   quantize: () => ambient.quantize(),
+  quantizeHand: (leadSeconds) => conductor.next(HAND_DIVISION, leadSeconds),
+  slotSeconds: () => conductor.slotSeconds() || currentTheme().music.slotSeconds,
+  conduct: (plan, atSeconds) => {
+    publishPlanLights(scoreFeed, plan, atSeconds);
+    if (scoreFeed.pending() > 0) semanticScheduler.start();
+  },
   play: (plan, atSeconds) => {
     audio.ensure();
     semanticScheduler.start();
@@ -115,8 +143,9 @@ export function onThreadVoice(listener: ThreadVoiceListener): () => void {
   return audioDirector.onThreadVoice(listener);
 }
 
-/** Stop the semantic scheduler and drop everything pending. */
+/** Stop the semantic scheduler and drop everything pending, heard or seen. */
 export function stopSemanticAudio(): void {
   semanticScheduler.stop();
+  scoreFeed.clear();
   audioDirector.reset();
 }

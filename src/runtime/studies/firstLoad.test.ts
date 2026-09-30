@@ -85,10 +85,27 @@ describe("the first load", () => {
       "runtime/interpretation/productionInterpretation.ts",
       "runtime/cues/planCues.ts",
       "runtime/scene/createSceneDirector.ts",
-      "audio/director.ts",
+      "audio/ambient.ts",
+      "audio/conductor.ts",
       "state/studies/index.ts",
     ]) {
       expect([...reached.keys()].map(name)).toContain(expected);
+    }
+  });
+
+  it("never reaches the semantic audio layer, which loads after the title (ADR-016)", () => {
+    // The director, its planners and its scheduler answer cues, and the first
+    // cue comes after the first press; the bridge fetches them as a chunk of
+    // their own. A static import that pulled them back into the first load
+    // would cost the ceiling what the conductor was allowed to.
+    for (const deferred of [
+      "audio/productionAudio.ts",
+      "audio/director.ts",
+      "audio/scheduler.ts",
+      "audio/attunement.ts",
+      "audio/conclusion.ts",
+    ]) {
+      expect([...reached.keys()].map(name)).not.toContain(deferred);
     }
   });
 
