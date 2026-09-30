@@ -4,7 +4,7 @@ import { facetById } from "@/content/castalia/facets";
 import { toFacetId } from "@/content/castalia/schema";
 import type { CaptionContext } from "@/runtime/captions";
 import { cueBus } from "@/runtime/cues";
-import { worldVoiceCaption } from "./worldVoice";
+import { SAID_AGAIN, worldVoiceCaption } from "./worldVoice";
 
 /**
  * THE LIVE REGION THE WORLD SPEAKS THROUGH.
@@ -34,16 +34,44 @@ interface Spoken {
   readonly id: string;
   readonly text: string;
   readonly urgency: "polite" | "assertive";
+  /**
+   * For an answer that is said again when it is given again (`SAID_AGAIN`),
+   * which arrival this is; null for every other caption.
+   */
+  readonly arrival: number | null;
+}
+
+/**
+ * What the polite region says. An answer that is said again (`SAID_AGAIN`) is
+ * written as a new element each time it arrives, so the region changes even
+ * when its words do not; every other caption is written exactly as it always
+ * was, as the region's text. Hook-free, so the difference can be asserted.
+ */
+export function PoliteWords({
+  text,
+  arrival,
+}: {
+  readonly text: string;
+  readonly arrival: number | null;
+}) {
+  return arrival === null ? <>{text}</> : <span key={arrival}>{text}</span>;
 }
 
 export function CueCaptions() {
   const [spoken, setSpoken] = useState<Spoken | null>(null);
 
   useEffect(() => {
+    let arrivals = 0;
     return cueBus.subscribe("caption", (cue) => {
       const caption = worldVoiceCaption(cue, captionContext);
       if (caption === null) return;
-      setSpoken({ id: cue.id, text: caption.text, urgency: caption.urgency });
+      arrivals += 1;
+      setSpoken({
+        id: cue.id,
+        text: caption.text,
+        urgency: caption.urgency,
+        arrival: SAID_AGAIN.has(cue.type) ? arrivals : null,
+      });
     });
   }, []);
 
@@ -53,7 +81,7 @@ export function CueCaptions() {
   return (
     <section className="sr-only" aria-label="What the Game answered">
       <p role="status" aria-live="polite" aria-atomic="true">
-        {polite?.text ?? ""}
+        {polite === null ? "" : <PoliteWords text={polite.text} arrival={polite.arrival} />}
       </p>
       {assertive && (
         <p role="alert" aria-live="assertive" aria-atomic="true">
