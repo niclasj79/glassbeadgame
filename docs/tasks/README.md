@@ -40,6 +40,9 @@ None.
 1. `M4-002-pulse-and-stems.md` — the bed's pulse, moving harmony and stems
    under ADR-017; directly assigned once M4-001 merged; branch
    `codex/M4-002-pulse-and-stems`.
+2. `M4-003-surface.md` — dither in the final pass, a dust field that answers
+   the beads' light, and one pass for all screen effects; directly assigned
+   under the polish mandate; branch `codex/M4-003-surface`.
 
 ## In review
 
