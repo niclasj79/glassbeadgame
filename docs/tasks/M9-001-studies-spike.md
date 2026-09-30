@@ -721,3 +721,10 @@ judgement is the milestone gate.
   disposed material go (`scene/prewarmLinks.ts`, with tests). The passage,
   silence and door browser tests walk Keep weaving, See the answer, Next
   Study and Leave/Back under a page-error watch that must stay empty.
+  Checks on the follow-up head, in the cloud container: typecheck (app and
+  Playwright configs), lint, `npm test` 1,997 passed, `validate:content`,
+  build, `bundle:check` (first load 523,317 bytes gzip and 1,745,006 raw
+  against the 524,000 and 1,760,000 ceilings), `steering:check` over 27
+  packets, `git diff --check`, and the CI browser set (deterministic mode,
+  threshold, conclusion, kept games) 16 of 16 on the software renderer. The
+  lockfile is unchanged.
