@@ -19,10 +19,12 @@ import {
   relationKey,
   type CastaliaConcept,
   type CastaliaPack,
+  type CastaliaPackForValidation,
   type DocumentedRelation,
   type OpenThreadPrompt,
   type StudyDefinition,
 } from "./schema";
+import { castaliaStudies } from "./studies";
 
 /**
  * CONTENT VALIDATION
@@ -127,7 +129,9 @@ const duplicates = <T>(values: readonly T[]): T[] => {
   return [...repeated];
 };
 
-export function validateCastaliaPack(pack: CastaliaPack): CastaliaValidationResult {
+export function validateCastaliaPack(
+  pack: CastaliaPackForValidation
+): CastaliaValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -722,7 +726,8 @@ function sequenceProblems(
  * solver reads facets and faculties only, so these proofs rest on exactly the
  * information a player has (R1).
  */
-export function validateStudies(pack: CastaliaPack): readonly StudyIssue[] {
+export function validateStudies(pack: CastaliaPackForValidation): readonly StudyIssue[] {
+  const studies = pack.studies ?? castaliaStudies();
   const issues: StudyIssue[] = [];
   const report = (subject: string, code: StudyErrorCode, message: string): void => {
     issues.push({ code, subject, message });
@@ -733,7 +738,7 @@ export function validateStudies(pack: CastaliaPack): readonly StudyIssue[] {
   const lookup = structureLookupFor(pack);
   const beadSets = new Map<string, string>();
 
-  for (const study of pack.studies) {
+  for (const study of studies) {
     const where = String(study.id);
 
     const expectedId = studyIdFor(study.chapter, study.ordinal);
@@ -837,7 +842,7 @@ export function validateStudies(pack: CastaliaPack): readonly StudyIssue[] {
     }
   }
 
-  sequenceProblems(pack.studies, report);
+  sequenceProblems(studies, report);
   return issues;
 }
 
@@ -952,7 +957,7 @@ function validateQuestion(thread: OpenThreadPrompt, errors: string[]): void {
 }
 
 /** Convenience for build scripts and tests: throws on the first error found. */
-export function assertCastaliaPackValid(pack: CastaliaPack): void {
+export function assertCastaliaPackValid(pack: CastaliaPackForValidation): void {
   const { errors } = validateCastaliaPack(pack);
   if (errors.length > 0) {
     throw new Error(`Castalia content pack is invalid:\n- ${errors.join("\n- ")}`);

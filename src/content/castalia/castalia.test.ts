@@ -25,10 +25,8 @@ import { buildStudySession } from "@/domain/studies/testing/buildStudySession";
 import {
   CASTALIA_LOOKUP,
   CASTALIA_PACK,
-  CASTALIA_STUDIES,
   CONTENT_PACK_VERSION,
   FACULTIES,
-  castaliaStudyById,
   facetById,
   facultyById,
   findRelation,
@@ -37,11 +35,15 @@ import {
   relationByKey,
   relationsByConcept,
 } from "./index";
+import { castaliaStudies, castaliaStudyById } from "./studies";
+
+const CASTALIA_STUDIES = castaliaStudies();
 import {
   FACULTY_IDS,
   relationKey,
   toFacetId,
   type CastaliaPack,
+  type CastaliaPackForValidation,
   type DocumentedRelation,
   type StudyDefinition,
 } from "./schema";
@@ -858,7 +860,7 @@ const STRUCTURE: ConceptStructureLookup = (() => {
 })();
 
 const studyNamed = (id: string): StudyDefinition => {
-  const study = castaliaStudyById.get(id);
+  const study = castaliaStudyById(id);
   if (study === undefined) throw new RangeError(`no Study ${id}`);
   return study;
 };
@@ -1006,8 +1008,10 @@ function studySession(
 describe("Studies — the twelve", () => {
   it("holds twelve Studies in chapter order, then by ordinal", () => {
     expect(CASTALIA_STUDIES.map((study) => study.id)).toEqual(SPIKE_TABLE.map((row) => row.id));
-    expect(CASTALIA_PACK.studies).toBe(CASTALIA_STUDIES);
-    for (const study of CASTALIA_STUDIES) expect(castaliaStudyById.get(study.id)).toBe(study);
+    // The Studies load with the Studies: the pack the runtime reads from the
+    // first frame does not carry them (scripts/bundle-budgets.json).
+    expect("studies" in CASTALIA_PACK).toBe(false);
+    for (const study of CASTALIA_STUDIES) expect(castaliaStudyById(study.id)).toBe(study);
   });
 
   it.each(SPIKE_TABLE)("$id poses its brief and holds the Magister's answer", (row) => {
@@ -1219,19 +1223,19 @@ describe("Studies — the validator refuses a Study that is not what it claims",
   const replace = (
     id: string,
     change: (study: StudyDefinition) => StudyDefinition
-  ): CastaliaPack => ({
+  ): CastaliaPackForValidation => ({
     ...CASTALIA_PACK,
     studies: CASTALIA_STUDIES.map((study) => (study.id === id ? change(study) : study)),
   });
   const beadsOf = (...names: string[]): readonly ConceptId[] => names.map(bead);
-  const codes = (pack: CastaliaPack): readonly StudyErrorCode[] =>
+  const codes = (pack: CastaliaPackForValidation): readonly StudyErrorCode[] =>
     validateStudies(pack).map((issue) => issue.code);
   const ESCHHOLZ_1 = "study.eschholz-1";
   const chiaroscuro = (): ConceptId => bead("Chiaroscuro");
 
   const CASES: ReadonlyArray<{
     readonly code: StudyErrorCode;
-    readonly pack: () => CastaliaPack;
+    readonly pack: () => CastaliaPackForValidation;
   }> = [
     {
       code: "study-id",

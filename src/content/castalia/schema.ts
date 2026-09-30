@@ -351,9 +351,21 @@ export interface CastaliaPack {
   readonly sources: readonly Source[];
   readonly relations: readonly DocumentedRelation[];
   readonly openThreads: readonly OpenThreadPrompt[];
-  /** In chapter order, then by ordinal. */
-  readonly studies: readonly StudyDefinition[];
 }
+
+/**
+ * What the validator reads: the pack, and the Studies authored over it.
+ *
+ * The Studies are deliberately not a field of the pack object. The runtime
+ * reads the pack from the first frame, so anything inside it is paid for
+ * before the title appears, and a Free Game never needs a Study; the Studies
+ * load with the Studies (`scripts/bundle-budgets.json`). The validator proves
+ * the authored set, in chapter order then by ordinal, unless a test hands it
+ * another.
+ */
+export type CastaliaPackForValidation = CastaliaPack & {
+  readonly studies?: readonly StudyDefinition[];
+};
 
 /** Canonical unordered-pair key for a documented relation. */
 export const relationKey = (a: string, b: string): string =>
