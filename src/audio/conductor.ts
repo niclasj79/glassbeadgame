@@ -36,6 +36,12 @@ export const BREATH_SLOTS = 4;
 export const GRID_LEAD_SECONDS = 0.03;
 /** Without a grid the next moment is simply soon, as the bed's quantize answers. */
 export const UNARMED_LEAD_SECONDS = 0.02;
+/**
+ * The bed's first slot begins this long after it starts, and that slot is the
+ * grid's origin. Test mode, where no bed can start, arms the grid the same
+ * distance ahead on the controlled clock.
+ */
+export const FIRST_SLOT_LEAD_SECONDS = 0.15;
 
 /**
  * CAV-007: no luminance flicker above 3 Hz. Two onsets on one concept closer
@@ -140,6 +146,15 @@ const TWO_PI = Math.PI * 2;
 /** Two claims closer than this are the same grid point. */
 const CLAIM_TOLERANCE_SECONDS = 0.001;
 
+/**
+ * The grid a bed starting at `nowSeconds` keeps: the world's slot, from a first
+ * slot `FIRST_SLOT_LEAD_SECONDS` ahead. One rule for the bed and for test mode,
+ * which arms the same grid on the controlled clock because no bed can start.
+ */
+export function gridAhead(slotSeconds: number, nowSeconds: number): GridArming {
+  return { slotSeconds, origin: nowSeconds + FIRST_SLOT_LEAD_SECONDS };
+}
+
 /** Shape of one light in time, from `elapsed` seconds after its onset. */
 export function lightEnvelope(
   elapsed: number,
@@ -182,9 +197,13 @@ export function createConductor(clock: ConductorClock): Conductor {
     const now = clock.now();
     if (!armed) return now + UNARMED_LEAD_SECONDS;
     const grid = slot / division;
-    const until = origin - now;
+    // Measured from the lead itself rather than from now, so that a lead longer
+    // than one grid step (a sighting deferred to the end of its window) still
+    // lands on the first point at or after it, not one step short of it.
+    const from = now + lead;
+    const until = origin - from;
     const phase = ((until % grid) + grid) % grid;
-    return now + (phase < lead ? phase + grid : phase);
+    return from + phase;
   };
 
   const slotPhase = (now = clock.now()): number => {

@@ -13,7 +13,9 @@
  */
 import { CASTALIA_LOOKUP } from "@/content/castalia";
 import type { CueBus } from "@/runtime/cues";
+import { currentTheme } from "@/themes/useTheme";
 import { ambient } from "./ambient";
+import { HAND_DIVISION, conductor } from "./conductor";
 import {
   createAudioDirector,
   type AudioCaption,
@@ -24,6 +26,7 @@ import {
 } from "./director";
 import { audio } from "./engine";
 import { CASTALIA_MODE } from "./mode";
+import { publishPlanLights } from "./planLights";
 import { createLookaheadScheduler } from "./scheduler";
 
 export const semanticScheduler = createLookaheadScheduler();
@@ -34,11 +37,24 @@ export const semanticScheduler = createLookaheadScheduler();
  * `quantize()` defers to the ambient engine's grid, so a relation lands in time
  * with the piece rather than wherever the pointer happened to be released — the
  * same behaviour the prototype's discovery chord already had, extended to
- * everything the semantic layer plays.
+ * everything the semantic layer plays. `quantizeHand()` asks the conductor for
+ * the same grid's sixteenth, where the focus lane answers the hand (ADR-016).
+ *
+ * `slotSeconds()` is the world's slot: the grid's while the bed keeps it, the
+ * world's own before the bed has started, so the director's rhythm unit is the
+ * sixteenth of the world in the room and not of Castalia in every world.
+ *
+ * `conduct()` puts every note of every plan the director schedules on the
+ * conductor, before the plan is played, muted or not.
  */
 const sink: AudioSink = {
   now: () => audio.now(),
   quantize: () => ambient.quantize(),
+  quantizeHand: (leadSeconds) => conductor.next(HAND_DIVISION, leadSeconds),
+  slotSeconds: () => conductor.slotSeconds() || currentTheme().music.slotSeconds,
+  conduct: (plan, atSeconds) => {
+    publishPlanLights(conductor, plan, atSeconds);
+  },
   play: (plan, atSeconds) => {
     audio.ensure();
     semanticScheduler.start();

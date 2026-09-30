@@ -4,6 +4,7 @@ import {
   ANSWER_DIVISION,
   BREATH_SLOTS,
   CHOIR_LIGHT_WEIGHT,
+  FIRST_SLOT_LEAD_SECONDS,
   GRID_LEAD_SECONDS,
   HAND_DIVISION,
   HAND_LIGHT_WEIGHT,
@@ -15,6 +16,7 @@ import {
   ONSET_CAPACITY,
   UNARMED_LEAD_SECONDS,
   createConductor,
+  gridAhead,
   lightEnvelope,
 } from "./conductor";
 
@@ -57,6 +59,36 @@ describe("the conductor's grid", () => {
     expect(c.next(HAND_DIVISION, 0.1)).toBeCloseTo(100.4, 9);
     // The slot itself is a division too.
     expect(c.next(1)).toBeCloseTo(102.15, 9);
+  });
+
+  it("honours a lead longer than one grid step: the first point at or after it", () => {
+    const clock = clockAt(100.2);
+    const c = createConductor(clock);
+    c.arm({ slotSeconds: SLOT, origin: 100.15 });
+    // Sixteenths fall at 100.275, 100.4, 100.525, 100.65 … A lead of 0.3 s reaches
+    // 100.5, so the answer is 100.525 — not 100.4, one step short of the lead.
+    expect(c.next(HAND_DIVISION, 0.3)).toBeCloseTo(100.525, 9);
+    // Exactly on a point is on it (binary-exact times, so no rounding decides it).
+    const exact = createConductor(clockAt(0.25));
+    exact.arm({ slotSeconds: SLOT, origin: 0 });
+    expect(exact.next(HAND_DIVISION, 0.375)).toBe(0.625);
+    // Several slots ahead, on the eighth.
+    expect(c.next(ANSWER_DIVISION, 4.3)).toBeCloseTo(104.65, 9);
+    for (const lead of [0.01, 0.12, 0.2, 0.37, 1.01, 2.5]) {
+      const at = c.next(HAND_DIVISION, lead);
+      expect(at).toBeGreaterThanOrEqual(100.2 + lead - 1e-9);
+      expect(at).toBeLessThan(100.2 + lead + SLOT / HAND_DIVISION);
+      const steps = (at - 100.15) / (SLOT / HAND_DIVISION);
+      expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-6);
+    }
+  });
+
+  it("places a starting bed's grid a first slot ahead, the same rule test mode arms", () => {
+    expect(gridAhead(2.4, 10)).toEqual({
+      slotSeconds: 2.4,
+      origin: 10 + FIRST_SLOT_LEAD_SECONDS,
+    });
+    expect(FIRST_SLOT_LEAD_SECONDS).toBe(0.15);
   });
 
   it("keeps the grid from before the origin as well as after it", () => {

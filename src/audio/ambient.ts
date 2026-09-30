@@ -1,5 +1,6 @@
 import { audio } from "./engine";
-import { playNote, noiseSource } from "./voices";
+import { CHOIR_LIGHT_WEIGHT, conductor, gridAhead } from "./conductor";
+import { noteSeconds, playNote, noiseSource, type SimpleVoiceOptions } from "./voices";
 import { beadVoice, modeFreq } from "./theory";
 import { castaliaConceptById } from "@/content/castalia";
 import { hashString, mulberry32 } from "@/lib/utils";
@@ -39,6 +40,9 @@ const MAX_MOTIF_PATTERNS = 4;
 
 interface Motif {
   threadId: string;
+  /** The concepts whose identity notes the voice sings, so their beads can light. */
+  conceptA: string;
+  conceptB: string;
   freqA: number;
   freqB: number;
   timbreA: TimbreId;
@@ -46,6 +50,9 @@ interface Motif {
   rng: () => number;
   flip: boolean;
 }
+
+/** A choir note with the moment it was scheduled for. */
+type ScheduledNote = SimpleVoiceOptions & { readonly at: number };
 
 class AmbientEngine {
   private timer: number | null = null;
@@ -98,7 +105,12 @@ class AmbientEngine {
     this.densityScale = 1;
     this.bedScale = 1;
     this.slot = 0;
-    this.nextSlotTime = ctx.currentTime + 0.15;
+    // The bed's first slot is the grid's origin: from here the world keeps one
+    // time, and the conductor carries it to everything else that moves with the
+    // music (ADR-016).
+    const grid = gridAhead(this.slotS, ctx.currentTime);
+    this.nextSlotTime = grid.origin;
+    conductor.arm(grid);
     this.droneRefreshAt = 0;
     // A previous session may have ended: the loop was told to stop and the bed
     // was ramped to silence. Both have to be released, or the new session opens
@@ -110,7 +122,21 @@ class AmbientEngine {
     this.startAirBed(ctx);
   }
 
+  /**
+   * The bed leaves the room, and the grid with it: the conductor forgets its
+   * time and every light it holds, because the next room keeps its own (ADR-016).
+   */
   stop(): void {
+    this.halt();
+    conductor.disarm();
+  }
+
+  /**
+   * The loop stops composing. This alone is what the loop's own ending does: the
+   * coda it ended for is still sounding on the grid, so the grid, and the light
+   * of the coda's notes, stay until the room changes and calls `stop()`.
+   */
+  private halt(): void {
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
@@ -312,6 +338,8 @@ class AmbientEngine {
     if (!a || !b) return;
     this.motifs.push({
       threadId,
+      conceptA: aId,
+      conceptB: bId,
       freqA: a.freq,
       freqB: b.freq,
       timbreA: a.timbre,
@@ -333,8 +361,9 @@ class AmbientEngine {
 
     if (this.silenceFrom !== null && ctx.currentTime >= this.silenceFrom) {
       // The ending has passed. Everything generative is silent by now; keeping
-      // the interval alive would only be a timer with nothing to schedule.
-      this.stop();
+      // the interval alive would only be a timer with nothing to schedule. The
+      // grid is not the loop's to take away: the coda is sounding on it.
+      this.halt();
       return;
     }
 
@@ -470,6 +499,8 @@ class AmbientEngine {
       const second = m.flip ? m.freqA : m.freqB;
       const timbre1 = m.flip ? m.timbreB : m.timbreA;
       const timbre2 = m.flip ? m.timbreA : m.timbreB;
+      const concept1 = m.flip ? m.conceptB : m.conceptA;
+      const concept2 = m.flip ? m.conceptA : m.conceptB;
       m.flip = !m.flip;
 
       // Tell the scene: this thread's motif will sound at `t + jitter` —
@@ -483,25 +514,45 @@ class AmbientEngine {
       if (frameState.pulses.length > 24) {
         frameState.pulses.splice(0, frameState.pulses.length - 24);
       }
-      playNote(ctx, bus, timbre1, first, {
+      // Each identity note that is actually scheduled is on the score, and its
+      // bead may light with it. A note the voice budget refused is not a musical
+      // event, so it lights nothing.
+      const firstNote: ScheduledNote = {
         gain: 0.075 * gainScale * this.bedScale,
         at: t + jitter,
         release: 1.6,
-      });
-      playNote(ctx, bus, timbre2, second, {
+      };
+      if (playNote(ctx, bus, timbre1, first, firstNote)) {
+        this.conduct(concept1, firstNote);
+      }
+      const secondNote: ScheduledNote = {
         gain: 0.06 * gainScale * this.bedScale,
         at: t + jitter + 0.55 + m.rng() * 0.3,
         release: 1.8,
-      });
+      };
+      if (playNote(ctx, bus, timbre2, second, secondNote)) {
+        this.conduct(concept2, secondNote);
+      }
       // Occasionally the motif lifts an octave — a thought recurring, changed.
       if (m.rng() < 0.18) {
-        playNote(ctx, bus, "glass", first * 2, {
+        const lift: ScheduledNote = {
           gain: 0.03 * gainScale * this.bedScale,
           at: t + jitter + 1.3,
           release: 1.4,
-        });
+        };
+        if (playNote(ctx, bus, "glass", first * 2, lift)) this.conduct(concept1, lift);
       }
     }
+  }
+
+  /** A choir note on a concept is on the score the scene reads (ADR-016). */
+  private conduct(conceptId: string, note: ScheduledNote): void {
+    conductor.sound({
+      conceptId,
+      at: note.at,
+      duration: noteSeconds(note),
+      weight: CHOIR_LIGHT_WEIGHT,
+    });
   }
 }
 
