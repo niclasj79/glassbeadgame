@@ -576,12 +576,11 @@ mesmerising.
 - Checks in the cloud container: `npm ci` was run by the audio stage and the
   lockfile is unchanged; typecheck (app and Playwright configs), lint,
   `steering:check` (28 packets), `steering:test`, `validate:content`, build,
-  `bundle:check` and `git diff --check` pass; `npm test` passes in full (the
-  count is in the pull request). The CI browser set on the software renderer:
-  the first run passed 17 of 18, the conclusion spec failing because the dev
-  server force-reloaded every open page when the agents' worktrees were
-  removed during it; it passes alone and in the quiet rerun recorded in the
-  pull request. Performance reference (SwiftShader, same container, effective
+  `bundle:check` and `git diff --check` pass; `npm test` passes in full
+  (2087 passed (2087)). The CI browser set on the software renderer: the first run passed 17
+  of 18, the conclusion spec failing because the dev server force-reloaded
+  every open page when the agents' worktrees were removed during it; it passes
+  alone, and the quiet rerun passed 18 of 18 in 3.6 minutes. Performance reference (SwiftShader, same container, effective
   frames per second, evidence only per M0-005): mobile-potato idle 6.45 and
   focus 4.57, against M9-001's 4.95/5.51 idle and 3.17/3.76 focus; the desktop
   profiles miss the container's frame floor, as they do on main.
