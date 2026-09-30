@@ -242,7 +242,10 @@ export function AudioBridge(): null {
        * once sounded. The weaving flag is the composition's own statement that
        * a gesture is in flight.
        *
-       * The cancel gliss is still fired directly by `threading.cancelGesture`.
+       * The cancel gliss is not fired from here. The pointer layer
+       * (`scene/threading.ts`) plays it when a held gesture is cancelled, at
+       * the moment of cancelling, because it is a response to the hand and not
+       * to the presentation state this subscription reads.
        */
       interpretationPresentationStore.subscribe((state, previous) => {
         if (state.weaving !== previous.weaving) setAimTension(state.weaving);

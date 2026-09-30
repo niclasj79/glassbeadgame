@@ -5,6 +5,7 @@ import { CASTALIA_RELATIONS } from "@/content/castalia/relations";
 import type { RelationIntention } from "@/domain/events";
 import { toConceptId, toMotifKindId, toThreadId } from "@/domain/ids";
 import type { CuePayloadMap, CueType, PresentationCue } from "@/runtime/cues";
+import { COMFORT, tensionCeiling } from "./comfort";
 import {
   createAudioDirector,
   isPerformanceScore,
@@ -12,13 +13,22 @@ import {
   type AudioSink,
 } from "./director";
 import type { PerformanceScore } from "./conclusion";
-import { peakSummedGain, type VoicePlan } from "./plan";
+import { FOCUS_VOICING, audibleEndSeconds } from "./focusVoicing";
+import {
+  auditComfort,
+  noteLifetime,
+  peakSummedGain,
+  type PlannedNote,
+  type VoicePlan,
+} from "./plan";
 import { SCORE } from "./score";
 
 const FIBONACCI = "measure.fibonacci-sequence";
 const COUNTERPOINT = "sound.counterpoint";
 const JUST = "sound.just-intonation";
 const EQUAL = "sound.equal-temperament";
+const PRIME = "measure.prime-numbers";
+const INTENTIONS: readonly RelationIntention[] = ["echo", "passage", "tension", "ground"];
 
 const cue = <Type extends CueType>(
   type: Type,
@@ -75,6 +85,167 @@ function harness(now = 100) {
     },
   };
 }
+
+// ─── The focus voice: a harness with a clock, and an oracle ─────────────────
+
+type LogEntry =
+  | { readonly type: "play"; readonly plan: VoicePlan; readonly atSeconds: number }
+  | {
+      readonly type: "retire";
+      readonly planId: string;
+      readonly atSeconds: number;
+      readonly fadeSeconds: number;
+    };
+
+/**
+ * A harness whose clock the test moves, and a log of everything the sink was
+ * asked to do, in order. `retire: false` is a sink that cannot take a plan back,
+ * which is what the production sink is until it learns to.
+ */
+function focusHarness(options: { retire: boolean; startAt?: number }) {
+  let now = options.startAt ?? 100;
+  const log: LogEntry[] = [];
+  const played: Recorded[] = [];
+  const spaces: { density: number; bed: number }[] = [];
+  const captions: AudioCaption[] = [];
+
+  const sink: AudioSink = {
+    now: () => now,
+    quantize: () => now + 0.25,
+    play: (plan, atSeconds) => {
+      played.push({ plan, atSeconds });
+      log.push({ type: "play", plan, atSeconds });
+    },
+    setSpace: (density, bed) => {
+      spaces.push({ density, bed });
+    },
+    activeVoiceCount: () => 0,
+    concludeAt: () => {},
+    ...(options.retire
+      ? {
+          retire: (planId: string, atSeconds: number, fadeSeconds: number) => {
+            log.push({ type: "retire", planId, atSeconds, fadeSeconds });
+          },
+        }
+      : {}),
+  };
+  const director = createAudioDirector({ sink, lookup: CASTALIA_LOOKUP });
+  director.onCaption((caption) => captions.push(caption));
+
+  return {
+    director,
+    played,
+    log,
+    spaces,
+    captions,
+    retired: () =>
+      log.filter((entry): entry is Extract<LogEntry, { type: "retire" }> => entry.type === "retire"),
+    at: (seconds: number) => {
+      now = seconds;
+    },
+    advance: (seconds: number) => {
+      now += seconds;
+    },
+  };
+}
+
+interface Instance {
+  readonly plan: VoicePlan;
+  readonly at: number;
+  retiredAt: number | null;
+  fade: number;
+}
+
+/**
+ * What is sounding, reconstructed from nothing but the sink's own log — none of
+ * the director's bookkeeping. A `retire` applies to the newest not-yet-retired
+ * plan with that id, which is the contract `AudioSink.retire` documents.
+ */
+function instancesOf(log: readonly LogEntry[]): Instance[] {
+  const instances: Instance[] = [];
+  for (const entry of log) {
+    if (entry.type === "play") {
+      instances.push({ plan: entry.plan, at: entry.atSeconds, retiredAt: null, fade: 0 });
+      continue;
+    }
+    const target = [...instances]
+      .reverse()
+      .find((instance) => instance.plan.id === entry.planId && instance.retiredAt === null);
+    if (target) {
+      target.retiredAt = entry.atSeconds;
+      target.fade = entry.fadeSeconds;
+    }
+  }
+  return instances;
+}
+
+interface Sounding {
+  readonly plan: string;
+  readonly note: PlannedNote;
+  /** One until a retirement begins to fade it; zero once it has. */
+  readonly factor: number;
+}
+
+function soundingAt(instances: readonly Instance[], t: number): Sounding[] {
+  const sounding: Sounding[] = [];
+  for (const instance of instances) {
+    let factor = 1;
+    if (instance.retiredAt !== null && t > instance.retiredAt) {
+      factor = instance.fade <= 0 ? 0 : 1 - (t - instance.retiredAt) / instance.fade;
+    }
+    if (factor <= 1e-6) continue;
+    for (const note of instance.plan.notes) {
+      const start = instance.at + note.atSeconds;
+      // The contract: what has not begun by the moment a plan is taken back never does.
+      if (instance.retiredAt !== null && start >= instance.retiredAt) continue;
+      if (start <= t && t < start + noteLifetime(note)) {
+        sounding.push({ plan: instance.plan.id, note, factor });
+      }
+    }
+  }
+  return sounding;
+}
+
+/** The whole timeline of a log, sampled every 10 ms. */
+function timeline(log: readonly LogEntry[]): { t: number; sounding: Sounding[] }[] {
+  const instances = instancesOf(log);
+  if (instances.length === 0) return [];
+  const from = Math.min(...instances.map((instance) => instance.at));
+  const to = Math.max(
+    ...instances.map((instance) => instance.at + audibleEndSeconds(instance.plan))
+  );
+  const samples: { t: number; sounding: Sounding[] }[] = [];
+  for (let t = from; t <= to; t += 0.01) {
+    samples.push({ t, sounding: soundingAt(instances, t) });
+  }
+  return samples;
+}
+
+const plansAt = (sounding: readonly Sounding[]): Set<string> =>
+  new Set(sounding.map((entry) => entry.plan));
+const levelAt = (sounding: readonly Sounding[]): number =>
+  sounding.reduce((sum, entry) => sum + entry.note.gain * entry.factor, 0);
+const tenseAt = (sounding: readonly Sounding[]): number =>
+  sounding.filter((entry) => entry.note.tense && entry.factor > 1e-6).length;
+
+const PAIR = [toConceptId(FIBONACCI), toConceptId(COUNTERPOINT)] as const;
+const previewed = (intention: RelationIntention, chosen = false): PresentationCue =>
+  cue("reading.previewed", { pair: [PAIR[0], PAIR[1]], intention, chosen });
+const sighted = (
+  conceptId: string,
+  band: "weak" | "medium" | "high" = "medium"
+): PresentationCue =>
+  cue("attention.sighted", {
+    attendedConceptId: toConceptId(FIBONACCI),
+    sighted: { conceptId: toConceptId(conceptId), band, sharedFacets: [] },
+  });
+const sightLost = (): PresentationCue =>
+  cue("attention.sighted", { attendedConceptId: toConceptId(FIBONACCI), sighted: null });
+const locked = (): PresentationCue =>
+  cue("pair.locked", { pair: [PAIR[0], PAIR[1]], sharedFacets: [] });
+const reopened = (threadId: string, intention: RelationIntention): PresentationCue =>
+  cue("thread.reopened", { threadId: toThreadId(threadId), pair: [PAIR[0], PAIR[1]], intention });
+const loudest = (plan: VoicePlan): number => Math.max(...plan.notes.map((note) => note.gain));
 
 const wovenPayload = (
   threadId: string,
@@ -136,22 +307,28 @@ describe("the audio director", () => {
     expect(spaces.at(-1)).toEqual({ density: 1, bed: 1 });
   });
 
-  it("changes the sound the instant an intention is armed", () => {
-    const { director, played } = harness();
-    const heard: number[] = [];
-    for (const intention of ["echo", "passage", "tension", "ground"] as const) {
-      director.handleCue(
-        cue("reading.previewed", {
-          pair: [toConceptId(FIBONACCI), toConceptId(COUNTERPOINT)],
-          intention,
-          chosen: false,
-        })
+  it("previews four intentions as four different readings — a reading is a tool, not a label", () => {
+    const h = focusHarness({ retire: true });
+    const heard: string[] = [];
+    for (const intention of INTENTIONS) {
+      h.advance(3); // one at a time: this is about what each one *is*, not how they mix
+      h.director.handleCue(previewed(intention));
+      const plan = h.played.at(-1)!.plan;
+      expect(plan.intention).toBe(intention);
+      heard.push(
+        plan.notes
+          .map((n) => `${n.role}:${n.conceptId}:${n.timbre}:${n.register}:${n.degree}`)
+          .join("|")
       );
-      heard.push(played.at(-1)!.plan.notes[0].degree);
     }
-    expect(played).toHaveLength(4);
-    // Four intentions, four different previews — arming is a tool, not a label.
+    expect(h.played).toHaveLength(4);
     expect(new Set(heard).size).toBe(4);
+    expect(h.played.map((p) => p.plan.meta.grammar)).toEqual([
+      "imitation",
+      "translation",
+      "displacement",
+      "foundation",
+    ]);
   });
 
   it("sounds the relation grammar the player declared", () => {
@@ -516,5 +693,676 @@ describe("director lifecycle", () => {
       cue("outcome.documented", documentedPayload("t2", JUST, EQUAL, "tension"))
     );
     expect(seen).toHaveLength(1);
+  });
+});
+
+// ─── The focus view ─────────────────────────────────────────────────────────
+
+const LEAD = FOCUS_VOICING.leadSeconds;
+const FADE = FOCUS_VOICING.fadeSeconds;
+
+describe("a bead sighted under the lens", () => {
+  it("says nothing when the lens has left every bead", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(sightLost());
+    expect(h.played).toHaveLength(0);
+    expect(h.retired()).toHaveLength(0);
+    expect(h.captions).toHaveLength(0);
+  });
+
+  it("answers with the sighted concept's own figure, alone, a lead after the cue", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    expect(h.played).toHaveLength(1);
+    const { plan, atSeconds } = h.played[0];
+    expect(atSeconds).toBeCloseTo(100 + LEAD, 9);
+    expect(plan.meta.conceptIds).toEqual([COUNTERPOINT]);
+    expect(new Set(plan.notes.map((n) => n.conceptId))).toEqual(new Set([COUNTERPOINT]));
+    expect(plan.notes.map((n) => n.degree)).toEqual(
+      CASTALIA_LOOKUP.conceptMotif(COUNTERPOINT).degrees.slice(0, plan.notes.length)
+    );
+  });
+
+  it("sits inside the attention sound-space without touching it", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(
+      cue("attention.enter", { conceptId: toConceptId(FIBONACCI), candidates: [] })
+    );
+    const spaces = h.spaces.length;
+    h.advance(5);
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    expect(h.spaces).toHaveLength(spaces);
+    expect(h.spaces.at(-1)!.bed).toBeLessThan(1);
+  });
+
+  it("answers at a level set by the band — high, medium, weak — and weak is still audible", () => {
+    const gains: Record<string, number> = {};
+    for (const band of ["high", "medium", "weak"] as const) {
+      const h = focusHarness({ retire: true });
+      h.director.handleCue(sighted(JUST, band));
+      gains[band] = loudest(h.played[0].plan);
+    }
+    expect(gains.high).toBeGreaterThan(gains.medium);
+    expect(gains.medium).toBeGreaterThan(gains.weak);
+    // The quietest deliberate sound in the game is the hover ping, at 0.045.
+    expect(gains.weak).toBeGreaterThan(0.045);
+  });
+
+  it("thins at reduced intensity rather than going quiet", () => {
+    const full = focusHarness({ retire: true });
+    full.director.handleCue(sighted(JUST, "weak"));
+    const reduced = focusHarness({ retire: true });
+    reduced.director.setIntensity("reduced");
+    reduced.director.handleCue(sighted(JUST, "weak"));
+    expect(loudest(reduced.played[0].plan)).toBeLessThan(loudest(full.played[0].plan));
+    expect(loudest(reduced.played[0].plan)).toBeGreaterThan(0);
+  });
+
+  it("replaces rather than stacks when a new bead is sighted within ~200 ms", () => {
+    const h = focusHarness({ retire: true });
+    h.at(100);
+    h.director.handleCue(sighted(COUNTERPOINT, "high")); // begins at 100.06
+    h.at(100.1);
+    h.director.handleCue(sighted(JUST, "high")); // inside the first's window
+    h.at(100.15);
+    h.director.handleCue(sighted(PRIME, "high")); // the lens moves on again
+
+    // Onsets are at least a window apart: the third bead replaced the second
+    // before it had begun, and was spaced from the first, which really sounded.
+    const onsets = h.played.map((entry) => entry.atSeconds);
+    expect(onsets).toHaveLength(3);
+    const window = FOCUS_VOICING.sighting.windowSeconds;
+    expect(onsets[1] - onsets[0]).toBeGreaterThanOrEqual(window - 1e-9);
+    expect(onsets[2] - onsets[0]).toBeGreaterThanOrEqual(window - 1e-9);
+
+    // The bead the lens came to rest on is the one heard — and never more than
+    // one at any instant. The bead it passed through was never heard at all.
+    const heard = new Set<string>();
+    for (const sample of timeline(h.log)) {
+      const plans = plansAt(sample.sounding);
+      expect(plans.size).toBeLessThanOrEqual(1);
+      plans.forEach((id) => heard.add(id));
+    }
+    expect([...heard].sort()).toEqual(
+      [`sighted:${COUNTERPOINT}:high`, `sighted:${PRIME}:high`].sort()
+    );
+  });
+
+  it("drops an answer the lens leaves before it has begun, so a fast pass is never a stutter", () => {
+    const h = focusHarness({ retire: true });
+    h.at(100);
+    h.director.handleCue(sighted(COUNTERPOINT, "high")); // due at 100.06
+    h.at(100.05);
+    h.director.handleCue(sighted(JUST, "high"));
+    // The first never began, so it is retired at once and the second is not
+    // deferred on its account: it begins a lead after its own cue.
+    expect(h.retired().map((entry) => entry.planId)).toEqual([
+      `sighted:${COUNTERPOINT}:high`,
+    ]);
+    expect(h.played[1].atSeconds).toBeCloseTo(100.05 + LEAD, 9);
+    const heard = new Set<string>();
+    for (const sample of timeline(h.log)) plansAt(sample.sounding).forEach((id) => heard.add(id));
+    expect([...heard]).toEqual([`sighted:${JUST}:high`]);
+  });
+
+  it("lets an answer finish until the next takes over, so each bead is heard for its window", () => {
+    const h = focusHarness({ retire: true });
+    h.at(100);
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    h.at(100.1);
+    h.director.handleCue(sighted(JUST, "high"));
+    const [first] = h.retired();
+    const second = h.played[1].atSeconds;
+    expect(first.planId).toBe(`sighted:${COUNTERPOINT}:high`);
+    // The first is faded out exactly as the second begins — not the moment the
+    // second was asked for.
+    expect(first.atSeconds + first.fadeSeconds).toBeCloseTo(second, 9);
+    expect(first.fadeSeconds).toBe(FADE);
+  });
+
+  it("declines an answer inside the window when the sink cannot take the last one back", () => {
+    const h = focusHarness({ retire: false });
+    h.at(100);
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    h.at(100.05);
+    h.director.handleCue(sighted(JUST, "high"));
+    expect(h.played).toHaveLength(1);
+    expect(h.retired()).toHaveLength(0);
+
+    // Beyond the window it answers, under what is still ringing — ducked, not
+    // stacked whole.
+    h.at(100.3);
+    h.director.handleCue(sighted(JUST, "high"));
+    expect(h.played).toHaveLength(2);
+    const alone = focusHarness({ retire: false });
+    alone.director.handleCue(sighted(JUST, "high"));
+    expect(loudest(h.played[1].plan)).toBeCloseTo(
+      loudest(alone.played[0].plan) * FOCUS_VOICING.lane.overlapDuck,
+      5
+    );
+  });
+
+  it("does not restart a bead it is still speaking — a lens that leaves and returns", () => {
+    for (const retire of [true, false]) {
+      const h = focusHarness({ retire });
+      h.director.handleCue(sighted(COUNTERPOINT, "medium"));
+      h.advance(0.1);
+      h.director.handleCue(sightLost());
+      h.advance(0.1);
+      h.director.handleCue(sighted(COUNTERPOINT, "medium"));
+      expect(h.played).toHaveLength(1);
+      // Once it has finished, the same bead answers again.
+      h.advance(4);
+      h.director.handleCue(sighted(COUNTERPOINT, "medium"));
+      expect(h.played).toHaveLength(2);
+    }
+  });
+
+  it("stays silent at silent intensity, and does not poison the next answer", () => {
+    const h = focusHarness({ retire: true });
+    h.director.setIntensity("silent");
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    expect(h.played).toHaveLength(0);
+    h.director.setIntensity("full");
+    h.advance(0.01);
+    h.director.handleCue(sighted(JUST, "high"));
+    expect(h.played).toHaveLength(1);
+    expect(h.played[0].atSeconds).toBeCloseTo(100.01 + LEAD, 9);
+  });
+});
+
+describe("a pair locked", () => {
+  it("calls with the attended figure and answers with the second, never together", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(locked());
+    expect(h.played).toHaveLength(1);
+    const { plan, atSeconds } = h.played[0];
+    expect(atSeconds).toBeCloseTo(100 + LEAD, 9);
+    const call = plan.notes.filter((n) => n.conceptId === FIBONACCI);
+    const answer = plan.notes.filter((n) => n.conceptId === COUNTERPOINT);
+    expect(call.length).toBeGreaterThan(0);
+    expect(answer.length).toBeGreaterThan(0);
+    expect(plan.notes.slice(0, call.length)).toEqual(call);
+    // No reading has been chosen, so no interval is sounded: at no instant do
+    // both concepts speak.
+    for (const sample of timeline(h.log)) {
+      const concepts = new Set(sample.sounding.map((entry) => entry.note.conceptId));
+      expect(concepts.size).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("is moderate — above the loudest sighting, below the attended figure and the commit", () => {
+    const lock = focusHarness({ retire: true });
+    lock.director.handleCue(locked());
+    const sight = focusHarness({ retire: true });
+    sight.director.handleCue(sighted(COUNTERPOINT, "high"));
+    const attend = focusHarness({ retire: true });
+    attend.director.handleCue(
+      cue("attention.enter", { conceptId: toConceptId(FIBONACCI), candidates: [] })
+    );
+    const woven = focusHarness({ retire: true });
+    woven.director.handleCue(
+      cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, "echo"))
+    );
+    const level = loudest(lock.played[0].plan);
+    expect(level).toBeGreaterThan(loudest(sight.played[0].plan));
+    expect(level).toBeLessThan(loudest(attend.played[0].plan));
+    expect(level).toBeLessThan(loudest(woven.played[0].plan));
+  });
+
+  it("takes the lane from a sighting still sounding", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    h.advance(0.3);
+    h.director.handleCue(locked());
+    const [retired] = h.retired();
+    expect(retired.planId).toBe(`sighted:${COUNTERPOINT}:high`);
+    expect(retired.atSeconds).toBeCloseTo(100.3, 9);
+    for (const sample of timeline(h.log)) {
+      expect(plansAt(sample.sounding).size).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("is not restarted while it is still sounding, and answers again for a different pair", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(locked());
+    h.advance(0.2);
+    h.director.handleCue(locked());
+    expect(h.played).toHaveLength(1);
+    h.advance(0.2);
+    h.director.handleCue(
+      cue("pair.locked", { pair: [PAIR[0], toConceptId(JUST)], sharedFacets: [] })
+    );
+    expect(h.played).toHaveLength(2);
+  });
+});
+
+describe("a reading previewed", () => {
+  it("plays that intention's grammar on the pair, a lead after the cue", () => {
+    const grammars: Record<RelationIntention, string> = {
+      echo: "imitation",
+      passage: "translation",
+      tension: "displacement",
+      ground: "foundation",
+    };
+    for (const intention of INTENTIONS) {
+      const h = focusHarness({ retire: true });
+      h.director.handleCue(previewed(intention));
+      expect(h.played).toHaveLength(1);
+      const { plan, atSeconds } = h.played[0];
+      expect(atSeconds).toBeCloseTo(100 + LEAD, 9);
+      expect(plan.intention).toBe(intention);
+      expect(plan.meta.grammar).toBe(grammars[intention]);
+      expect([...plan.meta.conceptIds].sort()).toEqual([COUNTERPOINT, FIBONACCI].sort());
+      // Heard on the pair: both concepts sound, in the grammar of the reading.
+      const concepts = new Set(plan.notes.map((n) => n.conceptId));
+      expect(concepts.has(FIBONACCI)).toBe(true);
+      expect(concepts.has(COUNTERPOINT)).toBe(true);
+    }
+  });
+
+  it("is quieter and shorter hovered than chosen — for every intention", () => {
+    for (const intention of INTENTIONS) {
+      const hover = focusHarness({ retire: true });
+      hover.director.handleCue(previewed(intention, false));
+      const chosen = focusHarness({ retire: true });
+      chosen.director.handleCue(previewed(intention, true));
+      const a = hover.played[0].plan;
+      const b = chosen.played[0].plan;
+      expect(loudest(a)).toBeLessThan(loudest(b));
+      expect(audibleEndSeconds(a)).toBeLessThan(audibleEndSeconds(b));
+      expect(a.id).not.toBe(b.id);
+    }
+  });
+
+  it("stays under the commit — a chosen reading is never louder than the phrase it leads to", () => {
+    for (const intention of INTENTIONS) {
+      const chosen = focusHarness({ retire: true });
+      chosen.director.handleCue(previewed(intention, true));
+      const woven = focusHarness({ retire: true });
+      woven.director.handleCue(
+        cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, intention))
+      );
+      expect(loudest(chosen.played[0].plan)).toBeLessThan(loudest(woven.played[0].plan));
+    }
+  });
+
+  it("hears the same reading a hover, a choice and a recall promise", () => {
+    for (const intention of ["echo", "tension"] as const) {
+      const hover = focusHarness({ retire: true });
+      hover.director.handleCue(previewed(intention, false));
+      const chosen = focusHarness({ retire: true });
+      chosen.director.handleCue(previewed(intention, true));
+      const recall = focusHarness({ retire: true });
+      recall.director.handleCue(reopened("t1", intention));
+      const woven = focusHarness({ retire: true });
+      woven.director.handleCue(
+        cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, intention))
+      );
+      const interval = woven.played[0].plan.meta.interval;
+      expect(hover.played[0].plan.meta.interval).toBe(interval);
+      expect(chosen.played[0].plan.meta.interval).toBe(interval);
+      expect(recall.played[0].plan.meta.interval).toBe(interval);
+    }
+    // A Tension is never a different suspension for being previewed: the same
+    // beating rate, in band.
+    const tension = focusHarness({ retire: true });
+    tension.director.handleCue(previewed("tension", true));
+    const beating = tension.played[0].plan.meta.beatingHz!;
+    expect(beating).toBeGreaterThanOrEqual(COMFORT.beating.minHz);
+    expect(beating).toBeLessThanOrEqual(COMFORT.beating.maxHz);
+  });
+
+  it("replaces the last preview instead of stacking — hovering across four sigils", () => {
+    const h = focusHarness({ retire: true });
+    INTENTIONS.forEach((intention, index) => {
+      h.at(100 + index * 0.25);
+      h.director.handleCue(previewed(intention));
+    });
+
+    // Immediate: each begins a lead after its cue.
+    expect(h.played.map((entry) => entry.atSeconds)).toEqual(
+      INTENTIONS.map((_, index) => expect.closeTo(100 + index * 0.25 + LEAD, 9))
+    );
+    // Each preview took the last one back, at the moment it was asked for.
+    const retired = h.retired();
+    expect(retired.map((entry) => entry.planId)).toEqual(
+      h.played.slice(0, 3).map((entry) => entry.plan.id)
+    );
+    retired.forEach((entry, index) => {
+      expect(entry.atSeconds).toBeCloseTo(100 + (index + 1) * 0.25, 9);
+      expect(entry.fadeSeconds).toBe(FADE);
+    });
+
+    // Never four bars: at no instant is more than one preview audible, however
+    // the pointer crossed them, and the sum never exceeds the loudest single one.
+    const single = Math.max(...h.played.map((entry) => peakSummedGain(entry.plan)));
+    for (const sample of timeline(h.log)) {
+      expect(plansAt(sample.sounding).size).toBeLessThanOrEqual(1);
+      expect(levelAt(sample.sounding)).toBeLessThanOrEqual(single + 1e-9);
+      expect(tenseAt(sample.sounding)).toBeLessThanOrEqual(
+        COMFORT.tension.maxConcurrentVoices
+      );
+    }
+    // And each was played whole: replacing is not ducking.
+    INTENTIONS.forEach((intention, index) => {
+      const alone = focusHarness({ retire: true });
+      alone.director.handleCue(previewed(intention));
+      expect(h.played[index].plan.notes.map((n) => n.gain)).toEqual(
+        alone.played[0].plan.notes.map((n) => n.gain)
+      );
+    });
+  });
+
+  it("bounds the pile instead, when the sink cannot take a preview back", () => {
+    const h = focusHarness({ retire: false });
+    INTENTIONS.forEach((intention, index) => {
+      h.at(100 + index * 0.25);
+      h.director.handleCue(previewed(intention));
+    });
+    expect(h.retired()).toHaveLength(0);
+    // The fourth would have to be ducked below the floor, so it is not played on
+    // top: silence is better than a stack.
+    expect(h.played.length).toBeLessThan(4);
+    expect(h.played.length).toBeGreaterThanOrEqual(2);
+
+    const stillSounding = (entry: Recorded, at: number): boolean =>
+      entry.plan.notes.some(
+        (n) =>
+          entry.atSeconds +
+            n.atSeconds +
+            n.envelope.attack +
+            n.envelope.hold +
+            n.envelope.release * FOCUS_VOICING.lane.audibleReleaseFraction >
+          at
+      );
+    h.played.forEach((entry, index) => {
+      const under = h.played.slice(0, index).filter((earlier) => stillSounding(earlier, entry.atSeconds));
+      // Never more than two voices under a new one — the third is declined.
+      expect(under.length).toBeLessThanOrEqual(2);
+      // Each later preview is ducked against what it would have been alone.
+      if (index > 0) {
+        const alone = focusHarness({ retire: false });
+        alone.director.handleCue(previewed(INTENTIONS[index]));
+        expect(loudest(entry.plan)).toBeLessThan(loudest(alone.played[0].plan));
+      }
+    });
+  });
+
+  it("does not restart a reading it is still playing", () => {
+    for (const retire of [true, false]) {
+      const h = focusHarness({ retire });
+      h.director.handleCue(previewed("echo"));
+      h.advance(0.2);
+      h.director.handleCue(previewed("echo"));
+      expect(h.played).toHaveLength(1);
+      expect(h.retired()).toHaveLength(0);
+    }
+  });
+
+  it("lets choosing take over from the hover of the same reading", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(previewed("passage", false));
+    h.advance(0.4);
+    h.director.handleCue(previewed("passage", true));
+    expect(h.played).toHaveLength(2);
+    expect(h.retired().map((entry) => entry.planId)).toEqual([h.played[0].plan.id]);
+    expect(loudest(h.played[1].plan)).toBeGreaterThan(loudest(h.played[0].plan));
+  });
+
+  it("stays inside CAV-007 when a Tension is heard, then chosen, before the first has finished", () => {
+    const withRetire = focusHarness({ retire: true });
+    withRetire.director.handleCue(previewed("tension", false));
+    withRetire.advance(0.3);
+    withRetire.director.handleCue(previewed("tension", true));
+    expect(withRetire.played).toHaveLength(2);
+    for (const sample of timeline(withRetire.log)) {
+      expect(tenseAt(sample.sounding)).toBeLessThanOrEqual(COMFORT.tension.maxConcurrentVoices);
+    }
+
+    // A sink that cannot take the hover back must not be handed six tense
+    // voices: the second is declined, and the first is the reading being heard.
+    const without = focusHarness({ retire: false });
+    without.director.handleCue(previewed("tension", false));
+    without.advance(0.3);
+    without.director.handleCue(previewed("tension", true));
+    expect(without.played).toHaveLength(1);
+    for (const sample of timeline(without.log)) {
+      expect(tenseAt(sample.sounding)).toBeLessThanOrEqual(COMFORT.tension.maxConcurrentVoices);
+    }
+
+    // Given room, both are heard, in either kind of sink.
+    for (const retire of [true, false]) {
+      const spaced = focusHarness({ retire });
+      spaced.director.handleCue(previewed("tension", false));
+      spaced.advance(4);
+      spaced.director.handleCue(previewed("tension", true));
+      expect(spaced.played).toHaveLength(2);
+    }
+  });
+
+  it("hands the sink only lawful plans at every bed a preview can be heard against", () => {
+    const beds: { name: string; scale: number; prepare: (h: ReturnType<typeof focusHarness>) => void }[] = [
+      { name: "released", scale: 1, prepare: () => {} },
+      {
+        name: "attending",
+        scale: SCORE.attention.bedGainScale,
+        prepare: (h) =>
+          h.director.handleCue(
+            cue("attention.enter", { conceptId: toConceptId(FIBONACCI), candidates: [] })
+          ),
+      },
+      {
+        name: "attuned",
+        scale: SCORE.attunement.bedGainScale,
+        prepare: (h) => h.director.handleCue(cue("attunement.changed", { active: true })),
+      },
+    ];
+    for (const bed of beds) {
+      const h = focusHarness({ retire: true });
+      bed.prepare(h);
+      h.played.length = 0;
+      const bedGain = SCORE.grammar.bedGain * bed.scale;
+      for (const intention of INTENTIONS) {
+        for (const chosen of [false, true]) {
+          h.advance(10);
+          h.director.handleCue(previewed(intention, chosen));
+          const plan = h.played.at(-1)!.plan;
+          expect(auditComfort(plan, { bedGain })).toEqual([]);
+          if (intention === "tension") {
+            expect(plan.notes.filter((n) => n.tense).length).toBeLessThanOrEqual(
+              COMFORT.tension.maxConcurrentVoices
+            );
+            expect(
+              plan.notes.filter((n) => n.tense).reduce((sum, n) => sum + n.gain, 0)
+            ).toBeLessThanOrEqual(tensionCeiling(bedGain) + 1e-9);
+          }
+        }
+      }
+    }
+  });
+
+  it("thins at reduced intensity, keeps its beating, and is silent at silent intensity", () => {
+    const full = focusHarness({ retire: true });
+    full.director.handleCue(previewed("tension", true));
+    const reduced = focusHarness({ retire: true });
+    reduced.director.setIntensity("reduced");
+    reduced.director.handleCue(previewed("tension", true));
+    expect(loudest(reduced.played[0].plan)).toBeLessThan(loudest(full.played[0].plan));
+    expect(reduced.played[0].plan.beatings).toHaveLength(1);
+
+    const silent = focusHarness({ retire: true });
+    silent.director.setIntensity("silent");
+    silent.director.handleCue(previewed("echo", true));
+    expect(silent.played).toHaveLength(0);
+  });
+});
+
+describe("a thread reopened", () => {
+  it("returns to the thread's own phrase, softly, once", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(reopened("t1", "echo"));
+    expect(h.played).toHaveLength(1);
+    const { plan, atSeconds } = h.played[0];
+    expect(atSeconds).toBeCloseTo(100 + LEAD, 9);
+    expect(plan.id).toBe("relation:t1:recall");
+    expect(plan.intention).toBe("echo");
+    expect(plan.meta.grammar).toBe("imitation");
+    // It is the weave's own voices, not a lookalike: the same note identities.
+    expect(plan.notes.every((n) => n.id.startsWith("relation:t1:"))).toBe(true);
+
+    const chosen = focusHarness({ retire: true });
+    chosen.director.handleCue(previewed("echo", true));
+    expect(loudest(plan)).toBeLessThan(loudest(chosen.played[0].plan));
+
+    // Once: asking again while it sounds does not restart it.
+    h.advance(0.3);
+    h.director.handleCue(reopened("t1", "echo"));
+    expect(h.played).toHaveLength(1);
+  });
+
+  it("does not depend on what the record said of the thread (CAV-006)", () => {
+    const openThread = cue("outcome.open-thread", {
+      threadId: toThreadId("t1"),
+      pair: [PAIR[0], PAIR[1]],
+      intention: "echo",
+      question: "Is there a work in which this can be demonstrated?",
+      sharedFacet: CASTALIA_RELATIONS[0].sharedFacets[0],
+    });
+    const unresolved = cue("outcome.unresolved", {
+      threadId: toThreadId("t1"),
+      pair: [PAIR[0], PAIR[1]],
+      intention: "echo",
+      statement: "The Game has no grounded relation here yet.",
+    });
+    const priors: (PresentationCue | null)[] = [
+      cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, "echo")),
+      openThread,
+      unresolved,
+      null,
+    ];
+    const plans = priors.map((prior) => {
+      const h = focusHarness({ retire: true });
+      if (prior !== null) h.director.handleCue(prior);
+      h.advance(30);
+      h.played.length = 0;
+      h.director.handleCue(reopened("t1", "echo"));
+      return h.played[0].plan;
+    });
+    for (const plan of plans) expect(plan).toEqual(plans[0]);
+  });
+
+  it("never depends on the record for a preview, a lock, or a sighting either", () => {
+    const record = cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, "tension"));
+    const cues: PresentationCue[] = [
+      sighted(COUNTERPOINT, "medium"),
+      locked(),
+      previewed("tension", true),
+      previewed("ground", false),
+    ];
+    for (const focus of cues) {
+      const bare = focusHarness({ retire: true });
+      bare.director.handleCue(focus);
+      const informed = focusHarness({ retire: true });
+      informed.director.handleCue(record);
+      informed.advance(30);
+      informed.played.length = 0;
+      informed.director.handleCue(focus);
+      const a = bare.played[0].plan;
+      const b = informed.played[0].plan;
+      expect(b.notes.map((n) => [n.degree, n.gain, n.atSeconds])).toEqual(
+        a.notes.map((n) => [n.degree, n.gain, n.atSeconds])
+      );
+    }
+  });
+});
+
+describe("moments that end the looking", () => {
+  it("lets a weave take the lane, and leaves the commit's landing unchanged", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(previewed("echo", true));
+    h.advance(0.4);
+    h.director.handleCue(cue("thread.woven", wovenPayload("t1", FIBONACCI, COUNTERPOINT, "echo")));
+    expect(h.retired().map((entry) => entry.planId)).toEqual([h.played[0].plan.id]);
+    expect(h.retired()[0].atSeconds).toBeCloseTo(100.4, 9);
+    const landing = h.played.at(-1)!;
+    expect(landing.plan.meta.grammar).toBe("landing");
+    expect(landing.atSeconds).toBeCloseTo(100.4 + 0.25, 9);
+  });
+
+  it("lets a new Attend and a release of attention take the lane", () => {
+    for (const ending of [
+      cue("attention.enter", { conceptId: toConceptId(JUST), candidates: [] }),
+      cue("attention.clear", {}),
+    ]) {
+      const h = focusHarness({ retire: true });
+      h.director.handleCue(previewed("passage", false));
+      h.advance(0.3);
+      h.director.handleCue(ending);
+      expect(h.retired().map((entry) => entry.planId)).toEqual([h.played[0].plan.id]);
+    }
+  });
+
+  it("spaces sightings afresh after a new Attend, not from a bead that was sighted before it", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(sighted(COUNTERPOINT, "high"));
+    h.advance(0.05);
+    h.director.handleCue(cue("attention.enter", { conceptId: toConceptId(JUST), candidates: [] }));
+    h.advance(0.01);
+    h.director.handleCue(sighted(PRIME, "high"));
+    const last = h.played.at(-1)!;
+    expect(last.plan.id).toBe(`sighted:${PRIME}:high`);
+    expect(last.atSeconds).toBeCloseTo(100.06 + LEAD, 9);
+  });
+
+  it("forgets the lane on reset, so a stale plan is never retired into a new session", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(previewed("echo", true));
+    h.director.reset();
+    h.advance(0.1);
+    h.director.handleCue(previewed("passage", true));
+    expect(h.retired()).toHaveLength(0);
+  });
+
+  it("leaves every other cue as it was: a relation, an attention foreground, an ensemble", () => {
+    const h = focusHarness({ retire: true });
+    h.director.handleCue(
+      cue("outcome.documented", documentedPayload("t1", FIBONACCI, COUNTERPOINT, "echo"))
+    );
+    h.director.handleCue(
+      cue("attention.enter", { conceptId: toConceptId(FIBONACCI), candidates: [] })
+    );
+    expect(h.played.map((entry) => entry.plan.kind)).toEqual(["relation", "attention"]);
+    expect(h.retired()).toHaveLength(0);
+  });
+});
+
+describe("the focus voice on the captioned path", () => {
+  it("adds no caption of its own: src/runtime/captions already says each moment", () => {
+    const h = focusHarness({ retire: true });
+    const sequence: PresentationCue[] = [
+      sighted(COUNTERPOINT, "high"),
+      sightLost(),
+      locked(),
+      ...INTENTIONS.flatMap((intention) => [previewed(intention, false), previewed(intention, true)]),
+      reopened("t1", "ground"),
+    ];
+    for (const focus of sequence) {
+      h.advance(4);
+      h.director.handleCue(focus);
+    }
+    expect(h.played.length).toBeGreaterThan(0);
+    expect(h.captions).toHaveLength(0);
+    expect(h.director.lastCaption()).toBeNull();
+  });
+
+  it("makes no sound at silent intensity and still asks nothing of the sink", () => {
+    const h = focusHarness({ retire: true });
+    h.director.setIntensity("silent");
+    for (const focus of [sighted(JUST, "high"), locked(), previewed("tension", true), reopened("t1", "echo")]) {
+      h.advance(1);
+      h.director.handleCue(focus);
+    }
+    expect(h.played).toHaveLength(0);
   });
 });
