@@ -41,11 +41,19 @@ export const SCORE = {
     vibratoHz: 4.6, // vibrato speed
   },
 
-  /** The slow harmonic journey of the ambient bed. */
+  /**
+   * The harmony that moves (ADR-017): the bed's root walks this cycle of the
+   * mode's stable degrees one phrase at a time and returns, and the pad is a
+   * three-voice chord over it (`harmony.ts`). `harmony.test.ts` holds the cycle
+   * to what it does to every concept's identity note, so it cannot change
+   * without that test changing with it.
+   */
   harmony: {
     phraseSlots: 12, // slots per phrase (8–16)
-    cycle: 3, // every Nth phrase leans toward the mode's shadow (2–4)
-    minorRootDegree: 9 as const, // the major sixth — the mode's minor shadow
+    rootCycle: [0, 5, 9, 7] as const, // C, F, A, G — one root per phrase
+    crossfadeSeconds: 2, // the old chord releases while the new one attacks, from the boundary
+    padGain: 0.03, // each of the chord's three voices; the one-note pad it replaced was 0.05
+    padFloor: 7, // the pad's first voicing starts here, in the low register (G2)
   },
 
   /**
