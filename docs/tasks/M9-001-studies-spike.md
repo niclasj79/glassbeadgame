@@ -183,7 +183,26 @@ scope; propose anything else in the implementation notes.
       "src/ui/arena/marginaliaNote.ts",
       "src/ui/arena/InterpretationControls.tsx",
       "src/ui/arena/CueCaptions.tsx",
-      "tests/browser/deterministic-mode.spec.ts"
+      "tests/browser/deterministic-mode.spec.ts",
+      "src/runtime/interpretation/productionInterpretation.ts",
+      "src/runtime/scene/createSceneDirector.ts",
+      "src/runtime/scene/createSceneDirector.test.ts",
+      "src/audio/director.ts",
+      "src/audio/director.test.ts",
+      "src/audio/useAudio.ts",
+      "src/audio/roomLifecycle.ts",
+      "src/audio/roomLifecycle.test.ts",
+      "src/ui/screens/studies.render.test.ts",
+      "src/ui/screens/studyPlate.render.test.ts",
+      "src/ui/screens/titleDoors.render.test.ts",
+      "src/ui/arena/FocusColumn.tsx",
+      "src/ui/arena/worldVoice.ts",
+      "src/ui/arena/StudyNote.tsx",
+      "src/ui/arena/studyMode.ts",
+      "src/ui/arena/presence.ts",
+      "src/ui/arena/studyMode.render.test.ts",
+      "src/ui/arena/studyVoice.test.ts",
+      "src/ui/arena/testing/studyFixtures.ts"
     ],
     "boundaries": [
       "studies-content",
@@ -191,7 +210,8 @@ scope; propose anything else in the implementation notes.
       "studies-runtime",
       "studies-presentation",
       "presentation-cue-vocabulary",
-      "browser-test-mode"
+      "browser-test-mode",
+      "audio-room-lifecycle"
     ]
   },
   "unresolvedDecisions": [],
@@ -253,6 +273,25 @@ scope; propose anything else in the implementation notes.
 - `src/ui/arena/InterpretationControls.tsx`
 - `src/ui/arena/CueCaptions.tsx`
 - `tests/browser/deterministic-mode.spec.ts`
+- `src/runtime/interpretation/productionInterpretation.ts`
+- `src/runtime/scene/createSceneDirector.ts`
+- `src/runtime/scene/createSceneDirector.test.ts`
+- `src/audio/director.ts`
+- `src/audio/director.test.ts`
+- `src/audio/useAudio.ts`
+- `src/audio/roomLifecycle.ts`
+- `src/audio/roomLifecycle.test.ts`
+- `src/ui/screens/studies.render.test.ts`
+- `src/ui/screens/studyPlate.render.test.ts`
+- `src/ui/screens/titleDoors.render.test.ts`
+- `src/ui/arena/FocusColumn.tsx`
+- `src/ui/arena/worldVoice.ts`
+- `src/ui/arena/StudyNote.tsx`
+- `src/ui/arena/studyMode.ts`
+- `src/ui/arena/presence.ts`
+- `src/ui/arena/studyMode.render.test.ts`
+- `src/ui/arena/studyVoice.test.ts`
+- `src/ui/arena/testing/studyFixtures.ts`
 
 ### Declared boundaries
 
@@ -262,6 +301,7 @@ scope; propose anything else in the implementation notes.
 - `studies-presentation`
 - `presentation-cue-vocabulary`
 - `browser-test-mode`
+- `audio-room-lifecycle`
 
 The Study browser smoke is added as its own test inside
 `tests/browser/deterministic-mode.spec.ts`, which already hosts several
@@ -542,3 +582,109 @@ judgement is the milestone gate.
   preview in both modes, so the Study-mode facet display and the scene paths
   it needed left this packet. The branch `codex/M9-001-studies-spike` is
   created when M2-012 is Done and this packet returns to In progress.
+
+- Built early and stacked, 2026-09-30. The director asked for the work to go
+  as far as it could be seen clearly, so the branch was created on
+  M2-012's pull-request head instead of after M2-012 is Done, and its pull
+  request is a draft based on `codex/M2-012-focus-view`. It cannot merge
+  before its base, and this packet stays Blocked until M2-012 is Done; the
+  branch is rebased onto the base when it moves.
+- Stage 1, content and domain. The twelve Studies carry the goals and
+  answers of the table, and every claim in the table holds over the whole
+  pack (a test checks each one). The bead sets were searched for under §9
+  with fairness constraints — every bead shares a facet with at least two
+  others, and each set holds near misses; all twenty-four beads are used,
+  and no two sets share more than four. The solver, the validator and
+  `evaluateStudy` are in `src/domain/studies/**`, which imports nothing
+  outside the domain (an import scan test). The evaluator is typed over
+  `ConceptStructureLookup`, which has no facet names, so `explanation` and the
+  *not yet* statement are closed structured unions rendered by pure functions
+  (`describeStudyStatus`, `describeStudyLine`, `renderStudyBrief`): a shape
+  the packet permits ("names may vary if the contract stays equally closed
+  and explicit"). Definitions chosen: Economical is the session's thread count
+  equal to the brief's; consecutive threads are threads that meet at a bead,
+  so a canon is never Varied; a one-thread answer is neither Varied nor Wide.
+  Two validator codes were added beyond the packet's list: a malformed goal,
+  and a Magister's line not written bead to bead.
+- The first load. With the Studies in the pack object the first load measured
+  524,251 bytes gzip against the 524,000 ceiling: the runtime reads the pack
+  from the first frame. The Studies left the pack object and are built on
+  first use (`castaliaStudies()`), the validator proves the authored twelve by
+  default so the build gate still refuses an invalid Study, and the threshold
+  page loads after the title as the arena's page does. With every stage in,
+  the first load is 523,137 bytes gzip and 1,744,582 raw, and no chunk in it
+  carries a Study.
+- Stage 2, runtime. A Study session is built without the draw (seed
+  `study:<id>`, session id `session:castalia.v1:study:<id>`, the Study's beads
+  in authored order) and replays to the same status. The Study progression
+  follows commits through a small follower registry in
+  `productionInterpretation.ts` (`followCommits`), after the session
+  progression and in the same turn, registered only while a Study is
+  attached: a store subscriber would run before the outcome is staged. It
+  stages `study.solved` after the commit's own moment (the `thread.woven`
+  plan's duration) and after a motif that commit completed
+  (`MOTIF_MOMENT_SECONDS`), and the plate opens on its ui delivery. A declared
+  silence that solved a Study stands for the rest of that session. Leaving
+  discards the session; a Free Game can never inherit a Study (R4); the
+  Attunement invitation is not surfaced in Study mode.
+- Cues: `study.solved` {studyId, by, threadIds, conceptIds, marks, brief} on
+  scene, audio, ui and caption — `conceptIds` and `brief` added so the
+  directors and the caption layer need no Study access — and a caption-only
+  `study.not-yet`. Captions: "Solved: <brief>.", "Solved: <brief> — it cannot
+  be done with these beads.", "Not yet — it can be done with these beads."
+  The scene answers with the outcome's flare and a burst at the answer's
+  beads; the audio reuses the motif ensemble over them; a silence is not
+  voiced. Nothing depends on documented, open or unresolved outcomes.
+- Stage 3, presentation. The title's *Studies* door is held shut with *Begin*
+  until the world is ready; the list shows three chapters, each Study's brief
+  and *Begin*, and nothing counted. In a Study the brief is the first note in
+  the column and can be set aside and reopened; *It cannot be done* is under
+  it and in the DOM mirror; *not yet* is a margin line and a polite caption,
+  said again when given again; the plate shows the player's line, the
+  Magister's line, the counts, the marks and three ways on (*Next Study* only
+  when one follows). Study mode shows no Conclude, Lens or Attunement, and a
+  leaving Study keeps its own chrome through the fade instead of flashing the
+  Free Game's.
+- The room. The ambient lifecycle knew the title and the threshold as empty
+  rooms, not the Studies list, and Again and Next Study go from arena to
+  arena: the last attempt's bed and choir kept singing. `roomIsEmpty` and
+  `choirMustReset` (`src/audio/roomLifecycle.ts`) decide it now.
+- Declared-path correction, the same protocol as M2-012's: the commit
+  follower (`productionInterpretation.ts`), the scene and audio directors
+  that answer `study.solved`, the audio room lifecycle (`useAudio.ts`,
+  `roomLifecycle.ts`), the column, the screen-reader table and the new
+  presentation modules under `src/ui/arena/`, and the render tests beside the
+  new screens (boundary `audio-room-lifecycle`). The event schema, reducer,
+  replay, outcome resolution, motif detection, portrait, annotation,
+  conclusion, persistence, audio grammar, threshold copy and every existing
+  browser test are unchanged (diff scan against M2-012's head).
+- Checks on the stacked head, in the cloud container: `npm ci` resolved the
+  unchanged lockfile (dry run); `steering:test` and `steering:check` passed;
+  typecheck and lint passed (the container's agent worktrees excluded);
+  `npm test` 1,989 passed; `validate:content` passed; build passed;
+  `bundle:check` passed (above); `test:browser` 16 of 16 passed, three of
+  them the Study paths by keyboard; `git diff --check` clean. Focused scans:
+  the import scan (`src/domain/studies/imports.test.ts`), the type scan
+  (`src/runtime/studies/publicInformation.test.ts`: no `RelationLookup`
+  reaches the evaluator), the first-load scan
+  (`src/runtime/studies/firstLoad.test.ts`), the copy scans over the list,
+  the plate, the brief, the margin line and the captions (render and caption
+  tests, and the browser smoke over the list and the marks), and the diff
+  scan above.
+- Performance reference (SwiftShader, same container, effective frames per
+  second; evidence only per M0-005): mobile-potato idle 4.95 and 5.51, focus
+  3.17 and 3.76, against M2-012's 6.49 and 6.11 idle and 3.64 and 3.95 focus
+  measured earlier the same day; the Studies run no code in a Free Game, and
+  the spread is the container's. Both desktop profiles miss the spec's frame
+  floor here, as main's do.
+- Proposals, not implemented: a stated per-session `attempt` in the Study
+  store for the column's key (today it keys on the projection's identity);
+  a way to set the plate aside without leaving (none is specified). Seen in
+  passing: the Free Game's `attention.enter` caption carries numerals ("3
+  beads answer…"); it is not a Study surface and predates this task.
+- Human review: whether a Study feels like a problem worth solving; the
+  fairness of the twelve bead sets and whether a silence Study can be
+  guessed from its set; the briefs in the Game's voice and the new copy (the
+  list's lead line, "Your answer", "The Magister's answer", "The form of your
+  answer"); the solved moment's flare and ensemble; the controls by mouse,
+  touch and keyboard; and that the Free Game is unchanged.

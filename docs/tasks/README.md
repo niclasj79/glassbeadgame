@@ -55,7 +55,8 @@ None.
 1. `M9-001-studies-spike.md` — directly assigned Studies spike: twelve authored
    Studies over the same loop, proven at build time, under the honesty rules
    of the Studies specification; blocked until M2-012 is Done, because the
-   Studies rely on the facet notation the focus view delivers.
+   Studies rely on the facet notation the focus view delivers. Implemented
+   early in a draft pull request stacked on M2-012's branch.
 
 ## Completed
 
