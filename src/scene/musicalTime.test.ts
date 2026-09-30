@@ -325,15 +325,19 @@ describe("the breath catching the grid", () => {
     // whole turn. The first armed frame moves by a frame's share of that short
     // distance, not by the gap — and the whole turn is never walked.
     const gap = 10 - 3 - 2 * Math.PI;
+    // A step is measured the way the breath is read, through sine and cosine:
+    // a whole turn is no step at all.
+    const step = (from: number, to: number): number =>
+      ((((to - from + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
     const first = breathPhaseAfter(phase, dt, 1, grid, follow);
-    expect(first - phase).toBeGreaterThan(0);
-    expect(first - phase).toBeLessThan(gap * dt * BREATH_CATCH_RATE * 1.01);
+    expect(step(phase, first)).toBeGreaterThan(0);
+    expect(step(phase, first)).toBeLessThan(gap * dt * BREATH_CATCH_RATE * 1.01);
     phase = first;
     let largestStep = 0;
     for (let i = 0; i < 60 * 3; i += 1) {
       t += dt;
       const next = breathPhaseAfter(phase, dt, 1, grid, follow);
-      largestStep = Math.max(largestStep, Math.abs(next - phase));
+      largestStep = Math.max(largestStep, Math.abs(step(phase, next)));
       phase = next;
     }
     // Caught: within a hundredth of a radian of the grid after three seconds…
@@ -361,7 +365,8 @@ describe("the breath catching the grid", () => {
     const armed = gridAt(() => 50);
     breathPhaseAfter(held, 1 / 60, 1, armed, follow);
     expect(follow.armed).toBe(true);
-    expect(follow.offset).toBeGreaterThan(0);
-    expect(follow.offset).toBeLessThan(50 - held);
+    // The short way round: never more than half a turn, and not nothing.
+    expect(follow.offset).not.toBe(0);
+    expect(Math.abs(follow.offset)).toBeLessThanOrEqual(Math.PI);
   });
 });
