@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Review
 
 ## Milestone
 
@@ -187,9 +187,20 @@ scope; propose anything else in the implementation notes.
       "src/audio/director.ts",
       "src/audio/director.test.ts",
       "src/audio/useAudio.ts",
+      "src/audio/focusVoicing.ts",
+      "src/audio/focusVoicing.test.ts",
+      "src/audio/focusLane.ts",
+      "src/audio/focusLane.test.ts",
+      "src/audio/productionAudio.ts",
+      "src/audio/scheduler.ts",
+      "src/audio/scheduler.test.ts",
+      "src/audio/voices.ts",
+      "src/audio/sfx.ts",
+      "src/audio/describe.ts",
       "src/ui/arena/**",
       "src/ui/components/inspection.ts",
       "src/ui/components/ReadingColumn.tsx",
+      "src/ui/components/readingColumn.render.test.ts",
       "src/App.tsx",
       "tests/browser/**"
     ],
@@ -201,7 +212,8 @@ scope; propose anything else in the implementation notes.
       "scene-focus-rendering",
       "arena-ui",
       "audio-attention",
-      "browser-test-mode"
+      "browser-test-mode",
+      "audio-voice-retirement"
     ]
   },
   "unresolvedDecisions": [],
@@ -252,9 +264,20 @@ scope; propose anything else in the implementation notes.
 - `src/audio/director.ts`
 - `src/audio/director.test.ts`
 - `src/audio/useAudio.ts`
+- `src/audio/focusVoicing.ts`
+- `src/audio/focusVoicing.test.ts`
+- `src/audio/focusLane.ts`
+- `src/audio/focusLane.test.ts`
+- `src/audio/productionAudio.ts`
+- `src/audio/scheduler.ts`
+- `src/audio/scheduler.test.ts`
+- `src/audio/voices.ts`
+- `src/audio/sfx.ts`
+- `src/audio/describe.ts`
 - `src/ui/arena/**`
 - `src/ui/components/inspection.ts`
 - `src/ui/components/ReadingColumn.tsx`
+- `src/ui/components/readingColumn.render.test.ts`
 - `src/App.tsx`
 - `tests/browser/**`
 
@@ -268,6 +291,7 @@ scope; propose anything else in the implementation notes.
 - `arena-ui`
 - `audio-attention`
 - `browser-test-mode`
+- `audio-voice-retirement`
 
 Within `src/scene/**`, the conclusion performance, constellation reveal,
 firmament, opening and idle modules are inspection-only unless the fog or the
@@ -540,3 +564,113 @@ fallbacks; they cannot establish comfort or legibility.
   steering ownership projection, no packet can validate as Ready. The branch
   `codex/M2-012-focus-view` is created on merge of the packet. M9-001 is
   Blocked behind this task and relies on the facet notation it delivers.
+
+- Stage 2 (surfaces) landed as four workstreams on the stage-1 contract, each
+  one commit, integrated in order: the pointer layer and sigils
+  (`src/scene/threading.ts`, `dwell.ts`, `threadPicking.ts`, the plate on the
+  unread strand), the column and the DOM mirror (`src/ui/arena/**`), the voice
+  of the focus view (`src/audio/director.ts`, `focusVoicing.ts`,
+  `focusLane.ts`), and the camera, fog and beads (`CameraRig.tsx`,
+  `framing.ts`, `focusFog.ts`, `FocusFogEffect.tsx`, `focusFogPass.ts`,
+  `focusPosture.ts`, `Beads.tsx`, `salience.ts`). No durable event, payload or
+  schema changed; the commit batch and its identity are M2-011's.
+- Declared-path correction in stage 2, same protocol as stage 1:
+  `src/audio/focusVoicing.ts`, `focusLane.ts` and their tests are the new pure
+  planners the audio contract needed; `src/audio/productionAudio.ts`,
+  `scheduler.ts` (with its test) and `voices.ts` carry the retire seam that
+  lets a new focus voice take the last one back (boundary
+  `audio-voice-retirement`); `src/audio/sfx.ts` and `src/audio/describe.ts`
+  lose code this task made dead (the drag's silk shimmer and the describer's
+  branch for the retired `armed:` plans);
+  `src/ui/components/readingColumn.render.test.ts` is the declared
+  `ReadingColumn.tsx`'s own test. The comfort tables, the grammar and every
+  other audio file are unchanged.
+- Decisions taken inside the contract, for review:
+  - The Lock's answer is immediate (the unread strand, the second card, the
+    call and response), and the sigils bloom once the locking hand has let go
+    and the camera has arrived: 11 frames under reduced motion (about 0.18 s
+    at 60 fps); with motion, after the pair framing turn (about 0.7 s), and
+    they then move 0.1 px. The old law "at once" (B2) is now measured under
+    reduced motion.
+  - Attend turns the world until the attended bead sits in the left of the
+    frame and as low as the ±19° elevation limit allows. Beads near the top of
+    the sphere (4 of 12 in the measured draw, Fibonacci among them) stay above
+    centre. The browser test holds the "left" part only.
+  - The fog runs as one pass before the bloom and is switched off in clear
+    air. Its dim level is a function of the relation-neutral band alone (0.7 /
+    0.45 / 0.25, floor 0.2). Low tier and reduced motion get no blur code.
+  - A dwell card hides the margin while the look lasts; the pair's cards leave
+    on release and the thread card writes itself in about 0.4 s later; the
+    column carries its own visible Step back (I-011) for touch.
+  - Hover previews are audible one at a time: each new focus voice retires the
+    last, so the reading the pointer rests on is always the one heard.
+  - A weave now ends the thinned attention sound-space, as it ends the fog.
+    Before this branch the bed stayed thinned from the first weave until the
+    next Attend.
+  - The arena's page (`ArenaHud` and everything under it) loads behind a
+    dynamic import prefetched after the title paints, as the conclusion does:
+    with every workstream in, the first load measured 531,608 bytes gzip
+    against the 524,000 ceiling, and the budget's policy prescribes a dynamic
+    import, not a raise.
+- Browser tests: the golden, keyboard, assistive, touch, cancel-ladder,
+  replay, seed and adapter paths, and the focus view (column states, the gap
+  line's delay, lit shared facets and "nothing shared", dwell, reopening from
+  the mirror and from the world, full-motion fog with blur) all run in
+  `deterministic-mode.spec.ts`, because `test:browser` runs a fixed list of
+  specs and `package.json` belongs to M0-008. `gesture-holds-the-world` and
+  `the-world-answers` keep their laws on the new surface. The adapter gains
+  `threadScreen(threadId, at)` and `beadScreen(id, { evenIfUnsettled })`.
+  `kept-games.spec.ts` no longer presses the shelf toggle blind on its second
+  visit: a quick Leave can revive the title that was still fading out, shelf
+  already open. That race predates this task.
+- Checks on the final head, run locally in the cloud container (4 cores,
+  SwiftShader): `npm ci` resolved the unchanged lockfile (dry run; no
+  dependency changed); `steering:test` 82 passed; `steering:check` passed for
+  27 packets; typecheck (app and Playwright) passed; lint passed with the
+  container's own agent worktrees under `.claude/worktrees/` excluded (they do
+  not exist in a checkout); `npm test` 1,713 passed; `validate:content`
+  passed; build passed; `bundle:check` passed at 523,445 bytes gzip and
+  1,744,878 raw initial JavaScript (ceilings 524,000 and 1,760,000);
+  `test:browser` 17 of 17 passed, and the four specs outside it 11 of 11;
+  `git diff --check` clean. `measure:performance`: the mobile profiles
+  passed; both desktop profiles fell below the spec's own floor of more than
+  ten frames in five seconds, which main's own desktop-base also misses on
+  this container (9 and 11 frames in two runs), so the gate is the container,
+  and the numbers are recorded below.
+- Performance reference (SwiftShader, same container, back to back; effective
+  frames per second, evidence only per M0-005):
+
+  | Profile | main `a87f18d` | this branch |
+  | --- | --- | --- |
+  | desktop-base, idle | 2.20, 1.82 | 2.08, 2.01, 2.23 |
+  | mobile-potato, idle | 6.08 | 6.49, 6.11 |
+  | desktop-base, focus (fog and blur) | — | 1.28 |
+  | mobile-potato, focus (dim only) | — | 3.64, 3.95 |
+
+  Idle cost is unchanged. On a software renderer the fog pass costs about 40
+  percent of the frame on the base tier and 35 percent on the low tier; one
+  full-screen pass is far cheaper on a GPU, and only a device pass can say
+  whether the low tier needs another form of fog.
+- Proposals, not implemented (specification change protocol):
+  - Low-tier fog as per-material dimming instead of a full-screen pass, if
+    the device pass finds the pass too dear where the low tier is chosen.
+    Affects `src/scene/**` only; alternative considered: keep the pass and
+    drop the fog on the low tier, rejected because the focus would lose its
+    one visible cue there.
+  - The Attend pose cannot bring a bead near the top of the sphere below
+    centre without relaxing the ±19° elevation limit, which exists for
+    comfort. A director call: accept "left and as low as comfort allows", or
+    relax the limit for Attend alone.
+  - The shelf at the title keeps whatever state a fading title instance had
+    (see the kept-games note). A separate UI task should reload the shelf
+    when the title reopens; out of this task's paths.
+  - README's Play section still describes the intention-first loop; README is
+    M0-008's until it closes.
+- Human review (declared categories): the whole surface is judgement by eye,
+  ear and hand and has not been seen on a GPU or heard on headphones: the
+  close-in and pair framing, the fog and lens, the lit-facet styling and the
+  dashed gap, the plate's timing after a Lock with motion, the instant fold at
+  commit, the dwell hiding the margin, the audio ladder (sighting 0.55 / 0.42
+  / 0.30 of the bed by band, lock 0.72 / 0.64, hover 0.42 of a reading for a
+  1.4 s bar, chosen 0.62, recall 0.45), and the whole flow by mouse, touch,
+  keyboard and screen reader.
