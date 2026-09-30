@@ -425,7 +425,7 @@ describe("a weave's fill", () => {
     expect(fill.every((onset) => onset.slot === 0)).toBe(true);
     expect(shape(fill)).toEqual([
       [8, "brush"],
-      [10, "brush"],
+      [9, "brush"],
       [11, "brush"],
       [13, "brush"],
       [14, "brush"],
@@ -451,7 +451,7 @@ describe("a weave's fill", () => {
     expect(fill.every((onset) => onset.slot === 1)).toBe(true);
     expect(shape(fill)).toEqual([
       [8, "brush"],
-      [10, "brush"],
+      [9, "brush"],
       [11, "brush"],
       [13, "brush"],
       [14, "brush"],
@@ -511,10 +511,10 @@ describe("a completed motif's second voice", () => {
     startBed();
     ambient.requestSecondVoice(SCORE.harmony.phraseSlots);
     runUntil(writtenBy(14));
-    expect(brushes(0)).toEqual([9]);
-    for (let slot = 1; slot <= 12; slot += 1) expect(brushes(slot)).toEqual([2, 9, 10, 14]);
-    expect(brushes(13)).toEqual([9]);
-    expect(brushes(14)).toEqual([9]);
+    expect(brushes(0)).toEqual([10]);
+    for (let slot = 1; slot <= 12; slot += 1) expect(brushes(slot)).toEqual([2, 10, 14]);
+    expect(brushes(13)).toEqual([10]);
+    expect(brushes(14)).toEqual([10]);
   });
 
   it("is extended by a second completion, and never shortened", () => {
@@ -524,8 +524,8 @@ describe("a completed motif's second voice", () => {
     ambient.requestSecondVoice(12);
     ambient.requestSecondVoice(3);
     runUntil(writtenBy(19));
-    expect(brushes(17)).toEqual([2, 9, 10, 14]);
-    expect(brushes(18)).toEqual([9]);
+    expect(brushes(17)).toEqual([2, 10, 14]);
+    expect(brushes(18)).toEqual([10]);
   });
 });
 

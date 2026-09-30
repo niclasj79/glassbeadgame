@@ -79,7 +79,7 @@ describe("the cell", () => {
     expect(shape(cell())).toEqual([
       [0, "skin", 1],
       [6, "skin", 1],
-      [9, "brush", 0.5],
+      [10, "brush", 0.5],
       [12, "skin", 1],
     ]);
     // In eighths the skin falls on the first, fourth and seventh: three, three, two.
@@ -146,7 +146,7 @@ describe("entry and growth", () => {
     expect(shape(cell({ awakening: 0.5 }))).toEqual([
       [0, "skin", 0.5],
       [6, "skin", 0.5],
-      [9, "brush", 0.25],
+      [10, "brush", 0.25],
       [12, "skin", 0.5],
     ]);
   });
@@ -174,7 +174,6 @@ describe("the second voice", () => {
       [0, "skin", 1],
       [2, "brush", 0.5],
       [6, "skin", 1],
-      [9, "brush", 0.5],
       [10, "brush", 0.5],
       [12, "skin", 1],
       [14, "brush", 0.5],

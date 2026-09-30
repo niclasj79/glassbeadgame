@@ -81,8 +81,8 @@ export const PULSE_SILENT_DENSITY = 0.2;
 
 /** The loping cell: the first, fourth and seventh eighths — three, three, two. */
 export const SKIN_SIXTEENTHS: readonly number[] = Object.freeze([0, 6, 12]);
-/** The brush, midway between the second and third skin onsets. */
-export const BRUSH_SIXTEENTH = 9;
+/** The brush, on the eighth between the second and third skin onsets. */
+export const BRUSH_SIXTEENTH = 10;
 /** Every brush is struck at half the weight of the skin. */
 export const BRUSH_WEIGHT = 0.5;
 /** The second voice: the brush on every other eighth, where no onset is already. */

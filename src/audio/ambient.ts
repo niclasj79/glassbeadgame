@@ -512,6 +512,10 @@ class AmbientEngine {
     const a = beadVoice(aId);
     const b = beadVoice(bId);
     if (!a || !b) return;
+    // The room re-seats the whole session with every new thread, and a seat
+    // is one per thread: a choir that held a thread twice spoke twice as often
+    // as designed and over-reported its voices to the director.
+    if (this.motifs.some((motif) => motif.threadId === threadId)) return;
     // The stems count a thread in the faculty of each of its two concepts. A
     // set, because the room re-seats the whole session with every new thread.
     for (const id of [aId, bId]) {
@@ -720,6 +724,9 @@ class AmbientEngine {
     }
 
     this.scheduleStems(ctx, t, slot);
+    // The pulse keeps the slot whether or not the choir has a voice to seat:
+    // it follows the web's awakening, not the choir's roll (M4-002).
+    this.schedulePulse(ctx, t, slot);
 
     // The choir: each thread's motif speaks with probability scaled by
     // density, thickening as the session awakens.
@@ -785,7 +792,6 @@ class AmbientEngine {
         if (playNote(ctx, bus, "glass", first * 2, lift)) this.conduct(concept1, lift);
       }
     }
-    this.schedulePulse(ctx, t, slot);
   }
 
   /**
