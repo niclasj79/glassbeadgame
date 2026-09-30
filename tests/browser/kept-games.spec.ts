@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { DisciplineId } from "../../src/content/types";
-import type { TestSessionSnapshot } from "../../src/runtime/testMode";
+import { PICKS, weaveGoldenPairWithMouse } from "./support/focusView";
 
 /**
  * A GAME IS KEPT, AND CAN BE TAKEN DOWN AGAIN.
@@ -15,49 +14,9 @@ import type { TestSessionSnapshot } from "../../src/runtime/testMode";
  * the shelf here is this page's alone; the flow is identical on either store.
  */
 
-const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
-const SOURCE_ID = "measure.fibonacci-sequence";
-const TARGET_ID = "sound.counterpoint";
-
-async function snapshot(page: Page): Promise<TestSessionSnapshot> {
-  return page.evaluate(() => window.__gbgTest!.snapshot());
-}
-
-async function beadPoint(page: Page, id: string): Promise<{ x: number; y: number }> {
-  await expect
-    .poll(async () => {
-      const result = await page.evaluate(
-        (conceptId) => window.__gbgTest!.beadScreen(conceptId),
-        id
-      );
-      return result === null || result.behind;
-    })
-    .toBe(false);
-  const result = await page.evaluate(
-    (conceptId) => window.__gbgTest!.beadScreen(conceptId),
-    id
-  );
-  if (!result || result.behind) throw new Error(`bead ${id} is not on screen`);
-  return { x: result.x, y: result.y };
-}
-
+/** One documented thread, woven with the mouse, exactly as a player would. */
 async function weaveOne(page: Page): Promise<void> {
-  const source = await beadPoint(page, SOURCE_ID);
-  await page.mouse.click(source.x, source.y);
-  await expect.poll(async () => (await snapshot(page)).draftStage).toBe("attending");
-  await page.getByTestId("intention-echo").click();
-  await expect.poll(async () => (await snapshot(page)).draftStage).toBe("armed");
-  const from = await beadPoint(page, SOURCE_ID);
-  const to = await beadPoint(page, TARGET_ID);
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await expect.poll(async () => (await snapshot(page)).weaving).toBe(true);
-  await page.evaluate(() => window.__gbgTest!.advanceClock(125));
-  await page.mouse.move(to.x, to.y, { steps: 4 });
-  await expect.poll(async () => (await snapshot(page)).sightedConceptId).toBe(TARGET_ID);
-  await page.evaluate(() => window.__gbgTest!.advanceClock(125));
-  await page.mouse.up();
-  await expect.poll(async () => (await snapshot(page)).draftStage).toBe("inactive");
+  await weaveGoldenPairWithMouse(page, "echo");
 }
 
 test("a concluded Game is kept, shelved at the title, and reads back whole", async ({
@@ -100,7 +59,12 @@ test("a concluded Game is kept, shelved at the title, and reads back whole", asy
   await expect(page.getByTestId("conclusion-kept")).toContainText(/kept on this device/i);
 
   // Reading it again did not keep it again: still one Game on the shelf.
+  // A quick Leave can bring back the title that was still fading out, shelf
+  // and all — the screens share one presence — so open the shelf only if it
+  // is closed rather than pressing a toggle whose state this test did not set.
   await page.getByRole("button", { name: "Leave" }).click();
-  await page.getByTestId("kept-games-toggle").click();
+  const again = page.getByTestId("kept-games-toggle");
+  await expect(again).toBeVisible({ timeout: 10_000 });
+  if ((await again.getAttribute("aria-expanded")) !== "true") await again.click();
   await expect(page.getByTestId("kept-games-list").locator("li")).toHaveCount(1);
 });
