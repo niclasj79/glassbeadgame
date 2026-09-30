@@ -11,6 +11,7 @@ import { Cosmos } from "./Cosmos";
 import { GLASS_ATTRIBUTES, createBeadGlassMaterial } from "./glass";
 import { presentationProfile } from "./quality";
 import { OPENING_ALPHABET, openingWorld } from "./opening";
+import { awaitLinks } from "./prewarmLinks";
 import { testMode } from "@/runtime/testMode";
 import { handleArenaMiss } from "./threading";
 
@@ -29,9 +30,10 @@ import { handleArenaMiss } from "./threading";
  * be started earlier. So the arena's two expensive constructions — the glass
  * program, and the label's derived program together with the signed-distance
  * atlas its glyphs are drawn from — are made here, off-stage, while the title
- * is up, and waited for with `compileAsync`, which polls the parallel-compile
- * extension's completion status instead of blocking on it. `scene/opening.ts`
- * carries the measurements and holds the door on the result.
+ * is up, and waited for with a poll of the parallel-compile extension's
+ * completion status instead of a block on it (`prewarmLinks.ts`, which is
+ * three's own `compileAsync` wait made safe for a material disposed mid-link).
+ * `scene/opening.ts` carries the measurements and holds the door on the result.
  *
  * Three things this deliberately does *not* do. It does not build a second
  * scene: the program cache is keyed on the material *and the scene it is drawn
@@ -174,18 +176,21 @@ function Prewarm() {
      * unbound: the glass was linked at 3119 ms, `compileAsync` waited 2.8 s for
      * it, and then the first draw linked the glass *a second time* at 5923 ms
      * and blocked for 1985 ms doing it. Binding a target for the length of the
-     * synchronous `compile()` inside `compileAsync` is the whole fix.
+     * synchronous `compile()` is the whole fix.
+     *
+     * And only this group is compiled, under the scene's own lights and fog.
+     * The glass is remade with the theme, and the theme is the session's, so
+     * this runs again while a Game is up — and a compile of the whole scene
+     * then collects the live beads' materials too, which the arena disposes
+     * when the Game is left. three's `compileAsync` throws from its timer at
+     * that; the wait here lets a disposed material go (`prewarmLinks.ts`).
      */
     const compileInto = (): Promise<void> => {
       const previous = gl.getRenderTarget();
       gl.setRenderTarget(asIfComposed);
-      // `compile()` runs synchronously inside this call; only the wait is async.
-      const linked = gl.compileAsync(scene, camera);
+      const linked = gl.compile(group.current ?? scene, camera, scene);
       gl.setRenderTarget(previous);
-      return linked.then(
-        () => undefined,
-        () => undefined
-      );
+      return awaitLinks(gl, linked);
     };
 
     /**

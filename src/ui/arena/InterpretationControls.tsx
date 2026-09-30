@@ -15,9 +15,9 @@ import { useStudy } from "@/state/studies";
 import { reopenWovenThread, wovenThreadLabel } from "./columnPlan";
 import { useHeldWhileLeaving } from "./presence";
 import { declareSilence } from "./studyMode";
+import { selectBeadIds } from "./selectBeadIds";
 
 const NO_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
-
 export interface WovenThreadListProps {
   /** The committed threads, in the order they were woven. */
   readonly threads: readonly Pick<CommittedThreadV1, "id" | "pair" | "intention">[];
@@ -89,7 +89,9 @@ export function StudySilenceMirror() {
  * bounded keyboard/screen-reader path without putting a second arena on screen.
  */
 export function InterpretationControls() {
-  const beadIds = useStore((state) => state.session?.beadIds ?? []);
+  // Held while the page leaves: a Study leaves by discarding its session, and
+  // the mirror fades out listing the beads it listed, not an empty draw.
+  const beadIds = useHeldWhileLeaving(useStore(selectBeadIds));
   // A Study adds one answer to the mirror; the Free Game's mirror is unchanged (R4).
   const studying = useHeldWhileLeaving(useStudy((state) => state.studyId !== null));
   const focusedBeadId = useStore((state) => state.focusedBeadId);

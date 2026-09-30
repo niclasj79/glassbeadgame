@@ -345,8 +345,8 @@ export function arrivalDurationMs(count: number): number {
  * be moved. `KHR_parallel_shader_compile` lets the driver link on its own
  * thread while the main thread carries on, so the whole build — the glass, the
  * label's derived material, and the glyph atlas the names are drawn from — is
- * started when the title appears and waited for with `compileAsync`, which
- * polls `COMPLETION_STATUS_KHR` instead of blocking on it.
+ * started when the title appears and waited for with a poll of
+ * `COMPLETION_STATUS_KHR` (`scene/prewarmLinks.ts`) instead of a block on it.
  *
  * And then the door waits for it. A press that cannot be honoured is worse than
  * a door that arrives a second late, and the title has an epigraph to read: the

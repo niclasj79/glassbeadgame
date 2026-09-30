@@ -390,6 +390,32 @@ describe("the arena in a Study", () => {
     expect(keyOf(2)).not.toBe(keyOf(1));
   });
 
+  it("offers the answer again once the Study is solved and the plate was set aside", () => {
+    const unsolved = renderToStaticMarkup(
+      createElement(StudyNote, { note: note(), reducedMotion: true, onToggleBrief: noop })
+    );
+    expect(unsolved).not.toContain('data-testid="study-see-answer"');
+    expect(unsolved).not.toContain('data-testid="study-solved"');
+
+    const onOpenPlate = vi.fn();
+    const solved = note({ solved: true });
+    const html = renderToStaticMarkup(
+      createElement(StudyNote, { note: solved, reducedMotion: true, onToggleBrief: noop, onOpenPlate })
+    );
+    expect(decode(element(html, "study-solved"))).toContain("Solved.");
+    expect(decode(element(html, "study-see-answer"))).toContain(">See the answer<");
+    // A word and a control: no count, no total, no mark of any kind.
+    const said = decode(element(html, "study-solved")).replace(/<[^>]*>/g, "");
+    expect(said).not.toMatch(/\d|%|score|points|rank/i);
+    press(
+      byTestId(
+        StudyNote({ note: solved, reducedMotion: true, onToggleBrief: noop, onOpenPlate }),
+        "study-see-answer"
+      )[0]
+    );
+    expect(onOpenPlate).toHaveBeenCalledTimes(1);
+  });
+
   it("reads not yet from the Study store into the arena's margin", () => {
     playing({ studyId: STUDY, notYet: { kind: "can-be-done", serial: 3 } });
     const html = renderToStaticMarkup(createElement(ArenaHud));

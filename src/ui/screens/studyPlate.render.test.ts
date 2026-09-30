@@ -118,23 +118,27 @@ describe("the solved plate", () => {
     expect(html).not.toContain('data-testid="study-plate-counts"');
   });
 
-  it("offers three ways on, and each calls its verb", () => {
+  it("offers four ways on, and each calls its verb", () => {
     const html = render(THREADS);
-    const ways = [...html.matchAll(/data-testid="(study-plate-(?:again|next|back))"[^>]*>([^<]*)</g)].map(
+    const ways = [...html.matchAll(/data-testid="(study-plate-(?:keep|again|next|back))"[^>]*>([^<]*)</g)].map(
       (match) => [match[1], match[2]]
     );
     expect(ways).toEqual([
+      ["study-plate-keep", "Keep weaving"],
       ["study-plate-again", "Again"],
       ["study-plate-next", "Next Study"],
       ["study-plate-back", "Back to the Studies"],
     ]);
-    // All three are set alike, so the plate suggests none of them.
-    const classes = [...html.matchAll(/data-testid="study-plate-(?:again|next|back)"[^>]*class="([^"]*)"/g)].map(
+    // All four are set alike, so the plate suggests none of them.
+    const classes = [...html.matchAll(/data-testid="study-plate-(?:keep|again|next|back)"[^>]*class="([^"]*)"/g)].map(
       (match) => match[1]
     );
     expect(new Set(classes).size).toBe(1);
 
-    const tree = StudyPlateSurface({ model: THREADS, reducedMotion: true });
+    const onKeep = vi.fn();
+    const tree = StudyPlateSurface({ model: THREADS, reducedMotion: true, onKeep });
+    press(byTestId(tree, "study-plate-keep")[0]);
+    expect(onKeep).toHaveBeenCalledTimes(1);
     press(byTestId(tree, "study-plate-again")[0]);
     expect(verbs.restart).toHaveBeenCalledTimes(1);
     press(byTestId(tree, "study-plate-next")[0]);
@@ -143,6 +147,35 @@ describe("the solved plate", () => {
     expect(verbs.leave).toHaveBeenCalledTimes(1);
     expect(verbs.start).not.toHaveBeenCalled();
     expect(verbs.declareSilence).not.toHaveBeenCalled();
+  });
+
+  it("keeps weaving on Escape, and takes no other key as a way on", () => {
+    const onKeep = vi.fn();
+    const tree = StudyPlateSurface({ model: THREADS, reducedMotion: true, onKeep });
+    const dialog = byTestId(tree, "study-plate")[0];
+    const keyDown = dialog.props.onKeyDown as (event: {
+      key: string;
+      shiftKey: boolean;
+      preventDefault: () => void;
+      currentTarget: { querySelectorAll: () => never[] };
+    }) => void;
+    const prevented = vi.fn();
+    keyDown({
+      key: "Escape",
+      shiftKey: false,
+      preventDefault: prevented,
+      currentTarget: { querySelectorAll: () => [] },
+    });
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(prevented).toHaveBeenCalledTimes(1);
+    keyDown({
+      key: "Enter",
+      shiftKey: false,
+      preventDefault: prevented,
+      currentTarget: { querySelectorAll: () => [] },
+    });
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(verbs.leave).not.toHaveBeenCalled();
   });
 
   it("takes no second answer while it fades", () => {

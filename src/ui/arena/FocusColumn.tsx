@@ -5,7 +5,7 @@ import type { FacetId } from "@/content/castalia/schema";
 import { productionInterpretation } from "@/runtime/interpretation";
 import { useFocusView } from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
-import { useStudy } from "@/state/studies";
+import { studyStore, useStudy, type StudyStoreState } from "@/state/studies";
 import {
   QUIET_CONTROL,
   READING_PLATE,
@@ -27,6 +27,10 @@ import { openReading, type MarginState } from "./marginState";
 import { useHeldWhileLeaving } from "./presence";
 import { StudyNote } from "./StudyNote";
 import { studyNote, type StudyNoteModel } from "./studyMode";
+
+/** Solved, by the player or by silence: the plate can be seen again. */
+const selectSolved = (state: StudyStoreState): boolean =>
+  state.status?.kind === "solved";
 
 /**
  * THE RIGHT COLUMN OF THE FOCUS VIEW (I-015, I-018, I-019).
@@ -280,6 +284,8 @@ export interface ColumnSurfaceProps {
   readonly study?: StudyNoteModel | null;
   /** Sets the brief aside, or reopens it. */
   readonly onToggleBrief?: () => void;
+  /** See the answer again: the solved plate reopens after it was set aside. */
+  readonly onOpenPlate?: () => void;
 }
 
 const NOTHING_TO_TOGGLE = (): void => undefined;
@@ -303,6 +309,7 @@ export function ColumnSurface({
   onReadLess,
   study = null,
   onToggleBrief = NOTHING_TO_TOGGLE,
+  onOpenPlate = NOTHING_TO_TOGGLE,
 }: ColumnSurfaceProps) {
   const register = plan.kind === "inspection" ? "none" : plan.margin;
   const cardsWritten =
@@ -330,6 +337,7 @@ export function ColumnSurface({
             note={study}
             reducedMotion={reducedMotion}
             onToggleBrief={onToggleBrief}
+            onOpenPlate={onOpenPlate}
           />
         )}
         {plan.kind === "inspection" ? (
@@ -386,12 +394,14 @@ export function ArenaColumn() {
   // Held while the page leaves, so the brief does not lift off a fading column.
   const studyId = useHeldWhileLeaving(useStudy((state) => state.studyId));
   const notYet = useHeldWhileLeaving(useStudy((state) => state.notYet));
+  const solved = useHeldWhileLeaving(useStudy(selectSolved));
   const [briefOpen, setBriefOpen] = useState(true);
   const study = useMemo(
-    () => (studyId === null ? null : studyNote(studyId, notYet, briefOpen)),
-    [studyId, notYet, briefOpen]
+    () => (studyId === null ? null : studyNote(studyId, notYet, briefOpen, solved)),
+    [studyId, notYet, briefOpen, solved]
   );
   const toggleBrief = useCallback(() => setBriefOpen((open) => !open), []);
+  const openPlate = useCallback(() => studyStore.getState().openPlate(), []);
 
   const plan = planColumn({ view, pinnedInspectId, lensActive });
   const gapFor =
@@ -424,6 +434,7 @@ export function ArenaColumn() {
       onReadLess={marginActions.readLess}
       study={study}
       onToggleBrief={toggleBrief}
+      onOpenPlate={openPlate}
     />
   );
 }

@@ -131,8 +131,11 @@ Marks are words, not points. Nothing counts them, stores them or sums them.
 - **Solved** is one coordinated moment through the cue boundary (ADR-009):
   scene, audio, caption and the plate together. **Not yet** is a caption and
   a margin line; it never interrupts.
-- **The plate** offers three ways on: *Again* (restart this Study), *Next
-  Study*, *Back to the Studies*.
+- **The plate** offers four ways on: *Keep weaving* (the plate is set aside
+  and the session goes on — weaving beyond the brief is allowed, R3 — and the
+  brief's note offers *See the answer* to read the plate again), *Again*
+  (restart this Study), *Next Study*, *Back to the Studies*. Escape is *Keep
+  weaving*.
 - **No counters.** No "3 of 12", no percentage, no progress bar, no chapter
   completion. The Studies list shows briefs, not results.
 - In Study mode the arena shows no Conclude, no Lens and no Attunement
