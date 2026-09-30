@@ -318,6 +318,15 @@ Each concept has a recognizable internal procedural motif. Threads have semantic
 - controlled dissonance is allowed and required for Tension;
 - gesture affects articulation and timing;
 - the score creates space during attention;
+- the bed keeps a pulse: a percussive layer on the world's slot, at whisper
+  level, entering as the web wakes and growing with reach; its accents answer
+  acts (a weave, a completed motif, a solved Study) and never time, and it
+  keeps to the slot's eighths and sixteenths (ADR-017);
+- the bed's harmony moves: the root walks a cycle of stable degrees one phrase
+  at a time and the pad is a voice-led chord, so that every concept's identity
+  note stays consonant over every root (ADR-017);
+- stems answer the web: a faculty's stem enters with its first thread and
+  thickens with its threads, pitched from the current chord (ADR-017);
 - the conclusion is generated from the event log.
 
 ## 19. Interface

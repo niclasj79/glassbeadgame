@@ -278,3 +278,71 @@ bed's grid origin still restarts with each session. Bundles B (stems by
 faculty, Attunement as the heightened state, payoff by form) and C (dither, a
 dust field, one pass for all screen effects) are separate packets after this
 spike has been played, each behind the audiovisual review boundary.
+
+## ADR-017 — The bed grows: a pulse, a harmony that moves, and stems that answer the web
+
+**Status:** Decided by the game design director on 2026-09-30 ("no track;
+extend the generative bed instead: harmony, movement, and an underlying
+hypnotic percussive pulse"); accepted on reviewed merge, and effective after
+it.
+
+No recorded music enters the Game. The generative bed is extended in three
+ways, all on the conductor's grid (ADR-016), and specified in
+`docs/VERTICAL-SLICE-SPEC.md` §18:
+
+1. **A pulse.** A percussive bed of its own: a loping cell over the world's
+   slot (three-three-two across the slot's eighths), played by synthesised
+   bodies the world already has — a skin, a brush, a bell — at whisper level
+   under the bed. It enters as the web wakes and grows with reach; it never
+   runs faster than the eighth except in a fill, and a fill only answers an
+   act. Its accents are the *rhythmic highlights*: a woven thread rolls into
+   the next slot boundary and lands on a bell; a completed motif, or a solved
+   Study, gives the cell its second voice for a phrase; attention thins it to
+   its downbeats; Attunement leaves it to the heartbeat; the conclusion takes
+   it out with the bed.
+2. **A harmony that moves.** The bed's root walks a cycle of stable degrees
+   one phrase at a time — 0, 5, 9, 7 — instead of leaning to 9 every third
+   phrase; the pad becomes a chord of root, fifth and one colour, voice-led to
+   the nearest stable degrees and crossfaded across the phrase boundary; the
+   drone's refresh locks to the phrase. Every concept's identity note stays
+   consonant over every root of the cycle, which a test proves over the
+   mode's ratios.
+3. **Stems that answer the web.** A faculty's stem enters when its first
+   thread is woven and thickens with its threads: Measure an arpeggio in metal
+   and glass on the eighths, Sound a formant sustain, Matter a low pedal in
+   gut, Image air in reed — each pitched from the current chord, each inside
+   the voice budget. They are the harmony's movement; nothing in them is
+   melody, which stays the concepts'.
+
+Conditions:
+
+- **Never time pressure.** The tempo is the world's slot and nothing changes
+  it; no fill anticipates an act, no pattern accelerates, no accent counts
+  anything (product law 3, `docs/MASTER-PLAN.md`).
+- **Never Tension's signature.** Co-prime pulse cycles that interlock are the
+  Tension grammar (`docs/CONTENT-AUDIOVISUAL-REFERENCE.md`); the pulse and
+  the stems stay aligned to the slot's eighths and sixteenths, and the
+  three-three-two is an accent pattern on that grid, not a cycle against it.
+- **CAV-006.** A fill is the same fill for every outcome kind.
+- **CAV-007.** No onset pattern above the sixteenth; no beating from the pulse
+  (its bodies are unpitched or a single pitch); the bed's gain ceiling holds
+  with the pulse under it; the reduced profile keeps the skin on the downbeats
+  only, and muted keeps nothing.
+- **No lights for percussion.** The pulse carries no concept, so it conducts
+  no bead (ADR-016); the hand's sounds remain the hand's own percussion.
+- **The first load.** The pulse and the stems load with the semantic audio
+  layer, after the title; the ceiling is not raised.
+
+**Reason:** the director, choosing between a licensed track and the bed,
+named what the bed lacks — harmony, movement, an underlying hypnotic pulse —
+and chose the system the Game already has. A track would have brought a key,
+a tempo and a form of its own into a world that keeps one time on a grid; the
+bed on that grid can grow those three things and stay generative, offline,
+deterministic and free of licence.
+
+**Consequences:** `docs/VERTICAL-SLICE-SPEC.md` §18 gains the pulse, the
+moving harmony and the stems; `docs/CONTENT-AUDIOVISUAL-REFERENCE.md` is not
+amended (its Tension grammar is what the pulse must not imitate). M4-002 is
+the packet, blocked behind M4-001. Bundle C of the polish assessment (the
+surface: dither, a dust field, one pass for all screen effects) stays a
+separate packet after this one has been heard.

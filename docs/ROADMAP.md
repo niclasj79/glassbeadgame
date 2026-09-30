@@ -144,6 +144,10 @@ Every relation is immediately expressed through coordinated form, sound, motion,
   world's slot as the unit for the director, the camera and the breath; beads
   lit on their own notes; the hand's sounds on the grid; the breath on the bar
   (ADR-016).
+- M4-002 the pulse and the stems (2026-09-30), after M4-001: a percussive
+  pulse on the world's slot with highlights that answer acts, a harmony that
+  walks a cycle of stable roots, and stems that enter with each faculty's
+  first thread; no recorded track (ADR-017).
 
 ### Gate
 
