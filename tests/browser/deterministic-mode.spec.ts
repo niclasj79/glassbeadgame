@@ -72,7 +72,9 @@ test("direct mouse weaving commits a deterministic canonical interpretation", as
     sigilsVisible: true,
     lensActive: false,
   });
-  await expect(page.getByRole("radio")).toHaveCount(4);
+  // The plate waits for the pose, counted in frames; the software renderer
+    // draws a few a second, so allow it the helpers' settle time.
+    await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 15_000 });
   await expect(page.getByTestId("intention-echo")).toHaveAccessibleName(
     "Echo: shares a form"
   );
@@ -445,7 +447,9 @@ test.describe("the focus view", () => {
     await expect(page.getByTestId("focus-shared-facets")).toHaveCount(0);
     // It is a statement, not a refusal: the pair can still be held.
     await lockWithMouse(page, other!);
-    await expect(page.getByRole("radio")).toHaveCount(4);
+    // The plate waits for the pose, counted in frames; the software renderer
+    // draws a few a second, so allow it the helpers' settle time.
+    await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 15_000 });
   });
 
   test("resting on a bead opens its card, and leaving closes it", async ({ page }) => {
@@ -547,10 +551,11 @@ test.describe("the focus view", () => {
     expect((await snapshot(page)).domainSession.eventCount).toBe(eventCount);
   });
 
-  test("full motion on the base tier fogs with blur and brings the bead close", async ({
+  test("full motion on the base tier fogs with blur and turns the bead to the left", async ({
     page,
   }) => {
     await openSession(page, "testMode=1&seed=castalia-golden-001&quality=base&reducedMotion=0");
+    const roaming = await beadPoint(page, SOURCE_ID);
     await page.getByTestId(`bead-control-${SOURCE_ID}`).focus();
     await page.keyboard.press("Enter");
     await waitForDraft(page, "attending");
@@ -559,12 +564,13 @@ test.describe("the focus view", () => {
       fogActive: true,
       blurActive: true,
     });
-    // The attended bead comes to rest in the lower left of the frame.
+    // The world turns until the attended bead sits to the left of the frame
+    // (I-017). How far down it can come depends on where it sits on the
+    // sphere, so the test holds the part every bead is promised.
     const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
     await expect
       .poll(
         async () => {
-          await advanceClock(page, 200);
           const point = await page.evaluate(
             (id) => window.__gbgTest!.beadScreen(id),
             SOURCE_ID
@@ -573,10 +579,10 @@ test.describe("the focus view", () => {
             point !== null &&
             !point.behind &&
             point.x < viewport.width * 0.5 &&
-            point.y > viewport.height * 0.5
+            roaming.x - point.x > 100
           );
         },
-        { timeout: 15_000 }
+        { timeout: 20_000 }
       )
       .toBe(true);
   });

@@ -3,7 +3,6 @@ import { AnimatePresence, MotionConfig } from "framer-motion";
 import { ArenaCanvas } from "./scene/ArenaCanvas";
 import { TitleScreen } from "./ui/screens/TitleScreen";
 import { ThresholdScreen } from "./ui/screens/ThresholdScreen";
-import { ArenaHud } from "./ui/arena/ArenaHud";
 import { AudioBridge } from "./audio/useAudio";
 import { SoundToggle } from "./ui/components/SoundToggle";
 import { useStore } from "./state/store";
@@ -52,6 +51,29 @@ const ConclusionScreen = lazy(async () => ({
   default: (await import("./ui/screens/ConclusionScreen")).ConclusionScreen,
 }));
 
+/**
+ * THE ARENA'S PAGE LOADS AFTER THE TITLE.
+ *
+ * The same prescription, one screen earlier. The focus view's column, the
+ * margin and its thread cards, the bead card and the accessible mirror are
+ * reachable only from the arena, and the title never shows any of them, so
+ * none of them belongs in what a stranger downloads before the title appears
+ * (`scripts/bundle-budgets.json`: "the answer is another dynamic import, not
+ * another number").
+ *
+ * It is prefetched as soon as the title has painted, not when the arena opens:
+ * the threshold alone gives it seconds, so `Suspense` does not suspend in
+ * ordinary play. The fallback is a held blank for the same reason as the
+ * conclusion's — the arena's own world is already drawn beneath it.
+ */
+const ArenaHud = lazy(async () => ({
+  default: (await import("./ui/arena/ArenaHud")).ArenaHud,
+}));
+
+const prefetchArenaHud = (): void => {
+  void import("./ui/arena/ArenaHud");
+};
+
 const prefetchConclusion = (): void => {
   void import("./ui/screens/ConclusionScreen");
 };
@@ -59,6 +81,10 @@ const prefetchConclusion = (): void => {
 export default function App() {
   const phase = useStore((s) => s.phase);
   const [webgl] = useState(probeWebGL);
+
+  useEffect(() => {
+    prefetchArenaHud();
+  }, []);
 
   useEffect(() => {
     if (phase === "arena") prefetchConclusion();
@@ -85,7 +111,11 @@ export default function App() {
         <AnimatePresence>
           {phase === "title" && <TitleScreen key="title" />}
           {phase === "threshold" && <ThresholdScreen key="threshold" />}
-          {phase === "arena" && <ArenaHud key="arena" />}
+          {phase === "arena" && (
+            <Suspense key="arena" fallback={null}>
+              <ArenaHud />
+            </Suspense>
+          )}
           {phase === "conclusion" && (
             <Suspense key="conclusion" fallback={null}>
               <ConclusionScreen />
