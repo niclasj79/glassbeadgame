@@ -714,7 +714,10 @@ test.describe("Studies", () => {
   }) => {
     await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato&reducedMotion=1");
     await page.waitForFunction(() => Boolean(window.__gbgTest));
-    await page.getByTestId("title-studies").focus();
+    // The second door is held shut with the first until the world is ready.
+    const door = page.getByTestId("title-studies");
+    await expect(door).toBeEnabled({ timeout: 30_000 });
+    await door.focus();
     await page.keyboard.press("Enter");
     const list = page.getByTestId("studies-screen");
     await expect(list).toBeVisible({ timeout: 15_000 });
