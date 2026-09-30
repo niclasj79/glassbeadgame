@@ -6,7 +6,13 @@ import { useCurrentTheme } from "@/themes/useTheme";
 import { castaliaConceptById } from "@/content/castalia";
 import type { CastaliaConcept } from "@/content/castalia/schema";
 import { fibonacciSpherePositions, lensPlanePositions } from "@/game/layout";
-import { frameState, initFramePositions, setMorphTargets } from "./frameState";
+import { conductor } from "@/audio/conductor";
+import {
+  breathPhaseAfter,
+  frameState,
+  initFramePositions,
+  setMorphTargets,
+} from "./frameState";
 import { advanceIdleClock } from "./idle";
 import { armillaryOrder } from "./identity";
 import { Firmament } from "./Firmament";
@@ -85,9 +91,19 @@ export function Cosmos() {
     // draw does not reset — see `scene/idle.ts`.
     advanceIdleClock(dt * frameState.timeScale);
 
-    // The Breath: phase integrates dilated time, so it slows with reveals
-    // and stays phase-continuous. Depth eases toward its context target.
-    frameState.breathPhase += dt * frameState.timeScale * Math.PI * 2 * 0.1;
+    // The Breath. While the conductor keeps the world's time it is the
+    // conductor's own — one breath every four slots, cresting on the bar, on
+    // the clock the music is scheduled on (ADR-016) — so the bloom, the bed,
+    // the sky and the lens breathe with the score. With no grid (no bed is
+    // playing) the phase integrates dilated time at 0.1 Hz, so it slows with
+    // reveals and stays phase-continuous, taking up from wherever the
+    // conductor left it. Depth eases toward its context target either way.
+    frameState.breathPhase = breathPhaseAfter(
+      frameState.breathPhase,
+      dt,
+      frameState.timeScale,
+      conductor
+    );
     const st = useStore.getState();
     const depthTarget = st.settings.reducedMotion
       ? 0
