@@ -490,3 +490,117 @@ mesmerising.
   in one pull request. Not selected by the autonomous loop: M2-011 remains in
   Review without a steering ownership projection, so no packet can validate
   as Ready.
+- Built on 2026-09-30 on `codex/M4-001-conductor`, from the design commit,
+  in six stages: the conductor as a pure module with its tests; the scene
+  readers and the audio writers, built in parallel from that commit; the
+  test adapter and the browser tests; the breath's catch; and the first
+  load's remedy. The pull request stacks on the design pull request (#65) and
+  cannot merge before it.
+- The conductor (`src/audio/conductor.ts`): `arm({slotSeconds, origin})`,
+  `disarm()`, `armed()`, `slotSeconds()`, `now()`, `next(division, lead)`
+  on the slot, the eighth and the sixteenth, `slotPhase()`, `breathPhase()`
+  (2π per four slots, monotonic, cresting on the slot boundary that begins
+  each group), `sound({conceptId, at, duration, weight})` into a ring of 64,
+  `light(conceptId)` from a 60 ms rise and a decay bounded to 0.35–1.6 s,
+  `claim(kind, at)` for one sound of a kind per grid point, `reset()` and
+  `report()`. Two onsets on one concept closer than a third of a second merge
+  into the stronger (CAV-007). The weight table is by role and by nothing
+  else (CAV-006): subject and answer 1, the rest 0.6, the choir 0.6, the
+  hand 0.35. `gridAhead(slot, now)` is the one rule for where a grid starts:
+  a first slot 0.15 s ahead, as the bed has always begun. The one instance
+  runs on the Web Audio clock in production and on the controlled clock in
+  test mode. The bed's quantize carried a guard that misfired for any lead
+  longer than a grid step; the conductor's `next` does not, and the bed now
+  asks the conductor.
+- Writers. The bed arms the grid when it starts and disarms it when it stops;
+  its own ending under the coda only halts, so the coda's lights survive
+  (leaving the room still disarms). The choir publishes the identity notes the
+  voice budget accepted, at the choir weight; the thread pulses are untouched.
+  The director conducts every plan before it plays it, at every intensity,
+  through a new `AudioSink.conduct(plan, at)`: muting empties the plans the
+  engine hears, so publication inside `play` would have left the beads dark
+  exactly when the light is the only channel; `publishPlanLights` publishes
+  each note with a concept at its onset, its envelope's length and its role's
+  weight. A score feed (`src/audio/planLights.ts`) publishes the notes due
+  within 1.5 s at once and holds later ones, releasing them on the semantic
+  scheduler's 25 ms tick: Attunement and the conclusion are scheduled tens of
+  seconds ahead, and a ten-thread conclusion is 109 onsets over 70 s against a
+  ring of 64. The five hand sounds start on the next sixteenth, one of a kind
+  per grid point, and hover, select and the settling sighting light their bead
+  at the hand weight; without a grid they fall back to now + 0.02 s as the bed
+  always did. The focus lane starts on the hand grid through
+  `AudioSink.quantizeHand(lead)` and keeps its 0.06 s lead, which the lane's
+  fade requires: with the grid's bare 0.03 s, a quarter of answers would begin
+  under the voice they replace. The director reads the world's slot per plan
+  from `AudioSink.slotSeconds()`, so the rhythm unit is the slot's sixteenth
+  in every world (Castalia's onsets unchanged).
+- Readers. The bead pass reads `conductor.now()` once a frame and folds
+  `light(id)` into the kindling lane by `max`, writing the lane into
+  `frameState.kindling` as well; the glass and its attributes are unchanged,
+  and the light stays under reduced motion and on potato. The frame breath is
+  the conductor's phase while the grid is armed — reached by a catch, not a
+  step: the distance on the arming frame is remembered the short way round and
+  closed exponentially over about a second and a half, because a step was up to
+  a quarter of the bloom's swing and half a degree of the lens at the first
+  press and on Again and Next. The camera's beat is 0.35 of the world's slot
+  (`cameraBeatSeconds`; Castalia 0.7 s unchanged, Tide 0.84, Ember 0.63,
+  Aurora 0.77), read from the theme, with phrases still whole or half beats of
+  at most two. The field of view breathes by at most `COMFORT.cameraBreath`
+  (0.006) with the frame's breath depth, off on potato (`SceneBudget.cameraBreath`)
+  and off under reduced motion — gated explicitly, because the depth starts
+  at 1 on load and would move the lens for a second before easing to zero.
+- Departures from the packet's letter, each above: `conduct` beside `play`;
+  the focus lane's lead kept; the coda keeps the grid; the choir and hand
+  lights last the note's whole envelope; the breath's catch; the camera
+  breath's reduced-motion gate. None changes the specification.
+- Test mode and evidence. The room lifecycle arms the grid on the controlled
+  clock where the bed would have started it, re-arms it on Again and Next,
+  and disarms it when the room empties. The adapter reports `musicalTime()`,
+  conducts a synthetic note with `conduct()`, and reads a bead's light with
+  `beadLight()`: what the pass wrote into the lane, the conductor's light, and
+  whether the idle score has kindled the bead lately (that score keeps the
+  frame clock, which the controlled clock does not move, so the lane is a
+  `max` of the two). Two browser tests in the deterministic-mode spec: the
+  grid armed with the world's slot, the hand and answer grids nesting, half a
+  slot advancing the phase by half, the breath cresting on a slot boundary, a
+  conducted note lighting its bead and only its bead through the glass and
+  dark again past its decay; and leaving to the Studies list disarming the
+  grid. Every existing browser test passes without a changed expectation.
+- The first load. The conductor enters it with the bed and the scene, and put
+  it 870 bytes gzip over the ceiling. The remedy the packet named: the
+  semantic audio layer (the director, its planners, the scheduler, Attunement
+  and the conclusion) is a chunk of its own, fetched when the bridge mounts
+  and awaited where it is used; the first cue comes after the first press. The
+  first load is 512,123 bytes gzip and 1,705,551 raw, from 523,317 and
+  1,745,006; a first-load test now guards that the layer never returns.
+- Checks in the cloud container: `npm ci` was run by the audio stage and the
+  lockfile is unchanged; typecheck (app and Playwright configs), lint,
+  `steering:check` (28 packets), `steering:test`, `validate:content`, build,
+  `bundle:check` and `git diff --check` pass; `npm test` passes in full (the
+  count is in the pull request). The CI browser set on the software renderer:
+  the first run passed 17 of 18, the conclusion spec failing because the dev
+  server force-reloaded every open page when the agents' worktrees were
+  removed during it; it passes alone and in the quiet rerun recorded in the
+  pull request. Performance reference (SwiftShader, same container, effective
+  frames per second, evidence only per M0-005): mobile-potato idle 6.45 and
+  focus 4.57, against M9-001's 4.95/5.51 idle and 3.17/3.76 focus; the desktop
+  profiles miss the container's frame floor, as they do on main.
+- For the headphone session (the feel gate): the hand's sounds now arrive
+  30–155 ms after the gesture in Castalia and the focus lane's answers
+  60–185 ms; the hand grid is `HAND_DIVISION` (16) and the eighth or none
+  are the alternatives; a fast lens sweep drops its first bead's sound more
+  often than before; whether the beads' light reads as the world singing or
+  as a flicker; whether the breath on the bar is felt.
+- Not done, with proposals: a sighting the lens leaves before it sounds still
+  lights its bead (plan ids in the feed would close it); muted focus answers
+  take no lane, so each muted sighting lights its own bead (the 3 Hz bound
+  still holds); the bed's completed-motif voices publish no lights; the rig's
+  3.5 s transit timeout is not scaled per world; every session opens in
+  Castalia today, so the per-world beat and unit change nothing yet; the
+  thread pulses fold into the conductor in the next audio packet (ADR-016).
+- The director's decision after this spike, 2026-09-30: no recorded track;
+  the generative bed is extended instead, because it lacks harmony, movement
+  and an underlying hypnotic percussive pulse — a percussive bed of its own
+  with rhythmic highlights beside harmonic and melodic ones, tied to the
+  events of play. That is the next packet, and it stands on the grid this one
+  built.
