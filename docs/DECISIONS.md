@@ -196,3 +196,85 @@ without restoring the lottery: the answer key is never the goal.
 ordinary session whose status is a pure function of its log; retracting a
 thread, titles, persistence of results and the Daily Study remain separate
 decisions after the spike has been played.
+
+
+## ADR-016 — The conductor: one musical time for the world
+
+**Status:** Proposed on 2026-09-30 under the director's polish mandate; accepted
+by the game design director on reviewed merge, and effective after it.
+
+The arena keeps one musical time, and everything that moves with the music
+reads it from one place. **The conductor** is a per-frame read model of
+scheduled musical time: the bed's grid (the world's slot, its eighths and
+sixteenths, the twelve-slot phrase), the phase within it, and the notes already
+scheduled ahead on the Web Audio clock, each with the concept it belongs to. It
+is written by the schedulers at the moment they schedule and read by the scene
+each frame. It is not an analyser: nothing listens to the output. The scene
+knows the notes because the score was written ahead, which is why the
+conductor is deterministic, costs no per-frame audio work, and still conducts
+when the game is muted.
+
+Four things follow from it, and together they are the first polish spike
+(M4-001):
+
+1. **One slot.** The world's slot is the unit for everything that keeps time:
+   the bed's grid (already), the director's rhythm unit (today a sixteenth of
+   two seconds in every world, whatever the world's slot), the camera's beat
+   (today a fixed 0.7 s; from now on 0.35 of the slot, which leaves Castalia
+   unchanged), and the breath (four slots, phase-locked to the grid).
+2. **Beads sing what they sound.** A note scheduled on a concept lights that
+   concept's glass at its onset, through the lane the world already uses to put
+   light on a bead for a moment. The light's weight follows the note's role and
+   gain, never the thread's outcome kind (CAV-006).
+3. **The hand's sounds land on the grid.** The sounds the hand makes (hover,
+   select, the settling sighting, the cancel, the clink) and the focus lane's
+   answers (sighting, lock, preview, reopen) are scheduled on the sixteenth of
+   the slot, at most one of a kind per grid point, while their visual answer
+   stays immediate (product law 2). The director's semantic sounds keep the
+   eighth they have.
+4. **The breath is on the bar.** The bloom's breath, the bed's breath, the
+   sky's line breath and a camera breath of at most 0.6 % of the field of view
+   share one phase from the conductor: one breath every four slots, cresting on
+   a slot boundary. It is off under reduced motion, and the camera breath is
+   off on the potato tier.
+
+Conditions:
+
+- The conductor defines no rule and holds no durable state. It is
+  presentation timing, rebuilt whenever the room changes; conducting during
+  Attunement stays ephemeral (ADR-013, condition 3).
+- The Web Audio clock remains authoritative. Onsets are stored in audio time
+  and the conductor's *now* is the audio clock in production. In deterministic
+  test mode, where no audio exists, it runs on the controlled clock with the
+  world's slot, so the browser can prove the grid and the lights without sound.
+- CAV-007's bounds are enforced where the conductor is read, not by its
+  callers: no light on one bead repeats faster than 3 Hz, and the breath and
+  camera-breath amplitudes are constants in the shared comfort table.
+- Nothing pulses for decoration: every reactive element traces to a scheduled
+  note or to the grid (product law 8).
+- No new full-screen pass, no analyser, no dependency, and no raised bundle
+  ceiling: the first load has under a kilobyte of headroom, and the remedy for
+  crossing it is a dynamic import of audio the title does not need.
+- The delay a grid puts on the hand's sounds is a feel judgement. It is one
+  constant, reviewed by the director in play; the eighth and the sixteenth are
+  both offered, and the visual answer never waits.
+
+**Reason:** the build has the two things a musical game is built on, one clock
+and one coordinated moment, but only the director's cues use them. The sounds
+the hand makes, the beads themselves, the camera's beat and the breath keep
+their own time: the hand's sounds play the instant the pointer moves, the beads
+never react to their own notes, the camera counts a fixed 0.7 s in every world,
+and the breath runs free at 0.1 Hz on the frame clock. Reading the schedule
+ahead is the cheapest synchronization there is, and it is the piece that makes
+the interaction track and the polish track one thing: the cue bus carries
+meaning and timing, and the conductor makes the timing readable.
+
+**Consequences:** `docs/ARCHITECTURE.md` §10 names the conductor as the
+scene's one source of musical time. The thread pulses (`frameState.pulses`)
+are unchanged by the spike and become a consumer of the conductor in the next
+audio packet, so that no second timing path remains. The event schema
+(ADR-013), the conclusion performance and the bed's grammar are untouched; the
+bed's grid origin still restarts with each session. Bundles B (stems by
+faculty, Attunement as the heightened state, payoff by form) and C (dither, a
+dust field, one pass for all screen effects) are separate packets after this
+spike has been played, each behind the audiovisual review boundary.

@@ -166,6 +166,7 @@ One semantic event should coordinate the whole response. A documented relation r
 - AudioWorklet is used only for justified custom DSP or low-latency gesture sonification.
 - Every voice has a bounded lifetime.
 - Visual synchronization consumes scheduled audio times where appropriate.
+- The conductor is the scene's one read model of musical time: the bed's grid and the notes scheduled ahead, written by the schedulers when they schedule and read per frame (ADR-016).
 - The conclusion score is compiled from the event log.
 
 ## 11. Persistence
