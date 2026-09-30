@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { COMFORT } from "./comfort";
 import { CASTALIA_MODE, degreeFrequency } from "./mode";
-import { createPlanQueue, realizeVoicePlan } from "./scheduler";
+import { createLookaheadScheduler, createPlanQueue, realizeVoicePlan } from "./scheduler";
 import { makeVoicePlan, type PlannedNote, type VoicePlan } from "./plan";
 import { createVoiceBudget, voiceBudget, type RetireVoice } from "./voices";
 
@@ -87,6 +87,22 @@ describe("the look-ahead queue", () => {
       ["b", 20],
     ]);
     expect(queue.remove("nobody")).toBe(false);
+  });
+});
+
+describe("the loop's own tick", () => {
+  it("calls onTick at the top of every tick, with or without an AudioContext", () => {
+    let calls = 0;
+    const scheduler = createLookaheadScheduler({
+      onTick: () => {
+        calls += 1;
+      },
+    });
+    // No AudioContext exists here: nothing can be realised, and the hook still
+    // runs, because what it feeds does not depend on sound.
+    scheduler.tick();
+    scheduler.tick();
+    expect(calls).toBe(2);
   });
 });
 

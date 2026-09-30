@@ -6,8 +6,12 @@
  * sounding surface: where the bed puts the grid, which of the choir's notes
  * reach the score, and when the hand's sounds actually start.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CASTALIA_LOOKUP } from "@/content/castalia";
+import { CASTALIA_RELATIONS } from "@/content/castalia/relations";
+import { toConceptId, toThreadId } from "@/domain/ids";
+import type { PresentationCue } from "@/runtime/cues";
 import { frameState } from "@/scene/frameState";
 import { ambient } from "./ambient";
 import {
@@ -19,9 +23,14 @@ import {
   LIGHT_RISE_SECONDS,
   UNARMED_LEAD_SECONDS,
   conductor,
+  type ScheduledOnset,
 } from "./conductor";
 import { COMFORT } from "./comfort";
+import { createAudioDirector, type AudioSink } from "./director";
 import { audio } from "./engine";
+import { makeVoicePlan, type VoicePlan } from "./plan";
+import { SCORE_HORIZON_SECONDS, publishPlanLights } from "./planLights";
+import { audioDirector, productionSink, stopSemanticAudio } from "./productionAudio";
 import { beadClink, cancelGliss, hoverPing, latchTick, selectTick } from "./sfx";
 import { voiceBudget } from "./voices";
 
@@ -121,6 +130,7 @@ beforeAll(() => {
         ticks.push(fn);
         return ticks.length;
       },
+      clearInterval: () => {},
     },
   });
   Object.defineProperty(globalThis, "document", {
@@ -440,5 +450,145 @@ describe("the hand's sounds land on the hand grid", () => {
     }
     hoverPing(FIBONACCI);
     expect(conductor.light(FIBONACCI, 10.275 + LIGHT_RISE_SECONDS)).toBe(0);
+  });
+});
+
+// ─── The production sink ────────────────────────────────────────────────────
+
+describe("the production sink conducts, muted or not", () => {
+  const outcome = (): PresentationCue =>
+    ({
+      id: "cue:outcome.documented",
+      type: "outcome.documented",
+      sourceEventId: null,
+      startAt: 0,
+      duration: 1,
+      channels: ["audio"],
+      payload: {
+        threadId: toThreadId("t1"),
+        pair: [toConceptId(FIBONACCI), toConceptId(COUNTERPOINT)],
+        intention: "ground",
+        relation: CASTALIA_RELATIONS[0],
+        evidence: CASTALIA_RELATIONS[0].evidence,
+        reception: "confirmed",
+      },
+    }) as PresentationCue;
+
+  /** The plan a director writes for the outcome, as a recording sink receives it. */
+  const written = (): VoicePlan => {
+    const conducted: VoicePlan[] = [];
+    const sink: AudioSink = {
+      now: () => 0,
+      quantize: () => 0,
+      quantizeHand: () => 0,
+      slotSeconds: () => 2,
+      conduct: (plan) => {
+        conducted.push(plan);
+      },
+      play: () => {},
+      setSpace: () => {},
+      activeVoiceCount: () => 0,
+      concludeAt: () => {},
+    };
+    createAudioDirector({ sink, lookup: CASTALIA_LOOKUP }).handleCue(outcome());
+    return conducted[0];
+  };
+
+  /** Every onset that reaches the conductor, and the audio time it arrived at. */
+  let arrivals: { onset: ScheduledOnset; clock: number }[] = [];
+  beforeEach(() => {
+    arrivals = [];
+    const reach = conductor.sound;
+    vi.spyOn(conductor, "sound").mockImplementation((onset) => {
+      arrivals.push({ onset, clock: ctx.currentTime });
+      reach(onset);
+    });
+  });
+
+  afterEach(() => {
+    vi.mocked(conductor.sound).mockRestore();
+    stopSemanticAudio();
+    audio.setMuted(false);
+    audioDirector.setIntensity("full");
+  });
+
+  /** Run the semantic scheduler's loop in 25 ms steps until `until`. */
+  const run = (loop: () => void, until: number): void => {
+    while (ctx.currentTime < until) {
+      ctx.currentTime = Math.min(until, ctx.currentTime + 0.025);
+      loop();
+    }
+  };
+
+  it("puts every note of a muted player's outcome on the score, each before it sounds", () => {
+    // Muted is the engine's silence and the director's silent intensity, set
+    // together by the bridge: nothing at all is handed over to be heard.
+    audio.setMuted(true);
+    audioDirector.setIntensity("silent");
+    const loops = ticks.length;
+    audioDirector.handleCue(outcome());
+    // A Ground is longer than the horizon, so conducting started the loop that
+    // brings the rest.
+    expect(ticks.length).toBe(loops + 1);
+    const loop = ticks[loops];
+
+    // Without a bed, the director's quantize answers soon after now.
+    const at = 10 + UNARMED_LEAD_SECONDS;
+    const plan = written();
+    const last = Math.max(...plan.notes.map((n) => n.atSeconds));
+    expect(last).toBeGreaterThan(SCORE_HORIZON_SECONDS);
+    run(loop, at + last + 0.1);
+
+    const expected: ScheduledOnset[] = [];
+    publishPlanLights({ sound: (onset) => expected.push(onset) }, plan, at);
+    const byTime = (a: ScheduledOnset, b: ScheduledOnset) => a.at - b.at;
+    const onsets = arrivals.map((arrival) => arrival.onset);
+    expect(onsets.length).toBe(expected.length);
+    expect([...onsets].sort(byTime).map((o) => [o.conceptId, o.at, o.duration, o.weight])).toEqual(
+      [...expected].sort(byTime).map((o) => [o.conceptId, expect.closeTo(o.at, 9), o.duration, o.weight])
+    );
+    // Each arrived before it sounded, and none more than the horizon early.
+    for (const { onset, clock } of arrivals) {
+      expect(clock).toBeLessThan(onset.at);
+      expect(onset.at - clock).toBeLessThanOrEqual(SCORE_HORIZON_SECONDS + 1e-9);
+    }
+  });
+
+  it("stops bringing what it holds when the room changes", () => {
+    const concepts = [FIBONACCI, COUNTERPOINT, PRIMES];
+    const plan = makeVoicePlan({
+      id: "long",
+      kind: "conclusion",
+      intention: null,
+      notes: Array.from({ length: 30 }, (_, i) => ({
+        id: `n${i}`,
+        conceptId: concepts[i % 3],
+        role: "subject" as const,
+        timbre: "glass" as const,
+        articulation: "struck" as const,
+        register: "mid" as const,
+        degree: 0,
+        frequency: 264,
+        detuneCents: 0,
+        atSeconds: i * 0.5,
+        envelope: { attack: 0.01, hold: 0.1, release: 0.4 },
+        gain: 0.05,
+        floorGain: 0,
+        openEnded: false,
+        tense: false,
+      })),
+      meta: { conceptIds: concepts, grammar: "test", resolves: false, interval: null, beatingHz: null },
+    });
+    const loops = ticks.length;
+    productionSink.conduct(plan, 10.5);
+    const loop = ticks[loops];
+    run(loop, 12);
+    const before = arrivals.length;
+    expect(before).toBeGreaterThan(0);
+    expect(before).toBeLessThan(30);
+    // The room empties: whatever was still waiting is not a note any more.
+    stopSemanticAudio();
+    run(loop, 30);
+    expect(arrivals.length).toBe(before);
   });
 });

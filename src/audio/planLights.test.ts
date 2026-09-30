@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { CASTALIA_LOOKUP } from "@/content/castalia";
 import { CASTALIA_RELATIONS } from "@/content/castalia/relations";
@@ -8,15 +8,18 @@ import type { CuePayloadMap, CueType, PresentationCue } from "@/runtime/cues";
 import {
   LIGHT_RISE_SECONDS,
   LIGHT_WEIGHT_BY_ROLE,
-  conductor,
+  ONSET_CAPACITY,
   createConductor,
   type ScheduledOnset,
 } from "./conductor";
 import { createAudioDirector, type AudioSink } from "./director";
-import { audio } from "./engine";
 import { makeVoicePlan, noteLifetime, type PlannedNote, type VoicePlan } from "./plan";
-import { publishPlanLights } from "./planLights";
-import { audioDirector } from "./productionAudio";
+import {
+  SCORE_FEED_CAPACITY,
+  SCORE_HORIZON_SECONDS,
+  createScoreFeed,
+  publishPlanLights,
+} from "./planLights";
 
 /**
  * A PLAN'S NOTES ON THE SCORE THE SCENE READS (ADR-016, M4-001).
@@ -287,36 +290,104 @@ describe("the three outcomes light their beads alike (CAV-006)", () => {
   });
 });
 
-describe("the production sink conducts, muted or not", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    audio.setMuted(false);
-    audioDirector.setIntensity("full");
-    audioDirector.reset();
-    conductor.disarm();
+describe("the score, fed a little ahead", () => {
+  /** A clock the test moves, and a conductor reading it. */
+  const onClock = (start = 100) => {
+    const clock = { t: start };
+    const c = createConductor({ now: () => clock.t });
+    return { clock, c };
+  };
+
+  const onset = (conceptId: string, at: number, weight = 1): ScheduledOnset => ({
+    conceptId,
+    at,
+    duration: 0.5,
+    weight,
   });
 
-  it("puts every note of a muted player's outcome on the conductor", () => {
-    // Muted is the engine's silence and the director's silent intensity, as the
-    // bridge sets them together: nothing is handed over to be heard.
-    audio.setMuted(true);
-    audioDirector.setIntensity("silent");
-    const sound = vi.spyOn(conductor, "sound");
-
-    audioDirector.handleCue(outcomeCue("documented", "echo"));
-
-    const written = writtenOutcome("documented", "echo");
-    const speaking = written.notes.filter((n) => n.conceptId !== null);
-    expect(sound).toHaveBeenCalledTimes(speaking.length);
-    // Without an AudioContext the sink's clock stands at zero, and the bed's
-    // quantize answers soon after it.
-    const at = sound.mock.calls[0][0].at - speaking[0].atSeconds;
-    expect(at).toBeCloseTo(0.02, 9);
-    for (const conceptId of [FIBONACCI, COUNTERPOINT]) {
-      const first = speaking.find((n) => n.conceptId === conceptId)!;
-      expect(
-        conductor.light(conceptId, at + first.atSeconds + LIGHT_RISE_SECONDS)
-      ).toBeGreaterThan(0);
+  it("puts a near note on the score at once and holds a far one until it nears", () => {
+    const { clock, c } = onClock();
+    const feed = createScoreFeed(c);
+    const heard: ScheduledOnset[] = [];
+    const spy = { now: () => c.now(), sound: (o: ScheduledOnset) => heard.push(o) };
+    const spied = createScoreFeed(spy);
+    for (const target of [feed, spied]) {
+      target.sound(onset(FIBONACCI, 100 + SCORE_HORIZON_SECONDS - 0.01));
+      target.sound(onset(COUNTERPOINT, 104));
     }
+    expect(heard.map((o) => o.conceptId)).toEqual([FIBONACCI]);
+    expect(spied.pending()).toBe(1);
+    // Nothing goes early.
+    clock.t = 104 - SCORE_HORIZON_SECONDS - 0.01;
+    spied.pump();
+    expect(heard).toHaveLength(1);
+    // And it goes as soon as it is within the horizon — before it sounds.
+    clock.t = 104 - SCORE_HORIZON_SECONDS;
+    spied.pump();
+    expect(heard.map((o) => o.conceptId)).toEqual([FIBONACCI, COUNTERPOINT]);
+    expect(spied.pending()).toBe(0);
+    // The real conductor behind the other feed lights each at its own time.
+    feed.pump();
+    clock.t = 104 + LIGHT_RISE_SECONDS;
+    feed.pump();
+    expect(c.light(COUNTERPOINT)).toBeCloseTo(1, 9);
+  });
+
+  it("hands held notes on in time order, whatever order they were written in", () => {
+    const { clock, c } = onClock();
+    const heard: number[] = [];
+    const feed = createScoreFeed({ now: () => c.now(), sound: (o) => heard.push(o.at) });
+    for (const at of [109, 103, 107, 105, 103.5]) feed.sound(onset(FIBONACCI, at));
+    clock.t = 108;
+    feed.pump();
+    expect(heard).toEqual([103, 103.5, 105, 107, 109]);
+  });
+
+  it("holds a bounded number of notes, letting the latest go, and forgets them on clear", () => {
+    const { c } = onClock();
+    const feed = createScoreFeed(c, SCORE_HORIZON_SECONDS, 4);
+    for (const at of [110, 111, 112, 113, 114, 115]) feed.sound(onset(FIBONACCI, at));
+    expect(feed.pending()).toBe(4);
+    feed.clear();
+    expect(feed.pending()).toBe(0);
+    expect(SCORE_FEED_CAPACITY).toBeGreaterThan(ONSET_CAPACITY);
+  });
+
+  it("keeps a long performance's opening that the conductor alone would lose", () => {
+    // A performance written all at once: a hundred and twenty notes over a
+    // minute, on twelve concepts in turn — more onsets than the conductor holds.
+    const concepts = Array.from({ length: 12 }, (_, i) => `concept.${i}`);
+    const notes = Array.from({ length: 120 }, (_, i) =>
+      note({ id: `n${i}`, conceptId: concepts[i % 12], atSeconds: i * 0.5 })
+    );
+    const plan = makeVoicePlan({
+      id: "performance",
+      kind: "conclusion",
+      intention: null,
+      notes,
+      meta: { conceptIds: concepts, grammar: "test", resolves: false, interval: null, beatingHz: null },
+    });
+    expect(notes.length).toBeGreaterThan(ONSET_CAPACITY);
+
+    const litAtTheirTime = (publish: "direct" | "fed"): number => {
+      const { clock, c } = onClock(100);
+      const feed = createScoreFeed(c);
+      publishPlanLights(publish === "fed" ? feed : c, plan, 100.25);
+      let lit = 0;
+      for (const n of notes) {
+        const at = 100.25 + n.atSeconds + LIGHT_RISE_SECONDS;
+        // The scheduler's loop, every 25 ms of the way.
+        while (clock.t < at) {
+          clock.t = Math.min(at, clock.t + 0.025);
+          feed.pump();
+        }
+        if (c.light(n.conceptId!) > 0) lit += 1;
+      }
+      return lit;
+    };
+    // Published whole, the soonest notes are the ones the full ring lets go.
+    expect(litAtTheirTime("direct")).toBeLessThan(notes.length);
+    // Fed as they near, every note lights at its own time.
+    expect(litAtTheirTime("fed")).toBe(notes.length);
   });
 });
