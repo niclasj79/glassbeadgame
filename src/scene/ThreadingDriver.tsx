@@ -300,9 +300,13 @@ export function ThreadingDriver() {
      * and on a slow software renderer "not yet" can be a second.
      */
     const screenOf = (
-      point: THREE.Vector3
+      point: THREE.Vector3,
+      evenIfUnsettled = false
     ): { x: number; y: number; behind: boolean } => {
-      if (!frameState.cameraSettled || frameState.framesSinceLayout < 3) {
+      if (
+        frameState.framesSinceLayout < 3 ||
+        (!frameState.cameraSettled && !evenIfUnsettled)
+      ) {
         return { x: 0, y: 0, behind: true };
       }
       view.copy(point).applyMatrix4(camera.matrixWorldInverse);
@@ -325,7 +329,7 @@ export function ThreadingDriver() {
       startSession: startTestSession,
       snapshot: testSnapshot,
       advanceClock: advanceTestClock,
-      beadScreen: (id: string) => {
+      beadScreen: (id: string, options?: { readonly evenIfUnsettled?: boolean }) => {
         const i = frameState.beadIndex.get(id);
         if (i === undefined) return null;
         v.set(
@@ -333,7 +337,7 @@ export function ThreadingDriver() {
           frameState.rendered[i * 3 + 1],
           frameState.rendered[i * 3 + 2]
         );
-        return screenOf(v);
+        return screenOf(v, options?.evenIfUnsettled === true);
       },
       threadScreen: (threadId: string, at = 0.5) => {
         const curve = threadCurves.get(threadId);

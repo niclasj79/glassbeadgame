@@ -26,10 +26,17 @@ import type { TestSessionSnapshot } from "../../src/runtime/testMode";
  *
  * This runs against the deterministic adapter but *without* reduced motion,
  * because the camera phrase is exactly the thing under test.
+ *
+ * THE FOCUS VIEW MOVED BOTH MOMENTS (I-016, I-017). A press on a bead now
+ * attends it and the plate opens only when a second bead is locked, on the
+ * thread between the pair, after the camera has turned to frame them. The two
+ * laws are unchanged: the world never leaves the hand that is holding it, and
+ * the plate is where it will stay from the first frame it is drawn.
  */
 
 const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
 const SOURCE_ID = "measure.fibonacci-sequence";
+const TARGET_ID = "sound.counterpoint";
 
 interface Point {
   readonly x: number;
@@ -67,6 +74,24 @@ async function beadPoint(page: Page, id: string): Promise<Point> {
   );
   if (!result || result.behind) throw new Error(`bead ${id} is not on screen`);
   return { x: result.x, y: result.y };
+}
+
+/**
+ * Every bead's centre as drawn this frame, whether or not the camera has a move
+ * waiting: the question here is whether the world is holding still.
+ */
+async function drawnBeads(page: Page): Promise<Map<string, Point>> {
+  const entries = await page.evaluate(() =>
+    window
+      .__gbgTest!.beadIds()
+      .map((id) => ({
+        id,
+        screen: window.__gbgTest!.beadScreen(id, { evenIfUnsettled: true }),
+      }))
+      .filter((bead) => bead.screen !== null && !bead.screen.behind)
+      .map((bead) => [bead.id, { x: bead.screen!.x, y: bead.screen!.y }] as const)
+  );
+  return new Map(entries);
 }
 
 /** How many of the draw's beads the camera can currently see. */
@@ -107,51 +132,56 @@ test("a drag from a bead never takes the world out from under the finger", async
   const bead = await beadPoint(page, SOURCE_ID);
   expect(await beadsOnScreen(page)).toBe(initial.beadIds.length);
 
+  const before = await drawnBeads(page);
+  expect(before.size).toBe(initial.beadIds.length);
   await page.mouse.move(bead.x, bead.y);
   await page.mouse.down();
   await page.mouse.move(bead.x + 40, bead.y, { steps: 8 });
 
-  // Held down, exactly as the reproduction had it: the bead is opened by the
-  // drag and the plate is what the same drag is meant to continue into.
+  // Held down, exactly as the reproduction had it: the press attends the bead
+  // and the same hand, still down, is now sweeping the lens (I-017). Every
+  // bead stays under where it was — the Attend pose waits for the hand to let
+  // go. (The defect carried the camera a hundred degrees; the few pixels
+  // allowed here are the idle drift the press itself stops.)
   for (let sample = 0; sample < 6; sample += 1) {
     await page.waitForTimeout(150);
-    expect(await beadsOnScreen(page)).toBe(initial.beadIds.length);
+    const now = await drawnBeads(page);
+    expect(now.size).toBe(initial.beadIds.length);
+    for (const [id, at] of before) {
+      const drawn = now.get(id)!;
+      expect(Math.hypot(drawn.x - at.x, drawn.y - at.y)).toBeLessThan(8);
+    }
   }
-  const snapshot = await page.evaluate(() => window.__gbgTest!.snapshot());
-  expect(snapshot.draftStage).toBe("attending");
-  expect(snapshot.draftAttendedConceptId).toBe(SOURCE_ID);
+  const held = await page.evaluate(() => window.__gbgTest!.snapshot());
+  expect(held.draftStage).toBe("attending");
+  expect(held.draftAttendedConceptId).toBe(SOURCE_ID);
+  expect(held.focus.lensActive).toBe(true);
 
-  // …and the plate the drag is being carried into is a real target under it.
-  // The ring's own centre is deliberately empty — the bead is there — so the
-  // thing that has to be hittable is a station.
-  const box = await plateBox(page);
-  expect(box).not.toBeNull();
-  expect(box!.w).toBeGreaterThan(0);
-  const under = await page.evaluate(() => {
-    const station = document
-      .querySelector('[data-testid="intention-echo"]')
-      ?.getBoundingClientRect();
-    if (!station || station.width === 0) return "missing";
-    const element = document.elementFromPoint(
-      station.x + station.width / 2,
-      station.y + station.height / 2
-    );
-    return element?.closest("[data-world-intention]")?.getAttribute(
-      "data-world-intention"
-    ) ?? (element ? element.tagName : null);
-  });
-  expect(under).toBe("echo");
-
+  // Let go: the Attend pose the press asked for is performed now, and it too
+  // keeps the whole draw in frame.
   await page.mouse.up();
+  await expect
+    .poll(async () => beadsOnScreen(page), { timeout: 30_000 })
+    .toBe(initial.beadIds.length);
 });
 
 test("the plate opens where it will stay", async ({ page }) => {
   await openSession(page);
-  const bead = await beadPoint(page, SOURCE_ID);
+  const source = await beadPoint(page, SOURCE_ID);
+  await page.mouse.click(source.x, source.y);
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(() => window.__gbgTest!.snapshot())).draftStage,
+      { timeout: 30_000 }
+    )
+    .toBe("attending");
+  const target = await beadPoint(page, TARGET_ID);
+  await page.mouse.move(target.x, target.y, { steps: 6 });
 
-  // Sampled inside the page, on every animation frame from before the press.
-  // Asking across the wire would have measured the plate seconds after it
-  // opened, which is precisely the window the defect lives in.
+  // Sampled inside the page, on every animation frame from before the press
+  // that locks the pair. Asking across the wire would have measured the plate
+  // seconds after it opened, which is precisely the window the defect lives in.
   await page.evaluate(() => {
     const samples: Array<{ x: number; y: number; w: number; h: number }> = [];
     (window as unknown as { __plateTrack: typeof samples }).__plateTrack =
@@ -169,19 +199,20 @@ test("the plate opens where it will stay", async ({ page }) => {
           h: rect.height,
         });
       }
-      if (performance.now() - started < 12_000) requestAnimationFrame(tick);
+      if (performance.now() - started < 20_000) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });
 
-  await page.mouse.click(bead.x, bead.y);
+  await page.mouse.down();
+  await page.mouse.up();
   await expect
     .poll(
       async () =>
         (await page.evaluate(() => window.__gbgTest!.snapshot())).draftStage,
       { timeout: 30_000 }
     )
-    .toBe("attending");
+    .toBe("locked");
   await expect
     .poll(async () => (await plateBox(page)) !== null, { timeout: 30_000 })
     .toBe(true);
@@ -193,7 +224,8 @@ test("the plate opens where it will stay", async ({ page }) => {
   expect(track.length).toBeGreaterThan(3);
 
   // Wherever the plate first appears is where the player will aim, so that is
-  // where it has to be when they get there.
+  // where it has to be when they get there — the camera's turn to frame the
+  // pair is over before the plate is drawn at all.
   const opened = track[0];
   const rested = track[track.length - 1];
   const travelled = Math.hypot(rested.x - opened.x, rested.y - opened.y);

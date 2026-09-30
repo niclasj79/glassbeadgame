@@ -96,7 +96,16 @@ export interface BrowserTestAdapter {
   startSession(picks: DisciplineId[]): TestSessionSnapshot;
   snapshot(): TestSessionSnapshot;
   advanceClock(milliseconds: number): number;
-  beadScreen(id: string): { x: number; y: number; behind: boolean } | null;
+  /**
+   * A bead's centre on the page. While the camera is moving, or has a move
+   * waiting, it answers "behind" so nothing acts on a point about to change —
+   * unless `evenIfUnsettled` asks what is drawn right now, to measure whether
+   * the world is holding still.
+   */
+  beadScreen(
+    id: string,
+    options?: { readonly evenIfUnsettled?: boolean }
+  ): { x: number; y: number; behind: boolean } | null;
   /**
    * A point along a committed thread's drawn strand (`at` from 0 at its first
    * bead to 1 at its second; the middle by default), in page pixels, or null
