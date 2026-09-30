@@ -230,6 +230,29 @@ A public vertical slice that makes a complete artistic and intellectual statemen
 
 All technical checks pass; success criteria in the master plan have been evaluated through external playtesting; no P0/P1 defects remain.
 
+## M9 — Studies
+
+### Goal
+
+Find out, by playing, whether authored problems over the same loop make the
+Game fun to get better at, without touching the Free Game or the honesty of
+the content. Accepted by ADR-015; specified in `STUDIES-SPEC.md`.
+
+### Work
+
+- M9-001 the Studies spike: Study content schema, twelve authored Studies in
+  three chapters, a solver that proves each at build time, a pure evaluator,
+  a Study session start, the brief and facets in Study mode, the silence
+  control, the solved plate, and a browser smoke test;
+- after the director has played the spike: retract, remembered results,
+  chapter titles, the Daily Study — each a separate proposal, or a stop.
+
+### Gate
+
+The director plays all twelve Studies and records whether Studies are fun,
+whether the honesty rules held, and whether the Free Game is unchanged. That
+record decides the next M9 task or ends the milestone.
+
 ## Safe parallelism
 
 Generally safe when files and architectural boundaries do not overlap:
