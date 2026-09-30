@@ -1,11 +1,64 @@
 import { useEffect, useRef } from "react";
 import { useStore as useVanillaStore } from "zustand";
 import { castaliaConceptById } from "@/content/castalia";
-import { toConceptId } from "@/domain/ids";
+import { toConceptId, type ThreadId } from "@/domain/ids";
+import type { CommittedThreadV1 } from "@/domain/model";
 import { productionInterpretation } from "@/runtime/interpretation";
+import { domainSessionStore } from "@/state/domainSession";
 import { interpretationDraftStore } from "@/state/interactionDraft";
-import { interpretationPresentationStore } from "@/state/interpretationPresentation";
+import {
+  interpretationPresentationStore,
+  useFocusView,
+} from "@/state/interpretationPresentation";
 import { useStore } from "@/state/store";
+import { reopenWovenThread, wovenThreadLabel } from "./columnPlan";
+
+const NO_THREADS: readonly CommittedThreadV1[] = Object.freeze([]);
+
+export interface WovenThreadListProps {
+  /** The committed threads, in the order they were woven. */
+  readonly threads: readonly Pick<CommittedThreadV1, "id" | "pair" | "intention">[];
+  /** The thread reopened for reading right now, if any. */
+  readonly reopenedThreadId: ThreadId | null;
+  /** Reopening is a roaming act: it waits while a pair is being composed. */
+  readonly disabled: boolean;
+  readonly onReopen: (threadId: ThreadId) => void;
+}
+
+/**
+ * THE WAY BACK TO A THREAD WITHOUT A POINTER (I-019).
+ *
+ * A committed thread can be clicked or tapped in the world; this is the same
+ * act for a keyboard or a screen reader. Each entry names the reading as the
+ * player composed it — "Fibonacci Sequence · Echo · Counterpoint" — and never
+ * how it fared, because the list is a way back to a thread, not a tally of
+ * outcomes. Hook-free, so what each entry does can be asserted directly.
+ */
+export function WovenThreadList({
+  threads,
+  reopenedThreadId,
+  disabled,
+  onReopen,
+}: WovenThreadListProps) {
+  if (threads.length === 0) return null;
+  return (
+    <ul aria-label="Woven threads">
+      {threads.map((thread) => (
+        <li key={String(thread.id)}>
+          <button
+            type="button"
+            data-testid={`woven-thread-${String(thread.id)}`}
+            aria-current={thread.id === reopenedThreadId ? "true" : undefined}
+            disabled={disabled}
+            onClick={() => onReopen(thread.id)}
+          >
+            {wovenThreadLabel(thread)}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
  * A non-dominant semantic mirror of the world interaction. It supplies a
@@ -20,6 +73,13 @@ export function InterpretationControls() {
     interpretationPresentationStore,
     (state) => state
   );
+  // Read from the canonical session, never from a copy: a thread is listed
+  // here because the log holds it.
+  const threads = useVanillaStore(
+    domainSessionStore,
+    (state) => state.session?.threads ?? NO_THREADS
+  );
+  const { reopenedThreadId } = useFocusView();
   const beadRefs = useRef(new Map<string, HTMLButtonElement>());
   const suppressCommitClick = useRef(false);
   const keyboardCaptureActive = useRef(false);
@@ -169,11 +229,21 @@ export function InterpretationControls() {
       <button
         type="button"
         data-testid="cancel-interpretation"
-        disabled={draft.stage === "inactive" && !presentation.weaving}
+        disabled={
+          draft.stage === "inactive" &&
+          !presentation.weaving &&
+          reopenedThreadId === null
+        }
         onClick={() => productionInterpretation.cancel()}
       >
         Step back
       </button>
+      <WovenThreadList
+        threads={threads}
+        reopenedThreadId={reopenedThreadId}
+        disabled={draft.stage !== "inactive"}
+        onReopen={(threadId) => reopenWovenThread(productionInterpretation, threadId)}
+      />
       <p role="status" aria-live="polite">
         {presentation.message}
       </p>

@@ -5,10 +5,9 @@ import { sessionProgression } from "@/runtime/progression";
 import { LENS_DISCLOSURE, LENS_VIEWS } from "@/game/layout";
 import { useStore } from "@/state/store";
 import { OPENING_DEPARTURE_MS, arenaChromeVisible } from "@/scene/opening";
-import { BeadInspectCard } from "./BeadInspectCard";
 import { CueCaptions } from "./CueCaptions";
+import { ArenaColumn } from "./FocusColumn";
 import { InterpretationControls } from "./InterpretationControls";
-import { Marginalia } from "./Marginalia";
 
 /**
  * THE CHROME WAITS FOR THE TITLE TO LEAVE.
@@ -130,8 +129,12 @@ export function ArenaHud() {
             </p>
           </div>
         )}
-        {!lensActive && <Marginalia />}
-        <BeadInspectCard />
+        {/* The one reading column: the focus view's bead cards, a pinned
+            inspection and the margin, written on one page. It stays mounted
+            while the Lens is open — the Lens silences the margin rather than
+            unmounting it, so no reading kept this Game is lost to a glance at
+            the triptych. */}
+        <ArenaColumn />
       </div>
       {/* Outside the Lens gate on purpose. The Lens hides the interpretation
           controls because there is nothing to interpret while it is open, but

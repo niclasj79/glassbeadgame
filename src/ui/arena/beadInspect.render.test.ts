@@ -2,8 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vitest";
 import { CASTALIA_CONCEPTS, castaliaConceptById } from "@/content/castalia";
+import { toFacetId } from "@/content/castalia/schema";
 import { installMotionDomStubs } from "../testing/domStubs";
-import { BeadDetails } from "./BeadInspectCard";
+import { BeadCompact, BeadDetails, FacetLine } from "./BeadInspectCard";
 
 /**
  * GAP-B4(3). This card is the only surface in the game that renders a concept
@@ -73,5 +74,97 @@ describe("the inspection card", () => {
       expect(classes).not.toContain("truncate");
       expect(classes).not.toContain("text-ellipsis");
     }
+  });
+});
+
+/**
+ * I-018: the facets both beads carry are lit in both cards. Lit is public
+ * structure, said in weight and a mark rather than colour alone, and it leads
+ * the line so the same words stand at the head of each card.
+ */
+describe("the facet line", () => {
+  beforeAll(installMotionDomStubs);
+
+  const line = (
+    shared: readonly string[] | null,
+    interactive = true,
+    facets = ["recursion", "proportion", "discreteness"]
+  ): string =>
+    renderToStaticMarkup(
+      createElement(FacetLine, {
+        facets: facets.map(toFacetId),
+        shared: shared === null ? null : shared.map(toFacetId),
+        interactive,
+      })
+    );
+
+  const order = (html: string): string[] =>
+    [...html.matchAll(/data-testid="facet-([^"]+)"/g)].map((match) => match[1]);
+
+  it("keeps the pack's order when there is no pair to compare", () => {
+    const html = line(null);
+    expect(order(html)).toEqual(["recursion", "proportion", "discreteness"]);
+    expect(html).not.toContain("focus-shared-facets");
+    expect(html).not.toContain("✦");
+  });
+
+  it("lights what both carry, first, and leaves the rest in the pack's order", () => {
+    const html = line(["discreteness", "recursion"]);
+    expect(order(html)).toEqual(["discreteness", "recursion", "proportion"]);
+    const group = /<span data-testid="focus-shared-facets"[^>]*>(.*?)<\/span><span aria-hidden="true"> · <\/span><span class="sr-only">Also: /.exec(
+      html
+    );
+    expect(group).not.toBeNull();
+    expect(group![1]).toContain("Discreteness");
+    expect(group![1]).toContain("Recursion");
+    expect(group![1]).not.toContain("Proportion");
+    // Weight and a mark, and a screen reader is told which are shared.
+    expect(html.match(/data-shared="true"/g)).toHaveLength(2);
+    expect(html.match(/✦/g)).toHaveLength(2);
+    expect(html).toContain("Both carry: ");
+  });
+
+  it("lights only facets this bead actually carries", () => {
+    const html = line(["recursion", "imitation"]);
+    expect(html).not.toContain('data-testid="facet-imitation"');
+    expect(html.match(/data-shared="true"/g)).toHaveLength(1);
+  });
+
+  it("gives a glance nothing to focus and a pinned card its glosses", () => {
+    expect(line(null, false)).not.toContain("tabindex");
+    expect(line(null, true).match(/tabindex="0"/g)).toHaveLength(3);
+    // The gloss travels with the name either way.
+    expect(line(null, false)).toContain(
+      "Recursion. A rule applied again to its own result, so the whole reappears inside the part."
+    );
+  });
+
+  it("sets a compact card from the same authored lines, without description or dates", () => {
+    const concept = castaliaConceptById.get("sound.counterpoint")!;
+    const html = renderToStaticMarkup(
+      createElement(BeadCompact, {
+        concept,
+        role: "sighted",
+        shared: [toFacetId("recursion")],
+      })
+    );
+    expect(html).toContain(concept.name);
+    expect(html).toContain(concept.caption);
+    expect(html).toContain("Sound");
+    expect(html).toContain(concept.kind);
+    expect(html).not.toContain(concept.era);
+    expect(html).not.toContain('data-testid="bead-description"');
+    // Its role is said to a screen reader; to the eye, position says it.
+    expect(html).toMatch(/<span class="sr-only">Under the lens · <\/span>/);
+    expect(html).toContain('data-testid="focus-shared-facets"');
+  });
+
+  it("closes only a card the player pinned", () => {
+    const concept = castaliaConceptById.get("sound.counterpoint")!;
+    const glance = renderToStaticMarkup(
+      createElement(BeadDetails, { concept, lensActive: false })
+    );
+    expect(glance).not.toContain('data-testid="bead-close"');
+    expect(glance).toContain(concept.description);
   });
 });

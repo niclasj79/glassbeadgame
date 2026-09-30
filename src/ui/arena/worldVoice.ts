@@ -14,12 +14,30 @@ import type { CueType, PresentationCue } from "@/runtime/cues";
  *
  * TWO REGIONS, NOT ONE. `InterpretationControls` already owns a polite live
  * region, and it announces the mechanics of the player's own input: "Attention
- * set. Choose an intention." / "Thread committed." This module deliberately
- * carries only what the *world* answers — outcomes, motifs, attunement, the
- * conclusion — because two regions changing in the same tick is how a screen
- * reader ends up dropping one of them, and `describeCue`'s attention, intention
- * and thread captions restate what the other region has already said. What no
- * region said before is the epistemic status, and that is what this one is for.
+ * set. Find a second bead." / "Pair held. Choose how you read them…" /
+ * "Reopened for reading." / "Thread committed." This module deliberately
+ * carries only what the *world* answers — a sighted bead and what it shares,
+ * outcomes, motifs, attunement, the conclusion — because two regions changing
+ * in the same tick is how a screen reader ends up dropping one of them, and
+ * `describeCue`'s attention, lock, reading, reopening and thread captions
+ * restate what the other region has already said. What no region said before
+ * is the epistemic status, and that is what this one is for.
+ *
+ * THE FOCUS VIEW'S NEW MOMENTS, ONE BY ONE (M2-012).
+ *
+ *  - `attention.sighted` is the world answering: the bead under the lens, and
+ *    the facets it shares with the attended bead, which no other region says.
+ *    It is carried, always politely — a sweep of the lens is looking, and
+ *    looking must never interrupt. Only settled sightings are published, and
+ *    the gap re-opening is not captioned at all.
+ *  - `pair.locked`, `reading.previewed` (a chosen reading) and
+ *    `thread.reopened` are the player's own acts, and the controls' region
+ *    announces each in the same tick; they stay there.
+ *  - A reading merely hovered on a sigil is a pointer's glance over four
+ *    targets in quick succession; captioning each would chatter. The column
+ *    names the reading being heard in text, and the keyboard's route to the
+ *    same preview — focusing a sigil, which chooses it — is announced by the
+ *    controls' region.
  */
 
 /**
@@ -28,12 +46,22 @@ import type { CueType, PresentationCue } from "@/runtime/cues";
  * states in words.
  */
 export const WORLD_VOICE_CUES: ReadonlySet<CueType> = new Set<CueType>([
+  "attention.sighted",
   "outcome.documented",
   "outcome.open-thread",
   "outcome.unresolved",
   "motif.completed",
   "attunement.changed",
   "conclusion.perform",
+]);
+
+/**
+ * Cues that may never reach the assertive region, whatever `describeCue` says
+ * of them: they arrive as fast as a lens can sweep, and an assertive region
+ * interrupts whatever the reader was saying for every one.
+ */
+export const NEVER_ASSERTIVE: ReadonlySet<CueType> = new Set<CueType>([
+  "attention.sighted",
 ]);
 
 /**
@@ -93,5 +121,9 @@ export function worldVoiceCaption(
 ): CueCaption | null {
   if (!WORLD_VOICE_CUES.has(cue.type)) return null;
   const caption = describeCue(cue, context);
-  return caption === null ? null : correctInterpretive(caption, cue);
+  if (caption === null) return null;
+  const corrected = correctInterpretive(caption, cue);
+  return NEVER_ASSERTIVE.has(cue.type) && corrected.urgency !== "polite"
+    ? { ...corrected, urgency: "polite" }
+    : corrected;
 }

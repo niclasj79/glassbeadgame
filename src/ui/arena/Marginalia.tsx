@@ -1,25 +1,14 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { cueBus } from "@/runtime/cues";
-import { useStore } from "@/state/store";
 import { ReadingBody } from "../components/ReadingBody";
-import { inspectedConcept } from "../components/inspection";
+import { QUIET_CONTROL, READING_PLATE } from "../components/ReadingColumn";
+import type { MarginRegister } from "./columnPlan";
+import { entranceMs, noteLayers, type Note } from "./marginaliaNote";
 import {
-  QUIET_CONTROL,
-  READING_MEASURE,
-  READING_PLATE,
-  ReadingColumn,
-} from "../components/ReadingColumn";
-import { entranceMs, type Note } from "./marginaliaNote";
-import {
-  EMPTY_MARGIN,
+  isExpanded,
   lastReading,
   openReading,
   pendingReading,
-  receive,
-  reopen,
-  setAside,
-  toggleIndex,
   type MarginState,
 } from "./marginState";
 
@@ -44,10 +33,19 @@ import {
  *
  * The timer is gone. `marginState.ts` holds the rule that replaced it and has
  * no clock in it: a reading stays until the player sets it aside, until another
- * outcome takes its place, or until the player begins another interpretation —
- * at which point the margin gets out of the arena's way, because it is the
- * arena the player has just reached for. Every reading is kept and every one can
- * be re-opened.
+ * outcome takes its place, or until the player's next act — at which point the
+ * margin gets out of the way of the arena, because it is the arena the player
+ * has just reached for. Every reading is kept and every one can be re-opened.
+ *
+ * THE THREAD CARD (I-018).
+ *
+ * After a weave the two bead cards fold into one thread card, and that card is
+ * this plate: the outcome's title, its evidence line and one sentence, with the
+ * rest of the insight, the counterpoint and the citations behind "Read more".
+ * The layering is decided in `marginaliaNote.noteLayers` and is only a length:
+ * the evidence line is on the first layer of every card. When a committed thread
+ * is reopened (I-019) the same card is written beneath the pair's two bead
+ * cards, and the view it belongs to is left with the column's own Step back.
  *
  * WHAT THE MARKUP STILL COMMITS TO.
  *
@@ -59,7 +57,8 @@ import {
  *    "3 sources in the Codex" — a pointer to a screen that was cut, and the
  *    only consumer the source register had. Spec §10 wants a source reference
  *    in a documented result and the content model's honesty rests on a player
- *    being able to go and check, so the entries are printed verbatim.
+ *    being able to go and check, so the entries are printed verbatim, one
+ *    request away on the thread card.
  *  - **An Open Thread is set at the same weight as a documented relation**
  *    (CAV-006). Same measure, same type size, same entrance — the entrance is
  *    one function in `marginaliaNote.ts` and it does not consult the kind. Only
@@ -67,8 +66,8 @@ import {
  *    hanging rule.
  *  - **Every player gets it.** This surface used to be `hidden md:flex`, so a
  *    phone finished an entire Game without once being told whether a claim was
- *    documented, contested, or a reading. Below `md` the margin becomes the
- *    foot of the page: same words, same measure, same weight for an Open Thread.
+ *    documented, contested, or a reading. Below `md` the margin is the foot of
+ *    the page: same words, same measure, same weight for an Open Thread.
  *
  * ON POINTER EVENTS, WHICH IS A REAL TRADE.
  *
@@ -86,13 +85,16 @@ import {
  * technology twice over — live through `CueCaptions` as it happens, and as
  * static text here for anyone who wants to go back to it.
  *
- * THE COLUMN IS NOT THE MARGIN'S PRIVATE PROPERTY.
+ * THE MARGIN IS A SECTION OF THE COLUMN, NOT A COLUMN OF ITS OWN.
  *
- * The page, the measure, the rule and the quiet controls now come from
- * `components/ReadingColumn`, which the bead inspection card is set in too. The
- * margin used to own all four, which is how the other surface that reads
- * authored prose at length ended up pinned over the instrument in a rounded
- * glass panel at 10px while this column stood empty in the same frame (IMP-5).
+ * The page, the measure, the rule and the quiet controls come from
+ * `components/ReadingColumn`, and the column itself is drawn once, by
+ * `FocusColumn`, with the bead cards above this section. The margin used to
+ * draw a column of its own and stand down whenever the bead card drew another
+ * over it; two absolutely-placed columns arbitrating who is drawn is how a
+ * surface ends up over another, so there is one page now and this is written on
+ * it. Its memory lives above the column (`arenaColumnHooks.useMarginState`), so
+ * nothing the player has read is lost when the page has no room for it.
  */
 
 /**
@@ -108,22 +110,39 @@ function indexLabel(note: Note): string {
 export interface MarginSurfaceProps {
   readonly state: MarginState;
   readonly reducedMotion: boolean;
+  /**
+   * What the margin writes (`columnPlan.MarginRegister`):
+   *
+   *  - `page` (the default): the whole margin — the open reading, the index of
+   *    earlier ones, a motif waiting its turn, and the way back in;
+   *  - `held`: only the open reading, as the card of a reopened thread
+   *    (I-019). It carries no index and no set-aside of its own; the view it
+   *    belongs to is left with the column's Step back, which takes the card
+   *    with it.
+   */
+  readonly register?: Exclude<MarginRegister, "none">;
   readonly onSetAside: () => void;
   readonly onReopen: (id: string) => void;
   readonly onToggleIndex: () => void;
+  readonly onReadMore: () => void;
+  readonly onReadLess: () => void;
 }
 
 /**
  * The margin with no bus attached, so what it renders in each of its states can
- * be asserted directly. `Marginalia` is the subscription and nothing else.
+ * be asserted directly. The subscription lives in `arenaColumnHooks`.
  */
 export function MarginSurface({
   state,
   reducedMotion,
+  register = "page",
   onSetAside,
   onReopen,
   onToggleIndex,
+  onReadMore,
+  onReadLess,
 }: MarginSurfaceProps) {
+  const held = register === "held";
   const note = openReading(state);
   const last = lastReading(state);
   const earlier = state.readings.length > 1;
@@ -131,6 +150,10 @@ export function MarginSurface({
      taking the page, and it is offered here and opened when the reading is
      set aside — see marginState. */
   const pending = pendingReading(state);
+  const layers = note === null ? null : noteLayers(note);
+  const expanded = isExpanded(state);
+  const whole = layers === null || !layers.more || expanded;
+  const shown = note === null || layers === null ? null : whole ? note : layers.first;
 
   /* A plain click on the prose sets the reading aside, so the arena underneath
      is one click away instead of being held hostage by a plate the player has
@@ -145,45 +168,48 @@ export function MarginSurface({
   };
 
   return (
-    <ReadingColumn label="The margin" testId="marginalia" lit={note !== null}>
-      <>
-        <AnimatePresence mode="wait">
-          {note && (
-            <motion.figure
-              key={note.id}
-              data-testid="margin-plate"
-              initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: 0, y: 10 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-              transition={{
-                duration: reducedMotion ? 0.14 : entranceMs(note) / 1000,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              /* Same measure on both edges: the note is a column of running
-                 prose either way, and pb-20 keeps the last line clear of the
-                 sound control in the corner. It scrolls inside itself rather
-                 than off the screen — a five-source relation with an 85-word
-                 insight is taller than a laptop margin, and a citation that
-                 falls off the bottom edge is a citation nobody can check.
+    <div data-testid="marginalia" className="pointer-events-none w-full">
+      <AnimatePresence mode="wait">
+        {note && shown && layers && (
+          <motion.figure
+            key={note.id}
+            data-testid="margin-plate"
+            data-kind={note.kind}
+            data-thread-id={note.threadId ?? undefined}
+            data-layer={whole ? "whole" : "first"}
+            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: 0, y: 10 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+            transition={{
+              duration: reducedMotion ? 0.14 : entranceMs(note) / 1000,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className={READING_PLATE}
+          >
+            <div onClick={held ? undefined : dismissOnClick}>
+              <ReadingBody
+                reading={shown}
+                titleTag="h2"
+                titleClassName="font-display text-title font-medium leading-tight text-vellum"
+              />
+            </div>
 
-                 The phone ceiling is half the screen and not more. A plate
-                 that can be pointed at is a plate that catches taps, and on a
-                 414px screen the arena has no side margin to retreat to: at
-                 78vh the note sat over the intention sigils and the player had
-                 to clear it before they could arm anything. Half a screen
-                 leaves the world's working half alone, and the citations
-                 scroll inside the half they have. */
-              className={`${READING_PLATE} ${READING_MEASURE}`}
-            >
-              <div onClick={dismissOnClick}>
-                <ReadingBody
-                  reading={note}
-                  titleTag="h2"
-                  titleClassName="font-display text-title font-medium leading-tight text-vellum"
-                />
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {/* A disclosure, not a one-way door: the same control reads
+                  "Read less" once opened, so a keyboard player's focus stays
+                  where they left it instead of falling to the page. */}
+              {layers.more && (
+                <button
+                  type="button"
+                  data-testid="thread-card-more"
+                  aria-expanded={expanded}
+                  onClick={expanded ? onReadLess : onReadMore}
+                  className={QUIET_CONTROL}
+                >
+                  {expanded ? "Read less" : "Read more"}
+                </button>
+              )}
+              {!held && (
                 <button
                   type="button"
                   data-testid="margin-set-aside"
@@ -192,133 +218,82 @@ export function MarginSurface({
                 >
                   Set aside
                 </button>
-                {pending && (
-                  <button
-                    type="button"
-                    data-testid="margin-pending"
-                    onClick={() => onReopen(pending.id)}
-                    className={`${QUIET_CONTROL} border-brass/60 text-vellum`}
-                  >
-                    {pending.title} · read it
-                  </button>
-                )}
-                {earlier && (
-                  <button
-                    type="button"
-                    data-testid="margin-index-toggle"
-                    aria-expanded={state.indexOpen}
-                    onClick={onToggleIndex}
-                    className={QUIET_CONTROL}
-                  >
-                    Earlier readings
-                  </button>
-                )}
-              </div>
-
-              {state.indexOpen && (
-                <ul data-testid="margin-index" className="mt-3 space-y-1">
-                  {[...state.readings]
-                    .reverse()
-                    .filter((entry) => entry.id !== note.id)
-                    .map((entry) => (
-                      <li key={entry.id}>
-                        <button
-                          type="button"
-                          onClick={() => onReopen(entry.id)}
-                          className="pointer-events-auto block w-full truncate text-left font-ui text-caption leading-relaxed text-dim transition-colors hover:text-vellum"
-                        >
-                          {indexLabel(entry)}
-                        </button>
-                      </li>
-                    ))}
-                </ul>
               )}
-            </motion.figure>
-          )}
-        </AnimatePresence>
+              {!held && pending && (
+                <button
+                  type="button"
+                  data-testid="margin-pending"
+                  onClick={() => onReopen(pending.id)}
+                  className={`${QUIET_CONTROL} border-brass/60 text-vellum`}
+                >
+                  {pending.title} · read it
+                </button>
+              )}
+              {!held && earlier && (
+                <button
+                  type="button"
+                  data-testid="margin-index-toggle"
+                  aria-expanded={state.indexOpen}
+                  onClick={onToggleIndex}
+                  className={QUIET_CONTROL}
+                >
+                  Earlier readings
+                </button>
+              )}
+            </div>
 
-        {/* THE WAY BACK IN. Without this the margin is still a surface a player
-            can lose: one recessed line, present only once there is something to
-            return to, naming the reading it will bring back rather than
-            counting anything. */}
-        {/* A motif that formed while the player was reading, and was never
-            opened: still on offer once the margin is clear. */}
-        {!note && pending && (
-          <div className={`flex justify-start ${READING_MEASURE}`}>
-            <button
-              type="button"
-              data-testid="margin-pending"
-              onClick={() => onReopen(pending.id)}
-              className={`${QUIET_CONTROL} max-w-full truncate border-brass/60 text-left text-vellum`}
-            >
-              {pending.title} · read it
-            </button>
-          </div>
+            {!held && state.indexOpen && (
+              <ul data-testid="margin-index" className="mt-3 space-y-1">
+                {[...state.readings]
+                  .reverse()
+                  .filter((entry) => entry.id !== note.id)
+                  .map((entry) => (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        onClick={() => onReopen(entry.id)}
+                        className="pointer-events-auto block w-full truncate text-left font-ui text-caption leading-relaxed text-dim transition-colors hover:text-vellum"
+                      >
+                        {indexLabel(entry)}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </motion.figure>
         )}
-        {!note && !pending && last && (
-          <div className={`flex justify-start ${READING_MEASURE}`}>
-            <button
-              type="button"
-              data-testid="margin-reopen"
-              onClick={() => onReopen(last.id)}
-              className={`${QUIET_CONTROL} max-w-full truncate text-left`}
-            >
-              Read again · {last.title}
-            </button>
-          </div>
-        )}
-      </>
-    </ReadingColumn>
-  );
-}
+      </AnimatePresence>
 
-export function Marginalia() {
-  const [state, setState] = useState<MarginState>(EMPTY_MARGIN);
-  const reducedMotion = useStore((s) => s.settings.reducedMotion);
-  /*
-   * ONE READING IN THE COLUMN AT A TIME (IMP-5).
-   *
-   * The bead card is set in the same column now, and two plates in one column
-   * is one plate over another. The arbitration is `inspectedConcept`, asked
-   * here and by the card itself, so the two can never disagree about who holds
-   * the column and leave it empty between them.
-   *
-   * Nothing is lost by standing down: this returns null, which keeps the
-   * component mounted, so the cue subscription stays live, every reading is
-   * still kept, and closing the card puts the margin back exactly as it was.
-   * `marginState` is not consulted or mutated here — the rule that a reading
-   * closes only when the player closes it is still the only rule it has.
-   */
-  const pinned = useStore((s) => s.pinnedInspectId);
-  const inspecting = inspectedConcept(pinned) !== null;
-
-  useEffect(
-    () => cueBus.subscribe("ui", (cue) => setState((prev) => receive(prev, cue))),
-    []
-  );
-
-  const handleSetAside = useCallback(
-    () => setState((prev) => setAside(prev)),
-    []
-  );
-  const handleReopen = useCallback(
-    (id: string) => setState((prev) => reopen(prev, id)),
-    []
-  );
-  const handleToggleIndex = useCallback(
-    () => setState((prev) => toggleIndex(prev)),
-    []
-  );
-
-  if (inspecting) return null;
-
-  return (
-    <MarginSurface
-      state={state}
-      reducedMotion={reducedMotion}
-      onSetAside={handleSetAside}
-      onReopen={handleReopen}
-      onToggleIndex={handleToggleIndex}
-    />
+      {/* THE WAY BACK IN. Without this the margin is still a surface a player
+          can lose: one recessed line, present only once there is something to
+          return to, naming the reading it will bring back rather than
+          counting anything. */}
+      {/* A motif that formed while the player was reading, and was never
+          opened: still on offer once the margin is clear. */}
+      {!held && !note && pending && (
+        <div className="flex justify-start">
+          <button
+            type="button"
+            data-testid="margin-pending"
+            onClick={() => onReopen(pending.id)}
+            className={`${QUIET_CONTROL} max-w-full truncate border-brass/60 text-left text-vellum`}
+          >
+            {pending.title} · read it
+          </button>
+        </div>
+      )}
+      {!held && !note && !pending && last && (
+        <div className="flex justify-start">
+          <button
+            type="button"
+            data-testid="margin-reopen"
+            onClick={() => onReopen(last.id)}
+            className={`${QUIET_CONTROL} max-w-full truncate text-left`}
+          >
+            Read again · {last.title}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

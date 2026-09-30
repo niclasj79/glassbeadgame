@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { installMotionDomStubs } from "../testing/domStubs";
 import { ArenaHud } from "./ArenaHud";
 import { CueCaptions } from "./CueCaptions";
-import { Marginalia } from "./Marginalia";
+import { ArenaColumn } from "./FocusColumn";
 
 /**
  * Markup-level guards for the two ways the epistemic label used to be withheld:
@@ -19,8 +19,8 @@ describe("the arena's reading surfaces", () => {
   beforeAll(installMotionDomStubs);
 
   it("writes the margin on a phone as well as a desktop (B4)", () => {
-    const html = renderToStaticMarkup(createElement(Marginalia));
-    const container = /<div [^>]*data-testid="marginalia"[^>]*>/.exec(html);
+    const html = renderToStaticMarkup(createElement(ArenaColumn));
+    const container = /<div [^>]*data-testid="focus-column"[^>]*>/.exec(html);
     expect(container).not.toBeNull();
     const classes = /class="([^"]*)"/.exec(container![0])![1].split(/\s+/);
 
@@ -31,6 +31,10 @@ describe("the arena's reading surfaces", () => {
     // Below md it is the foot of the page; from md it is the right margin.
     expect(classes).toContain("bottom-0");
     expect(classes).toContain("md:right-0");
+    // And the margin is written in it, on every width, from the first frame.
+    const margin = /<div [^>]*data-testid="marginalia"[^>]*>/.exec(html);
+    expect(margin).not.toBeNull();
+    expect(/class="([^"]*)"/.exec(margin![0])![1].split(/\s+/)).not.toContain("hidden");
   });
 
   it("gives the world a live region of its own", () => {
