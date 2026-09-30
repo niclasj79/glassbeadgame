@@ -24,11 +24,20 @@ stop on any refusal or valid no-Ready result. See `../STEERING-HARNESS.md`.
 
 ## Current milestone
 
-M2 — New interaction loop
+M2 — the focus view revision (M2-012), then M9 — Studies. M2-011 remains in
+Review pending the director's P-005 gate, which M2-012 re-runs on the new
+surface; the M3–M8 completion campaign merged as one reviewed branch.
 
 ## Ready queue
 
 None.
+
+## In progress
+
+1. `M2-012-focus-view.md` — directly assigned focus view: pair before reading,
+   camera close-in, fog and lens, the two-card column, dwell inspection and
+   thread reopening (I-015 through I-020); awaiting implementation on
+   `codex/M2-012-focus-view`.
 
 ## In review
 
@@ -41,7 +50,10 @@ None.
 
 ## Blocked queue
 
-None.
+1. `M9-001-studies-spike.md` — directly assigned Studies spike: twelve authored
+   Studies over the same loop, proven at build time, under the honesty rules
+   of the Studies specification; blocked until M2-012 is Done, because the
+   Studies rely on the facet notation the focus view delivers.
 
 ## Completed
 
@@ -87,6 +99,12 @@ but M2-011 remains Review until the director records the separate P-005
 physical-device, accessibility, and audiovisual acceptance. M3 outcomes and M4
 camera/audio/artistic grammar remain separate human-review boundaries rather
 than inferred results of the cutover or its automated checks.
+
+While M2-011 is in Review without a steering ownership projection, the
+validator refuses every Ready packet (`READY_ACTIVE_OWNERSHIP_UNVERIFIABLE`),
+so the autonomous loop cannot select work. Directly assigned tasks such as
+M9-001 proceed under their reviewed packets; the loop resumes when M2-011 is
+recorded Done.
 
 ## Director design companions
 

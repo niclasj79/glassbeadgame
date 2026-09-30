@@ -2,9 +2,11 @@
 
 ## Status
 
-Director decisions I-001 through I-014 are accepted. Exact audiovisual pacing,
-camera comfort, device behavior, and artistic quality remain subject to the
-personal playtest gates recorded in `PLAYTEST-PLAN.md`.
+Director decisions I-001 through I-020 are accepted. I-016 supersedes the
+intention-first order of I-005, I-006, I-008 and I-014; the rest of those
+decisions stand. Exact audiovisual pacing, camera comfort, device behavior, and
+artistic quality remain subject to the personal playtest gates recorded in
+`PLAYTEST-PLAN.md`.
 
 This record refines interaction questions left deliberately open by `VERTICAL-SLICE-SPEC.md`. It does not authorize changes to the accepted domain event schema, reducer, persistence, or accessibility contract. The accepted pre-weave flow is represented as ephemeral draft state so existing durable pair/hypothesis/thread events can remain an atomic commit sequence.
 
@@ -36,26 +38,48 @@ Recommended conceptual separation:
 | Canonical interpretation state | attended concept and committed thread; the commit batch contains pair, hypothesis, and gesture events | Event-derived |
 | Presentation response | dimming, resonance halos, audio space, relation preview, camera response | No; derived from canonical/ephemeral state and cues |
 
-## Proposed interaction sequence
+## Accepted interaction sequence — the focus view
 
-This sequence is accepted through I-014. Pointer/touch/pen and coordinate-free
-routes express the same decisions with different physical phrasing.
+This sequence is accepted through I-020 and replaces the intention-first
+sequence accepted through I-014. Pointer/touch/pen and coordinate-free routes
+express the same decisions with different physical phrasing.
 
-1. Move focus to a bead: it responds lightly without changing durable state.
-2. Explicitly Attend: the bead becomes primary; a smooth camera sweep places it in a lower-left or lower-right attended posture while preserving the whole arena; noise recedes and candidate resonance appears.
-3. Inspect if desired: read the concept without advancing the interpretation.
-4. Choose Echo, Passage, Tension, or Ground from four world-anchored icons beside the attended bead, mirrored by an equivalent accessible DOM surface.
-5. The chosen intention visibly moves into and arms the attended bead. This changes its tool-ready response immediately but remains an ephemeral draft.
-6. For pointer/touch/pen, draw from the armed bead across relation-neutral
-   candidate resonance. A nearby bead latches provisionally; releasing on that
-   latch selects it and commits through the same atomic coordinator. Releasing
-   without a latch preserves the armed draft.
-7. For keyboard, controller-compatible, or assistive operation, activate the
-   candidate provisionally and use the accepted coordinate-free hold/confirm.
-8. Commit once. The commit command records `pair.selected`,
-   `relation.hypothesized`, and `thread.committed` as one atomic ordered batch;
-   then the player receives the outcome and coordinated consequence.
-9. Cancel at any provisional stage by discarding only the ephemeral draft and restoring the prior accepted stage.
+1. **Roam.** Move focus to a bead: it responds lightly without changing
+   durable state. Dwelling on it opens its card at the top of the right
+   column; leaving closes it (I-015).
+2. **Attend.** Explicitly Attend: the bead becomes primary. The arena turns
+   and the camera closes in so the bead sits lower-left, near and large, with
+   the whole sphere still legible; the world dims and softens into fog while
+   the attended bead stays sharp; candidates glow through the fog by their
+   relation-neutral band (I-017). The attended card locks at the top of the
+   column and an empty slot opens beneath it — the gap that asks for a second
+   bead (I-018).
+3. **Sight.** The cursor is a lens: beads under it come sharp and lit, and a
+   faint preview thread runs from the attended bead to the one under the
+   lens. Its card fills the gap, and the facets both beads carry are lit in
+   both cards; if none, the cards say so (I-015, I-018).
+4. **Lock.** Activate the second bead. The pair is fixed, both beads sharp,
+   the camera frames both, and Echo, Passage, Tension and Ground bloom on the
+   preview thread between them, mirrored by the accessible radiogroup
+   (I-016).
+5. **Read.** Hover or focus a sigil: the preview thread and both beads perform
+   that grammar and the two motifs sound in it, so the reading is heard
+   before it is made. Nothing says which reading the record prefers (I-016).
+6. **Weave.** Press and hold the sigil; release commits. The lens path from
+   Attend to Lock and the hold fill the gesture profile; keyboard and
+   controller use the accepted hold-and-confirm (I-020). The commit command
+   records `pair.selected`, `relation.hypothesized`, and `thread.committed`
+   as one atomic ordered batch; then the player receives the outcome and the
+   coordinated consequence.
+7. **Return.** The thread grows in its grammar, the sky answers, and the fog
+   lifts on its own as the performance ends. The two cards fold into one
+   thread card that stays until the player's next act; no timer closes it
+   (I-018).
+8. **Reopen.** Activating a committed thread returns to the same view: the
+   pair framed and sharp, both cards and the thread's card (I-019).
+9. **Cancel** at any provisional stage by discarding only the ephemeral draft
+   and restoring the prior stage: Read → Lock → Attend → Roam (I-010, as
+   adapted by I-016).
 
 ## Director metaphor reference — attended viewpoint and directional sweep
 
@@ -117,10 +141,12 @@ Equivalent means the same decision, reversibility, information, and consequence�
 | --- | --- | --- | --- | --- |
 | Move focus | hover or spatial navigation | tap target without commitment only if a separate Attend affordance exists | arrows/WASD or spatial navigation | stick/D-pad |
 | Attend | primary click | tap | Enter/Space | primary action |
-| Inspect | dwell or explicit details control | long press or explicit details control | `I`/details control | secondary/details action |
-| Choose intention | world-anchored four-way control | four large touch targets | arrows/number shortcut + Enter | D-pad/stick + primary action |
-| Select candidate after arming | press the armed source or candidate, sweep, and latch; direct candidate press is the no-dexterity equivalent | touch the armed source or candidate, sweep, and latch; direct candidate touch is equivalent | focus candidate + Enter/Space | focus candidate + primary action |
-| Weave/confirm | release the same captured sweep on the latch | release the same captured sweep on the latch | hold/confirm sequence producing a neutral keyboard gesture profile | hold/confirm sequence producing a neutral controller profile |
+| Inspect | dwell (~700 ms) or explicit details control | long press or explicit details control | `I`/details control | secondary/details action |
+| Sight (the lens) | cursor position; the lens follows it | one-finger drag over the arena; two-finger drag orbits | arrows move focus bead to bead and the lens jumps with it | stick moves focus; the lens follows |
+| Lock the second bead | click the sighted bead | tap the sighted bead | Enter/Space on the focused bead | primary action |
+| Choose the reading | hover a sigil on the preview thread to hear it; press and hold it | touch and hold one of four large targets | arrows/1–4 focus a sigil; hold Enter | D-pad/stick + hold primary action |
+| Weave/confirm | release the held sigil | release the held sigil | release Enter (hold-and-confirm gesture profile) | release primary (hold-and-confirm profile) |
+| Reopen a thread | click the thread | tap the thread | activate it in the DOM list of woven threads | activate it in the list |
 | Cancel/back | Escape, secondary click, or background action | explicit Back/Cancel target; background tap only if unambiguous | Escape | secondary/back action |
 
 ## Decision records
@@ -172,7 +198,7 @@ Director answers become binding only after reviewed merge. If an answer changes 
   Commit as one physical phrase. The separate provisional activation followed
   by hold/confirm remains the coordinate-free semantic route.
 - **Director answer:** Accepted as a combined I-005/I-006 flow. After Attend and intention arming, activating another bead while still in the attended aiming posture selects it as the provisional candidate. “Firing” is a directional interaction metaphor only: it implies no weapon, damage, correctness lock, dexterity gate, or punishment.
-- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge. **Superseded in part by I-016 on 2026-09-30:** the candidate is now selected before the intention. The non-combat and no-dexterity guardrails stand.
 - **Clears:** Candidate selection may follow intention arming; concrete pointer/touch/keyboard/controller mapping remains subject to I-009 and human testing.
 
 ### I-006 — Relation-choice presentation
@@ -182,7 +208,7 @@ Director answers become binding only after reviewed merge. If an answer changes 
 - **Alternatives:** Persistent HUD tray; radial pointer menu; sequential four-card chooser; gesture-only selection.
 - **Do not accept:** Color-only wedges, unlabeled first-use icons, or a modal that visually replaces the world.
 - **Director answer:** Accepted as a combined I-005/I-006 flow. Four world-anchored intention icons appear beside the attended bead in its lower-corner aiming posture. Selecting one visibly moves it into and arms the bead. An accessible DOM radiogroup exposes the same four choices and state; first-use labels/microcopy remain governed by I-007.
-- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge. **Superseded in part by I-016 on 2026-09-30:** the four sigils bloom on the preview thread between the locked pair — the recommended default above — rather than beside the attended bead. Labels, glyphs, the accessible radiogroup and the "do not accept" list stand.
 - **Compatibility resolution:** Arming is ephemeral. After candidate activation, a later commit boundary may record the existing pair and hypothesis events in accepted order without changing their payloads.
 - **Clears:** Spatial intention-presentation prototyping, subject to I-007 copy and I-009 input-equivalence decisions.
 
@@ -199,7 +225,7 @@ Director answers become binding only after reviewed merge. If an answer changes 
 - **Question:** After intention arming and candidate selection, when does the armed intention become the durable declared hypothesis and how may the player re-arm before weaving?
 - **Recommended default:** Keep arming and candidate selection ephemeral; apply the intention immediately to the provisional pair preview; record the pair, hypothesis, and committed thread only as one ordered atomic commit batch. A fluent shortcut may remember focus position but never silently reuse a prior intention.
 - **Director answer:** Accepted as recommended. Arming and candidate selection remain ephemeral and immediately affect the provisional preview. Pair selection, hypothesis, and thread commitment are published only as one ordered atomic batch after expressive confirmation. Re-arming or a fluent shortcut must be an explicit action; it may preserve focus position but never silently reuse a prior intention.
-- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge.
+- **Status:** Accepted by the game design director on 2026-07-14; effective after reviewed merge. **Superseded in part by I-016 on 2026-09-30:** the pair is locked before the intention is chosen. Ephemerality, the single atomic batch and the rule against silently reusing a prior intention stand.
 - **Clears:** Atomic commit-state and gesture-capture sequencing may be implemented without changing schema-version-1 event payloads.
 
 ### I-009 — Keyboard/controller expressive equivalent
@@ -275,13 +301,125 @@ Director answers become binding only after reviewed merge. If an answer changes 
   Escape/back, and pointer cancellation step back without durable mutation;
   inspection remains independently accessible.
 - **Status:** Accepted by the game design director on 2026-07-15; effective
-  after reviewed merge of the revised M2 production cutover.
+  after reviewed merge of the revised M2 production cutover. **Superseded in
+  part by I-016 on 2026-09-30:** the sigils no longer bloom around the attended
+  bead and the draw-from-the-armed-bead sweep is replaced by the lens and the
+  lock. The rejection of the persistent tray, the semantic DOM mirror, empty
+  arena tap and Escape as step-back, and independent inspection all stand.
 - **Compatibility resolution:** Attend, arming, candidate latch, and gesture
   capture remain ephemeral/canonical in the already accepted owners. The direct
   gesture enters candidate-selected state before the same atomic three-event
   Commit and changes no domain schema, resonance rule, or intellectual outcome.
 - **Clears:** Revision of the M2-011 primary input/presentation surface, subject
   to the existing P-005 director device and comfort gate.
+
+### I-015 — Dwell inspection
+
+- **Question:** Should hovering a bead open its card without a click?
+- **Director answer:** Yes. While roaming, dwelling on a bead for about 700 ms
+  opens its card at the top of the right column; leaving the bead closes it
+  after a short grace. In the focus view, the bead under the lens shows its
+  card in the gap after about 250 ms, so a sweep does not flicker. Dwell is
+  ephemeral, records nothing, and never replaces the explicit details control,
+  long press or `I` (I-003).
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** The dwell timings above as first values for M2-012, subject to
+  the director's comfort testing.
+
+### I-016 — Pair before reading
+
+- **Question:** Is the intention chosen before or after the second bead?
+- **Director answer:** After. Attend, sight, lock the second bead, then choose
+  Echo, Passage, Tension or Ground from four sigils that bloom on the preview
+  thread between the two beads, mirrored by the accessible radiogroup.
+  Hovering or focusing a sigil previews that grammar on the locked pair — the
+  thread and both beads move in it and the two motifs sound in it — and
+  says nothing about which reading the record prefers. Press and hold the
+  sigil to weave; release commits.
+- **Evidence:** in the September playtest the intention-first order produced
+  five Echo readings out of nine, chosen by default because the verb was
+  demanded before the object was known. With both cards visible, the shared
+  structure informs the verb. The durable batch was already pair-first
+  (`pair.selected` before `relation.hypothesized`); only the surface changes.
+- **Supersedes:** the intention-first order in I-005, I-006, I-008 and I-014.
+  Everything else in those decisions stands. The cancel order of I-010
+  becomes Read → Lock → Attend → Roam, one step per Cancel, never a durable
+  event.
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** M2-012 and the amendment of `VERTICAL-SLICE-SPEC.md` §8.
+
+### I-017 — The focus view: camera, fog and lens
+
+- **Question:** How is attention made unmistakable?
+- **Director answer:** On Attend the arena turns and the camera closes in so
+  the attended bead sits lower-left, near and large enough for its internal
+  motif to read, while the whole sphere stays legible. The world dims and
+  softens into fog; the attended bead stays sharp. Other beads glow through
+  the fog by their relation-neutral band — high brightest, weak never below a
+  visible floor — so nothing hides and nothing is nominated. The cursor is a
+  lens: beads under it come sharp and lit, and a faint preview thread runs
+  from the attended bead to the sighted one. Under reduced motion there is no
+  camera travel and no lens animation: the attended bead is set apart by scale
+  and brightness, and fog is dim-only. On the low quality tier fog is dim-only
+  with no blur. Nothing flickers.
+- **Guardrails:** the fog level is derived from the accepted resonance bands
+  and nothing else; the lens is a presentation of the accepted directional
+  sweep and never a filter on candidates; there is no target lock, no aiming
+  test and no time pressure.
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** M2-012 camera, fog and lens work, subject to the P-005 comfort
+  gate.
+
+### I-018 — The two-card column and the gap
+
+- **Question:** What does the right column show during the focus view?
+- **Director answer:** On Attend the attended bead's card locks at the top of
+  the column and an empty slot with a faint outline opens beneath it. The gap
+  is the invitation; after about three seconds without a sighted bead one
+  line appears — "Find a second bead" — and not before (I-013). The sighted
+  bead's card fills the gap, and the facets both beads carry are lit in both
+  cards; if they share none, the cards say so plainly. A locked pair keeps
+  both cards. After the commit performance the fog lifts on its own and the
+  two cards fold into one thread card — title, evidence line, one sentence,
+  sources on request — which stays until the player's next act. No timer
+  closes a card.
+- **Honesty:** lit facets are public structure. Nothing in either card says
+  whether a pair is documented or which reading the record prefers; that
+  appears only after commit, as today.
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** M2-012 column work; the facet notation the Studies need is
+  delivered here for both modes.
+
+### I-019 — Reopening a thread
+
+- **Question:** Can a committed thread be returned to?
+- **Director answer:** Yes. Activating a committed thread — click, tap, or
+  its entry in the accessible list of woven threads — returns to the focus
+  view held on that pair: fog, both beads sharp and framed, both cards and
+  the thread's card. Escape returns to roaming. Reopening reads; it changes
+  nothing durable. Later verbs that belong here — retracting a thread in the
+  Free Game, what a thread carries in a Study — are separate decisions.
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** M2-012 thread picking and the accessible thread list.
+
+### I-020 — Gesture under pair-first
+
+- **Question:** Where is the expressive weave when nothing is dragged from
+  bead to bead?
+- **Director answer:** In the sweep and the hold. The lens path from Attend to
+  Lock supplies path length, curvature, average speed and speed variance; the
+  sigil hold supplies duration; pointer pressure where available. Keyboard and
+  controller keep the accepted hold-and-confirm (I-009). The fields of the
+  gesture profile and the `thread.committed` payload do not change; the
+  gesture still shapes articulation and phrasing only, never validity.
+- **Status:** Accepted by the game design director on 2026-09-30; effective
+  after reviewed merge.
+- **Clears:** M2-012 gesture capture without a schema change.
 
 ## Decision gate by task type
 
@@ -294,3 +432,4 @@ Director answers become binding only after reviewed merge. If an answer changes 
 | Relation declaration and weave transition | I-006 through I-008 and I-012; accepted |
 | Gesture/input equivalence | I-005, I-009, I-010, plus playtest device decision P-005 |
 | Overture | I-001 through I-014; accepted, subject to implementation dependencies |
+| M2-012 focus view | I-001 through I-020; accepted, subject to the P-005 comfort gate |

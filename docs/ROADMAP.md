@@ -93,7 +93,10 @@ The player can Attend → Hypothesize → Weave → Commit using placeholder pre
 - expressive gesture profile;
 - command validation and cancellation;
 - typed thread commit event;
-- mouse, touch, and keyboard paths.
+- mouse, touch, and keyboard paths;
+- M2-012 the focus view (2026-09-30): pair before reading, camera close-in,
+  fog and lens, the two-card column, dwell inspection and thread reopening
+  (I-015 through I-020).
 
 ### Gate
 
@@ -229,6 +232,30 @@ A public vertical slice that makes a complete artistic and intellectual statemen
 ### Gate
 
 All technical checks pass; success criteria in the master plan have been evaluated through external playtesting; no P0/P1 defects remain.
+
+## M9 — Studies
+
+### Goal
+
+Find out, by playing, whether authored problems over the same loop make the
+Game fun to get better at, without touching the Free Game or the honesty of
+the content. Accepted by ADR-015; specified in `STUDIES-SPEC.md`.
+
+### Work
+
+- M9-001 the Studies spike, after M2-012: Study content schema, twelve
+  authored Studies in three chapters, a solver that proves each at build time,
+  a pure evaluator, a Study session start, the brief, the silence control, the
+  solved plate, and a browser smoke test; the facet notation it relies on is
+  delivered by the focus view;
+- after the director has played the spike: retract, remembered results,
+  chapter titles, the Daily Study — each a separate proposal, or a stop.
+
+### Gate
+
+The director plays all twelve Studies and records whether Studies are fun,
+whether the honesty rules held, and whether the Free Game is unchanged. That
+record decides the next M9 task or ends the milestone.
 
 ## Safe parallelism
 

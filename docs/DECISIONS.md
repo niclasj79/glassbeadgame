@@ -165,3 +165,34 @@ noted separately.
 **Consequences:** log growth tracks committed interpretation; persisted sessions
 stay small for reasons that will matter more as sessions are archived; and the
 log reads as a record of what the player did.
+
+## ADR-015 — Studies may pose goals
+
+**Status:** Accepted by the game design director on 2026-09-30; effective after
+reviewed merge.
+
+A second mode, **Studies**, may pose explicit, rule-checked goals over the same
+loop and the same content, with a *solved* / *not yet* result and up to three
+marks of form. `docs/STUDIES-SPEC.md` is the specification that product law 7
+requires before any such element exists, and it binds the mode.
+
+The Free Game is not amended: product law 7 and ADR-010 apply to it unchanged,
+and no goal, budget, mark or Study copy may appear there.
+
+Four conditions hold for every Study and are stated in full in the
+specification: a Study is solvable from public information only (concept
+identity, faculty, facets), never from documented relations; its result and
+marks are computed from the structure of the woven threads, never from outcome
+kind; there is no timer, no failure and nothing lost; and the Free Game is
+untouched.
+
+**Reason:** the slice, played end to end, is an honest and beautiful reader that
+poses no problem, so nothing can be solved and nothing can be got better at
+(`docs/proposals/GAMEPLAY-MODES.md`). Rejecting the challenge lenses removed the
+old hidden-answer lottery and the problem together. Studies restore the problem
+without restoring the lottery: the answer key is never the goal.
+
+**Consequences:** the event schema does not change (ADR-013); a Study is an
+ordinary session whose status is a pure function of its log; retracting a
+thread, titles, persistence of results and the Daily Study remain separate
+decisions after the spike has been played.
