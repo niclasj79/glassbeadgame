@@ -14,6 +14,7 @@ import { easing } from "maath";
 import { useStore } from "@/state/store";
 import { useStore as useVanillaStore } from "zustand";
 import { domainSessionStore } from "@/state/domainSession";
+import { useCurrentTheme } from "@/themes/useTheme";
 import { cueBus } from "@/runtime/cues";
 import { ARENA_RADIUS } from "@/game/layout";
 import { frameState } from "./frameState";
@@ -29,8 +30,9 @@ import {
   type Vec3,
 } from "./conclusionPerformance";
 import {
-  ARENA_FOV,
   PORTRAIT_ASPECT,
+  arenaFov,
+  cameraBreath,
   createDamped,
   createOrbitDamper,
   createOrbitPose,
@@ -46,6 +48,7 @@ import {
   type CameraPhrase,
   type HomeComposition,
 } from "./framing";
+import { sceneBudget } from "./quality";
 import {
   HOME_ELEVATION,
   HOME_ELEVATION_PORTRAIT,
@@ -138,6 +141,13 @@ const MIN_ORBIT = 5.2;
 
 /** A move is abandoned if it has not arrived in this long. */
 const TRANSIT_TIMEOUT_S = 3.5;
+
+/**
+ * A field of view nearer than this to the one drawn is the one drawn: a lens
+ * at rest re-derives no projection, and one that breathes re-derives it once a
+ * frame.
+ */
+const FOV_STILL_DEGREES = 1e-4;
 
 const IDLE_ORBIT_AFTER_MS = 10_000;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
@@ -370,8 +380,20 @@ export function CameraRig() {
   const viewportHeight = useThree((s) => s.size.height);
   const phase = useStore((s) => s.phase);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const tier = useStore((s) => s.settings.qualityTier);
   const lensActive = useStore((s) => s.lensActive);
   const lensView = useStore((s) => s.lensView);
+  /**
+   * The world's slot: the camera's beat is a share of it (framing.ts §5), so
+   * every phrase is counted in the bar the world's music keeps (ADR-016).
+   */
+  const slotSeconds = useCurrentTheme().music.slotSeconds;
+  /**
+   * Whether the lens breathes with the world: on the tiers that afford it,
+   * and never under reduced motion — a lens that breathes is a camera that
+   * moves, and it is stilled from the first frame rather than eased out.
+   */
+  const breathes = sceneBudget(tier).cameraBreath && !reducedMotion;
   /**
    * What the focus view asks of the camera, as a key: it changes on Attend,
    * Lock, a reopened thread and a return to roaming, and never on a look.
@@ -731,7 +753,7 @@ export function CameraRig() {
         at.x = want.x;
         at.y = want.y;
       } else {
-        const smoothTime = phraseSmoothTime("settle");
+        const smoothTime = phraseSmoothTime("settle", slotSeconds);
         shiftDamper.current.x.value = at.x;
         shiftDamper.current.y.value = at.y;
         at.x = dampScalar(shiftDamper.current.x, want.x, smoothTime, dt);
@@ -740,7 +762,7 @@ export function CameraRig() {
       applyLensShift(cam, at, viewportWidth, viewportHeight);
       return false;
     },
-    [viewportWidth, viewportHeight]
+    [viewportWidth, viewportHeight, slotSeconds]
   );
 
   useFrame((state, dt) => {
@@ -750,12 +772,21 @@ export function CameraRig() {
     const racked = rackShift(state.camera, dt, reducedMotion);
 
     // Impact kick: a quick FOV punch, no position meddling, so OrbitControls
-    // never fights it.
-    if (frameState.kick > 0.001) {
-      frameState.kick *= Math.exp(-dt * 5);
-      const cam = state.camera as THREE.PerspectiveCamera;
-      cam.fov = ARENA_FOV * (1 - 0.04 * Math.sin(frameState.kick * Math.PI));
-      cam.updateProjectionMatrix();
+    // never fights it. The world's breath rides the same lens (framing.ts §5):
+    // the field of view widens and narrows on the bar, by at most
+    // COMFORT.cameraBreath of itself, and the two compose without touching
+    // each other. The kick is written every frame it decays, as it always was;
+    // otherwise the lens is written only when the breath has moved it.
+    const kicking = frameState.kick > 0.001;
+    if (kicking) frameState.kick *= Math.exp(-dt * 5);
+    const lens = state.camera as THREE.PerspectiveCamera;
+    const fov = arenaFov(
+      frameState.kick,
+      cameraBreath(breathes, frameState.breathDepth, frameState.breathPhase)
+    );
+    if (kicking || Math.abs(lens.fov - fov) > FOV_STILL_DEGREES) {
+      lens.fov = fov;
+      lens.updateProjectionMatrix();
     }
 
     // A gesture owns the sightline until release: suspending the move keeps a
@@ -814,7 +845,7 @@ export function CameraRig() {
         transitAge.current = 0;
       } else {
         transitAge.current += dt;
-        const smoothTime = phraseSmoothTime(current.phrase);
+        const smoothTime = phraseSmoothTime(current.phrase, slotSeconds);
         dampOrbitToward(
           damper.current,
           state.camera.position,
@@ -839,7 +870,12 @@ export function CameraRig() {
         ctl.target.set(0, 0, 0);
         frameState.recenter = false;
       } else {
-        easing.damp3(ctl.target, ORIGIN, phraseSmoothTime("release"), dt);
+        easing.damp3(
+          ctl.target,
+          ORIGIN,
+          phraseSmoothTime("release", slotSeconds),
+          dt
+        );
         if (ctl.target.lengthSq() < 0.002) {
           ctl.target.set(0, 0, 0);
           frameState.recenter = false;

@@ -57,8 +57,10 @@ function BreathDriver({
   useFrame(() => {
     const bloom = bloomRef.current;
     if (!bloom) return;
-    // The synesthetic pulse: bloom inhales with the shared breath. At ~0.1 Hz
-    // this is two orders of magnitude below CAV-007's 3 Hz luminance ceiling.
+    // The synesthetic pulse: bloom inhales with the shared breath — one breath
+    // every four slots on the conductor (0.10–0.14 Hz across the worlds), or
+    // 0.1 Hz with no grid: more than twenty times under CAV-007's 3 Hz
+    // luminance ceiling.
     bloom.intensity =
       base *
       (1 + 0.06 * frameState.awakening) *

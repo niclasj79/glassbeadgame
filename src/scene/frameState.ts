@@ -19,8 +19,11 @@ export const frameState = {
   timeScaleTarget: 1,
   /** Dilated elapsed time — advances by dt * timeScale; drives bobbing and drift. */
   clock: 0,
-  /** The Breath: one ~0.1 Hz meditative oscillation shared by bloom, halos,
-   *  lattice, and (via a throttled bridge) the ambient bus. Radians. */
+  /** The Breath: one slow oscillation shared by bloom, halos, lattice, the
+   *  camera's lens, and (via a throttled bridge) the ambient bus. While the
+   *  conductor keeps the world's time it is the conductor's four-slot breath,
+   *  cresting on the bar (ADR-016); without a grid it runs at ~0.1 Hz of
+   *  dilated time. Radians. */
   breathPhase: 0,
   /** 0..1 — eased down during reveals and to 0 under reduced motion. */
   breathDepth: 1,
@@ -64,6 +67,14 @@ export const frameState = {
   /** Final rendered position per bead (positions + bob), written by Beads each frame. */
   rendered: new Float32Array(0),
   /**
+   * The kindling lane as the glass was last handed it, one per bead, indexed
+   * like `beadIndex`: the idle score's light, the opening's gather and the
+   * light of the bead's own scheduled notes (ADR-016), folded by `max`.
+   * Written by Beads every frame so the test adapter can read back what was
+   * drawn; nothing decides anything from it.
+   */
+  kindling: new Float32Array(0),
+  /**
    * False while a scripted camera transit is in flight, and from the moment a
    * new layout is published until the first frame has been drawn with it. A
    * bead's screen position is meaningless before then — it would be reported
@@ -84,6 +95,7 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.positions = initial.slice();
   frameState.targets = initial.slice();
   frameState.rendered = initial.slice();
+  frameState.kindling = new Float32Array(beadIds.length);
   frameState.snapId = null;
   frameState.beadIndex = new Map(beadIds.map((id, i) => [id, i]));
   frameState.morphActive = false;
@@ -100,6 +112,34 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.cameraSettled = false;
   frameState.framesSinceLayout = 0;
   frameState.idleSince = presentationNow();
+}
+
+/** What the breath follows while the world keeps time: the conductor's grid. */
+export interface BreathGrid {
+  armed(): boolean;
+  /** 2π per four slots, cresting on the bar. */
+  breathPhase(): number;
+}
+
+/** The breath's rate when no grid is kept, in cycles per dilated second. */
+export const FREE_BREATH_HZ = 0.1;
+
+/**
+ * THE BREATH, ONE FRAME ON.
+ *
+ * While the conductor keeps the world's time the breath is the conductor's
+ * four-slot phase, cresting on the bar (ADR-016). With no grid it integrates
+ * dilated time at `FREE_BREATH_HZ` from wherever it stands, so it slows with a
+ * reveal and takes up from the conductor's last phase when the grid lets go.
+ */
+export function breathPhaseAfter(
+  phase: number,
+  dt: number,
+  timeScale: number,
+  grid: BreathGrid
+): number {
+  if (grid.armed()) return grid.breathPhase();
+  return phase + dt * timeScale * Math.PI * 2 * FREE_BREATH_HZ;
 }
 
 export function setMorphTargets(targets: Float32Array): void {

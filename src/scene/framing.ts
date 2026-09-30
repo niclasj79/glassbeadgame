@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ARENA_RADIUS } from "@/game/layout";
 import type { FocusView } from "@/runtime/interactionDraft";
 import { MAX_BEAD_EXTENT } from "./rings";
+import { COMFORT } from "./threadGrammar";
 
 /**
  * HOW THE WORLD IS COMPOSED ON THE SCREEN
@@ -1252,7 +1253,7 @@ export function projectFromPose(
  * ────────────────────────────────────────────────────────────────────── */
 
 /**
- * ONE TEMPO.
+ * ONE TEMPO, AND IT IS THE WORLD'S.
  *
  * Every scripted camera move used to carry its own hand-picked smoothing time
  * — 0.5, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1, 1.3, 1.4 — which is nine motion
@@ -1269,8 +1270,20 @@ export function projectFromPose(
  *   dwell   1½   a reveal: staying with what was found
  *   crown    2   the concluding rise. The one phrase that leaves the level
  *                behind, and it announces that by taking twice as long.
+ *
+ * The beat is not the camera's own. It is a fixed share of the slot the
+ * world's music keeps time in (ADR-016), so the camera counts the bar the bed
+ * plays and the breath crests on: Castalia's two-second slot gives the 0.7 s
+ * the phrases were tuned on, and the Tide (2.4 s), the Forge (1.8 s) and the
+ * Aurora (2.2 s) give 0.84, 0.63 and 0.77 s. The ratios above are the
+ * language; the beat is the world's.
  */
-export const CAMERA_BEAT_SECONDS = 0.7;
+export const CAMERA_BEAT_PER_SLOT = 0.35;
+
+/** The camera's beat, in seconds, in a world whose slot is `slotSeconds`. */
+export function cameraBeatSeconds(slotSeconds: number): number {
+  return CAMERA_BEAT_PER_SLOT * slotSeconds;
+}
 
 export type CameraPhrase =
   | "breath"
@@ -1293,14 +1306,54 @@ const PHRASE_BEATS: Readonly<Record<CameraPhrase, number>> = Object.freeze({
   crown: 2,
 });
 
-export function phraseSmoothTime(phrase: CameraPhrase): number {
-  return CAMERA_BEAT_SECONDS * PHRASE_BEATS[phrase];
+/** How long a phrase takes, in the world whose slot is `slotSeconds`. */
+export function phraseSmoothTime(
+  phrase: CameraPhrase,
+  slotSeconds: number
+): number {
+  return cameraBeatSeconds(slotSeconds) * PHRASE_BEATS[phrase];
 }
 
 /** Every phrase, for tests that assert the language is closed. */
 export const CAMERA_PHRASES = Object.freeze(
   Object.keys(PHRASE_BEATS) as CameraPhrase[]
 );
+
+/**
+ * THE LENS: THE KICK, AND THE BREATH ON THE BAR.
+ *
+ * Two things move the field of view and nothing else does. The kick is an
+ * impact — a quick narrowing when the world answers, gone in a fraction of a
+ * second — and it is unchanged. The breath is the world's own: the lens widens
+ * and narrows with the one breath the bloom, the bed and the sky follow, four
+ * slots long and cresting on the bar (ADR-016), by at most
+ * `COMFORT.cameraBreath` of itself. It is meant to be felt and never watched:
+ * 0.6 % of 42° is a quarter of a degree.
+ *
+ * It is off on the engraved tier (a budget flag) and under reduced motion (a
+ * lens that breathes is a camera that moves), and it composes with the kick by
+ * multiplication, so neither changes what the other does.
+ */
+const FOV_KICK = 0.04;
+
+/**
+ * The share of the field of view the breath takes this frame, never more than
+ * `COMFORT.cameraBreath` either way. Nothing when the breath is not allowed or
+ * has no depth.
+ */
+export function cameraBreath(
+  allowed: boolean,
+  depth: number,
+  phase: number
+): number {
+  if (!allowed || !(depth > 0)) return 0;
+  return COMFORT.cameraBreath * Math.min(1, depth) * Math.sin(phase);
+}
+
+/** The arena camera's field of view, in degrees, kicked and breathing. */
+export function arenaFov(kick: number, breath: number): number {
+  return ARENA_FOV * (1 - FOV_KICK * Math.sin(kick * Math.PI)) * (1 - breath);
+}
 
 /**
  * ORBIT COORDINATES.
