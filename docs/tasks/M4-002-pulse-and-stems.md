@@ -81,8 +81,8 @@ so it comes before them.
 - `docs/DECISIONS.md` — ADR-009, ADR-013, ADR-016 and ADR-017
 - `docs/CONTENT-AUDIOVISUAL-REFERENCE.md` — the Tension grammar, CAV-006 and
   CAV-007
-- `docs/tasks/M4-001-conductor.md` — the grid, the sink's members, the lazy
-  semantic layer
+- `docs/tasks/M4-001-conductor.md` — the grid and its module (which lands
+  with that packet), the sink's members, the lazy semantic layer
 - `src/audio/ambient.ts` — every layer the bed schedules and how
 - `src/audio/score.ts` — the phrase, the root rule, the units
 - `src/audio/voices.ts` — the bodies, the envelopes, the voice budget
@@ -91,7 +91,6 @@ so it comes before them.
 - `src/audio/comfort.ts` — the comfort table and the tension ceiling
 - `src/audio/intensity.ts` — the profiles
 - `src/audio/engine.ts` — the buses, the reverb, the binaural layer
-- `src/audio/conductor.ts` — the grid
 - `src/audio/director.ts` — the cues that reach the sink
 - `src/audio/useAudio.ts` — the room lifecycle and the lazy layer
 - `src/themes/worlds.ts` — each world's slot and bed
@@ -145,7 +144,6 @@ so it comes before them.
     "src/audio/comfort.ts",
     "src/audio/intensity.ts",
     "src/audio/engine.ts",
-    "src/audio/conductor.ts",
     "src/audio/director.ts",
     "src/audio/useAudio.ts",
     "src/themes/worlds.ts",
