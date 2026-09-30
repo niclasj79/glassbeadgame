@@ -384,18 +384,39 @@ test.describe("the focus view", () => {
     expect(other, "the golden draw holds a bead that shares nothing").toBeTruthy();
     await expect(page.getByTestId("focus-card-top")).toHaveCount(0);
 
+    // The hesitation line waits (I-013): never at once. It keeps real time,
+    // and a slow runner can take longer than its delay to ask, so the page
+    // itself notes when the gap opened and when the line arrived.
+    await page.evaluate(() => {
+      const marks: { gap?: number; hint?: number } = {};
+      (window as unknown as { __gapMarks: typeof marks }).__gapMarks = marks;
+      new MutationObserver(() => {
+        const now = performance.now();
+        if (marks.gap === undefined && document.querySelector('[data-testid="focus-gap"]')) {
+          marks.gap = now;
+        }
+        if (
+          marks.hint === undefined &&
+          document.querySelector('[data-testid="focus-gap-hint"]')
+        ) {
+          marks.hint = now;
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
     await attendWithMouse(page, SOURCE_ID);
     const top = page.getByTestId("focus-card-top");
     await expect(top).toBeVisible();
     await expect(top).toHaveAttribute("data-role", "attended");
     await expect(top).toHaveAttribute("data-concept-id", SOURCE_ID);
     await expect(page.getByTestId("focus-gap")).toBeVisible();
-    // The hesitation line waits (I-013): never at once.
-    await expect(page.getByTestId("focus-gap-hint")).toHaveCount(0);
-    await advanceClock(page, 3_200);
     await expect(page.getByTestId("focus-gap-hint")).toHaveText("Find a second bead.", {
-      timeout: 8_000,
+      timeout: 15_000,
     });
+    const marks = await page.evaluate(
+      () => (window as unknown as { __gapMarks: { gap?: number; hint?: number } }).__gapMarks
+    );
+    expect(marks.gap).toBeDefined();
+    expect(marks.hint! - marks.gap!).toBeGreaterThanOrEqual(2_900);
 
     // A pair that shares nothing says so plainly, and claims nothing else.
     await sweepTo(page, SOURCE_ID, other!);
