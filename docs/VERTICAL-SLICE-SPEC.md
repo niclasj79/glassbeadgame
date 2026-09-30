@@ -88,12 +88,15 @@ Selecting or dwelling on a bead brings its identity into focus. Nearby or semant
 
 ### Presentation
 
-- non-relevant noise recedes;
-- the bead’s internal motif becomes legible;
-- candidate beads emit relation-neutral resonance signals;
-- audio leaves space through reduced density or call-and-response.
-- a smooth camera transition may place the attended bead in a lower-left or lower-right situated posture while the whole spherical arena remains legible;
-- reduced-motion presentation communicates the same situated attention without requiring camera travel.
+Amended 2026-09-30 by I-017 and I-018; the focus view is the accepted form of
+attention.
+
+- the arena turns and the camera closes in so the attended bead sits lower-left, near and large enough for its internal motif to read, while the whole spherical arena remains legible;
+- the world dims and softens into fog; the attended bead stays sharp; other beads glow through the fog by their relation-neutral resonance band, and none falls below a visible floor;
+- the pointer is a lens: beads under it come sharp and lit, and a faint preview thread joins the attended bead to the sighted one;
+- the attended bead's card locks at the top of the right column and an empty slot beneath it invites the second bead; the sighted bead's card fills it, with the facets both carry lit in both cards;
+- audio leaves space through reduced density or call-and-response; the sighted bead's motif answers at a level set by its band;
+- reduced-motion presentation communicates the same situated attention without camera travel or lens animation, and fog is dim-only; the low quality tier uses dim without blur; nothing flickers.
 
 ## 7. Resonance preview
 
@@ -110,13 +113,15 @@ Make potential relationships perceptible before commitment without turning the g
 
 ### Acceptance criteria
 
-- the player can distinguish high, medium, and weak candidate resonance without reading a number;
+- the player can distinguish high, medium, and weak candidate resonance without reading a number — in the focus view, by how brightly a bead glows through the fog;
 - previews are reproducible under a fixed seed and state;
-- no hidden connection endpoint list is exposed in normal play.
+- no hidden connection endpoint list is exposed in normal play;
+- the lit facets in the two cards are public structure and never a documented flag.
 
 ## 8. Relation declaration
 
-After attending to one bead, the player arms one intention before selecting the second bead:
+Amended 2026-09-30 by I-016. After attending to one bead, the player locks a
+second bead, then declares one intention for the pair:
 
 - Echo;
 - Passage;
@@ -125,14 +130,15 @@ After attending to one bead, the player arms one intention before selecting the 
 
 ### Rules
 
-- the four intention choices appear world-anchored beside the attended bead with an equivalent accessible DOM control;
-- arming changes the attended bead’s preview appearance and sound immediately;
-- while the intention is armed, the player selects a second bead from the still-visible arena;
+- the four intention choices appear world-anchored on the preview thread between the locked pair, with an equivalent accessible DOM control;
+- hovering or focusing an intention previews its grammar on the locked pair — motion, thread construction and sound — immediately, and says nothing about which reading the record prefers;
+- pressing and holding an intention weaves; release commits;
 - choice does not determine candidate strength, correctness, or whether the eventual pair is documented;
-- armed intention and candidate selection remain an ephemeral draft until commitment;
+- the sighted bead, the locked pair and the intention remain an ephemeral draft until commitment;
 - cancel or re-Attend returns to the applicable prior state without durable mutation;
 - on commitment, the selected pair, declared relation, and thread are recorded as one ordered atomic event batch;
-- the declared relation is included in the durable thread event.
+- the declared relation is included in the durable thread event;
+- a committed thread can be reopened into the same view (I-019), which changes nothing durable.
 
 ## 9. Expressive weaving
 
@@ -149,6 +155,8 @@ Capture a normalized gesture profile including, where available:
 - input modality.
 
 Gesture qualities may influence articulation, visual growth, or replay phrasing. They must not determine intellectual validity.
+
+Under the focus view (I-020) the pointer path from Attend to Lock supplies the geometric fields and the held intention supplies duration; keyboard and controller supply duration through hold-and-confirm. The profile's fields do not change.
 
 ## 10. Thread outcomes
 
@@ -366,9 +374,9 @@ The canonical integration scenario must demonstrate:
 1. session start;
 2. attention to Fibonacci Sequence;
 3. perceptible resonance with Counterpoint;
-4. Echo arming beside the attended bead;
-5. Counterpoint selection through the armed Echo intention;
-6. expressive weave;
+4. Counterpoint sighted through the lens, its card filling the gap with the shared facet lit, and locked;
+5. Echo chosen from the sigils on the preview thread between them, previewed before it is held;
+6. expressive weave — the lens path and the hold;
 7. documented Bartók/Fibonacci revelation;
 8. semantic thread and musical transformation;
 9. a later Prime Numbers and Polyrhythm relation;

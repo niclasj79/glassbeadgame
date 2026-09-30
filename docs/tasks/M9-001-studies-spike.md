@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Blocked
 
 ## Milestone
 
@@ -10,6 +10,8 @@ M9 — Studies
 
 ## Dependencies
 
+- M2-012 must be Done: the focus view delivers the facet notation and the
+  pair-first preview that every Study relies on.
 - M2-004, M2-008, and M2-010 must be Done.
 - ADR-015 must be accepted through reviewed merge, together with
   `docs/STUDIES-SPEC.md`.
@@ -26,9 +28,11 @@ Add a second way to play, **Studies**, in which the player solves an authored
 problem over a fixed set of beads using the Free Game's own verbs, outcomes and
 cards. The spike proves the loop with twelve Studies in three chapters, three
 goal kinds (passage, canon, carry), the silence answer, a build-time solver
-that proves every authored Study, a pure evaluator, the brief and the facets
-visible in Study mode, one coordinated *solved* moment, and a restart. It adds
-no event type, no persistence, no progression and nothing to the Free Game.
+that proves every authored Study, a pure evaluator, the brief pinned in the
+margin, one coordinated *solved* moment, and a restart. The facets a Study
+reads are shown by the focus view (M2-012) in both modes; this task adds
+nothing to that display. It adds no event type, no persistence, no
+progression and nothing to the Free Game.
 
 `docs/STUDIES-SPEC.md` is the binding contract for the mode. This packet turns
 it into an executable scope with objective acceptance criteria.
@@ -58,7 +62,7 @@ green.
    bus after the commit moment settles; the declare-silence command; captions;
    restart; the browser test adapter.
 3. **Presentation.** The Studies door and list; the brief pinned in the
-   margin; facet names in Study mode; the silence control in the world margin
+   margin above the focus view's cards; the silence control in the margin
    and the DOM mirror; the solved plate; Conclude, Lens and Attunement hidden
    in Study mode.
 4. **Proof.** The browser smoke, the Free Game regression run unchanged, the
@@ -118,7 +122,8 @@ scope; propose anything else in the implementation notes.
   `marginaliaNote.ts`, `InterpretationControls.tsx`, `CueCaptions.tsx` — the
   margin state machine, the note model, the DOM mirror and captions;
 - `src/scene/labels.ts`, `Beads.tsx`, `IntentionConstellation.tsx` — bead
-  name labels and the world-anchored controls;
+  name labels and the world-anchored controls, inspection-only: the facet
+  display is M2-012's;
 - `src/runtime/persistence/sessionArchive.ts` — confirm a Study session is
   never kept (it never concludes);
 - `tests/browser/deterministic-mode.spec.ts` and `conclusion.spec.ts` — the
@@ -132,7 +137,7 @@ scope; propose anything else in the implementation notes.
   "schemaVersion": 1,
   "taskId": "M9-001",
   "branch": "codex/M9-001-studies-spike",
-  "dependencies": ["M2-004", "M2-008", "M2-010"],
+  "dependencies": ["M2-012", "M2-004", "M2-008", "M2-010"],
   "requiredReading": [
     "AGENTS.md",
     "docs/STUDIES-SPEC.md",
@@ -165,9 +170,6 @@ scope; propose anything else in the implementation notes.
       "src/runtime/content/castaliaLookup.ts",
       "src/runtime/testMode.ts",
       "src/scene/ThreadingDriver.tsx",
-      "src/scene/labels.ts",
-      "src/scene/Beads.tsx",
-      "src/scene/IntentionConstellation.tsx",
       "src/state/types.ts",
       "src/state/store.ts",
       "src/state/studies/**",
@@ -237,9 +239,6 @@ scope; propose anything else in the implementation notes.
 - `src/runtime/content/castaliaLookup.ts`
 - `src/runtime/testMode.ts`
 - `src/scene/ThreadingDriver.tsx`
-- `src/scene/labels.ts`
-- `src/scene/Beads.tsx`
-- `src/scene/IntentionConstellation.tsx`
 - `src/state/types.ts`
 - `src/state/store.ts`
 - `src/state/studies/**`
@@ -393,14 +392,13 @@ structural, never names a bead the player has not woven, and never hints.
   register and reachable by keyboard. A new phase shows the Studies list:
   three chapters, each Study's brief, and *Begin*; no results, no counts.
 - The Study opens straight into the arena; the threshold is not shown.
-- The brief is the first margin note, pinned and re-openable; outcome cards
-  and motif notes arrive as in the Free Game.
-- Facets in Study mode only: the attended bead's label gains a line of facet
-  names; while an intention is armed, each other bead shows the facets it
-  shares with the attended bead; a committed thread's note names what it
-  carries. The accessible bead controls carry the same text.
-- *It cannot be done* exists in the world margin and in the DOM mirror on
-  every Study, with a test id.
+- The brief is pinned above the focus view's cards in the right column and
+  re-openable; outcome cards and motif notes arrive as in the Free Game.
+- Facets come from the focus view: the two cards light what both beads carry
+  and the thread card names what a thread carried. A Study adds no facet
+  display of its own.
+- *It cannot be done* exists in the margin under the brief and in the DOM
+  mirror on every Study, with a test id.
 - The solved plate: the player's line with the facets each thread carried, the
   Magister's line, "solved in N; the brief asked for M", up to three marks as
   words, and *Again*, *Next Study*, *Back to the Studies*. *Not yet* is a
@@ -463,11 +461,11 @@ structural, never names a bead the player has not woven, and never hints.
   lines and the marks; eschholz-4 is solved by declaring silence; declaring
   silence on eschholz-1 yields *not yet* and no plate; restart starts a fresh
   session with the same seed.
-- The Studies door, the list, the pinned brief, the facet text on attended and
-  armed beads and in the accessible controls, the silence control in both
+- The Studies door, the list, the pinned brief, the silence control in both
   places, the solved plate's three ways on, and the absence of Conclude, Lens
   and Attunement in Study mode are all present and covered by render or
-  browser tests.
+  browser tests; the focus view's cards and thread card behave in a Study
+  exactly as in the Free Game.
 - A scan of Study surfaces and captions finds no count, total, percentage or
   the words *score*, *points*, *rank* or *wrong*.
 - Existing browser tests pass unmodified; a diff scan shows no change to the
@@ -538,5 +536,9 @@ judgement is the milestone gate.
   with the packet, the specification and the roadmap entry reviewed in one
   pull request. Not selected by the autonomous loop: while M2-011 remains in
   Review without a steering ownership projection, no packet can validate as
-  Ready, so the branch `codex/M9-001-studies-spike` is created on merge of the
-  packet.
+  Ready.
+- Blocked behind M2-012 on the same day: the director's focus-view redesign
+  (I-015 through I-020) delivers the facet notation and the pair-first
+  preview in both modes, so the Study-mode facet display and the scene paths
+  it needed left this packet. The branch `codex/M9-001-studies-spike` is
+  created when M2-012 is Done and this packet returns to In progress.

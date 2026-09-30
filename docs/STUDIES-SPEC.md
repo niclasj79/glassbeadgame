@@ -15,9 +15,10 @@ the other.
 ## 1. Definition
 
 A **Study** is an authored problem posed over a fixed set of beads and solved
-by weaving. It uses the Free Game's verbs (Attend, arm an intention, weave),
-its content pack, its outcome rules and its cards, unchanged. What it adds is a
-brief, a rule that checks the brief, and an answer.
+by weaving. It uses the Free Game's verbs (Attend, sight and lock a second
+bead, choose a reading, weave), its content pack, its outcome rules and its
+cards, unchanged. What it adds is a brief, a rule that checks the brief, and an
+answer.
 
 The title offers two doors: **Free Game** (the session the slice already
 defines) and **Studies**. Nothing in a Study reaches the Free Game.
@@ -121,11 +122,10 @@ Marks are words, not points. Nothing counts them, stores them or sums them.
 
 - **The brief** is the first note in the margin, pinned for the whole Study
   and re-openable at any time. Outcome cards arrive as in the Free Game.
-- **Facets are visible in Study mode**, without opening the details card: the
-  attended bead shows its facet names; while an intention is armed, each
-  other bead shows the facets it shares with the attended bead; a committed
-  thread's note names what it carries. The accessible bead controls carry the
-  same text. Glyphs are a later art pass; text is sufficient for the spike.
+- **Facets are visible** through the focus view (I-018), in both modes: the
+  two cards light the facets both beads carry, and the thread card names what
+  a committed thread carries. A Study adds nothing to this; it relies on it.
+  Glyphs are a later art pass; text is sufficient for the spike.
 - **The silence control** exists in the world margin and in the accessible
   DOM mirror, on every Study.
 - **Solved** is one coordinated moment through the cue boundary (ADR-009):
@@ -177,6 +177,5 @@ concludes; leaving discards it. What a player learned is what carries over.
 
 Retracting a thread, hints, remembering solved Studies, chapter titles or any
 progression, the Daily Study, Open Thread quests, Bridge and Dialectic
-families, facet glyph art, facets in the Free Game, and a solution that
-"sounds like its logic" are all out of scope. Each may be proposed after the
-spike has been played.
+families, facet glyph art, and a solution that "sounds like its logic" are all
+out of scope. Each may be proposed after the spike has been played.

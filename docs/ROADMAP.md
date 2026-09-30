@@ -93,7 +93,10 @@ The player can Attend → Hypothesize → Weave → Commit using placeholder pre
 - expressive gesture profile;
 - command validation and cancellation;
 - typed thread commit event;
-- mouse, touch, and keyboard paths.
+- mouse, touch, and keyboard paths;
+- M2-012 the focus view (2026-09-30): pair before reading, camera close-in,
+  fog and lens, the two-card column, dwell inspection and thread reopening
+  (I-015 through I-020).
 
 ### Gate
 
@@ -240,10 +243,11 @@ the content. Accepted by ADR-015; specified in `STUDIES-SPEC.md`.
 
 ### Work
 
-- M9-001 the Studies spike: Study content schema, twelve authored Studies in
-  three chapters, a solver that proves each at build time, a pure evaluator,
-  a Study session start, the brief and facets in Study mode, the silence
-  control, the solved plate, and a browser smoke test;
+- M9-001 the Studies spike, after M2-012: Study content schema, twelve
+  authored Studies in three chapters, a solver that proves each at build time,
+  a pure evaluator, a Study session start, the brief, the silence control, the
+  solved plate, and a browser smoke test; the facet notation it relies on is
+  delivered by the focus view;
 - after the director has played the spike: retract, remembered results,
   chapter titles, the Daily Study — each a separate proposal, or a stop.
 
