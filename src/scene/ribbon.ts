@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import type { RelationIntention } from "@/domain/events";
+import type { FocusView } from "@/runtime/interactionDraft";
 import type { WorldTheme } from "@/themes/types";
 import { GLSL_COMMON } from "./glsl";
 import { beadIdentity } from "./identity";
@@ -23,6 +25,11 @@ import { COMFORT, type ThreadForm } from "./threadGrammar";
  *              directions, over a beat that decays to a floor and stays there.
  *   3 ground   one heavy strand that passes *inside* the armillary and settles
  *              onto a base rule beneath the supported bead.
+ *   4 unread   the pair before anyone has read it (I-016, I-017): one fine
+ *              strand, no mark, no travel, no torsion, no taper toward either
+ *              bead, and open in the middle where the reading will be made. It
+ *              is the only construction that says nothing, which is exactly
+ *              what a sighting or a locked pair may say.
  *
  * The curve is evaluated in the vertex shader from three endpoint uniforms, so
  * moving beads cost no CPU geometry work and nothing allocates per frame.
@@ -145,7 +152,12 @@ void main() {
   vec3 offset = vec3(0.0);
   float taper = 1.0;
 
-  if (form == 0) {
+  if (form == 4) {
+    // Unread — one fine strand laid along the arc. No offset, no twist, and
+    // an even width end to end: it neither mirrors, carries, opposes nor
+    // settles, because nobody has said which yet.
+    taper = 0.7;
+  } else if (form == 0) {
     // Echo — mirrored pair. Separation is symmetric about the midpoint, so
     // neither end is privileged and the figure reads the same reversed.
     float sep = uWidth * (1.15 + 0.85 * sin(t * GBG_PI));
@@ -238,8 +250,9 @@ void main() {
   // the figure closes. Echo and Tension arrive from both beads and close in
   // the middle; Passage and Ground close at the destination. Both the reveal
   // and CAV-006's terminal read this one coordinate, so "where it closes" is
-  // stated once per form instead of twice.
-  float mirrored = (form == 0 || form == 2) ? 1.0 : 0.0;
+  // stated once per form instead of twice. The unread strand is symmetric
+  // too: it privileges neither bead, and it stays open where they would meet.
+  float mirrored = (form == 0 || form == 2 || form == 4) ? 1.0 : 0.0;
   float closure = mix(vU, min(vU, 1.0 - vU) * 2.0, mirrored);
 
   // CAV-006, in one call. Documented ink is dry and closes; open ink has
@@ -251,7 +264,11 @@ void main() {
   float mark = 0.0;
   float reveal = 1.0;
 
-  if (form == 0) {
+  if (form == 4) {
+    // Unread — no mark at all. A mark is a grammar, and this strand has none
+    // yet: whatever it becomes is the player's to say.
+    reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, closure);
+  } else if (form == 0) {
     // Echo — growth arrives from both ends at once, and the ticks it leaves
     // sit at mirrored stations.
     reveal = 1.0 - smoothstep(uGrow, uGrow + 0.12, closure);
@@ -291,9 +308,33 @@ void main() {
 }
 `;
 
+/**
+ * THE UNREAD STRAND (I-016, I-017).
+ *
+ * What joins the attended bead to the sighted one, and a locked pair before a
+ * reading is heard or chosen. It used to be drawn in Echo's grammar as a
+ * placeholder, which put one reading's construction — and its mirrored ticks —
+ * on every pair before the player had read anything, and a placeholder that
+ * looks like an answer is a nomination. It is its own construction instead,
+ * and every channel that could carry a grammar is empty: one strand, no
+ * torsion, no beat, no travel, no mark.
+ *
+ * It is not a `ThreadForm`: those are the four readings, and this is the
+ * absence of one. `threadGrammar.ts` stays the list of what a player can mean.
+ */
+export const UNREAD_STRAND = Object.freeze({
+  /** GLSL branch index. Order is a shader ABI: after the four readings. */
+  code: 4,
+  strands: 1,
+  torsion: 0,
+  beatHz: 0,
+  travel: 0,
+});
+
 export interface RibbonUniformSeed {
   readonly theme: WorldTheme;
-  readonly form: ThreadForm;
+  /** The reading the strand is drawn in, or null for the unread strand. */
+  readonly form: ThreadForm | null;
   readonly ink: THREE.Color;
   readonly width: number;
   readonly opacity: number;
@@ -307,7 +348,8 @@ export interface RibbonUniformSeed {
 }
 
 export function createRibbonMaterial(seed: RibbonUniformSeed): THREE.ShaderMaterial {
-  const { theme, form } = seed;
+  const { theme } = seed;
+  const form = seed.form ?? UNREAD_STRAND;
   const material = new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
@@ -339,8 +381,65 @@ export function createRibbonMaterial(seed: RibbonUniformSeed): THREE.ShaderMater
       uRhythmB: { value: 7 },
     },
   });
-  material.name = `castalia.thread.${form.intention}`;
+  material.name = `castalia.thread.${seed.form?.intention ?? "unread"}`;
   return material;
+}
+
+/**
+ * THE STRAND A DRAFT WEARS (I-016, I-017).
+ *
+ *   focus, a bead sighted       the unread strand, faint, attended → sighted
+ *   locked, nothing heard       the unread strand between the pair
+ *   locked, a sigil hovered     the pair, in the reading being heard
+ *   reading                     the pair, in the chosen reading
+ *
+ * Until a reading is heard or chosen the strand carries no grammar at all.
+ * The opacities rise with commitment — a look, a pair, a reading heard, a
+ * reading chosen — and never with anything the record knows about the pair.
+ */
+export interface PreviewStrand {
+  readonly sourceId: string;
+  readonly targetId: string;
+  /** The grammar the strand is drawn in, or null for the unread strand. */
+  readonly intention: RelationIntention | null;
+  readonly opacity: number;
+}
+
+/** A sighting is a look, so its strand is the faintest thing here. */
+export const SIGHTED_STRAND_OPACITY = 0.4;
+/** A locked pair nobody has read yet. */
+export const UNREAD_PAIR_OPACITY = 0.5;
+/** A reading heard by hovering its sigil — a preview, not a choice. */
+export const HEARD_READING_OPACITY = 0.62;
+/** The chosen reading, held and waiting to be woven. */
+export const CHOSEN_READING_OPACITY = 0.72;
+
+/**
+ * Which strand the focus view shows, and in which grammar. Pure: it reads the
+ * one derivation every surface reads (`deriveFocusView`), plus whether the
+ * reading in it has been chosen rather than merely heard.
+ */
+export function previewStrandFor(
+  view: FocusView,
+  readingChosen: boolean
+): PreviewStrand | null {
+  const attended = view.attendedConceptId;
+  const second = view.secondConceptId;
+  if (attended === null || second === null) return null;
+  const pair = { sourceId: String(attended), targetId: String(second) };
+
+  if (view.mode === "focus") {
+    return { ...pair, intention: null, opacity: SIGHTED_STRAND_OPACITY };
+  }
+  if (view.mode !== "locked") return null;
+  if (view.previewIntention === null) {
+    return { ...pair, intention: null, opacity: UNREAD_PAIR_OPACITY };
+  }
+  return {
+    ...pair,
+    intention: view.previewIntention,
+    opacity: readingChosen ? CHOSEN_READING_OPACITY : HEARD_READING_OPACITY,
+  };
 }
 
 /** Unrest amplitude for a Tension thread, exported for the frame loop. */

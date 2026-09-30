@@ -5,7 +5,7 @@ import { Html } from "@react-three/drei";
 import { useStore as useVanillaStore } from "zustand";
 import {
   threadingEnv,
-  advanceRecoil,
+  advancePointerFrame,
   handlePointerMove,
   handlePointerUp,
   handlePointerCancel,
@@ -405,9 +405,10 @@ export function ThreadingDriver() {
     // said it would.
     cueBus.tick(presentationNow() / 1000);
 
-    // The ribbon falling back out of a missed weave. Driven by frame time, not
-    // by a clock, so a controlled test clock cannot leave it hanging in the air.
-    advanceRecoil(Math.min(dt, 1 / 20));
+    // The pointer layer's own tick: the camera hold after a press is counted
+    // in frames of the world, and the lens is put down the frame the focus
+    // view stops sighting, not on the next move of a hand that may not move.
+    advancePointerFrame();
 
     acc.current += dt;
     if (acc.current < 0.066) return;
