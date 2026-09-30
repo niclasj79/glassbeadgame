@@ -307,6 +307,18 @@ describe("the audio director", () => {
     expect(spaces.at(-1)).toEqual({ density: 1, bed: 1 });
   });
 
+  it("restores the score when a weave ends the look that led to it", () => {
+    const { director, spaces } = harness();
+    director.handleCue(
+      cue("attention.enter", { conceptId: toConceptId(FIBONACCI), candidates: [] })
+    );
+    expect(spaces.at(-1)!.bed).toBeLessThan(1);
+    director.handleCue(
+      cue("thread.woven", wovenPayload("t1", FIBONACCI, COUNTERPOINT, "echo"))
+    );
+    expect(spaces.at(-1)).toEqual({ density: 1, bed: 1 });
+  });
+
   it("previews four intentions as four different readings — a reading is a tool, not a label", () => {
     const h = focusHarness({ retire: true });
     const heard: string[] = [];

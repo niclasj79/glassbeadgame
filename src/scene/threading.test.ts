@@ -16,8 +16,6 @@ vi.mock("@/audio/sfx", () => ({
   selectTick: vi.fn(),
   latchTick: vi.fn(),
   cancelGliss: vi.fn(),
-  setSilkActive: vi.fn(),
-  updateSilk: vi.fn(),
   setAimTension: vi.fn(),
 }));
 

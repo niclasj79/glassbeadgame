@@ -418,7 +418,9 @@ test.describe("the focus view", () => {
 
     await holdSigil(page, "passage");
     // The pair's cards close with the fog; the thread card stays to be read.
+    // The outcome is a cue like any other, so it lands on the cue clock.
     await expect(page.getByTestId("focus-card-top")).toHaveCount(0);
+    await advanceClock(page, 3_000);
     const more = page.getByTestId("thread-card-more");
     await expect(more).toBeVisible();
     // No timer closes it (I-018): time passes, the card is still there.

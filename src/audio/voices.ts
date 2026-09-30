@@ -43,6 +43,11 @@ export interface VoiceBudget {
   /** Reserve a slot. False means the note is dropped rather than queued. */
   readonly claim: (now: number, endsAt: number) => boolean;
   readonly active: (now: number) => number;
+  /**
+   * A claimed voice will end at `to` rather than `from` — because it was retired,
+   * and stopped early. It gives back what it no longer uses.
+   */
+  readonly shorten: (from: number, to: number) => void;
   readonly reset: () => void;
 }
 
@@ -66,6 +71,10 @@ export function createVoiceBudget(
       return true;
     },
     active: (now) => ends.filter((end) => end > now).length,
+    shorten: (from, to) => {
+      const index = ends.indexOf(from);
+      if (index >= 0 && to < from) ends[index] = to;
+    },
     reset: () => {
       ends = [];
     },
@@ -327,6 +336,12 @@ function envelope(
 
 // ─── The one place a note is born ───────────────────────────────────────────
 
+/**
+ * Take a voice back: fade it to silence over `fadeSeconds` from `atSeconds` — or,
+ * if it has not begun by `atSeconds`, never let it begin.
+ */
+export type RetireVoice = (atSeconds: number, fadeSeconds: number) => void;
+
 export interface VoiceRequest {
   readonly timbre: TimbreId;
   readonly frequency: number;
@@ -354,6 +369,15 @@ export interface VoiceRequest {
    * point is that it locks and does not beat.
    */
   readonly exactTuning?: boolean;
+  /**
+   * Ask to be able to take this voice back. Called once, before the voice
+   * sounds, with the function that does it. It costs one extra gain node for
+   * this voice, and only for a caller that asks. A voice already in its release
+   * fades from where it is; the gate sits after the envelope, so it cannot jump
+   * a falling note back up to its peak the way cancelling the envelope's own
+   * automation would.
+   */
+  readonly onRetire?: (retire: RetireVoice) => void;
 }
 
 /**
@@ -400,11 +424,45 @@ export function playVoice(
     target = panner;
   }
 
+  // Every source this voice starts, and when it will stop, so a retirement can
+  // stop what would otherwise go on rendering silence.
+  const running: { source: AudioScheduledSourceNode; stopsAt: number }[] = [];
+
+  if (request.onRetire !== undefined) {
+    const gate = ctx.createGain();
+    gate.connect(target);
+    target = gate;
+    request.onRetire((atSeconds, fadeSeconds) => {
+      const fade = Math.max(0.005, fadeSeconds);
+      gate.gain.cancelScheduledValues(atSeconds);
+      // A voice not begun by then never does; one already sounding fades from
+      // where it is.
+      const begun = t0 < atSeconds;
+      if (begun) {
+        gate.gain.setValueAtTime(1, atSeconds);
+        gate.gain.linearRampToValueAtTime(0, atSeconds + fade);
+      } else {
+        gate.gain.setValueAtTime(0, atSeconds);
+      }
+      // Silent is not gone. The voice budget bounds nodes, not loudness, so a
+      // retired voice stops its sources and gives its slot back.
+      const end =
+        (begun ? atSeconds + fade : Math.max(atSeconds, ctx.currentTime)) + 0.02;
+      for (const entry of running) {
+        if (end >= entry.stopsAt) continue;
+        entry.source.stop(end);
+        entry.stopsAt = end;
+      }
+      voiceBudget.shorten(stopAt, end);
+    });
+  }
+
   const env = envelope(ctx, target, gain, floor, t0, attack, hold, release);
 
   const startOscillator = (osc: OscillatorNode): void => {
     osc.start(t0);
     osc.stop(stopAt);
+    running.push({ source: osc, stopsAt: stopAt });
   };
 
   const addVibrato = (osc: OscillatorNode): void => {
@@ -465,7 +523,9 @@ export function playVoice(
         noise.connect(bp);
         bp.connect(breath);
         noise.start(t0);
-        noise.stop(Math.min(stopAt, t0 + 1.2));
+        const breathEnds = Math.min(stopAt, t0 + 1.2);
+        noise.stop(breathEnds);
+        running.push({ source: noise, stopsAt: breathEnds });
       }
       break;
     }
@@ -531,7 +591,9 @@ export function playVoice(
       noise.connect(bp);
       bp.connect(strike);
       noise.start(t0);
-      noise.stop(Math.min(stopAt, t0 + 0.35));
+      const strikeEnds = Math.min(stopAt, t0 + 0.35);
+      noise.stop(strikeEnds);
+      running.push({ source: noise, stopsAt: strikeEnds });
       break;
     }
   }

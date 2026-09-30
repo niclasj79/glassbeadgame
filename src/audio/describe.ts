@@ -192,12 +192,13 @@ export function describeVoicePlan(
     default:
       break;
   }
-  // Two plans deliberately say nothing here. A weave landing and an armed
-  // intention are already captioned by `src/runtime/captions` from the cue
-  // itself, in the player's vocabulary; describing them a second time in
-  // musical terms would turn the caption track into noise, and a caption track
-  // that can be ignored is not an accessible path.
-  if (plan.meta.grammar === "landing" || plan.meta.grammar.startsWith("armed:")) {
+  // A weave landing deliberately says nothing here. It is already captioned by
+  // `src/runtime/captions` from the cue itself, in the player's vocabulary;
+  // describing it a second time in musical terms would turn the caption track
+  // into noise, and a caption track that can be ignored is not an accessible
+  // path. (The focus view's voices never reach this function: they are
+  // captioned by the cue layer alone.)
+  if (plan.meta.grammar === "landing") {
     return null;
   }
   if (plan.kind === "attention") {

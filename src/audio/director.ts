@@ -816,6 +816,11 @@ export function createAudioDirector(
         // The commit's phrase is unchanged, and it begins over silence: nothing
         // the player was merely hearing sounds under it.
         settleFocus();
+        // A weave ends the look that led to it: the draft is back to roaming
+        // and the fog lifts on its own (I-016), so the score comes back too
+        // rather than staying thinned until the next Attend.
+        attended = null;
+        setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
         const [a, b] = cue.payload.pair;
         const plan = planLanding(
           `woven:${String(cue.payload.threadId)}`,
