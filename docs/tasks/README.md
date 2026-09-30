@@ -27,7 +27,9 @@ stop on any refusal or valid no-Ready result. See `../STEERING-HARNESS.md`.
 M9 — Studies. M9-001, the Studies spike, merged in PR #62, and M2-012, the
 focus view, in PR #61. M2-011 remains in Review pending the director's P-005
 gate, which M2-012 re-runs on the new surface; the M3–M8 completion campaign
-merged as one reviewed branch.
+merged as one reviewed branch. The polish track opened on 2026-09-30 with
+ADR-016 and M4-001, the conductor, directly assigned and In progress, and
+ADR-017 with M4-002, the pulse and the stems, blocked behind it.
 
 ## Ready queue
 
@@ -35,7 +37,10 @@ None.
 
 ## In progress
 
-None.
+1. `M4-001-conductor.md` — directly assigned polish spike under ADR-016: the
+   conductor (one musical time for the world), beads lit on their own notes,
+   the hand's sounds on the grid, the breath on the bar; branch
+   `codex/M4-001-conductor`.
 
 ## In review
 
@@ -48,7 +53,8 @@ None.
 
 ## Blocked queue
 
-None.
+1. `M4-002-pulse-and-stems.md` — the bed's pulse, moving harmony and stems
+   under ADR-017; blocked behind M4-001, whose grid it stands on.
 
 ## Completed
 

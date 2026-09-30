@@ -1,9 +1,45 @@
 import { audio } from "./engine";
-import { playNote, noiseSource } from "./voices";
+import { HAND_DIVISION, HAND_LIGHT_WEIGHT, conductor } from "./conductor";
+import { noteSeconds, playNote, noiseSource, type SimpleVoiceOptions } from "./voices";
 import { beadVoice, modeFreq } from "./theory";
 import { COMFORT, clampBeatingHz } from "./comfort";
 import { centsForBeatingHz, transposeCents } from "./mode";
 import { presentationNow } from "@/runtime/testMode";
+
+/**
+ * THE HAND ON THE GRID (ADR-016).
+ *
+ * The sounds the hand makes land on the next sixteenth of the world's slot
+ * rather than at the instant the pointer moved, so the hand plays with the piece
+ * instead of across it — and at most one of each kind lands on a grid point: a
+ * second request for the same kind at the same point is dropped, not stacked.
+ * Only the sound is placed. The scene answers the hand at once, and never waits
+ * for the grid (product law 2).
+ *
+ * Without a grid (the title, or before the bed has started) the conductor
+ * answers "soon", so none of this depends on the bed. `attunementInvitation`
+ * and the aim tension are not the hand's and keep their own time.
+ */
+type HandSoundKind = "hover" | "select" | "latch" | "cancel" | "clink";
+
+/** The grid point this kind of sound may take, or null if one already has it. */
+function handTime(kind: HandSoundKind): number | null {
+  const at = conductor.next(HAND_DIVISION);
+  return conductor.claim(kind, at) ? at : null;
+}
+
+/** A hand note that speaks for a bead is on the score, and the bead lights with it. */
+function conductHand(
+  conceptId: string,
+  note: SimpleVoiceOptions & { readonly at: number }
+): void {
+  conductor.sound({
+    conceptId,
+    at: note.at,
+    duration: noteSeconds(note),
+    weight: HAND_LIGHT_WEIGHT,
+  });
+}
 
 let lastHoverAt = 0;
 
@@ -16,10 +52,12 @@ export function hoverPing(conceptId: string): void {
   if (!ctx || !audio.sfxBus) return;
   const voice = beadVoice(conceptId);
   if (!voice) return;
-  playNote(ctx, audio.sfxBus, "glass", voice.freq * 2, {
-    gain: 0.045,
-    release: 0.5,
-  });
+  const at = handTime("hover");
+  if (at === null) return;
+  const ping = { gain: 0.045, at, release: 0.5 };
+  if (playNote(ctx, audio.sfxBus, "glass", voice.freq * 2, ping)) {
+    conductHand(conceptId, ping);
+  }
 }
 
 export function selectTick(conceptId: string): void {
@@ -27,14 +65,16 @@ export function selectTick(conceptId: string): void {
   if (!ctx || !audio.sfxBus) return;
   const voice = beadVoice(conceptId);
   if (!voice) return;
-  playNote(ctx, audio.sfxBus, voice.timbre, voice.freq, {
-    gain: 0.09,
-    release: 0.45,
-  });
+  const at = handTime("select");
+  if (at === null) return;
+  const tick = { gain: 0.09, at, release: 0.45 };
+  if (playNote(ctx, audio.sfxBus, voice.timbre, voice.freq, tick)) {
+    conductHand(conceptId, tick);
+  }
 
   // The glass touch — a close-mic tap layered under the tick: the ASMR of
   // a fingertip meeting a cold bead.
-  const t0 = ctx.currentTime;
+  const t0 = at;
   const noise = noiseSource(ctx, 2.5);
   const bp = ctx.createBiquadFilter();
   bp.type = "bandpass";
@@ -51,6 +91,7 @@ export function selectTick(conceptId: string): void {
   noise.stop(t0 + 0.35);
   playNote(ctx, audio.sfxBus, "glass", voice.freq * 4, {
     gain: 0.012,
+    at,
     release: 0.35,
   });
 }
@@ -71,7 +112,9 @@ export function selectTick(conceptId: string): void {
 export function latchTick(conceptId: string): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const t0 = ctx.currentTime;
+  const at = handTime("latch");
+  if (at === null) return;
+  const t0 = at;
 
   const noise = noiseSource(ctx, 0.4);
   const bp = ctx.createBiquadFilter();
@@ -92,10 +135,10 @@ export function latchTick(conceptId: string): void {
   // note so it sits under the click instead of competing with it.
   const voice = beadVoice(conceptId);
   if (!voice) return;
-  playNote(ctx, audio.sfxBus, "gut", voice.freq * 0.5, {
-    gain: 0.035,
-    release: 0.18,
-  });
+  const caught = { gain: 0.035, at, release: 0.18 };
+  if (playNote(ctx, audio.sfxBus, "gut", voice.freq * 0.5, caught)) {
+    conductHand(conceptId, caught);
+  }
 }
 
 /**
@@ -131,9 +174,11 @@ export function latchTick(conceptId: string): void {
 export function beadClink(strength: number, size: number, pan: number): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
+  const at = handTime("clink");
+  if (at === null) return;
 
   const hit = Math.max(0, Math.min(1, strength));
-  const t0 = ctx.currentTime;
+  const t0 = at;
   const bounds = COMFORT.contact;
   const level = bounds.maxGain * (0.3 + 0.7 * hit);
 
@@ -176,6 +221,7 @@ export function beadClink(strength: number, size: number, pan: number): void {
   // The body, through the one place a note is born.
   playNote(ctx, audio.sfxBus, "glass", body, {
     gain: level * 0.65,
+    at,
     attack: 0.001,
     hold: 0,
     release: 0.1 + 0.22 * hit,
@@ -187,6 +233,7 @@ export function beadClink(strength: number, size: number, pan: number): void {
   if (hit > 0.45) {
     playNote(ctx, audio.sfxBus, "glass", body * 2.34, {
       gain: level * 0.3 * hit,
+      at,
       attack: 0.001,
       hold: 0,
       release: 0.06 + 0.1 * hit,
@@ -301,7 +348,8 @@ export function setAimTension(active: boolean): void {
 export function cancelGliss(): void {
   const ctx = audio.get();
   if (!ctx || !audio.sfxBus) return;
-  const t = ctx.currentTime;
+  const t = handTime("cancel");
+  if (t === null) return;
   const osc = ctx.createOscillator();
   osc.type = "sine";
   osc.frequency.setValueAtTime(modeFreq(4, "high"), t);

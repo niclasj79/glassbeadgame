@@ -551,9 +551,12 @@ function harness() {
   const sink: AudioSink = {
     now: () => 100,
     quantize: () => 100.25,
+    quantizeHand: () => 100.125,
+    slotSeconds: () => 2,
     play: (plan, atSeconds) => {
       played.push({ plan, atSeconds });
     },
+    conduct: () => {},
     setSpace: () => {},
     activeVoiceCount: () => 0,
     concludeAt: () => {},

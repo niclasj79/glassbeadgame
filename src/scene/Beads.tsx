@@ -13,6 +13,7 @@ import { hashString, smoothstep } from "@/lib/utils";
 import { isCoarsePointer } from "@/lib/device";
 import { presentationNow } from "@/runtime/testMode";
 import { beadClink } from "@/audio/sfx";
+import { conductor } from "@/audio/conductor";
 import { frameState } from "./frameState";
 import {
   createContactTracker,
@@ -956,6 +957,10 @@ export function Beads() {
       focal.offset
     );
 
+    // The conductor's clock, read once: every bead's light this frame is taken
+    // at one instant, on the clock its notes were scheduled on (ADR-016).
+    const conductedAt = conductor.now();
+
     for (let i = 0; i < count; i++) {
       const id = ids[i];
       const index = frameState.beadIndex.get(id) ?? i;
@@ -988,10 +993,23 @@ export function Beads() {
       // world putting light on a bead for a moment, and neither is content. It
       // is handed over unsmoothed because it is already a hump with no velocity
       // at either end, and easing a hump is how you lose it.
-      focal.attribute[i * 2 + 1] = Math.max(
+      //
+      // So does the score (ADR-016): a note scheduled on this bead's concept
+      // lights its glass at the onset and lets it go with the note, so the
+      // beads sing what they sound — muted too, because muting strips the
+      // voice and never the schedule. Unsmoothed for the same reason as the
+      // gather, and by `max` like both: the glass answers with the light it
+      // already has, and no attribute is widened. The 3 Hz bound was kept
+      // where the onset was written. Reduced motion and every tier keep it:
+      // it is light, not travel.
+      const lane = Math.max(
         focal.kindled[i],
-        focal.gather[i]
+        focal.gather[i],
+        conductor.light(id, conductedAt)
       );
+      focal.attribute[i * 2 + 1] = lane;
+      // What the glass was actually handed, for the test adapter to read back.
+      if (index < frameState.kindling.length) frameState.kindling[index] = lane;
 
       const label = labels.current[i];
       const halfAtBead = Math.max(0.001, focal.depth[i] * tanHalfFov);

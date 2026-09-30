@@ -95,6 +95,16 @@ describe("CAV-007 comfort envelope", () => {
     expect(luminanceHz(-4)).toBe(0);
   });
 
+  it("bounds the camera's breath in the same table (ADR-016)", () => {
+    // The largest share of the field of view the world's breath may move: a
+    // constant here, beside the 3 Hz bound, so no scene path can exceed it
+    // locally. `framing.cameraBreath` is the one reader.
+    expect(COMFORT.cameraBreath).toBe(0.006);
+    expect(COMFORT.cameraBreath).toBeGreaterThan(0);
+    expect(COMFORT.cameraBreath).toBeLessThan(0.01);
+    expect(Object.isFrozen(COMFORT)).toBe(true);
+  });
+
   it("decays unrest to a legible floor by about twelve seconds", () => {
     expect(unrestAmplitude(0)).toBe(1);
     expect(unrestAmplitude(-1)).toBe(1);

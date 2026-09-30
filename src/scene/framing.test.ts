@@ -4,10 +4,17 @@ import { ARENA_RADIUS, fibonacciSpherePositions } from "@/game/layout";
 import { deriveFocusView } from "@/runtime/interactionDraft";
 import { toConceptId, toThreadId } from "@/domain/ids";
 import type { ConceptPair } from "@/domain/events";
+import { THEMES } from "@/themes";
+import { aurora, castalia, ember, tide } from "@/themes/worlds";
+import { COMFORT } from "./threadGrammar";
 import {
   ARENA_FOV,
-  CAMERA_BEAT_SECONDS,
+  CAMERA_BEAT_PER_SLOT,
   CAMERA_PHRASES,
+  arenaFov,
+  cameraBeatSeconds,
+  cameraBreath,
+  type CameraPhrase,
   CONTROL_CLEARANCE,
   FOCUS_FOOT_VH,
   FOCUS_NEAREST_RATIO,
@@ -440,19 +447,66 @@ describe("the intention plate's clearance law", () => {
  * CAM-01 / TR-01. One tempo, and every move a turn of the instrument.
  */
 describe("the camera's motion language", () => {
-  it("is one beat and a closed set of ratios of it", () => {
+  it("is one beat and a closed set of ratios of it, in every world", () => {
     expect(CAMERA_PHRASES.length).toBeGreaterThan(0);
-    for (const phrase of CAMERA_PHRASES) {
-      const ratio = phraseSmoothTime(phrase) / CAMERA_BEAT_SECONDS;
-      expect(Math.abs(ratio * 2 - Math.round(ratio * 2))).toBeLessThan(1e-9);
-      expect(ratio).toBeGreaterThan(0);
-      expect(ratio).toBeLessThanOrEqual(2);
+    expect(THEMES.length).toBe(4);
+    for (const world of THEMES) {
+      const slot = world.music.slotSeconds;
+      const beat = cameraBeatSeconds(slot);
+      for (const phrase of CAMERA_PHRASES) {
+        const ratio = phraseSmoothTime(phrase, slot) / beat;
+        expect(Math.abs(ratio * 2 - Math.round(ratio * 2))).toBeLessThan(1e-9);
+        expect(ratio).toBeGreaterThan(0);
+        expect(ratio).toBeLessThanOrEqual(2);
+      }
+      const time = (phrase: CameraPhrase): number => phraseSmoothTime(phrase, slot);
+      expect(time("breath")).toBeLessThan(time("lean"));
+      expect(time("lean")).toBe(time("release"));
+      expect(time("crown")).toBeGreaterThan(time("dwell"));
+      // The lock is a turn of the same look as the attend, in the same tempo.
+      expect(time("frame")).toBe(time("lean"));
     }
-    expect(phraseSmoothTime("breath")).toBeLessThan(phraseSmoothTime("lean"));
-    expect(phraseSmoothTime("lean")).toBe(phraseSmoothTime("release"));
-    expect(phraseSmoothTime("crown")).toBeGreaterThan(phraseSmoothTime("dwell"));
-    // The lock is a turn of the same look as the attend, in the same tempo.
-    expect(phraseSmoothTime("frame")).toBe(phraseSmoothTime("lean"));
+  });
+
+  /**
+   * ADR-016: the camera counts the bar the world's music keeps. The beat is a
+   * share of the slot, so it is the world's, never a constant of the camera's.
+   */
+  it("counts the world's slot: a beat is 0.35 of it", () => {
+    expect(CAMERA_BEAT_PER_SLOT).toBe(0.35);
+    expect(castalia.music.slotSeconds).toBe(2);
+    expect(cameraBeatSeconds(castalia.music.slotSeconds)).toBe(0.7);
+    expect(cameraBeatSeconds(tide.music.slotSeconds)).toBeCloseTo(0.84, 12);
+    expect(cameraBeatSeconds(ember.music.slotSeconds)).toBeCloseTo(0.63, 12);
+    expect(cameraBeatSeconds(aurora.music.slotSeconds)).toBeCloseTo(0.77, 12);
+    // A longer slot is a slower camera, in proportion and in nothing else.
+    for (const world of THEMES) {
+      expect(cameraBeatSeconds(world.music.slotSeconds) / world.music.slotSeconds).toBeCloseTo(
+        CAMERA_BEAT_PER_SLOT,
+        12
+      );
+    }
+  });
+
+  it("leaves Castalia's phrases exactly where the fixed beat had them", () => {
+    // Before the beat was the world's it was 0.7 s everywhere; Castalia's
+    // two-second slot keeps every phrase to well within a millisecond.
+    const fixedBeat: Readonly<Record<CameraPhrase, number>> = {
+      breath: 0.35,
+      lean: 0.7,
+      frame: 0.7,
+      release: 0.7,
+      square: 0.7,
+      settle: 1.05,
+      dwell: 1.05,
+      crown: 1.4,
+    };
+    for (const phrase of CAMERA_PHRASES) {
+      expect(phraseSmoothTime(phrase, castalia.music.slotSeconds)).toBeCloseTo(
+        fixedBeat[phrase],
+        9
+      );
+    }
   });
 
   it("wraps angles the short way round", () => {
@@ -538,6 +592,72 @@ describe("the camera's motion language", () => {
       expect(level).toBeLessThanOrEqual(previous + 1e-6);
       previous = level;
     }
+  });
+});
+
+/**
+ * ADR-016 — THE LENS BREATHES ON THE BAR.
+ *
+ * The field of view widens and narrows with the world's one breath, by at most
+ * the comfort table's share of itself; it is still on the engraved tier and
+ * under reduced motion, and it composes with the impact kick without changing
+ * it. The rig applies exactly these two functions (see `musicalTime.test.ts`).
+ */
+describe("the lens's breath", () => {
+  const phases = Array.from({ length: 160 }, (_, i) => (i * Math.PI) / 40 - Math.PI);
+
+  it("moves the field of view by at most the comfort table's share", () => {
+    expect(COMFORT.cameraBreath).toBe(0.006);
+    for (const depth of [0.1, 0.25, 0.5, 1, 1.4]) {
+      for (const phase of phases) {
+        const share = cameraBreath(true, depth, phase);
+        expect(Math.abs(share)).toBeLessThanOrEqual(COMFORT.cameraBreath + 1e-15);
+        const fov = arenaFov(0, share);
+        expect(Math.abs(fov - ARENA_FOV) / ARENA_FOV).toBeLessThanOrEqual(
+          COMFORT.cameraBreath + 1e-12
+        );
+      }
+    }
+    // A quarter of a degree at the most: felt, never watched.
+    expect(ARENA_FOV * COMFORT.cameraBreath).toBeLessThan(0.26);
+  });
+
+  it("follows the breath's own phase, narrowest where the breath crests", () => {
+    expect(cameraBreath(true, 1, Math.PI / 2)).toBeCloseTo(COMFORT.cameraBreath, 15);
+    expect(cameraBreath(true, 1, -Math.PI / 2)).toBeCloseTo(-COMFORT.cameraBreath, 15);
+    expect(arenaFov(0, cameraBreath(true, 1, Math.PI / 2))).toBeLessThan(ARENA_FOV);
+    expect(arenaFov(0, cameraBreath(true, 1, -Math.PI / 2))).toBeGreaterThan(ARENA_FOV);
+    // Depth scales it, as it scales the bloom's breath.
+    for (const phase of phases) {
+      expect(cameraBreath(true, 0.25, phase)).toBeCloseTo(
+        0.25 * cameraBreath(true, 1, phase),
+        15
+      );
+    }
+  });
+
+  it("is still under reduced motion and on the engraved tier", () => {
+    for (const phase of phases) {
+      // Reduced motion: the depth is zero, and the rig withholds it as well.
+      expect(cameraBreath(true, 0, phase)).toBe(0);
+      expect(cameraBreath(false, 1, phase)).toBe(0);
+      expect(arenaFov(0, cameraBreath(false, 1, phase))).toBe(ARENA_FOV);
+    }
+    expect(cameraBreath(true, Number.NaN, 1)).toBe(0);
+    expect(cameraBreath(true, -1, 1)).toBe(0);
+  });
+
+  it("leaves the kick exactly as it was, and composes with it", () => {
+    for (let kick = 0; kick <= 1; kick += 0.01) {
+      // The kick's own formula, unchanged: a 4 % punch at its height.
+      expect(arenaFov(kick, 0)).toBe(ARENA_FOV * (1 - 0.04 * Math.sin(kick * Math.PI)));
+      for (const phase of [-1.2, 0.3, Math.PI / 2]) {
+        const share = cameraBreath(true, 1, phase);
+        expect(arenaFov(kick, share)).toBeCloseTo(arenaFov(kick, 0) * (1 - share), 12);
+      }
+    }
+    expect(arenaFov(0.5, 0) / ARENA_FOV).toBeCloseTo(0.96, 12);
+    expect(arenaFov(0, 0)).toBe(ARENA_FOV);
   });
 });
 

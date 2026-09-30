@@ -183,6 +183,13 @@ export interface LookaheadSchedulerOptions {
   readonly tickMs?: number;
   readonly lookaheadSeconds?: number;
   readonly capacity?: number;
+  /**
+   * Called at the top of every tick, before anything is realised and whether or
+   * not an AudioContext exists. The production wiring feeds the conductor's
+   * score from it (ADR-016), so what is written far ahead reaches the scene as
+   * it nears, on the same loop and the same clock as the notes themselves.
+   */
+  readonly onTick?: () => void;
 }
 
 const DEFAULT_TICK_MS = 25;
@@ -212,6 +219,7 @@ export function createLookaheadScheduler(
   }[] = [];
 
   const tick = (): void => {
+    options.onTick?.();
     const ctx = audio.get();
     const music = audio.motifBus;
     const tension = audio.tensionBus;
