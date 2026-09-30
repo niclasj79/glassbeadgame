@@ -81,6 +81,27 @@ describe("scene budgets", () => {
   });
 });
 
+describe("the dust in the air (M4-003)", () => {
+  it("fills the air on the high and base tiers, thinner on base", () => {
+    expect(sceneBudget("high").dust).toBe(600);
+    expect(sceneBudget("base").dust).toBe(300);
+    expect(sceneBudget("high").dust).toBeGreaterThan(sceneBudget("base").dust);
+    expect(sceneBudget("base").dust).toBeGreaterThan(0);
+  });
+
+  it("has none on the engraved tier: a plate has no air", () => {
+    expect(sceneBudget("potato").dust).toBe(0);
+  });
+
+  it("is a budget, not a motion preference: reduced motion keeps the field", () => {
+    // Under reduced motion the field holds still and still answers a ring's
+    // light; the count is the tier's alone.
+    for (const tier of TIERS) {
+      expect(presentationProfile(tier, true).budget.dust).toBe(sceneBudget(tier).dust);
+    }
+  });
+});
+
 describe("presentation profile", () => {
   it("treats reduced motion as an independent axis from the tier", () => {
     const still = presentationProfile("high", true);
