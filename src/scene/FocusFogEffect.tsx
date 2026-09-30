@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Pass } from "postprocessing";
@@ -79,19 +79,24 @@ export function FocusFogPass() {
   const [slot] = useState(() => new FocusFogSlot());
   const [fog, setFog] = useState<FocusFog | null>(null);
 
-  // Disposing the slot disposes the fog's pass with it: a Pass disposes every
-  // pass it holds.
-  useEffect(() => () => slot.dispose(), [slot]);
+  const made = useRef<FocusFog | null>(null);
   useEffect(() => {
     let alive = true;
     void import("./focusFogPass").then(({ createFocusFog }) => {
       if (!alive) return;
-      const made = createFocusFog(slot);
-      slot.seat(made.pass);
-      setFog(made);
+      const fog = createFocusFog(slot);
+      slot.seat(fog.pass);
+      made.current = fog;
+      setFog(fog);
     });
     return () => {
       alive = false;
+      // The pass we made is ours to dispose. Not the slot: it is mounted with
+      // `dispose={null}`, which the renderer applies as a property, so by the
+      // time this runs `slot.dispose` is null and calling it threw during the
+      // arena's teardown.
+      made.current?.pass.dispose();
+      made.current = null;
     };
   }, [slot]);
   useEffect(() => {

@@ -397,7 +397,7 @@ describe("the world behind the door", () => {
     const source = canvasSource();
     // The two expensive constructions, made here rather than at the press.
     expect(source).toContain("createBeadGlassMaterial");
-    expect(source).toContain("compileAsync");
+    expect(source).toContain("gl.compile(");
     expect(source).toMatch(/<Text[\s\S]{0,400}characters=\{OPENING_ALPHABET\}/);
     // And the gate is opened from here, once a frame has actually been drawn
     // with them — a link that has never been used has not been paid for.
@@ -414,11 +414,24 @@ describe("the world behind the door", () => {
     // linked the glass a *second* time and blocked 1985 ms doing it.
     const source = stripComments(canvasSource());
     const bind = source.indexOf("gl.setRenderTarget(asIfComposed)");
-    const compile = source.indexOf("gl.compileAsync(");
+    const compile = source.indexOf("gl.compile(");
     const restore = source.indexOf("gl.setRenderTarget(previous)");
     expect(bind).toBeGreaterThan(-1);
     expect(compile).toBeGreaterThan(bind);
     expect(restore).toBeGreaterThan(compile);
+  });
+
+  it("compiles its own group, and waits in a way a disposed material cannot break", () => {
+    // The glass is remade with the theme, and the theme is the session's, so
+    // the warm-up runs again while a Game is up. A compile of the whole scene
+    // then collects the live beads' materials, which the arena disposes when
+    // the Game is left — and three's `compileAsync` throws from its timer at a
+    // material whose program is gone. The group alone is compiled, under the
+    // scene's own lights and fog, and the wait is the tolerant one.
+    const source = stripComments(canvasSource());
+    expect(source).toContain("gl.compile(group.current ?? scene, camera, scene)");
+    expect(source).toContain("awaitLinks(gl, linked)");
+    expect(source).not.toContain("gl.compileAsync(");
   });
 
   it("does not draw the warm-up until the link is finished", () => {

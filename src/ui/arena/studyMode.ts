@@ -28,6 +28,8 @@ export interface StudyNoteModel {
   readonly open: boolean;
   /** The last *not yet*, as a margin line; a new serial is a new answer. */
   readonly notYet: Readonly<{ serial: number; line: string }> | null;
+  /** The Study is solved: the plate can be read again after it was set aside. */
+  readonly solved: boolean;
 }
 
 /**
@@ -53,13 +55,15 @@ export function chapterNameOf(
 export function studyNote(
   studyId: string,
   notYet: StudyNotYetAnswer | null,
-  open: boolean
+  open: boolean,
+  solved = false
 ): StudyNoteModel {
   return Object.freeze({
     studyId,
     chapter: chapterNameOf(studies.chapters(), studyId),
     brief: studies.briefOf(studyId),
     open,
+    solved,
     notYet:
       notYet === null
         ? null

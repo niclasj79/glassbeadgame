@@ -695,3 +695,36 @@ judgement is the milestone gate.
   list's lead line, "Your answer", "The Magister's answer", "The form of your
   answer"); the solved moment's flare and ensemble; the controls by mouse,
   touch and keyboard; and that the Free Game is unchanged.
+- The director's first play, 2026-09-30, answered in a follow-up pull
+  request on the same day. Two findings. *Keep weaving*: a solved Study
+  offered only Again, Next Study and Back, and the director wanted to linger
+  on the solved set and go on weaving. Specification amendment, a product
+  decision by the director (`STUDIES-SPEC.md` §7): the plate offers a fourth
+  way on, *Keep weaving*, which sets the plate aside and leaves the solved
+  session as it stands, and Escape is that way; the brief's note in the
+  column then says *Solved.* and offers *See the answer*, which reopens the
+  plate. The status stays solved and nothing is counted; the proposal above
+  for a way to set the plate aside is closed by it. *Back to the Studies*
+  left a black page: two faults on the leaving path, where the domain session
+  is cleared while the arena fades. The screen-reader table's bead-id selector
+  returned a fresh empty list once the session was gone, which the store
+  subscription read as a new value on every render until React gave up and
+  unmounted the root (`selectBeadIds.ts`: one frozen list, with a test); and
+  the focus fog's cleanup called `dispose` on a slot whose dispose the scene
+  graph had voided (its pass is disposed instead). A third fault surfaced by
+  the browser watch that now guards these paths: three's `compileAsync`
+  throws from its own timer when a material it waits on is disposed, and the
+  title's warm-up recompiles on every theme change, the theme is the
+  session's, and a compile of the whole scene collected the live beads'
+  materials, which leaving disposes. The warm-up now compiles only its own
+  group, under the scene's lights and fog, and waits with a poll that lets a
+  disposed material go (`scene/prewarmLinks.ts`, with tests). The passage,
+  silence and door browser tests walk Keep weaving, See the answer, Next
+  Study and Leave/Back under a page-error watch that must stay empty.
+  Checks on the follow-up head, in the cloud container: typecheck (app and
+  Playwright configs), lint, `npm test` 1,997 passed, `validate:content`,
+  build, `bundle:check` (first load 523,317 bytes gzip and 1,745,006 raw
+  against the 524,000 and 1,760,000 ceilings), `steering:check` over 27
+  packets, `git diff --check`, and the CI browser set (deterministic mode,
+  threshold, conclusion, kept games) 16 of 16 on the software renderer. The
+  lockfile is unchanged.

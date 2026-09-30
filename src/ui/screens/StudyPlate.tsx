@@ -1,8 +1,8 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { type KeyboardEvent, type RefObject, useCallback, useEffect, useRef } from "react";
 import { motion, useIsPresent } from "framer-motion";
 import { studies, type StudyPlateModel } from "@/runtime/studies";
 import { useStore } from "@/state/store";
-import { useStudy } from "@/state/studies";
+import { studyStore, useStudy } from "@/state/studies";
 import { useHeldWhileLeaving } from "../arena/presence";
 import { ReadingRule } from "../components/ReadingColumn";
 
@@ -29,15 +29,17 @@ import { ReadingRule } from "../components/ReadingColumn";
  * line is simply absent. Gold is spent on nothing here: a Study solved is a
  * form made, not a claim settled (CAV-006).
  *
- * THREE WAYS ON, AND NO OTHER (§7): *Again* begins this Study afresh, *Next
- * Study* the one after it (absent after the last), and *Back to the Studies*
- * returns to the list. All three are set alike, so the plate suggests none of
- * them, and none is a highlighted default.
+ * FOUR WAYS ON, AND NO OTHER (§7): *Keep weaving* sets the plate aside and
+ * the session goes on — the director's first play wanted to linger on a solved
+ * Study, and weaving beyond the brief is allowed (R3) — and Escape does the
+ * same; *Again* begins this Study afresh; *Next Study* the one after it (absent
+ * after the last); *Back to the Studies* returns to the list. All are set
+ * alike, so the plate suggests none of them, and none is a highlighted default.
  *
  * A DIALOG THAT TAKES FOCUS. The plate is modal over the arena: it is
  * labelled by its state and its brief, described by the player's answer, and
  * takes focus when it opens, so a screen reader is told what was solved and
- * how at once. Tab stays among its three ways on. When it closes, focus goes
+ * how at once. Tab stays among its ways on. When it closes, focus goes
  * back where it was if that is still on the page. Reduced motion shortens the
  * entrance and removes its travel; it never removes the moment.
  */
@@ -58,7 +60,9 @@ function entrance(reducedMotion: boolean) {
 const GROUND =
   "radial-gradient(ellipse 64% 90% at 50% 50%, hsl(var(--void) / 0.94) 0%, hsl(var(--void) / 0.82) 55%, hsl(var(--void) / 0.4) 100%)";
 
-/** The three ways on share one mark, so none of them is the plate's suggestion. */
+const NOTHING = (): void => undefined;
+
+/** The ways on share one mark, so none of them is the plate's suggestion. */
 const WAY_ON =
   "rounded-full border border-line/50 px-7 py-3 font-ui text-caption uppercase tracking-engraved text-dim transition-colors hover:border-brass/60 hover:text-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-glow/60";
 
@@ -82,6 +86,8 @@ function holdFocus(event: KeyboardEvent<HTMLDivElement>): void {
 }
 
 export interface StudyPlateSurfaceProps {
+  /** Keep weaving: the plate is set aside and the session goes on (§7). Escape does the same. */
+  readonly onKeep?: () => void;
   readonly model: StudyPlateModel;
   readonly reducedMotion: boolean;
   /** The dialog itself, so the connected plate can give it focus. */
@@ -102,6 +108,7 @@ export function StudyPlateSurface({
   reducedMotion,
   dialogRef,
   leaving = false,
+  onKeep = NOTHING,
 }: StudyPlateSurfaceProps) {
   const arrive = entrance(reducedMotion);
   /** A way on, taken once: a plate on its way out answers nothing more. */
@@ -118,7 +125,7 @@ export function StudyPlateSurface({
       style={{ pointerEvents: leaving ? "none" : undefined }}
     >
       {/* The veil catches the pointer: while the plate is open the arena
-          beneath it waits, and the three ways on are the only ways on. */}
+          beneath it waits, and the ways on are the only ways on. */}
       <div
         aria-hidden="true"
         className="pointer-events-auto absolute inset-0 backdrop-blur-[2px]"
@@ -135,7 +142,14 @@ export function StudyPlateSurface({
             tabIndex={-1}
             data-testid="study-plate"
             data-by={model.by}
-            onKeyDown={holdFocus}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                wayOn(onKeep)();
+                return;
+              }
+              holdFocus(event);
+            }}
             initial={arrive.initial}
             animate={arrive.animate}
             transition={arrive.transition}
@@ -208,6 +222,14 @@ export function StudyPlateSurface({
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
+                data-testid="study-plate-keep"
+                onClick={wayOn(onKeep)}
+                className={WAY_ON}
+              >
+                Keep weaving
+              </button>
+              <button
+                type="button"
                 data-testid="study-plate-again"
                 onClick={wayOn(() => studies.restart())}
                 className={WAY_ON}
@@ -270,6 +292,8 @@ export function StudyPlate() {
     };
   }, [open]);
 
+  const keep = useCallback(() => studyStore.getState().closePlate(), []);
+
   if (model === null) return null;
   return (
     <StudyPlateSurface
@@ -277,6 +301,7 @@ export function StudyPlate() {
       reducedMotion={reducedMotion}
       dialogRef={dialog}
       leaving={leaving}
+      onKeep={keep}
     />
   );
 }

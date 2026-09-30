@@ -627,6 +627,18 @@ test.describe("Studies", () => {
     return page.evaluate(() => window.__gbgTest!.studyStatus());
   }
 
+  /**
+   * Uncaught errors on the page, from now on. Leaving a Study discards its
+   * session while the arena is still fading out, and the director's first play
+   * met a black page there: React had stopped. Every Study path ends by
+   * asserting that nothing on the page threw.
+   */
+  function watchErrors(page: Page): () => readonly string[] {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    return () => errors;
+  }
+
   /** Attend, lock, and hold Echo to weave — the keyboard's whole route. */
   async function weaveByKeyboard(page: Page, fromId: string, toId: string): Promise<void> {
     await page.getByTestId(`bead-control-${fromId}`).focus();
@@ -644,6 +656,7 @@ test.describe("Studies", () => {
   }
 
   test("a passage is woven by keyboard, and the plate reads both lines", async ({ page }) => {
+    const errors = watchErrors(page);
     const started = await openStudy(page, "study.eschholz-1");
     // An ordinary session, built without the draw (§8).
     expect(started.beadIds).toEqual(ESCHHOLZ_1_BEADS);
@@ -674,6 +687,25 @@ test.describe("Studies", () => {
     await expect(page.getByTestId("study-plate-marks")).toContainText(/economical/i);
     await expect(page.getByTestId("study-plate-marks")).not.toContainText(STUDY_SURFACE_FORBIDDEN);
 
+    // Keep weaving (§7): Escape sets the plate aside, the session goes on, and
+    // the answer stays a press away in the brief's note.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("study-plate")).toHaveCount(0);
+    expect((await studyStatus(page)).plateOpen).toBe(false);
+    const solvedCount = (await snapshot(page)).domainSession.eventCount;
+    await expect(page.getByTestId("study-solved")).toContainText("Solved.");
+    await page.getByTestId("study-see-answer").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-plate")).toBeVisible();
+    await page.getByTestId("study-plate-keep").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-plate")).toHaveCount(0);
+    expect((await snapshot(page)).domainSession.eventCount).toBe(solvedCount);
+    expect((await studyStatus(page)).kind).toBe("solved");
+    await page.getByTestId("study-see-answer").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-plate")).toBeVisible();
+
     // Again: a new session with the same seed, and nothing carried over.
     await page.getByTestId("study-plate-again").focus();
     await page.keyboard.press("Enter");
@@ -682,9 +714,11 @@ test.describe("Studies", () => {
     expect(again.domainSession.sessionId).toBe(started.domainSession.sessionId);
     expect(again.domainSession.seed).toBe(started.domainSession.seed);
     expect((await studyStatus(page)).plateOpen).toBe(false);
+    expect(errors()).toEqual([]);
   });
 
   test("silence answers a Study that cannot be done, and only that one", async ({ page }) => {
+    const errors = watchErrors(page);
     await openStudy(page, "study.eschholz-1");
     await page.getByTestId("study-declare-silence-mirror").focus();
     await page.keyboard.press("Enter");
@@ -707,11 +741,27 @@ test.describe("Studies", () => {
     expect(await studyStatus(page)).toMatchObject({ kind: "solved", by: "silence" });
     await expect(page.getByTestId("study-plate-player-line")).toContainText("Proportion");
     await expect(page.getByTestId("study-plate-counts")).toHaveCount(0);
+
+    // Next Study, from the plate: the following Study opens in its own session.
+    await page.getByTestId("study-plate-next").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("study-brief")).toContainText(
+      "From The Möbius Band to Polyrhythm in three threads",
+      { timeout: 15_000 }
+    );
+    expect((await studyStatus(page)).studyId).toBe("study.waldzell-1");
+    await expect.poll(async () => (await snapshot(page)).domainSession.eventCount).toBe(1);
+
+    // Leave, from the arena: the list again, and no fault on the way out.
+    await page.getByTestId("study-leave").click();
+    await expect(page.getByTestId("studies-screen")).toBeVisible({ timeout: 15_000 });
+    expect(errors()).toEqual([]);
   });
 
-  test("the Studies door leads to the list and a Study opens without the threshold", async ({
+  test("the Studies door leads to the list, a Study opens without the threshold, and Back returns", async ({
     page,
   }) => {
+    const errors = watchErrors(page);
     await page.goto("/?testMode=1&seed=castalia-golden-001&quality=potato&reducedMotion=1");
     await page.waitForFunction(() => Boolean(window.__gbgTest));
     // The second door is held shut with the first until the world is ready.
@@ -725,13 +775,27 @@ test.describe("Studies", () => {
       await expect(list).toContainText(chapter);
     }
     await expect(list).not.toContainText(STUDY_SURFACE_FORBIDDEN);
-    await page.getByTestId("study-begin-study.waldzell-4").focus();
+    // Begin from the list: the arena opens without the threshold.
+    await page.getByTestId("study-begin-study.eschholz-4").focus();
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("study-brief")).toContainText(
-      "From Girih Tiling to Polyrhythm in two threads",
+      "Carry Proportion into Matter",
       { timeout: 15_000 }
     );
-    await expect(page.getByTestId("bead-control-image.girih-tiling")).toBeAttached();
-    expect((await studyStatus(page)).studyId).toBe("study.waldzell-4");
+    await expect(page.getByTestId("bead-control-measure.fibonacci-sequence")).toBeAttached();
+    expect((await studyStatus(page)).studyId).toBe("study.eschholz-4");
+
+    // It cannot be done, from the margin, by mouse: solved by silence.
+    await page.getByTestId("study-declare-silence").click();
+    await advanceClock(page, 5_000);
+    await expect(page.getByTestId("study-plate")).toBeVisible({ timeout: 15_000 });
+    expect(await studyStatus(page)).toMatchObject({ kind: "solved", by: "silence" });
+
+    // Back to the Studies, from the plate, by mouse: the list again, and no
+    // fault on the way out. The director's first play met a black page here.
+    await page.getByTestId("study-plate-back").click();
+    await expect(page.getByTestId("studies-screen")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("study-begin-study.eschholz-1")).toBeVisible();
+    expect(errors()).toEqual([]);
   });
 });

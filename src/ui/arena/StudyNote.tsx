@@ -43,9 +43,18 @@ export interface StudyNoteProps {
   readonly note: StudyNoteModel;
   readonly reducedMotion: boolean;
   readonly onToggleBrief: () => void;
+  /** See the answer again: reopens the solved plate after *Keep weaving*. */
+  readonly onOpenPlate?: () => void;
 }
 
-export function StudyNote({ note, reducedMotion, onToggleBrief }: StudyNoteProps) {
+const NOTHING = (): void => undefined;
+
+export function StudyNote({
+  note,
+  reducedMotion,
+  onToggleBrief,
+  onOpenPlate = NOTHING,
+}: StudyNoteProps) {
   return (
     <section
       data-testid="study-note"
@@ -97,6 +106,25 @@ export function StudyNote({ note, reducedMotion, onToggleBrief }: StudyNoteProps
           {note.open ? "Set aside" : `The brief · ${note.brief}`}
         </button>
       </div>
+
+      {/* Solved, and set aside to keep weaving: the answer stays a press away
+          (§7). A word and a control, never a count. */}
+      {note.solved && (
+        <p
+          data-testid="study-solved"
+          className="mt-3 flex flex-wrap items-center gap-2 font-display text-body italic leading-snug text-dim"
+        >
+          <span>Solved.</span>
+          <button
+            type="button"
+            data-testid="study-see-answer"
+            onClick={onOpenPlate}
+            className={QUIET_CONTROL}
+          >
+            See the answer
+          </button>
+        </p>
+      )}
 
       {note.notYet && (
         <motion.p
