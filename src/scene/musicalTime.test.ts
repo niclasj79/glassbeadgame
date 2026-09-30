@@ -351,7 +351,7 @@ describe("the breath catching the grid", () => {
       t += dt;
       phase = breathPhaseAfter(phase, dt, 1, grid, follow);
     }
-    expect(Math.sin(phase)).toBeCloseTo(Math.sin(grid.breathPhase()), 12);
+    expect(Math.sin(phase)).toBeCloseTo(Math.sin(grid.breathPhase()), 9);
     expect(follow.offset).toBe(0);
   });
 

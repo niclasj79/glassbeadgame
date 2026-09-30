@@ -175,7 +175,9 @@ export function breathPhaseAfter(
       ((((target - phase + Math.PI) % turn) + turn) % turn) - Math.PI;
   }
   follow.offset *= Math.exp(-dt * BREATH_CATCH_RATE);
-  if (Math.abs(follow.offset) < 1e-6) follow.offset = 0;
+  // A ten-thousandth of a radian is nothing to any reader; from there the
+  // breath is the grid's phase exactly.
+  if (Math.abs(follow.offset) < 1e-4) follow.offset = 0;
   return target - follow.offset;
 }
 
