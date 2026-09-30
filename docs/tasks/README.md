@@ -24,9 +24,10 @@ stop on any refusal or valid no-Ready result. See `../STEERING-HARNESS.md`.
 
 ## Current milestone
 
-M2 — the focus view revision (M2-012), then M9 — Studies. M2-011 remains in
-Review pending the director's P-005 gate, which M2-012 re-runs on the new
-surface; the M3–M8 completion campaign merged as one reviewed branch.
+M9 — Studies (M9-001, in review). M2-012, the focus view, merged in PR #61.
+M2-011 remains in Review pending the director's P-005 gate, which M2-012
+re-runs on the new surface; the M3–M8 completion campaign merged as one
+reviewed branch.
 
 ## Ready queue
 
@@ -44,19 +45,15 @@ None.
 2. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
    the canonical interpretation path; awaiting the required director
    interaction, accessibility, and audiovisual review.
-3. `M2-012-focus-view.md` — directly assigned focus view: pair before reading,
-   camera close-in, fog and lens, the two-card column, dwell inspection and
-   thread reopening (I-015 through I-020); implemented on
-   `codex/M2-012-focus-view` and awaiting the director's product,
-   accessibility-interaction and audiovisual review.
+3. `M9-001-studies-spike.md` — directly assigned Studies spike: twelve authored
+   Studies over the same loop, proven at build time, under the honesty rules
+   of the Studies specification; implemented on
+   `codex/M9-001-studies-spike` (PR #62) and awaiting the director's product,
+   content-authoring, accessibility-interaction and audiovisual review.
 
 ## Blocked queue
 
-1. `M9-001-studies-spike.md` — directly assigned Studies spike: twelve authored
-   Studies over the same loop, proven at build time, under the honesty rules
-   of the Studies specification; blocked until M2-012 is Done, because the
-   Studies rely on the facet notation the focus view delivers. Implemented
-   early in a draft pull request stacked on M2-012's branch.
+None.
 
 ## Completed
 
@@ -94,6 +91,10 @@ None.
 23. `M2-010-deterministic-thread-identity.md` — accepted and merged in PR #50;
     established one pure replay-stable, session-namespaced, first-free thread
     identity derivation without a mutable allocator or production caller.
+24. `M2-012-focus-view.md` — accepted and merged in PR #61; pair before
+    reading, the close-in camera and pair framing, fog and lens, the two-card
+    column with lit shared facets, dwell inspection and thread reopening
+    (I-015 through I-020).
 
 ## Planned but not yet Ready
 

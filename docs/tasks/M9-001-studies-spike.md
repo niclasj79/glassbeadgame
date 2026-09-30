@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked
+Review
 
 ## Milestone
 
@@ -588,7 +588,10 @@ judgement is the milestone gate.
   M2-012's pull-request head instead of after M2-012 is Done, and its pull
   request is a draft based on `codex/M2-012-focus-view`. It cannot merge
   before its base, and this packet stays Blocked until M2-012 is Done; the
-  branch is rebased onto the base when it moves.
+  branch is rebased onto the base when it moves. M2-012 merged in PR #61
+  (`537b7bd`) on 2026-09-30, a merge commit whose history holds the stacked
+  base, so the pull request (#62) was retargeted to `main` without a rebase
+  and this packet moved to Review.
 - Stage 1, content and domain. The twelve Studies carry the goals and
   answers of the table, and every claim in the table holds over the whole
   pack (a test checks each one). The bead sets were searched for under §9

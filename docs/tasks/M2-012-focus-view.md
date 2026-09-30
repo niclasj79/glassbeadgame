@@ -2,7 +2,7 @@
 
 ## Status
 
-Review
+Done
 
 ## Milestone
 
@@ -540,6 +540,10 @@ Automated checks prove the state machine, the batch, the bounds and the
 fallbacks; they cannot establish comfort or legibility.
 
 ## Implementation notes
+
+- Accepted and merged in PR #61 on 2026-09-30. The exact `main` merge commit
+  `537b7bd` passed Quality Gates run `36722223904` and Pages deployment run
+  `36723332550`.
 
 - Stage 1 (core contract) landed first on `codex/M2-012-focus-view`: the
   pair-first draft (`inactive`/`attending`/`locked`/`reading`), the commit
