@@ -24,10 +24,10 @@ stop on any refusal or valid no-Ready result. See `../STEERING-HARNESS.md`.
 
 ## Current milestone
 
-M9 — Studies (M9-001, in review). M2-012, the focus view, merged in PR #61.
-M2-011 remains in Review pending the director's P-005 gate, which M2-012
-re-runs on the new surface; the M3–M8 completion campaign merged as one
-reviewed branch.
+M9 — Studies. M9-001, the Studies spike, merged in PR #62, and M2-012, the
+focus view, in PR #61. M2-011 remains in Review pending the director's P-005
+gate, which M2-012 re-runs on the new surface; the M3–M8 completion campaign
+merged as one reviewed branch.
 
 ## Ready queue
 
@@ -45,11 +45,6 @@ None.
 2. `M2-011-production-interpretation-loop-cutover.md` — production cutover to
    the canonical interpretation path; awaiting the required director
    interaction, accessibility, and audiovisual review.
-3. `M9-001-studies-spike.md` — directly assigned Studies spike: twelve authored
-   Studies over the same loop, proven at build time, under the honesty rules
-   of the Studies specification; implemented on
-   `codex/M9-001-studies-spike` (PR #62) and awaiting the director's product,
-   content-authoring, accessibility-interaction and audiovisual review.
 
 ## Blocked queue
 
@@ -95,6 +90,11 @@ None.
     reading, the close-in camera and pair framing, fog and lens, the two-card
     column with lit shared facets, dwell inspection and thread reopening
     (I-015 through I-020).
+25. `M9-001-studies-spike.md` — accepted and merged in PR #62; twelve authored
+    Studies in three chapters over the Free Game's own loop, proven at build
+    by a solver over facets and faculties, evaluated under the honesty rules
+    R1–R4, with the silence answer, the brief in the margin and the solved
+    plate.
 
 ## Planned but not yet Ready
 
