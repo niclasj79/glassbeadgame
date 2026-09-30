@@ -623,6 +623,17 @@ fallbacks; they cannot establish comfort or legibility.
   `kept-games.spec.ts` no longer presses the shelf toggle blind on its second
   visit: a quick Leave can revive the title that was still fading out, shelf
   already open. That race predates this task.
+- CI draws the arena in software, and the focus view's waits (the plate's
+  wait for the pose, the camera's settle) are counted in frames. The first CI
+  run hit the job's fifteen-minute limit: on the low tier the focus view drew
+  0.69 frames a second at 1280x720, 2.0 at 960x640 and 3.64 at 800x600 on the
+  container. The four CI specs therefore run at 800x600 (still the desktop
+  layout, column beside the arena), allow ninety seconds a test, share a
+  session where the question allows, and weave by keyboard in the conclusion
+  and kept-games specs; the mouse route keeps its own test. The gap line's
+  delay is measured inside the page, because it keeps real time and a slow
+  runner can take longer than three seconds to ask. CI's browser step now
+  takes about six and a half minutes.
 - Checks on the final head, run locally in the cloud container (4 cores,
   SwiftShader): `npm ci` resolved the unchanged lockfile (dry run; no
   dependency changed); `steering:test` 82 passed; `steering:check` passed for
@@ -631,7 +642,8 @@ fallbacks; they cannot establish comfort or legibility.
   not exist in a checkout); `npm test` 1,713 passed; `validate:content`
   passed; build passed; `bundle:check` passed at 523,445 bytes gzip and
   1,744,878 raw initial JavaScript (ceilings 524,000 and 1,760,000);
-  `test:browser` 17 of 17 passed, and the four specs outside it 11 of 11;
+  `test:browser` 13 of 13 passed, locally and in CI (Quality Gates green on
+  `d950376`), and the four specs outside it 11 of 11;
   `git diff --check` clean. `measure:performance`: the mobile profiles
   passed; both desktop profiles fell below the spec's own floor of more than
   ten frames in five seconds, which main's own desktop-base also misses on
