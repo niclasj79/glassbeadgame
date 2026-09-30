@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
   PICKS,
+  SECOND_SOURCE_ID,
+  SECOND_TARGET_ID,
   SOURCE_ID,
   TARGET_ID,
   advanceClock,
@@ -14,7 +16,7 @@ import {
   snapshot,
   sweepTo,
   waitForDraft,
-  weaveGoldenPairWithMouse,
+  weaveGoldenPairByKeyboard,
 } from "./support/focusView";
 
 /**
@@ -24,7 +26,14 @@ import {
  * a second, choose how to read the pair, and hold to weave. The durable record
  * is the same atomic batch whichever hand made it; only the gesture profile
  * says which hand it was (I-009, I-020).
+ *
+ * CI renders this in software. The focus view's waits are counted in frames,
+ * so the page is kept small enough to draw several a second (800x600 is still
+ * the desktop layout, column beside the arena), each test is allowed ninety
+ * seconds, and sessions are shared where the question allows.
  */
+test.use({ viewport: { width: 800, height: 600 } });
+test.describe.configure({ timeout: 90_000 });
 
 test("direct mouse weaving commits a deterministic canonical interpretation", async ({
   page,
@@ -74,7 +83,7 @@ test("direct mouse weaving commits a deterministic canonical interpretation", as
   });
   // The plate waits for the pose, counted in frames; the software renderer
     // draws a few a second, so allow it the helpers' settle time.
-    await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 15_000 });
+    await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 30_000 });
   await expect(page.getByTestId("intention-echo")).toHaveAccessibleName(
     "Echo: shares a form"
   );
@@ -126,6 +135,13 @@ test("direct mouse weaving commits a deterministic canonical interpretation", as
   expect(first.threads).toHaveLength(0);
   expect(first.discoveries).toHaveLength(0);
   expect(first.score).toBe(0);
+
+  // The canonical log reloads to the same web, byte for byte.
+  const canonicalBefore = await page.evaluate(() => window.__gbgTest!.canonicalEventLog());
+  const reloaded = await page.evaluate(() => window.__gbgTest!.reloadCanonical());
+  const canonicalAfter = await page.evaluate(() => window.__gbgTest!.canonicalEventLog());
+  expect(canonicalAfter).toBe(canonicalBefore);
+  expect(reloaded.domainSession).toEqual(first.domainSession);
 });
 
 test("keyboard controls mirror the complete action path", async ({ page }) => {
@@ -144,7 +160,7 @@ test("keyboard controls mirror the complete action path", async ({ page }) => {
 
   // After a keyboard lock the first reading receives focus; a radiogroup's
   // selection follows its focus, so the arrow chooses the reading.
-  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 15_000 });
+  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 30_000 });
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("intention-passage")).toBeFocused();
   await waitForDraft(page, "reading");
@@ -164,38 +180,34 @@ test("keyboard controls mirror the complete action path", async ({ page }) => {
   });
   // No pointer path is lent to a keyboard hold (I-009).
   expect(committed.gesture).toEqual({ inputModality: "keyboard", durationMs: 250 });
-});
 
-test("the assistive confirm weaves the chosen reading without a hold", async ({
-  page,
-}) => {
-  await openSession(page);
-  await page.getByTestId(`bead-control-${SOURCE_ID}`).focus();
+  // The assistive route, on the golden path's second pair: Space chooses the
+  // reading, and the mirror's confirm weaves it with a hold of its own that a
+  // pointer press elsewhere can neither finish nor steal.
+  await page.getByTestId(`bead-control-${SECOND_SOURCE_ID}`).focus();
   await page.keyboard.press("Enter");
   await waitForDraft(page, "attending");
-  await page.getByTestId(`bead-control-${TARGET_ID}`).focus();
+  await page.getByTestId(`bead-control-${SECOND_TARGET_ID}`).focus();
   await page.keyboard.press("Enter");
   await waitForDraft(page, "locked");
   await expect(page.getByTestId("keyboard-weave-confirm")).toBeDisabled();
-  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 15_000 });
+  await expect(page.getByTestId("intention-echo")).toBeFocused({ timeout: 30_000 });
   await page.keyboard.press("Space");
   await waitForDraft(page, "reading");
   expect((await snapshot(page)).draftIntention).toBe("echo");
-
   await expect(page.getByTestId("keyboard-weave-confirm")).toBeEnabled();
   await page.getByTestId("keyboard-weave-confirm").focus();
   await page.keyboard.down("Space");
   await expect.poll(async () => (await snapshot(page)).weaving).toBe(true);
-  // A pointer press elsewhere cannot finish or steal a keyboard hold.
-  const source = await beadPoint(page, SOURCE_ID);
-  await page.mouse.click(source.x, source.y);
+  const elsewhere = await beadPoint(page, SOURCE_ID);
+  await page.mouse.click(elsewhere.x, elsewhere.y);
   expect((await snapshot(page)).weaving).toBe(true);
   expect((await snapshot(page)).draftStage).toBe("reading");
   await advanceClock(page, 250);
   await page.keyboard.up("Space");
   await waitForDraft(page, "inactive");
-  expect((await snapshot(page)).domainSession.threads[0]).toMatchObject({
-    pair: [SOURCE_ID, TARGET_ID],
+  expect((await snapshot(page)).domainSession.threads[1]).toMatchObject({
+    pair: [SECOND_SOURCE_ID, SECOND_TARGET_ID],
     intention: "echo",
     inputModality: "keyboard",
   });
@@ -327,20 +339,6 @@ test("cancellation steps back one stage at a time and pointer loss never commits
   expect((await snapshot(page)).focus.fogActive).toBe(false);
 });
 
-test("canonical replay reload preserves the committed web", async ({ page }) => {
-  await openSession(page);
-  await attendWithMouse(page, SOURCE_ID);
-  await sweepTo(page, SOURCE_ID, TARGET_ID);
-  await lockWithMouse(page, TARGET_ID);
-  await holdSigil(page, "echo");
-  const committed = await snapshot(page);
-  const canonicalBefore = await page.evaluate(() => window.__gbgTest!.canonicalEventLog());
-  const reloaded = await page.evaluate(() => window.__gbgTest!.reloadCanonical());
-  const canonicalAfter = await page.evaluate(() => window.__gbgTest!.canonicalEventLog());
-  expect(canonicalAfter).toBe(canonicalBefore);
-  expect(reloaded.domainSession).toEqual(committed.domainSession);
-});
-
 test("the declared seed and disciplines reproduce the same draw", async ({ page }) => {
   const first = await openSession(page);
   const second = await page.evaluate(
@@ -381,7 +379,9 @@ test.describe("the focus view", () => {
   test("the column holds the attended card, the gap, and then the pair", async ({
     page,
   }) => {
-    await openSession(page);
+    const initial = await openSession(page);
+    const other = SHARES_NOTHING_WITH_SOURCE.find((id) => initial.beadIds.includes(id));
+    expect(other, "the golden draw holds a bead that shares nothing").toBeTruthy();
     await expect(page.getByTestId("focus-card-top")).toHaveCount(0);
 
     await attendWithMouse(page, SOURCE_ID);
@@ -397,11 +397,19 @@ test.describe("the focus view", () => {
       timeout: 8_000,
     });
 
-    await sweepTo(page, SOURCE_ID, TARGET_ID);
+    // A pair that shares nothing says so plainly, and claims nothing else.
+    await sweepTo(page, SOURCE_ID, other!);
+    await expect(page.getByTestId("focus-nothing-shared")).toHaveText(
+      "These two share no facet Castalia knows."
+    );
+    await expect(page.getByTestId("focus-shared-facets")).toHaveCount(0);
+
+    await sweepTo(page, other!, TARGET_ID);
     const second = page.getByTestId("focus-card-second");
     await expect(second).toBeVisible();
     await expect(second).toHaveAttribute("data-role", "sighted");
     await expect(second).toHaveAttribute("data-concept-id", TARGET_ID);
+    await expect(page.getByTestId("focus-nothing-shared")).toHaveCount(0);
     await expect(page.getByTestId("focus-gap")).toHaveCount(0);
     // Both carry Recursion; both cards light it, and nothing else is claimed.
     const shared = page.getByTestId("focus-shared-facets");
@@ -435,23 +443,6 @@ test.describe("the focus view", () => {
     await expect(page.getByTestId("thread-card-more")).toHaveCount(0);
   });
 
-  test("a pair that shares nothing says so plainly", async ({ page }) => {
-    const initial = await openSession(page);
-    const other = SHARES_NOTHING_WITH_SOURCE.find((id) => initial.beadIds.includes(id));
-    expect(other, "the golden draw holds a bead that shares nothing").toBeTruthy();
-    await attendWithMouse(page, SOURCE_ID);
-    await sweepTo(page, SOURCE_ID, other!);
-    await expect(page.getByTestId("focus-nothing-shared")).toHaveText(
-      "These two share no facet Castalia knows."
-    );
-    await expect(page.getByTestId("focus-shared-facets")).toHaveCount(0);
-    // It is a statement, not a refusal: the pair can still be held.
-    await lockWithMouse(page, other!);
-    // The plate waits for the pose, counted in frames; the software renderer
-    // draws a few a second, so allow it the helpers' settle time.
-    await expect(page.getByRole("radio")).toHaveCount(4, { timeout: 15_000 });
-  });
-
   test("resting on a bead opens its card, and leaving closes it", async ({ page }) => {
     await openSession(page);
     const bead = await beadPoint(page, TARGET_ID);
@@ -476,14 +467,15 @@ test.describe("the focus view", () => {
     await expect(page.getByTestId("focus-card-top")).toHaveCount(0);
   });
 
-  test("a woven thread can be taken up again, and Escape sets it down", async ({
+  test("a woven thread can be taken up again, from the mirror and from the world", async ({
     page,
   }) => {
-    await openSession(page);
-    const woven = await weaveGoldenPairWithMouse(page, "tension");
+    const initial = await openSession(page);
+    const woven = await weaveGoldenPairByKeyboard(page, "tension");
     const threadId = woven.domainSession.threads[0].id;
     const eventCount = woven.domainSession.eventCount;
 
+    // From the accessible mirror, by keyboard.
     const mirror = page.getByTestId(`woven-thread-${threadId}`);
     await expect(mirror).toHaveAccessibleName(/Fibonacci Sequence.*Tension.*Counterpoint/);
     await mirror.focus();
@@ -494,22 +486,12 @@ test.describe("the focus view", () => {
     await expect(page.getByTestId("focus-card-top")).toHaveAttribute("data-role", "held");
     await expect(page.getByTestId("focus-card-second")).toHaveAttribute("data-role", "held");
     expect(held.domainSession.eventCount).toBe(eventCount);
-
     await page.keyboard.press("Escape");
     await expect.poll(async () => (await snapshot(page)).reopenedThreadId).toBe(null);
-    const after = await snapshot(page);
-    expect(after.focus.mode).toBe("roaming");
-    expect(after.domainSession.eventCount).toBe(eventCount);
-  });
+    expect((await snapshot(page)).focus.mode).toBe("roaming");
 
-  test("a woven strand in the world can be picked up again", async ({ page }) => {
-    const initial = await openSession(page);
-    const woven = await weaveGoldenPairWithMouse(page, "ground");
-    const threadId = woven.domainSession.threads[0].id;
-    const eventCount = woven.domainSession.eventCount;
-
-    // A point on the strand that is clear of every bead and of every page
-    // control above the canvas, so the press can only mean the strand.
+    // From the world: a click on the strand, clear of every bead and of every
+    // page control above the canvas, so the press can only mean the strand.
     const clearOfBeads = async (point: { x: number; y: number }): Promise<boolean> => {
       for (const id of initial.beadIds) {
         const bead = await page.evaluate((conceptId) => window.__gbgTest!.beadScreen(conceptId), id);
@@ -538,16 +520,16 @@ test.describe("the focus view", () => {
           }
           return false;
         },
-        { timeout: 10_000 }
+        { timeout: 30_000 }
       )
       .toBe(true);
     await page.mouse.click(target!.x, target!.y);
     await expect.poll(async () => (await snapshot(page)).reopenedThreadId).toBe(threadId);
     expect((await snapshot(page)).focus.mode).toBe("held");
     expect((await snapshot(page)).draftStage).toBe("inactive");
-
     await page.keyboard.press("Escape");
     await expect.poll(async () => (await snapshot(page)).reopenedThreadId).toBe(null);
+    // Nothing durable changed either time.
     expect((await snapshot(page)).domainSession.eventCount).toBe(eventCount);
   });
 

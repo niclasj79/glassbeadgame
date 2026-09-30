@@ -16,6 +16,9 @@ import type { TestSessionSnapshot } from "../../../src/runtime/testMode";
 export const PICKS: DisciplineId[] = ["mathematics", "music", "art"];
 export const SOURCE_ID = "measure.fibonacci-sequence";
 export const TARGET_ID = "sound.counterpoint";
+/** The golden path's second pair (spec §23), pinned in every seeded draw. */
+export const SECOND_SOURCE_ID = "measure.prime-numbers";
+export const SECOND_TARGET_ID = "sound.polyrhythm";
 
 /**
  * How long a sigil must stay put before a hand reaches for it, and how far it
@@ -26,8 +29,11 @@ export const TARGET_ID = "sound.counterpoint";
 const SIGIL_REST_MS = 600;
 const SIGIL_READ_INTERVAL_MS = 150;
 const SIGIL_CREEP_PX = 2;
-/** First frames on a software renderer, after a cold compile, can be slow. */
-const SETTLE_TIMEOUT_MS = 15_000;
+/**
+ * First frames on a software renderer, after a cold compile, can be slow, and
+ * the plate's wait for the pose is counted in frames.
+ */
+export const SETTLE_TIMEOUT_MS = 30_000;
 
 export interface ScreenPoint {
   readonly x: number;
@@ -201,5 +207,36 @@ export async function weaveGoldenPairWithMouse(
   await sweepTo(page, SOURCE_ID, TARGET_ID);
   await lockWithMouse(page, TARGET_ID);
   await holdSigil(page, intention);
+  return snapshot(page);
+}
+
+/**
+ * The golden pair woven by keyboard: the route with no sweep and no pointer
+ * hold to wait out, for tests whose question is not the hand that wove.
+ * Enter held on a sigil chooses that reading and weaves it (I-009).
+ */
+export async function weaveGoldenPairByKeyboard(
+  page: Page,
+  intention: "echo" | "passage" | "tension" | "ground" = "echo"
+): Promise<TestSessionSnapshot> {
+  await page.getByTestId(`bead-control-${SOURCE_ID}`).focus();
+  await page.keyboard.press("Enter");
+  await waitForDraft(page, "attending");
+  await page.getByTestId(`bead-control-${TARGET_ID}`).focus();
+  await page.keyboard.press("Enter");
+  await waitForDraft(page, "locked");
+  await expect(page.getByTestId("intention-echo")).toBeFocused({
+    timeout: SETTLE_TIMEOUT_MS,
+  });
+  const order = ["echo", "passage", "tension", "ground"] as const;
+  for (let step = 0; step < order.indexOf(intention); step += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await expect(page.getByTestId(`intention-${intention}`)).toBeFocused();
+  await page.keyboard.down("Enter");
+  await expect.poll(async () => (await snapshot(page)).weaving).toBe(true);
+  await advanceClock(page, 250);
+  await page.keyboard.up("Enter");
+  await waitForDraft(page, "inactive");
   return snapshot(page);
 }

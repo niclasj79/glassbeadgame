@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { PICKS, SOURCE_ID, TARGET_ID, weaveGoldenPairWithMouse } from "./support/focusView";
+import { PICKS, SOURCE_ID, TARGET_ID, weaveGoldenPairByKeyboard } from "./support/focusView";
 
 /**
  * THE CONCLUSION IS REACHED IN A REAL BROWSER.
@@ -20,10 +20,17 @@ import { PICKS, SOURCE_ID, TARGET_ID, weaveGoldenPairWithMouse } from "./support
  * case in it. This one weaves the minimum and concludes.
  */
 
-/** One documented thread, woven with the mouse, exactly as a player would. */
+/**
+ * One documented thread, woven by keyboard exactly as a player would. The
+ * keyboard route has no sweep and no pointer hold to wait out, which matters
+ * where CI draws this scene in software; the mouse route has its own test.
+ */
 async function weaveOne(page: Page): Promise<void> {
-  await weaveGoldenPairWithMouse(page, "echo");
+  await weaveGoldenPairByKeyboard(page, "echo");
 }
+
+test.use({ viewport: { width: 800, height: 600 } });
+test.describe.configure({ timeout: 120_000 });
 
 test("concluding loads the deferred chunk and reads the session back", async ({
   page,
