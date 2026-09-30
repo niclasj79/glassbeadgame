@@ -63,6 +63,22 @@ describe("scene budgets", () => {
       sceneBudget("base").fogBlurTaps
     );
   });
+
+  it("lets the lens breathe with the world on every tier but the engraved one (ADR-016)", () => {
+    // The camera breath is the one breath the budget may withhold: the bloom,
+    // the sky and the bed keep theirs on every tier, and so does a bead's light
+    // on its own notes, which is not a budget question at all.
+    expect(sceneBudget("high").cameraBreath).toBe(true);
+    expect(sceneBudget("base").cameraBreath).toBe(true);
+    expect(sceneBudget("potato").cameraBreath).toBe(false);
+    // A budget flag, not a motion preference: reduced motion leaves it alone
+    // and stills the lens by its own path.
+    for (const tier of TIERS) {
+      expect(presentationProfile(tier, true).budget.cameraBreath).toBe(
+        sceneBudget(tier).cameraBreath
+      );
+    }
+  });
 });
 
 describe("presentation profile", () => {
