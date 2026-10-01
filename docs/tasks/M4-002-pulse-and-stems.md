@@ -497,3 +497,20 @@ of the cycle; they cannot establish that the bed is beautiful.
   pure and small and stays with the bed. The first load is 513,777 bytes
   gzip and 1,710,026 raw against the ceilings, from 512,123 and 1,705,551;
   the first-load walk guards all three chunks.
+- Checks in the cloud container, on the integrated head: `npm ci` was run
+  by both stages and the lockfile is unchanged; typecheck (app and
+  Playwright configs), lint over the sources, `npm test` 2,212 passed in 137
+  files, `validate:content`, build, `bundle:check`, `steering:check` and
+  `git diff --check` pass; the CI browser set passed 18 of 18 in 4.0 minutes
+  on the software renderer. Performance reference (SwiftShader, same
+  container, effective frames per second, evidence only per M0-005):
+  mobile-potato idle 4.06 and focus 2.78, measured while another browser
+  suite ran on the same four cores; M4-001's quiet numbers were 6.45 and
+  4.57, and the audio layer draws no frame in test mode, so a quiet rerun is
+  owed before this is read as a cost. The desktop profiles miss the
+  container's frame floor, as on main.
+- For the headphone session: is the pulse underneath and hypnotic, or in
+  front; does it ever read as a timer; do the fills answer acts and reward
+  nothing; does the harmony turn without drawing attention; do the stems
+  sound like the web growing; does Tension still sound like Tension; is the
+  thinner choir right; and Entropy's rub against two roots, kept or not.
