@@ -61,6 +61,9 @@ export const semanticScheduler = createLookaheadScheduler({
  * `pulseFill()` and `pulseSecondVoice()` hand the bed's pulse its highlights
  * (ADR-017): the bed decides which slot a weave's fill rolls into, and what the
  * space and the intensity leave of it.
+ *
+ * `holdHarmony()` hands Attunement's hold to the bed (ADR-018): the bed decides
+ * how its chord sustains, and where on its grid the cadence resolves it.
  */
 const sink: AudioSink = {
   now: () => audio.now(),
@@ -84,6 +87,7 @@ const sink: AudioSink = {
     ambient.concludeAt(atSeconds, fadeSeconds),
   pulseFill: (atSeconds) => ambient.requestFill(atSeconds),
   pulseSecondVoice: (untilSlots) => ambient.requestSecondVoice(untilSlots),
+  holdHarmony: (held) => ambient.holdHarmony(held),
 };
 
 export const productionSink: AudioSink = Object.freeze(sink);
