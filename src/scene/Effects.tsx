@@ -1,9 +1,10 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import type { BloomEffect } from "postprocessing";
+import type { BloomEffect, EffectComposer as PostComposer } from "postprocessing";
 import { useStore } from "@/state/store";
 import { useCurrentTheme } from "@/themes/useTheme";
+import { ditherLastPass } from "./dither";
 import { frameState } from "./frameState";
 import { FocusFogPass } from "./FocusFogEffect";
 import { presentationProfile } from "./quality";
@@ -25,6 +26,36 @@ import { presentationProfile } from "./quality";
  * bloom then gathers from the fogged frame, so the receding world stops
  * glowing while the attended bead and the lens keep their light. It must never
  * be the composer's last pass: see `FocusFogEffect.tsx`.
+ *
+ * ONE PASS FOR ALL SCREEN EFFECTS (M4-003). The composer's children are, in
+ * this order and no other: the fog slot, then the bloom, then only
+ * non-convolution effects. So, always:
+ *
+ *  - no `Pass` child after the fog slot, and
+ *  - nothing convolution after the bloom.
+ *
+ * Why: the r3f composer merges consecutive non-convolution effects into the
+ * one `EffectPass` the bloom already renders in, so an effect added after the
+ * bloom costs a few instructions in a draw the frame pays anyway. A `Pass`
+ * child is added as its own full-screen draw, and a convolution effect (one
+ * that reads its neighbours: chromatic aberration, SMAA, a blur) cannot share
+ * a pass and starts a new one. The frame's full-screen work is therefore
+ * fixed: the render, the fog while it is active, the bloom's luminance and
+ * mip passes, and one effect pass. A vignette, a grain or a dither of our own
+ * joins that pass as a non-convolution effect, or does not join at all
+ * (`effectsOrder.test.ts` scans the children below).
+ *
+ * THE FINAL PASS DITHERS (M4-003). The frame is composed in half-float and
+ * quantised once, by the bloom's pass, so that is where the void's gradient
+ * stops banding: `dither.ts` switches the pass's dithering on — three's hash
+ * of the fragment coordinate, ±0.5 of an 8-bit step, static per pixel. The
+ * composer rebuilds its passes in its own layout effect whenever its children
+ * change (every render of this component; a tier change reconstructs the
+ * bloom) or its camera does, and a rebuilt pass starts with dithering off. So
+ * the flag is re-applied at the top of every frame, before the composer
+ * renders (its frame callback runs at priority 1, after ours): a rebuild of
+ * any cause never reaches the screen undithered, and a flag already on costs
+ * one read.
  */
 const TIER_BLOOM: Record<
   "high" | "base" | "potato",
@@ -69,11 +100,25 @@ function BreathDriver({
   return null;
 }
 
+/** Keeps the composer's final pass dithering, through every rebuild. */
+function DitherDriver({
+  composerRef,
+}: {
+  composerRef: React.RefObject<PostComposer>;
+}) {
+  useFrame(() => {
+    const composer = composerRef.current;
+    if (composer) ditherLastPass(composer.passes);
+  });
+  return null;
+}
+
 export function Effects() {
   const tier = useStore((s) => s.settings.qualityTier);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
   const theme = useCurrentTheme();
   const bloomRef = useRef<BloomEffect>(null);
+  const composerRef = useRef<PostComposer>(null);
   const profile = useMemo(
     () => presentationProfile(tier, reducedMotion),
     [tier, reducedMotion]
@@ -89,7 +134,8 @@ export function Effects() {
   return (
     <>
       <BreathDriver bloomRef={bloomRef} base={baseIntensity} depth={breathDepth} />
-      <EffectComposer multisampling={0}>
+      <DitherDriver composerRef={composerRef} />
+      <EffectComposer ref={composerRef} multisampling={0}>
         <FocusFogPass />
         <Bloom
           ref={bloomRef as never}

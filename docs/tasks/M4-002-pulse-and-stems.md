@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked
+In progress
 
 ## Milestone
 
@@ -397,3 +397,121 @@ of the cycle; they cannot establish that the bed is beautiful.
   underlying hypnotic percussive pulse with rhythmic highlights tied to the
   events of play. Recorded as ADR-017 with the §18 amendment; blocked behind
   M4-001, whose grid it stands on.
+- Unblocked on 2026-09-30 when M4-001 merged (`38c33db`), and begun the same
+  evening on `codex/M4-002-pulse-and-stems` under the director's mandate to go
+  on with the polish track autonomously: the pulse, and the harmony with the
+  stems, built in parallel from that commit.
+- The pulse, as shipped (`src/audio/pulse.ts`, `src/audio/pulseBodies.ts`,
+  the bed's `schedulePulse`). The cell: skin on sixteenths 0, 6 and 12
+  (three-three-two), the brush on 10, the eighth between the second and third
+  skin onsets, at half the skin's weight; the second voice adds the brush on
+  2 and 14 (6 and 10 are taken); the fill rolls brush sixteenths over 8–15
+  where free and lands one bell on 16, the next boundary. Weights are the
+  awakening itself: the skin enters at 0.25, the brush at 0.5; density
+  between 0.2 and 1 (attention) keeps the downbeat only; density at or
+  under 0.2 (Attunement, and the conclusion's space, which the bed cannot
+  tell apart) keeps nothing; reduced intensity keeps the skin on the
+  downbeat and never a fill; silent keeps nothing. `PULSE_GAIN`: skin 0.06,
+  brush 0.02, bell 0.015, each × weight × the bed scale, all on the ambient
+  bus (the effective level goes with bed², as the pad's does); the ceilings
+  sum to 0.095 under the bed's 0.19. Bodies: the skin a wood strike at the
+  tonic in the sub register through a 240 Hz low-pass (4/30/260 ms), the
+  brush a noise tap bandpassed 1.6–3.8 kHz (6/20/120 ms), the bell a glass
+  tick at the tonic in the air register (2/40/700 ms); every onset seeded
+  by slot and sixteenth so the humanising never draws on the shimmer's
+  stream. `fillIsUniform` is a compile-time witness that the fill's options
+  carry no outcome. The bed reads its intensity through `setIntensity`,
+  called synchronously from the bridge before the semantic layer loads.
+- The fill's landing, a call that differs from the packet's wording: with a
+  1.2 s look-ahead and 2 s slots, the slot a landing belongs to is almost
+  always written when the cue arrives, so the fill belongs to the first slot
+  whose last half begins at or after the landing (it never anticipates the
+  act), and if that slot is already written the fill's onsets are added on
+  the sixteenths it left free. In Castalia the bell lands one to three
+  seconds after the weave. A Study solved by a silence asks for no second
+  voice, as the director answers a silence with one. The pulse call sits
+  ahead of the choir's early return, so it follows the web's awakening
+  rather than the choir's roll.
+- The harmony, as shipped (`src/audio/harmony.ts`, `SCORE.harmony`, the
+  bed's root and ground). The root walks 0, 5, 9, 7 one phrase at a time;
+  the chord is the root, the fifth (or the fifth below where the fifth is
+  tense: over 7 the true fifth D is tense, so the chord takes C) and one
+  colour, the first of major third, minor third, major sixth, minor sixth
+  that is stable and consonant with both (over 9 the sixth F would sit a
+  semitone from E, so the colour is the minor third C): C–G–E, F–C–A, A–E–C,
+  G–C–E. The pad is voice-led by least total motion, ties down: G2 C3 E3 →
+  A2 C3 F3 → A2 C3 E3 → G2 C3 E3, every voice moving at most two semitones,
+  each voice attacking over 2 s from the phrase boundary and releasing over
+  2 s at the next; 0.03 each, 0.09 summed. The drone follows the same
+  crossfade on the root; Tide's 28.8 s phrase re-strikes at the half phrase
+  to stay inside the 30 s lifetime bound. The lean's comment is corrected
+  (27/20). `cycle` and `minorRootDegree` left the score; the 8-slot refresh
+  is gone.
+- **A finding for the director:** the consonance claim in ADR-017 and §18 is
+  false for one concept. Twenty-three identity notes are on C and are
+  consonant over every root of the cycle, proven by interval class and by
+  the mode's ratios; `matter.entropy`'s identity note is G, which over F
+  (root 5) is a major second and over A (root 9) a minor seventh, both tense
+  in the mode, and no voicing can change what a root is. The test pins the
+  exception by name and fails if the cycle or the content changes. Three
+  ways out, none taken tonight: a cycle of 0, 3, 4, 7 keeps both C and G
+  consonant but walks a chromatic step; re-authoring Entropy's motif is a
+  content change; or accept the exception and amend ADR-017 and §18 to say
+  the tonic's notes are consonant everywhere and the one concept off the
+  tonic, Entropy, is tense over two roots by its nature. The recommendation
+  is the third: it is honest, it costs nothing, and entropy rubbing against
+  the harmony half the time is a fact the world may keep.
+- The stems, as shipped (`src/audio/stems.ts`, the bed's `scheduleStems`,
+  `addThreadVoice`'s faculty seats): Measure a metal-and-glass arpeggio of
+  the chord on eighths 0, 2, 4, 6 (rising on even slots, falling on odd),
+  Sound a formant sustain on the colour once per slot, Matter a gut pedal
+  in the sub register every other slot (in the low register the root is an
+  identity note in half the cycle), Image reed on the fifth in the high
+  register entering on the second eighth; gains 0.024 / 0.032 / 0.04 / 0.02
+  × bed, shared as gain/√voices, at most three voices, thickening with the
+  faculty's threads; any chord tone that would be an identity note in that
+  register moves to the chord's next tone, proven by test; every note ends
+  inside its slot; all onsets on the sixteenth grid; thinned by a
+  deterministic density coin per faculty and slot; loaded lazily with the
+  pulse. The comfort audit over 48 slots of a ten-thread, four-faculty
+  session passes. The ground is let go over 2 s when the bed stops, so a
+  phrase-long chord never holds into an empty room.
+- **The voice budget is the binding constraint.** Stems may take half of
+  the 48 voices (`STEM_VOICE_RESERVE` 24), one round at a time, so a full
+  budget thins them before it silences anything. Measured over four phrases
+  fully awakened without director plans: ten threads average 20 active
+  voices without stems and 26 with; the time with fewer than 12 voices free
+  (a relation plan needs 10–12) is at most 5 %; stem notes played against
+  full thickness: 100 % at one thread, 62 % at four, 30 % at ten. In large
+  webs the stems plateau rather than keep growing; leaner stems (Sound and
+  Image once per two slots) or a leaner choir are the remedies if the
+  director wants them to keep growing.
+- A defect found and fixed on the way: the room re-seats the whole session
+  with every new thread and the choir had no dedupe, so at four threads it
+  held ten seats, spoke about twice as often as designed and over-reported
+  its voices to the director. A thread is seated once (`choirSeat.test.ts`).
+  The choir is audibly thinner for it, which the headphone session should
+  weigh with the rest.
+- Load: the pulse, its bodies and the stems are dynamic chunks the bed
+  fetches when it starts (0.80, 0.95 and 1.43 kB gzip); `harmony.ts` is
+  pure and small and stays with the bed. The first load is 513,777 bytes
+  gzip and 1,710,026 raw against the ceilings, from 512,123 and 1,705,551;
+  the first-load walk guards all three chunks.
+- Checks in the cloud container, on the integrated head: `npm ci` was run
+  by both stages and the lockfile is unchanged; typecheck (app and
+  Playwright configs), lint over the sources, `npm test` 2,212 passed in 137
+  files, `validate:content`, build, `bundle:check`, `steering:check` and
+  `git diff --check` pass; the CI browser set passed 18 of 18 in 4.0 minutes
+  on the software renderer. Performance reference (SwiftShader, same
+  container, effective frames per second, evidence only per M0-005): a
+  first measurement taken while another browser suite ran on the same four
+  cores gave mobile-potato idle 4.06 and focus 2.78; the quiet rerun gave
+  8.59 and 5.60, against M4-001's 6.45 and 4.57 the same day (the audio
+  layer draws no frame in test mode, so the spread is the container's).
+  Desktop-base idle 2.89; the desktop focus profile misses the container's
+  frame floor, as on main.
+- For the headphone session: is the pulse underneath and hypnotic, or in
+  front; does it ever read as a timer; do the fills answer acts and reward
+  nothing; does the harmony turn without drawing attention; do the stems
+  sound like the web growing; does Tension still sound like Tension; is the
+  thinner choir right; and Entropy's rub against two roots, kept or not.

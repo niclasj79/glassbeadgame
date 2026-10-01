@@ -18,6 +18,7 @@ import {
 } from "./constellationReveal";
 import { idleClock, travellingLight } from "./idle";
 import { presentationProfile } from "./quality";
+import { easeToward, useAttuned } from "./skyAttunement";
 import { getHaloTexture } from "./textures";
 import { glslFloat, VAULT } from "./firmamentGeometry";
 import {
@@ -102,25 +103,6 @@ const LINE_BREATH = 0.05;
  * numbers used to resolve below the level a floor-subtracted luminance
  * measurement can see.
  */
-
-
-/**
- * How fast the room enters and leaves the held state of Attunement. Seconds.
- * Slow, so it reads as attention changing rather than as a light switch.
- */
-const ATTUNED_EASE_SECONDS = 0.9;
-
-function easeToward(current: number, target: number, dt: number): number {
-  return current + (target - current) * Math.min(1, dt / ATTUNED_EASE_SECONDS);
-}
-
-/** Whether the canonical session is currently held in Attunement. */
-function useAttuned(): boolean {
-  return useVanillaStore(
-    domainSessionStore,
-    (state) => state.session?.attunementActive ?? false
-  );
-}
 
 const VERTEX = /* glsl */ `
 varying vec3 vDir;

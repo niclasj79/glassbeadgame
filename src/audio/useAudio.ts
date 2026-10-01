@@ -135,9 +135,15 @@ export function AudioBridge(): null {
    * captioned path, and captions keep being emitted for every plan. Reduced
    * motion carries reduced audio intensity with it, per CAV-007: thinner,
    * slower-beating, gentler onsets, with the Tension still present.
+   *
+   * The bed's pulse follows the same profile (ADR-017): reduced keeps its
+   * downbeats, silent keeps nothing, because the pulse is not a caption. The
+   * bed is in the first load, so it is told at once rather than once the
+   * semantic layer has arrived.
    */
   useEffect(() => {
     const intensity = muted ? "silent" : reducedMotion ? "reduced" : "full";
+    ambient.setIntensity(intensity);
     void semanticAudio().then((layer) => layer.audioDirector.setIntensity(intensity));
   }, [muted, reducedMotion]);
 
