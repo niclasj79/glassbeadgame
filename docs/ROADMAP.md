@@ -151,6 +151,9 @@ Every relation is immediately expressed through coordinated form, sound, motion,
 - M4-003 the surface (2026-09-30): dither in the final pass, a sparse dust
   field rippling from a bead when it sounds, and one pass for all screen
   effects at no new full-screen cost.
+- M4-004 the payoff by form (proposed 2026-09-30, ADR-019): the commit
+  moment grows with the web's threads, faculties and completed motifs, never
+  with a thread's truth, after M4-002.
 
 ### Gate
 
@@ -192,6 +195,9 @@ The session resolves as a performance of the exact web the player created.
 - topology-driven climax;
 - qualitative portrait;
 - topology-aware Annotation.
+- M6-001 Attunement as the heightened state (proposed 2026-09-30, ADR-018):
+  the material, the depth and the sky answer the held state, the camera drifts
+  on the breath, and release plays a cadence; after M4-002.
 
 ### Gate
 
