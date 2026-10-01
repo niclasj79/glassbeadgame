@@ -366,6 +366,14 @@ test("ordinary development exposes no test adapter", async ({ page }) => {
  * runs.
  */
 test.describe("the focus view", () => {
+  /**
+   * The column test is the longest in the set: it walks attend, sweep, lock
+   * and weave by mouse, and on GitHub's software renderer it has taken 54 s on
+   * an ordinary runner and over 90 s on a slow one, where every test in the
+   * set ran at about 1.8× its usual length. Its budget is sized for the slow
+   * runner, not the ordinary one.
+   */
+  test.describe.configure({ timeout: 150_000 });
   /** Beads the pack says share no facet with Fibonacci (public structure). */
   const SHARES_NOTHING_WITH_SOURCE = [
     "measure.continuous-symmetry",

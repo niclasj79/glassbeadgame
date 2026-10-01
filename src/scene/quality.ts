@@ -48,6 +48,12 @@ export interface SceneBudget {
    * every tier.
    */
   readonly cameraBreath: boolean;
+  /**
+   * Motes in the air between the beads (M4-003): one `points` draw, answering
+   * only where the beads are and when one takes light. Thinned on the base
+   * tier; the engraved tier has none and mounts nothing — a plate has no air.
+   */
+  readonly dust: number;
 }
 
 const HIGH: SceneBudget = Object.freeze({
@@ -63,6 +69,7 @@ const HIGH: SceneBudget = Object.freeze({
   grain: 0.035,
   fogBlurTaps: 13,
   cameraBreath: true,
+  dust: 600,
 });
 
 const BASE: SceneBudget = Object.freeze({
@@ -78,6 +85,7 @@ const BASE: SceneBudget = Object.freeze({
   grain: 0.022,
   fogBlurTaps: 9,
   cameraBreath: true,
+  dust: 300,
 });
 
 /**
@@ -98,6 +106,7 @@ const POTATO: SceneBudget = Object.freeze({
   grain: 0,
   fogBlurTaps: 0,
   cameraBreath: false,
+  dust: 0,
 });
 
 const BUDGETS: Readonly<Record<QualityTier, SceneBudget>> = Object.freeze({

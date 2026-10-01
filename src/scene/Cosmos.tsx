@@ -16,6 +16,7 @@ import {
 import { advanceIdleClock } from "./idle";
 import { armillaryOrder } from "./identity";
 import { Firmament } from "./Firmament";
+import { Dust } from "./Dust";
 import { Armillary } from "./Armillary";
 import { LensAxes } from "./LensAxes";
 import { Bursts } from "./Bursts";
@@ -198,6 +199,9 @@ export function Cosmos() {
       />
 
       <Firmament />
+      {/* The air between the beads: it answers where they are and when one
+          takes light, and nothing else (M4-003). */}
+      <Dust />
       <Armillary />
       <LensAxes />
       <Beads />
