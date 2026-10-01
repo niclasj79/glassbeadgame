@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked
+In progress
 
 ## Milestone
 
@@ -397,3 +397,7 @@ of the cycle; they cannot establish that the bed is beautiful.
   underlying hypnotic percussive pulse with rhythmic highlights tied to the
   events of play. Recorded as ADR-017 with the §18 amendment; blocked behind
   M4-001, whose grid it stands on.
+- Unblocked on 2026-09-30 when M4-001 merged (`38c33db`), and begun the same
+  evening on `codex/M4-002-pulse-and-stems` under the director's mandate to go
+  on with the polish track autonomously: the pulse, and the harmony with the
+  stems, built in parallel from that commit.

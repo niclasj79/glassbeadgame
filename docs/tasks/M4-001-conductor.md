@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Milestone
 
@@ -484,6 +484,11 @@ bounds and the parity across outcomes; they cannot establish that it is
 mesmerising.
 
 ## Implementation notes
+
+- Accepted and merged in PR #65 on 2026-09-30, after the spike's own pull
+  request (#66) merged into the design branch. The exact `main` merge commit
+  `38c33db` passed Quality Gates run `36788096854` and Pages deployment run
+  `36788919831`.
 
 - Directly assigned by the game design director on 2026-09-30 ("Go on with
   the polish track"), with ADR-016, the roadmap entry and the index reviewed
