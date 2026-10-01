@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked
+In progress
 
 ## Milestone
 
@@ -281,3 +281,65 @@ cadence and not a snap, and that reduced motion keeps the state legible.
 
 - Proposed on 2026-09-30 with ADR-018 under the director's polish mandate;
   blocked behind M4-002.
+- Unblocked on 2026-10-01: M4-002 merged (`1c5a78f`) and ADR-018 with the
+  §13 amendment merged in PR #69 (`49a214a`). Directly assigned by the game
+  design director the same day ("Move M6-001 to Ready and build it"), so it
+  goes from Blocked to In progress in this pull request, on
+  `codex/M6-001-attunement` restarted from `main` (`02673fa`).
+- **Plan, written before the code** (AGENTS.md, task protocol 3):
+  1. *One scalar.* Today the vault, the drawn sky and the dust each keep their
+     own ease of the session's `attunementActive`; there is no shared scalar.
+     A pure module (`src/scene/attuned.ts`) owns the bounds table, the scalar's
+     step and the answers; Cosmos steps it once a frame after the breath, on
+     musical seconds (the conductor's clock while the grid is armed, the frame
+     clock when it is not, as the breath does), into `frameState.attuned`. The
+     vault, the sky, the dust, the glass and the rig read the answers it wrote;
+     `useAttuned` and the per-component eases are removed, and a source scan
+     proves no second attuned state remains. The ribbons' per-thread presence
+     (`Attunement.ts`) is a different quantity (which thread is speaking) and
+     stays.
+  2. *In and out.* In: the sky's exponential ease, 0.9 s. Out: the stage
+     records the cadence instant when the cue arrives (the first slot
+     boundary at least `SCORE.harmony.cadenceLeadSeconds` ahead on the
+     conductor's grid, the same instant the bed computes); the scalar holds
+     until then and falls along a smoothstep to zero over exactly one slot.
+     Without a grid the fall begins at once, over the world's slot.
+  3. *The answers.* Glass: `uIor` + 0.06 × scalar; dispersion through a new
+     `uDispersion` uniform (the split was a compiled constant), × (1 + 1/3 ×
+     scalar), read only where the tier compiles dispersion. Depth: `uDepth`
+     in the vault and in the glass (the same `gbgEnvironment`, so the room and
+     what the beads carry agree) × (1 − 0.2 × scalar). Sky: the drawn
+     figures' stars and lines × (1 + 0.5 × scalar × voices), where voices is
+     the eased fraction of this hold's channels whose thread voices have
+     begun since entering (`frameState.pulses`, on the conductor's clock),
+     out of min(threads, `SCORE.attunement.maxChannelsPerCycle`); the static
+     figure boost it replaces (up to 1.9× on the lines) exceeded the 1.5×
+     bound. The field's recession and the vault's legibility shift stay,
+     driven by the scalar. Reduced bloom drops the brightening and keeps the
+     depth; today reduced motion implies reduced bloom (`quality.ts`).
+  4. *The drift.* The rig turns the camera about the orbit target (the web's
+     centre at rest) at (4° per breath) × scalar × (1 − cos breath), whose
+     mean over a breath is 4°: it eases with the breath rather than gliding.
+     Off under reduced motion; never during a reveal, a scripted move, a
+     gesture, the focus view or the conclusion's performance; a press or
+     wheel on the canvas or any key cancels it for the rest of the hold,
+     eased out over a quarter second; the idle orbit stays off while
+     attuned, so one authority turns the camera.
+  5. *The bed (audio).* An optional sink call, `holdHarmony(held)`, from the
+     director on `attunement.changed` (before the channels) and on the
+     conclusion. The bed's phrase clock becomes its own counter of harmonic
+     slots: held, it does not advance, and the ground is re-struck on the
+     same root and voicing at its usual strike interval so the chord sustains
+     inside the 30 s voice bound. Released: the cadence at the first slot
+     boundary at least the lead ahead — the fifth and the colour release
+     over one slot while one voice arrives on the root an octave above the
+     pad's root; the drone and the pad's root hand over at the next boundary,
+     where the clock resumes at the start of the next phrase (the cadence
+     closes the phrase it paused in). The cadence slot writes no pulse cell
+     and no stems; the heartbeat stays.
+  6. *Evidence.* Unit tests for the step, the answers, the bounds, the
+     drift's helpers and the source scan; the bed's hold and cadence on a fake
+     context; the director's calls; an adapter read of the scalar and its
+     answers; a browser spec that weaves six threads by keyboard, accepts the
+     invitation, and measures the targets and the one-slot release at two
+     profiles; the rest-frame spec unchanged; the performance reference.
