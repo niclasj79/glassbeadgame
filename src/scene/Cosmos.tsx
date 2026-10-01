@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useStore } from "@/state/store";
 import { domainSessionStore } from "@/state/domainSession";
@@ -6,13 +6,18 @@ import { useCurrentTheme } from "@/themes/useTheme";
 import { castaliaConceptById } from "@/content/castalia";
 import type { CastaliaConcept } from "@/content/castalia/schema";
 import { fibonacciSpherePositions, lensPlanePositions } from "@/game/layout";
-import { conductor } from "@/audio/conductor";
+import { BREATH_SLOTS, conductor } from "@/audio/conductor";
+import { SCORE } from "@/audio/score";
+import { currentTheme } from "@/themes/useTheme";
+import { advanceAttuned, attunedAnswers, soundedShare } from "./attuned";
 import {
+  FREE_BREATH_HZ,
   breathPhaseAfter,
   frameState,
   initFramePositions,
   setMorphTargets,
 } from "./frameState";
+import { presentationProfile } from "./quality";
 import { advanceIdleClock } from "./idle";
 import { armillaryOrder } from "./identity";
 import { Firmament } from "./Firmament";
@@ -36,6 +41,14 @@ export function Cosmos() {
   const lensActive = useStore((s) => s.lensActive);
   const lensView = useStore((s) => s.lensView);
   const theme = useCurrentTheme();
+  const tier = useStore((s) => s.settings.qualityTier);
+  const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const profile = useMemo(
+    () => presentationProfile(tier, reducedMotion),
+    [tier, reducedMotion]
+  );
+  /** The conductor's clock as last read, or null while no grid is armed. */
+  const lastMusical = useRef<number | null>(null);
 
   /**
    * The draw's order on the armillary: faculties become contiguous zones
@@ -113,6 +126,55 @@ export function Cosmos() {
         ? 0.25
         : 1;
     frameState.breathDepth += (depthTarget - frameState.breathDepth) * Math.min(1, dt * 2);
+
+    /*
+     * THE HELD STATE OF ATTUNEMENT (ADR-018), once a frame, for every reader.
+     *
+     * It moves on musical seconds — the conductor's clock while the grid is
+     * armed, as the breath does — so the release falls across the very slot
+     * the bed resolves its chord over, and in test mode it moves only when the
+     * controlled clock does. Without a grid it moves on the frame's seconds.
+     */
+    const armed = conductor.armed();
+    const musicalNow = armed ? conductor.now() : null;
+    const musicalDt =
+      musicalNow !== null && lastMusical.current !== null
+        ? Math.max(0, musicalNow - lastMusical.current)
+        : dt;
+    lastMusical.current = musicalNow;
+    frameState.musicalDt = musicalDt;
+    const session = domainSessionStore.getState().session;
+    const held = session?.attunementActive ?? false;
+    const slotSeconds = armed
+      ? conductor.slotSeconds()
+      : currentTheme().music.slotSeconds;
+    const cadenceAt = frameState.attunement.cadenceAt;
+    advanceAttuned(frameState.attuned, {
+      held,
+      dt: musicalDt,
+      slotSeconds,
+      untilCadence: armed && cadenceAt !== null ? cadenceAt - conductor.now() : 0,
+      sounded: held
+        ? soundedShare(
+            frameState.pulses,
+            frameState.attunement.since,
+            conductor.now(),
+            session?.threads.length ?? 0,
+            SCORE.attunement.maxChannelsPerCycle
+          )
+        : 0,
+    });
+    attunedAnswers(
+      frameState.attunedAnswers,
+      frameState.attuned.value,
+      frameState.attuned.voices,
+      profile,
+      {
+        phase: frameState.breathPhase,
+        depth: frameState.breathDepth,
+        seconds: armed ? BREATH_SLOTS * slotSeconds : 1 / FREE_BREATH_HZ,
+      }
+    );
 
     /**
      * How far the web has been *carried*, not how much of it has been found.

@@ -167,6 +167,28 @@ export interface BrowserTestAdapter {
   beadLight(
     conceptId: string
   ): { written: number; note: number; kindled: boolean } | null;
+  /**
+   * The held state of Attunement (M6-001, ADR-018), as the scene last stepped
+   * it and as its readers were handed it: the scalar, the share of this hold's
+   * voices heard, the slot boundary the release waits for (seconds on the
+   * conductor's clock), and every answer as written — the glass's index and
+   * split (null where the tier compiles no dispersion), the depth's scale, the
+   * drawn figures' gain, and the drift allowed and actually applied, in
+   * radians per second.
+   */
+  attunement(): {
+    held: boolean;
+    phase: "rest" | "entering" | "awaiting" | "releasing";
+    value: number;
+    voices: number;
+    cadenceAt: number | null;
+    ior: number;
+    dispersion: number | null;
+    depthScale: number;
+    figureGain: number;
+    driftRate: number;
+    driftApplied: number;
+  };
   canonicalEventLog(): string;
   reloadCanonical(): TestSessionSnapshot;
   startFrameSample(): void;

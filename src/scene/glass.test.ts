@@ -5,6 +5,7 @@ import { FACULTIES } from "@/content/castalia/faculties";
 import { castalia } from "@/themes/worlds";
 import {
   BEAD_PROXY_SEGMENTS,
+  DISPERSION_SPLIT,
   GLASS_ATTRIBUTES,
   INK_VALUE,
   backdropResolution,
@@ -249,8 +250,17 @@ describe("the glass bends what is behind it", () => {
 
   it("splits the carried image at two indices either side of the glass", () => {
     const source = fragment("high");
-    expect(source).toMatch(/gbgSphereDeviation\(impact, uIor \* 0\.98\d+\)/);
-    expect(source).toMatch(/gbgSphereDeviation\(impact, uIor \* 1\.01\d+\)/);
+    // The split is a uniform whose rest is DISPERSION_SPLIT, so the held state
+    // of Attunement can widen it without recompiling the glass (ADR-018).
+    expect(source).toContain("gbgSphereDeviation(impact, uIor * (1.0 - uDispersion))");
+    expect(source).toContain("gbgSphereDeviation(impact, uIor * (1.0 + uDispersion))");
+    const material = createBeadGlassMaterial({
+      theme: castalia,
+      budget: sceneBudget("high"),
+      reducedMotion: false,
+    });
+    expect(material.uniforms.uDispersion.value).toBe(DISPERSION_SPLIT);
+    material.dispose();
     // Dispersion is a tier decision — the preprocessor compiles the split out
     // of the shader a device that has not bought it actually runs.
     expect(source).toContain("#if GBG_DISPERSION");

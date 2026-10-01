@@ -18,6 +18,7 @@ import { useCurrentTheme } from "@/themes/useTheme";
 import { cueBus } from "@/runtime/cues";
 import { ARENA_RADIUS } from "@/game/layout";
 import { frameState } from "./frameState";
+import { driftAngle, driftGateAfter } from "./attuned";
 import { sampleFocusView, subscribeFocusView } from "./focusFrame";
 import type * as FocusPosture from "./focusPosture";
 import {
@@ -151,6 +152,8 @@ const FOV_STILL_DEGREES = 1e-4;
 
 const IDLE_ORBIT_AFTER_MS = 10_000;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
+const UP = new THREE.Vector3(0, 1, 0);
+const driftOffset = new THREE.Vector3();
 
 /**
  * WHAT A FINGER DOES TO THE ORBIT.
@@ -369,6 +372,15 @@ function beadAt(conceptId: string): Vec3 | null {
 
 export function CameraRig() {
   const controls = useRef<OrbitControlsImpl>(null);
+  const canvas = useThree((s) => s.gl.domElement);
+  /**
+   * THE DRIFT (ADR-018). How open it is (eased, 0..1), whether the player has
+   * taken the camera during this hold, and whether the session was held on the
+   * last frame — a new hold gives the drift back.
+   */
+  const driftGate = useRef(0);
+  const driftTaken = useRef(false);
+  const wasHolding = useRef(false);
   const goal = useRef<Goal | null>(null);
   const goalOrbit = useRef(createOrbitPose());
   const scratchOrbit = useRef(createOrbitPose());
@@ -765,6 +777,26 @@ export function CameraRig() {
     [viewportWidth, viewportHeight, slotSeconds]
   );
 
+  /**
+   * The player takes the camera from the drift with anything they do to the
+   * world: a press or a wheel on the canvas, or any key. It is theirs for the
+   * rest of the hold. A press on the interface (the Release control itself)
+   * is not a move of the camera, and leaves the drift to fall with the world.
+   */
+  useEffect(() => {
+    const take = () => {
+      if (frameState.attuned.phase !== "rest") driftTaken.current = true;
+    };
+    canvas.addEventListener("pointerdown", take);
+    canvas.addEventListener("wheel", take, { passive: true });
+    window.addEventListener("keydown", take);
+    return () => {
+      canvas.removeEventListener("pointerdown", take);
+      canvas.removeEventListener("wheel", take);
+      window.removeEventListener("keydown", take);
+    };
+  }, [canvas]);
+
   useFrame((state, dt) => {
     const ctl = controls.current;
     if (!ctl) return;
@@ -911,6 +943,47 @@ export function CameraRig() {
         phase === "title" ||
         phase === "threshold" ||
         phase === "conclusion");
+
+    /*
+     * THE DRIFT (ADR-018, spec §13). While Attunement is held the camera takes
+     * a slow orbit of the web — at most four degrees a breath, swelling on the
+     * crest (`attuned.ts`) — about the orbit target, which at rest is the web's
+     * centre. It is the camera's only authority while it runs: the idle orbit
+     * stays off. It never runs under reduced motion (its rate is zero there),
+     * in a reveal, under a scripted move, a gesture, the focus view or the
+     * conclusion's performance, and the player's first act on the world takes
+     * the camera from it for the rest of the hold. It moves on the music's
+     * seconds, and falls with the world over the release's slot.
+     */
+    const attunedNow = frameState.attuned.phase !== "rest";
+    const holding = frameState.attuned.phase === "entering";
+    if (holding && !wasHolding.current) driftTaken.current = false;
+    wasHolding.current = holding;
+    const driftMay =
+      attunedNow &&
+      !driftTaken.current &&
+      !reducedMotion &&
+      phase === "arena" &&
+      mode !== "reveal" &&
+      mode !== "concluding" &&
+      !performing &&
+      !composing &&
+      goal.current === null &&
+      !frameState.aim.active;
+    const musicalDt = frameState.musicalDt;
+    driftGate.current = driftGateAfter(driftGate.current, driftMay, musicalDt);
+    const angle = driftAngle(
+      frameState.attunedAnswers.driftRate,
+      driftGate.current,
+      musicalDt
+    );
+    frameState.driftApplied = musicalDt > 0 ? angle / musicalDt : 0;
+    if (angle > 0) {
+      // The idle orbit's own sense of turn, so a drift that follows it does not reverse.
+      driftOffset.copy(state.camera.position).sub(ctl.target).applyAxisAngle(UP, -angle);
+      state.camera.position.copy(ctl.target).add(driftOffset);
+    }
+    if (attunedNow) ctl.autoRotate = false;
   });
 
   return (

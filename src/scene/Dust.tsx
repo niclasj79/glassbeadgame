@@ -5,7 +5,6 @@ import { useStore } from "@/state/store";
 import { useCurrentTheme } from "@/themes/useTheme";
 import { frameState } from "./frameState";
 import { sceneBudget } from "./quality";
-import { easeToward, useAttuned } from "./skyAttunement";
 import {
   DUST_FRAGMENT,
   DUST_MAX_BEADS,
@@ -43,7 +42,6 @@ export function Dust() {
 function DustField({ count }: { count: number }) {
   const theme = useCurrentTheme();
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
-  const attuned = useAttuned();
 
   const geometry = useMemo(() => {
     const field = buildDust(count);
@@ -86,10 +84,7 @@ function DustField({ count }: { count: number }) {
   );
   /** The draw the clocks belong to: a new bead index is a new draw. */
   const drawn = useRef<ReadonlyMap<string, number> | null>(null);
-  const held = useRef(0);
-
-  useFrame((_, rawDt) => {
-    const dt = Math.min(rawDt, 1 / 20);
+  useFrame(() => {
     const uniforms = material.uniforms;
     const beads = (uniforms.uBeads as { value: Float32Array }).value;
     const lights = (uniforms.uLights as { value: Float32Array }).value;
@@ -121,8 +116,8 @@ function DustField({ count }: { count: number }) {
     (uniforms.uTime as { value: number }).value = now;
     (uniforms.uTimeScale as { value: number }).value = frameState.timeScale;
     (uniforms.uMotion as { value: number }).value = reducedMotion ? 0 : 1;
-    held.current = easeToward(held.current, attuned ? 1 : 0, dt);
-    (uniforms.uAttuned as { value: number }).value = held.current;
+    // The air answers the held state with the rest of the room (ADR-018).
+    (uniforms.uAttuned as { value: number }).value = frameState.attuned.value;
   });
 
   return (
