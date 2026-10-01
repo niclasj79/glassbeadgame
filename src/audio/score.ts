@@ -54,6 +54,10 @@ export const SCORE = {
     crossfadeSeconds: 2, // the old chord releases while the new one attacks, from the boundary
     padGain: 0.03, // each of the chord's three voices; the one-note pad it replaced was 0.05
     padFloor: 7, // the pad's first voicing starts here, in the low register (G2)
+    // Attunement's release (ADR-018): the cadence begins on the first slot
+    // boundary at least this far ahead, on the conductor's grid. The bed and
+    // the scene both read it at the cue, so they choose the same boundary.
+    cadenceLeadSeconds: 0.05,
   },
 
   /**

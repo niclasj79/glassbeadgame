@@ -18,6 +18,8 @@ import { threadCurves } from "./threadPicking";
 import { attunementInvitation } from "@/audio/sfx";
 import { conductor } from "@/audio/conductor";
 import { idleClock, kindling } from "./idle";
+import { DISPERSION_SPLIT } from "./glass";
+import { sceneBudget } from "./quality";
 import {
   attachWorldDirectors,
   createHapticsDirector,
@@ -414,6 +416,26 @@ export function ThreadingDriver() {
           }
         }
         return { written: frameState.kindling[i], note: conductor.light(id), kindled };
+      },
+      attunement: () => {
+        const state = frameState.attuned;
+        const answers = frameState.attunedAnswers;
+        const tier = useStore.getState().settings.qualityTier;
+        return {
+          held: domainSessionStore.getState().session?.attunementActive ?? false,
+          phase: state.phase,
+          value: state.value,
+          voices: state.voices,
+          cadenceAt: frameState.attunement.cadenceAt,
+          ior: currentTheme().refraction + answers.ior,
+          dispersion: sceneBudget(tier).dispersion
+            ? DISPERSION_SPLIT * answers.dispersionScale
+            : null,
+          depthScale: answers.depthScale,
+          figureGain: answers.figureGain,
+          driftRate: answers.driftRate,
+          driftApplied: frameState.driftApplied,
+        };
       },
       canonicalEventLog: () => {
         const eventLog = domainSessionStore.getState().eventLog;
