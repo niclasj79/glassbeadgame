@@ -343,3 +343,86 @@ cadence and not a snap, and that reduced motion keeps the state legible.
      answers; a browser spec that weaves six threads by keyboard, accepts the
      invitation, and measures the targets and the one-slot release at two
      profiles; the rest-frame spec unchanged; the performance reference.
+- Built on 2026-10-01 in two halves from `01d7546`, the scene here and the
+  bed in a parallel worktree, merged without conflict. As shipped:
+- **The scene** (`src/scene/attuned.ts`, `Cosmos.tsx`, `frameState.ts`). The
+  bounds are one frozen table, `ATTUNED`: enter 0.9 s, voices eased 0.9 s,
+  index of refraction +0.06, dispersion +1/3, depth −20 %, figure gain at
+  most 1.5×, drift 4° a breath, the drift let go within 0.25 s, no
+  oscillation (3 Hz bound). `advanceAttuned` steps the scalar in place:
+  `entering` (exponential), `awaiting` (held until the cadence's boundary),
+  `releasing` (smoothstep over exactly one slot, overshoot carried), `rest`.
+  `attunedAnswers` writes the answers once a frame; the stage records the
+  hold's start and the cadence's boundary at the cue
+  (`conductor.next(1, cadenceLeadSeconds)`). The vault, the drawn sky and the
+  dust lost their own eases and `skyAttunement.ts` is gone; the source scan in
+  `attuned.test.ts` proves the three `uAttuned` writes read the one scalar,
+  that only `Cosmos` steps it, and that the session's flag is read only by
+  `Cosmos`, the ribbons' per-thread presence and the interface.
+- **The answers.** The glass's dispersion split became a uniform
+  (`uDispersion`, rest `DISPERSION_SPLIT`), so nothing recompiles; only the
+  high tier compiles dispersion. The depth scales `uDepth` in the vault and in
+  the glass together. The drawn figures keep their size and their stars and
+  lines take the gain; the static attuned boost they replace (up to 1.9× on
+  the lines and a larger, brighter star) exceeded the packet's bound, so a
+  hold with no voice heard — no unlocked audio — leaves the figures at rest
+  while the field still recedes and the vault's drawing still comes forward.
+  The drift turns about the orbit target at `(4°/breath) × scalar × (1 +
+  depth × sin breath)`, on musical seconds; a press or wheel on the canvas or
+  any key takes the camera for the rest of the hold (the Release control is
+  interface, not world, and leaves the drift to fall with the scalar); the
+  idle orbit is off while attuned.
+- **The bed** (`ambient.ts`, `harmony.ts`, `conductor.ts`, `director.ts`).
+  The phrase clock is the bed's own `harmonicSlot`; without a hold every slot,
+  strike and root is as before (the 521 existing audio tests pass unchanged).
+  Held, the clock waits and the same chord is struck again at its usual
+  interval — the packet's "no drone refresh" read as no movement, because a
+  voice may not outlive 30 s. Released, the cadence on the first boundary
+  at least the lead ahead (`gridPointAtOrAfter`, now the one formula behind
+  `conductor.next` too, so the scene and the bed agree to the bit): the fifth
+  and the colour release over the slot, the drone and the pad's root hold to
+  the next boundary, one voice arrives on the root an octave above the pad's;
+  the next boundary strikes the next phrase's chord. The cadence slot writes
+  no stems, no pulse cell and no fill. Calls the bed half made beyond the
+  plan, all tested: the phrase it resumes on is the one after the phrase whose
+  chord it resolves (`nextPhraseStart`, which fixes the plan's formula
+  skipping a phrase when the hold began on a phrase boundary); a hold taken
+  back during the cadence strikes the held chord at once on the first
+  boundary the lead allows, the cadence's own where possible, and nothing
+  doubles; a re-strike due on the cadence's own slot strikes the drone and the
+  pad's root alone, so the root still carries the cadence; a fading ground
+  voice is never retired twice (a click); and the release reaches the bed
+  before the space returns, so the arrival is struck at the held level and the
+  room rises over it. Known limit: where the cadence's boundary falls inside
+  the lookahead already written (about half of releases), that slot's stems
+  were written before the release and stay; at Attunement's density they are
+  sparse and on the held chord.
+- Load: the first load is 517,773 bytes gzip and 1,721,885 raw against
+  524,000 and 1,760,000, from 515,287 and 1,714,586 on `main` (+818 bytes
+  gzip for the bed, the rest for the scene's module).
+- Checks in the cloud container on the integrated head: `npm run
+  steering:test` 82 of 82; `steering:check` 32 packets; typecheck (app and
+  Playwright); lint; `npm test` 2,321 passed in 142 files (62 new: 32 for the
+  scene, 30 for the bed); `validate:content`; build; `bundle:check`; `git diff
+  --check`. Browser, on the software renderer at 800×600 through the local
+  runner: the CI set (`test:browser`) passed 18 of 18 in 2.5 minutes. The
+  first full run, right after the dev server was restarted, passed 24 of 25:
+  the focus view's column test missed its first attend by mouse, and missed it
+  again when rerun alone at once; it then passed five times on this branch and
+  six times on `main` alternately, so it is recorded as a timing sensitivity of
+  the software renderer to watch on CI, not as a defect of this change (the
+  held state is at rest there, and nothing in it touches a click). The new
+  `attunement.spec.ts` passed 3 of 3 on three runs (about 2.3 minutes; not in
+  the CI set, like `surface.spec.ts`); the rest-frame spec 4 of 4, unchanged.
+  `npm run measure:performance` (SwiftShader, quiet, effective frames per
+  second, evidence only per M0-005): desktop-base idle 2.96, mobile-potato idle
+  9.76 and focus 6.25, against M4-003's 2.65, 8.61 and 5.41; the desktop focus
+  profile misses the container's frame floor, as on `main`. The held state
+  draws nothing new: uniforms and one camera rotation. `npm ci` was not run
+  again in this container: no dependency or lockfile changed.
+- For the headphone and screen session: is Attunement now the peak; does the
+  cadence read as a release or as a loss; is the drift felt or seen; does the
+  void read as deeper or only darker; do the figures brightening as the
+  voices enter read as the sky listening; is closing the phrase on release
+  (rather than resuming it) right; and under reduced motion, is the held state
+  still legible without the drift.
