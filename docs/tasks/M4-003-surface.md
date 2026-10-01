@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Milestone
 
@@ -357,6 +357,15 @@ device pass did not move. Automated checks prove the pass count, the bounds
 and the determinism; they cannot establish beauty.
 
 ## Implementation notes
+
+- Accepted for live testing and merged in PR #71 on 2026-10-01, retargeted
+  to `main` after #67 merged and updated with M4-002's merge, on the
+  director's instruction to merge the polish track and test everything new
+  live. The `main` merge commit `79e9953` runs Quality Gates as run
+  `36837313231`, and the Pages deployment that follows it is the first to
+  carry M4-002 and M4-003 together. The human review
+  boundary is not closed by the merge: the screen session's questions below
+  stand.
 
 - Directly assigned on 2026-09-30 under the director's mandate to go on with
   the polish track autonomously, as Bundle C of the polish assessment: the

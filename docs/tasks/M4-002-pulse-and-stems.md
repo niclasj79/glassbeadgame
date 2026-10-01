@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Milestone
 
@@ -391,6 +391,18 @@ prove the grid, the ceilings, the parity across outcomes and the consonance
 of the cycle; they cannot establish that the bed is beautiful.
 
 ## Implementation notes
+
+- Accepted for live testing and merged in PR #70 on 2026-10-01, on the
+  director's instruction to merge the polish track and test everything new
+  live. The `main` merge commit `1c5a78f` carries the tree that passed
+  Quality Gates as the pull request's head `09fd92c` (run `36835216939`);
+  its own run on `main` (`36836406904`) was cancelled by the next push to
+  `main` nine minutes later, so the first Pages deployment carrying it is
+  M4-003's, of `79e9953`. The human review
+  boundary is not closed by the merge: the headphone session's questions
+  below stand, and the Entropy consonance exception awaits the director's
+  decision (ADR-017 and §18 still claim consonance for every concept; the
+  test pins the exception by name).
 
 - Decided by the game design director on 2026-09-30, choosing the bed over a
   recorded track and naming what it lacks: harmony, movement, and an
