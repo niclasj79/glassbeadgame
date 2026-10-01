@@ -17,7 +17,10 @@ jobs:
   quality-gates:
     name: Quality Gates
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The browser suite on GitHub's runner takes 5 to 8 minutes; a slow
+    # Chromium download once took 9 on its own and cancelled a passing run at
+    # the old limit of 15. The cache below makes that download the exception.
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -42,8 +45,21 @@ jobs:
         run: npm run validate:content
       - name: Production build
         run: npm run build
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -e "process.stdout.write(require('@playwright/test/package.json').version)")" >> "$GITHUB_OUTPUT"
+      - name: Cache Chromium
+        id: chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - name: Install Chromium
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+      - name: Install Chromium system dependencies
+        if: steps.chromium-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: Browser smoke
         run: npm run test:browser
       - name: Bundle budget
