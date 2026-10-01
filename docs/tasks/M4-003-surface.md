@@ -416,3 +416,23 @@ and the determinism; they cannot establish beauty.
   unmoved (1440×810: 0.428 → 0.431, 0.500; 1280×720: 0.417, 0.499 → 0.500).
 - Load: first load 513,709 bytes gzip and 1,710,111 raw against the
   ceilings, from 512,123 and 1,705,551.
+- Checks in the cloud container, on the integrated head: `npm ci` was run
+  by the stage and the lockfile is unchanged; typecheck (app and Playwright
+  configs), lint, `npm test` 2,134 passed in 133 files, `validate:content`,
+  build, `bundle:check`, `steering:check` and `git diff --check` pass. The CI
+  browser set on a quiet software renderer passed 17 of 18 in 3.1 minutes:
+  the Studies passage test timed out waiting for the first sigil's focus
+  after a keyboard lock (its wait is 15 s and the frame rate here is a few
+  per second); it passed in the stage's own run of the same set, and passed
+  again alone with the three other Studies tests in 31 s. It is recorded as
+  a timing sensitivity of the software renderer to watch on CI, not as a
+  defect of the surface. The rest-frame spec passed at both viewports and
+  the banding spec passed with the counts above. Performance reference
+  (SwiftShader, same container, quiet, effective frames per second,
+  evidence only per M0-005): mobile-potato idle 8.61 and focus 5.41, against
+  M4-001's 6.45 and 4.57 the same day (potato has no dust); desktop-base
+  2.65 idle, and the desktop focus profile misses the container's frame
+  floor, as on main.
+- For the screen session: does the void read as depth; is the dust air or
+  noise; does a ring read as the bead's sound reaching the room; the dust's
+  rest level under Attunement.
