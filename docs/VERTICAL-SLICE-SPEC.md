@@ -253,11 +253,14 @@ Attunement is a held heightened state, not a consumable hint.
 - threads become individually audible;
 - relation channels shimmer according to their grammar;
 - the player may conduct pulses, foreground a motif, or listen spatially;
+- the world's material, depth and sky answer the held state, and the camera
+  drifts on the breath, all ephemeral (ADR-018);
 - no new intellectual assertions are generated.
 
 ### Exit
 
-- releasing or completing the gesture returns to ordinary play;
+- releasing or completing the gesture returns to ordinary play, by a cadence:
+  the held chord resolves and the world lifts back over one slot (ADR-018);
 - the action may influence the concluding performance’s emphasis but not its factual content.
 
 ## 14. Conclusion performance

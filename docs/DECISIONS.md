@@ -357,3 +357,78 @@ amended (its Tension grammar is what the pulse must not imitate). M4-002 is
 the packet, blocked behind M4-001. Bundle C of the polish assessment (the
 surface: dither, a dust field, one pass for all screen effects) stays a
 separate packet after this one has been heard.
+
+
+## ADR-018 — Attunement is the heightened state the world was built for
+
+**Status:** Proposed on 2026-09-30 under the director's polish mandate;
+accepted by the game design director on reviewed merge, and effective after
+it.
+
+Attunement (specification §13) is the one held heightened state the Game has,
+and it becomes the peak of the audiovisual experience rather than a quieter
+listening mode. Four things change while it is held, all ephemeral (ADR-013,
+condition 3), all read from the state the cue bus already publishes:
+
+1. **The world's material answers.** The bead glass deepens (its index of
+   refraction and dispersion rise toward the high tier's values within the
+   tier's budget), the void's depth increases, and the sky's figures brighten
+   as the threads' voices enter — one eased scalar, `attuned`, that the scene
+   already carries, driving all three.
+2. **The bed sustains.** The bed's chord holds without its phrase movement and
+   the pulse leaves it to the heartbeat (ADR-017); the threads' voices are
+   individually audible as §13 requires, and nothing else enters.
+3. **The camera drifts.** With time softened, the camera takes a slow orbit
+   of at most 4° per breath around the attended web, on the breath's phase,
+   cancelled by any input; off under reduced motion, where the sky and the
+   material still answer.
+4. **Leaving plays a cadence.** Release resolves the held chord to the phrase's
+   root over one slot and lifts the material, the depth and the drift over the
+   same slot; the world does not snap back.
+
+Conditions: no new intellectual assertion, no durable effect, no payload on
+`attunement.entered`/`attunement.exited`, no counter, and the comfort bounds of
+CAV-007 (no luminance above 3 Hz; the drift is far under any motion bound).
+Reduced motion keeps the material and the sky and drops the drift; reduced
+bloom keeps the depth and drops the brightening.
+
+**Reason:** the assessment behind the polish track found that Attunement is
+specified as the Game's heightened state but reads, in play, as the world
+turning down: the ribbons recede and the space thins, and nothing rises to meet
+the player's attention. A held state that the whole world answers is the
+mesmerising peak the director asked for, and §13 already allows every part of
+it.
+
+**Consequences:** §13's behaviour list gains the material, the sky, the drift
+and the cadence; M6-001 builds it, after M4-002, because the sustain and the
+cadence are the bed's.
+
+## ADR-019 — The commit moment scales with the form of the web, never with the truth of a thread
+
+**Status:** Proposed on 2026-09-30 under the director's polish mandate;
+accepted by the game design director on reviewed merge, and effective after
+it.
+
+The moment a thread is woven (the scene's bursts and flare, the bed's landing,
+the pulse's fill) grows with what the player has built and with nothing else:
+the number of threads in the web, the faculties it spans, and whether the
+commit completed a motif. The growth is bounded — at most one and a half times
+the first thread's moment at twelve threads and four faculties — and it is the
+same for a documented, an Open and an unresolved outcome (CAV-006). A completed
+motif adds the ensemble it already has, not a larger burst.
+
+Nothing is counted for the player: no number, no bar, no rank; the form is
+felt in the moment's size, as the conclusion's climax already belongs to the
+web (specification §14).
+
+**Reason:** the twelfth thread of a wide web answers today exactly like the
+first, so the web's growth is visible only in the picture and audible only in
+the choir's density; the moment itself never says "this is bigger now". Tetris
+Effect's escalation is not a score; it is the world answering more the more
+there is to answer.
+
+**Consequences:** the scene director's response table takes a form factor
+from the session's shape (threads, faculties, the completing motif) through the
+cue's payload; the audio director scales the landing's gain within the bed's
+ceiling; the pulse's fill gains its bell's octave at the third faculty. No
+event changes. M4-004 builds it after M4-002.

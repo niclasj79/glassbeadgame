@@ -55,7 +55,10 @@ None.
 
 ## Blocked queue
 
-None.
+1. `M6-001-attunement.md` — Attunement as the heightened state: material,
+   sky, drift and cadence under ADR-018; blocked behind M4-002.
+2. `M4-004-payoff-by-form.md` — the commit moment scales with the form of
+   the web under ADR-019; blocked behind M4-002.
 
 ## Completed
 
