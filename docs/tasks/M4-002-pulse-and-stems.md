@@ -400,9 +400,10 @@ of the cycle; they cannot establish that the bed is beautiful.
   `main` nine minutes later, so the first Pages deployment carrying it is
   M4-003's, of `79e9953` (run `36838330165`). The human review
   boundary is not closed by the merge: the headphone session's questions
-  below stand, and the Entropy consonance exception awaits the director's
-  decision (ADR-017 and §18 still claim consonance for every concept; the
-  test pins the exception by name).
+  below stand. The Entropy consonance exception was accepted by the director
+  on 2026-10-01 (the third way below): ADR-017 and §18 are amended to say the
+  tonic's notes are consonant everywhere and Entropy is tense over two roots
+  by its nature; the test pins it by name.
 
 - Decided by the game design director on 2026-09-30, choosing the bed over a
   recorded track and naming what it lacks: harmony, movement, and an

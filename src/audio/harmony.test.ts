@@ -225,15 +225,13 @@ describe("the concepts' identity notes over the cycle (ADR-017)", () => {
   /**
    * THE ONE THE CYCLE DOES NOT KEEP.
    *
-   * ADR-017 and the packet promise every identity note consonant over every
-   * root of 0, 5, 9, 7. Entropy's identity note is 7: over F it is a major
-   * second (9/8) and over A a minor seventh (9/5), both tense in this mode. No
-   * chord or voicing can change that, because the claim is about the root. The
-   * cycle is the director's and the content is out of this packet's scope, so
-   * the exception is pinned here, by name, until the director settles it —
-   * with a different cycle (only 0, 3, 4 and 7 keep both C and G consonant),
-   * with Entropy's motif, or by accepting it. The test fails if the cycle or
-   * the content changes in either direction.
+   * Every identity note on the tonic is consonant over every root of 0, 5,
+   * 9, 7. Entropy's identity note is 7: over F it is a major second (9/8) and
+   * over A a minor seventh (9/5), both tense in this mode. No chord or
+   * voicing can change that, because the claim is about the root. The
+   * director accepted the exception on 2026-10-01 (ADR-017, amended), so it
+   * is pinned here by name. The test fails if the cycle or the content
+   * changes in either direction.
    */
   it("finds exactly one identity note tense, over exactly two roots: Entropy over 5 and 9", () => {
     const tense: string[] = [];

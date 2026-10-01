@@ -30,10 +30,11 @@ gate, which M2-012 re-runs on the new surface; the M3–M8 completion campaign
 merged as one reviewed branch. The polish track opened on 2026-09-30 with
 ADR-016 and M4-001, the conductor, merged the same day in PR #65; ADR-017
 with M4-002, the pulse and the stems, merged in PR #70 and M4-003, the
-surface, in PR #71 on 2026-10-01 for the director's live testing. Awaiting
-the director: the headphone and screen sessions of both, the Entropy
-consonance exception (M4-002), and the proposals ADR-018 and ADR-019 with
-M6-001 and M4-004 (PR #69).
+surface, in PR #71 on 2026-10-01 for the director's live testing. The
+director accepted the Entropy consonance exception (ADR-017, amended) and
+ADR-018 and ADR-019 with PR #69 the same day; M6-001 and M4-004 stay Blocked
+until their packets are reviewed for Ready. Awaiting the director: the
+headphone and screen sessions of M4-002 and M4-003.
 
 ## Ready queue
 
@@ -106,7 +107,8 @@ None.
     bar.
 27. `M4-002-pulse-and-stems.md` — accepted for live testing and merged in
     PR #70; the pulse, the moving harmony and the stems per faculty, with
-    the Entropy consonance exception pending the director's decision.
+    the Entropy consonance exception accepted by the director (ADR-017,
+    amended).
 28. `M4-003-surface.md` — accepted for live testing and merged in PR #71;
     dither in the final pass, the dust field that answers the beads'
     light, and one pass for all screen effects.

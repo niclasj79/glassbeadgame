@@ -304,9 +304,11 @@ ways, all on the conductor's grid (ADR-016), and specified in
    one phrase at a time — 0, 5, 9, 7 — instead of leaning to 9 every third
    phrase; the pad becomes a chord of root, fifth and one colour, voice-led to
    the nearest stable degrees and crossfaded across the phrase boundary; the
-   drone's refresh locks to the phrase. Every concept's identity note stays
-   consonant over every root of the cycle, which a test proves over the
-   mode's ratios.
+   drone's refresh locks to the phrase. Every identity note on the tonic
+   stays consonant over every root of the cycle, which a test proves over the
+   mode's ratios. The one concept off the tonic, Entropy (identity note G),
+   is tense over F and A by its nature, and the world keeps that rub
+   (amended on 2026-10-01, below).
 3. **Stems that answer the web.** A faculty's stem enters when its first
    thread is woven and thickens with its threads: Measure an arpeggio in metal
    and glass on the eighths, Sound a formant sustain, Matter a low pedal in
@@ -339,6 +341,15 @@ and chose the system the Game already has. A track would have brought a key,
 a tempo and a form of its own into a world that keeps one time on a grid; the
 bed on that grid can grow those three things and stay generative, offline,
 deterministic and free of licence.
+
+**Amendment, 2026-10-01 (the Entropy exception):** M4-002 found the
+original claim false for one concept. Twenty-three identity notes are on C and
+consonant over every root; `matter.entropy`'s is G, a major second over F and
+a minor seventh over A. The game design director accepted the exception
+rather than change the cycle (0, 3, 4, 7 would walk a chromatic step) or
+re-author Entropy's motif: entropy rubbing against the harmony half the time is
+a fact the world may keep. The test pins the exception by name, so any change
+to the cycle or the content in either direction fails it.
 
 **Consequences:** `docs/VERTICAL-SLICE-SPEC.md` §18 gains the pulse, the
 moving harmony and the stems; `docs/CONTENT-AUDIOVISUAL-REFERENCE.md` is not
