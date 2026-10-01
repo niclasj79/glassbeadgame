@@ -326,8 +326,9 @@ Each concept has a recognizable internal procedural motif. Threads have semantic
   acts (a weave, a completed motif, a solved Study) and never time, and it
   keeps to the slot's eighths and sixteenths (ADR-017);
 - the bed's harmony moves: the root walks a cycle of stable degrees one phrase
-  at a time and the pad is a voice-led chord, so that every concept's identity
-  note stays consonant over every root (ADR-017);
+  at a time and the pad is a voice-led chord, so that every identity note on
+  the tonic stays consonant over every root; Entropy, the one concept off the
+  tonic, is tense over two roots by its nature (ADR-017, amended);
 - stems answer the web: a faculty's stem enters with its first thread and
   thickens with its threads, pitched from the current chord (ADR-017);
 - the conclusion is generated from the event log.

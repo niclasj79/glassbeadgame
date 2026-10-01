@@ -28,8 +28,13 @@ M9 — Studies. M9-001, the Studies spike, merged in PR #62, and M2-012, the
 focus view, in PR #61. M2-011 remains in Review pending the director's P-005
 gate, which M2-012 re-runs on the new surface; the M3–M8 completion campaign
 merged as one reviewed branch. The polish track opened on 2026-09-30 with
-ADR-016 and M4-001, the conductor, merged the same day in PR #65, and
-ADR-017 with M4-002, the pulse and the stems, In progress behind it.
+ADR-016 and M4-001, the conductor, merged the same day in PR #65; ADR-017
+with M4-002, the pulse and the stems, merged in PR #70 and M4-003, the
+surface, in PR #71 on 2026-10-01 for the director's live testing. The
+director accepted the Entropy consonance exception (ADR-017, amended) and
+ADR-018 and ADR-019 with PR #69 the same day; M6-001 and M4-004 stay Blocked
+until their packets are reviewed for Ready. Awaiting the director: the
+headphone and screen sessions of M4-002 and M4-003.
 
 ## Ready queue
 
@@ -37,12 +42,7 @@ None.
 
 ## In progress
 
-1. `M4-002-pulse-and-stems.md` — the bed's pulse, moving harmony and stems
-   under ADR-017; directly assigned once M4-001 merged; branch
-   `codex/M4-002-pulse-and-stems`.
-2. `M4-003-surface.md` — dither in the final pass, a dust field that answers
-   the beads' light, and one pass for all screen effects; directly assigned
-   under the polish mandate; branch `codex/M4-003-surface`.
+None.
 
 ## In review
 
@@ -108,6 +108,13 @@ None.
 26. `M4-001-conductor.md` — accepted and merged in PR #65 (with #66); the
     conductor, beads on their notes, the hand on the grid, the breath on the
     bar.
+27. `M4-002-pulse-and-stems.md` — accepted for live testing and merged in
+    PR #70; the pulse, the moving harmony and the stems per faculty, with
+    the Entropy consonance exception accepted by the director (ADR-017,
+    amended).
+28. `M4-003-surface.md` — accepted for live testing and merged in PR #71;
+    dither in the final pass, the dust field that answers the beads'
+    light, and one pass for all screen effects.
 
 ## Planned but not yet Ready
 
