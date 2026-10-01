@@ -181,6 +181,23 @@ export interface AudioSink {
     atSeconds: number,
     fadeSeconds: number
   ) => void;
+  /**
+   * THE PULSE ANSWERS A WEAVE (ADR-017).
+   *
+   * The bed's pulse rolls a fill of brush sixteenths into the next slot boundary
+   * it can reach from `atSeconds` — the weave's landing, on the sink's clock —
+   * and lands it on one bell. The director asks for it where the thread lands,
+   * before any outcome is known, and hands over nothing but the time: one fill
+   * for documented, open and unresolved alike (CAV-006). Optional, because a
+   * sink that keeps no pulse is still a lawful sink.
+   */
+  readonly pulseFill?: (atSeconds: number) => void;
+  /**
+   * The pulse's second voice — the brush on every other eighth — for the next
+   * `untilSlots` slots of the bed: a completed motif, or a solved Study, is
+   * given one phrase of it (ADR-017). Optional, as `pulseFill` is.
+   */
+  readonly pulseSecondVoice?: (untilSlots: number) => void;
 }
 
 /**
@@ -911,6 +928,11 @@ export function createAudioDirector(
         );
         const at = sink.quantize();
         emit(plan, at);
+        // The pulse answers the weave: a fill into the next slot boundary it can
+        // reach from the landing (ADR-017). Asked for here, where the thread
+        // lands, with nothing but the time, so it is one fill whatever the
+        // outcome turns out to be (CAV-006); the outcome cues ask for nothing.
+        sink.pulseFill?.(at);
         lightThread(
           String(cue.payload.threadId),
           at,
@@ -991,6 +1013,8 @@ export function createAudioDirector(
           ),
           sink.quantize()
         );
+        // The pulse gains its second voice for the following phrase (ADR-017).
+        sink.pulseSecondVoice?.(SCORE.harmony.phraseSlots);
         break;
       }
 
@@ -1011,6 +1035,10 @@ export function createAudioDirector(
           ),
           sink.quantize()
         );
+        // As a completed motif does, the pulse gains its second voice for the
+        // following phrase (ADR-017). A silence, answered by silence above,
+        // asks nothing of the pulse either.
+        sink.pulseSecondVoice?.(SCORE.harmony.phraseSlots);
         break;
       }
 

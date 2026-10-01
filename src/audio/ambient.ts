@@ -1,15 +1,31 @@
 import { audio } from "./engine";
 import { CHOIR_LIGHT_WEIGHT, conductor, gridAhead } from "./conductor";
-import { noteSeconds, playNote, noiseSource, type SimpleVoiceOptions } from "./voices";
+import {
+  noteSeconds,
+  playNote,
+  playVoice,
+  noiseSource,
+  type RetireVoice,
+  type SimpleVoiceOptions,
+} from "./voices";
 import { beadVoice, modeFreq } from "./theory";
+import {
+  chordFor,
+  groundStrike,
+  groundStrikeSlots,
+  nextVoicing,
+  rootForPhrase,
+} from "./harmony";
 import { castaliaConceptById } from "@/content/castalia";
 import { hashString, mulberry32 } from "@/lib/utils";
 import { frameState } from "@/scene/frameState";
 import { runtimeRandom } from "@/runtime/testMode";
 import { currentTheme } from "@/themes/useTheme";
 import { SCORE } from "./score";
-import type { TimbreId } from "@/content/castalia/schema";
+import type { FacultyId, TimbreId } from "@/content/castalia/schema";
 import type { MotifKind } from "@/domain/motifs";
+import type { AudioIntensity } from "./intensity";
+import type { PulseOnset } from "./pulse";
 
 /**
  * The generative soundtrack that grows with the web.
@@ -38,6 +54,32 @@ const MAX_ACTIVE_MOTIFS = 6;
  */
 const MAX_MOTIF_PATTERNS = 4;
 
+/**
+ * THE STEMS LOAD WITH THE BED, NOT WITH THE TITLE (ADR-017).
+ *
+ * They answer woven threads, and nothing is woven before the arena opens, so
+ * the module is fetched the first time the bed starts and played from the
+ * first slot after it arrives. The first load never carries it.
+ */
+type StemsModule = typeof import("./stems");
+let stems: StemsModule | null = null;
+let stemsLoading: Promise<StemsModule | null> | null = null;
+export function loadStems(): Promise<StemsModule | null> {
+  stemsLoading ??= import("./stems").then(
+    (module) => {
+      stems = module;
+      return module;
+    },
+    () => {
+      // Texture, not meaning: the bed plays on without them and asks again
+      // the next time it starts.
+      stemsLoading = null;
+      return null;
+    }
+  );
+  return stemsLoading;
+}
+
 interface Motif {
   threadId: string;
   /** The concepts whose identity notes the voice sings, so their beads can light. */
@@ -54,12 +96,49 @@ interface Motif {
 /** A choir note with the moment it was scheduled for. */
 type ScheduledNote = SimpleVoiceOptions & { readonly at: number };
 
+/**
+ * THE PULSE LOADS AFTER THE TITLE (ADR-017).
+ *
+ * The pulse's patterns and bodies (`pulse.ts`, `pulseBodies.ts`) are a chunk of
+ * their own, fetched when the bed first starts — the first press into a room,
+ * never the title — so the first load keeps its ceiling with the bed in it.
+ * Until they arrive the bed writes its slots without a pulse, and from the
+ * first slot after, the pulse is under them. A chunk that cannot be fetched
+ * leaves the bed as it was, and the next room asks again.
+ */
+export interface PulseModules {
+  readonly pattern: typeof import("./pulse");
+  readonly bodies: typeof import("./pulseBodies");
+}
+let pulseModules: PulseModules | null = null;
+let pulseLoading: Promise<PulseModules | null> | null = null;
+
+/** Fetch the pulse, once. Resolves with it, or with null if it could not be fetched. */
+export function loadPulse(): Promise<PulseModules | null> {
+  pulseLoading ??= Promise.all([import("./pulse"), import("./pulseBodies")]).then(
+    ([pattern, bodies]) => {
+      pulseModules = { pattern, bodies };
+      return pulseModules;
+    },
+    () => {
+      pulseLoading = null;
+      return null;
+    }
+  );
+  return pulseLoading;
+}
+
+/**
+ * How many written slots the bed remembers the pulse of: enough for a weave
+ * landing inside the lookahead to add its fill to the slot it belongs to.
+ */
+const PULSE_MEMORY_SLOTS = 3;
+
 class AmbientEngine {
   private timer: number | null = null;
   private nextSlotTime = 0;
   private slot = 0;
   private motifs: Motif[] = [];
-  private droneRefreshAt = 0;
   private running = false;
   private airBed: {
     src: AudioBufferSourceNode;
@@ -79,6 +158,12 @@ class AmbientEngine {
   }[] = [];
   /** The harmonic journey: which semitone of the mode grounds the drone now. */
   private rootDegree = 0;
+  /** The pad's voices as last led, in the low register; null before the first chord. */
+  private padVoices: readonly number[] | null = null;
+  /** The ground still sounding, so the bed can let it go when it stops. */
+  private groundVoices: { readonly retire: RetireVoice; readonly endsAt: number }[] = [];
+  /** The woven threads seated in each faculty: who the stems play for (ADR-017). */
+  private facultyThreads = new Map<FacultyId, Set<string>>();
   /** Space the semantic layer has asked for: density and bed multipliers. */
   private densityScale = 1;
   private bedScale = 1;
@@ -89,6 +174,17 @@ class AmbientEngine {
   private silenceFrom: number | null = null;
   /** From here the loop schedules nothing new; the bed is already ramping out. */
   private lastSlotBefore = Number.POSITIVE_INFINITY;
+  /** The profile the director's plans are heard at; the pulse follows it (CAV-007). */
+  private intensity: AudioIntensity = "full";
+  /** Slots not yet written that a weave has asked to roll into their closing boundary. */
+  private fillSlots = new Set<number>();
+  /** The pulse carries its second voice on every slot before this one. */
+  private secondVoiceUntil = 0;
+  /** The pulse of the last few written slots, by slot, and when each began. */
+  private pulseWritten = new Map<
+    number,
+    { readonly t: number; onsets: readonly PulseOnset[] }
+  >();
 
   start(): void {
     const ctx = audio.ensure();
@@ -100,8 +196,11 @@ class AmbientEngine {
     audio.setBreathCenter(world.padCutoff);
     this.running = true;
     this.motifs = [];
+    this.facultyThreads = new Map();
+    void loadStems();
     this.motifPatterns = [];
     this.rootDegree = 0;
+    this.padVoices = null;
     this.densityScale = 1;
     this.bedScale = 1;
     this.slot = 0;
@@ -111,7 +210,6 @@ class AmbientEngine {
     const grid = gridAhead(this.slotS, ctx.currentTime);
     this.nextSlotTime = grid.origin;
     conductor.arm(grid);
-    this.droneRefreshAt = 0;
     // A previous session may have ended: the loop was told to stop and the bed
     // was ramped to silence. Both have to be released, or the new session opens
     // into a room that is still finishing the last one.
@@ -120,6 +218,12 @@ class AmbientEngine {
     audio.setBedScale(1);
     this.timer = window.setInterval(() => this.tick(), TICK_MS);
     this.startAirBed(ctx);
+    // The pulse (ADR-017) is fetched now, after the title, and a new session
+    // owes no fill and no second voice to the last one.
+    this.fillSlots.clear();
+    this.secondVoiceUntil = 0;
+    this.pulseWritten.clear();
+    void loadPulse();
   }
 
   /**
@@ -129,6 +233,10 @@ class AmbientEngine {
   stop(): void {
     this.halt();
     conductor.disarm();
+    // The pulse leaves with the bed: nothing it was asked for outlives the room.
+    this.fillSlots.clear();
+    this.secondVoiceUntil = 0;
+    this.pulseWritten.clear();
   }
 
   /**
@@ -143,6 +251,8 @@ class AmbientEngine {
     }
     this.running = false;
     this.motifs = [];
+    this.facultyThreads = new Map();
+    this.releaseGround();
     // A previous session's completed motifs may not keep their seats in the
     // next one. `start()` already resets them, but a session that never reaches
     // `start()` — no audio context yet — would otherwise inherit an ensemble
@@ -261,6 +371,72 @@ class AmbientEngine {
     return this.running;
   }
 
+  /**
+   * The profile the director's plans are heard at, which the pulse follows
+   * (CAV-007): reduced keeps the skin on the downbeats, silent keeps nothing.
+   * The bridge sets it where it sets the director's, from the same settings.
+   */
+  setIntensity(intensity: AudioIntensity): void {
+    this.intensity = intensity;
+  }
+
+  /**
+   * A WEAVE HAS LANDED, AND THE PULSE ROLLS INTO A BOUNDARY (ADR-017).
+   *
+   * `atSeconds` is the landing on the audio clock. The fill belongs to the first
+   * slot whose last half begins at or after it — never earlier, because a fill
+   * begun before the thread landed would anticipate the act — and lands its bell
+   * on that slot's closing boundary. A slot not yet written is marked, and its
+   * cell carries the fill. A slot already written (the lookahead is more than
+   * half a slot, so it usually is) has the fill's own onsets added now, on the
+   * sixteenths it left free, as its cell with the fill would have struck them.
+   * Once the ending has been asked for, nothing new is added under it.
+   */
+  requestFill(atSeconds: number): void {
+    if (!this.running || this.silenceFrom !== null || !Number.isFinite(atSeconds)) {
+      return;
+    }
+    const ctx = audio.get();
+    if (!ctx) return;
+    // Slot `this.slot` is the next to be written and begins at `nextSlotTime`;
+    // each slot's last half begins half a slot after its start.
+    const ahead = Math.ceil(
+      (atSeconds - this.nextSlotTime) / this.slotS - 0.5 - 1e-6
+    );
+    const slot = this.slot + ahead;
+    if (slot < 0) return;
+    if (ahead >= 0) {
+      this.fillSlots.add(slot);
+      return;
+    }
+    const written = this.pulseWritten.get(slot);
+    const pulse = pulseModules;
+    if (written === undefined || pulse === null) return;
+    const fill = pulse.pattern.pulseFill(slot, {
+      awakening: frameState.awakening,
+      density: this.densityScale,
+      intensity: this.intensity,
+    });
+    const onsets = pulse.pattern.mergePulse(written.onsets, fill);
+    const added = onsets.filter((onset) => !written.onsets.includes(onset));
+    written.onsets = onsets;
+    this.playPulse(ctx, pulse, written.t, slot, added);
+  }
+
+  /**
+   * A COMPLETED MOTIF, OR A SOLVED STUDY (ADR-017): the pulse gains its second
+   * voice — the brush on every other eighth — for the next `slots` slots the bed
+   * writes, which the director asks for as one phrase. A second completion
+   * inside the phrase extends it; nothing shortens it.
+   */
+  requestSecondVoice(slots: number): void {
+    if (!this.running || !Number.isFinite(slots) || slots <= 0) return;
+    this.secondVoiceUntil = Math.max(
+      this.secondVoiceUntil,
+      this.slot + Math.floor(slots)
+    );
+  }
+
   /** Camera azimuth → gentle stereo drift of the room tone. */
   setAirPan(pan: number): void {
     const ctx = audio.get();
@@ -336,6 +512,19 @@ class AmbientEngine {
     const a = beadVoice(aId);
     const b = beadVoice(bId);
     if (!a || !b) return;
+    // The room re-seats the whole session with every new thread, and a seat
+    // is one per thread: a choir that held a thread twice spoke twice as often
+    // as designed and over-reported its voices to the director.
+    if (this.motifs.some((motif) => motif.threadId === threadId)) return;
+    // The stems count a thread in the faculty of each of its two concepts. A
+    // set, because the room re-seats the whole session with every new thread.
+    for (const id of [aId, bId]) {
+      const faculty = castaliaConceptById.get(id)?.faculty;
+      if (faculty === undefined) continue;
+      const seated = this.facultyThreads.get(faculty) ?? new Set<string>();
+      seated.add(threadId);
+      this.facultyThreads.set(faculty, seated);
+    }
     this.motifs.push({
       threadId,
       conceptA: aId,
@@ -351,6 +540,76 @@ class AmbientEngine {
       // The oldest voices retire entirely once the choir is very full.
       this.motifs.splice(0, this.motifs.length - MAX_ACTIVE_MOTIFS * 2);
     }
+  }
+
+  /**
+   * One strike of the ground (`groundStrike`): on a phrase boundary the pad is
+   * first led to the new root's chord. Tuned exactly, because the chord's
+   * intervals are just ratios whose point is that they lock; seeded, so the
+   * same slot is humanised the same way on every replay.
+   */
+  private strikeGround(
+    ctx: AudioContext,
+    ground: AudioNode,
+    t: number,
+    slot: number,
+    strikeSlots: number
+  ): void {
+    if (this.padVoices === null || slot % SCORE.harmony.phraseSlots === 0) {
+      this.padVoices = nextVoicing(this.padVoices, this.rootDegree);
+    }
+    const now = ctx.currentTime;
+    this.groundVoices = this.groundVoices.filter((voice) => voice.endsAt > now);
+    const span = strikeSlots * this.slotS;
+    for (const voice of groundStrike(this.rootDegree, this.padVoices, span, this.droneGain)) {
+      const endsAt = t + voice.attack + voice.hold + voice.release;
+      playVoice(ctx, ground, {
+        timbre: voice.timbre,
+        frequency: modeFreq(voice.degree, "low"),
+        gain: voice.gain * this.bedScale,
+        at: t,
+        attack: voice.attack,
+        hold: voice.hold,
+        release: voice.release,
+        seed: `ground:${slot}:${voice.timbre}:${voice.degree}`,
+        exactTuning: true,
+        onRetire: (retire) => this.groundVoices.push({ retire, endsAt }),
+      });
+    }
+  }
+
+  /**
+   * The ground holds for a whole phrase. When the bed stops it is let go over
+   * the crossfade, rather than left holding a chord in a room that has changed
+   * — a new session opens on its own root while the last one's fades.
+   */
+  private releaseGround(): void {
+    const ctx = audio.get();
+    if (ctx !== null) {
+      const now = ctx.currentTime;
+      for (const voice of this.groundVoices) {
+        if (voice.endsAt > now) voice.retire(now, SCORE.harmony.crossfadeSeconds);
+      }
+    }
+    this.groundVoices = [];
+  }
+
+  /**
+   * The stems (ADR-017): every faculty the web has reached plays its stem on
+   * the chord, once the module has arrived. The stems thin with the density
+   * as the choir does, and leave with the loop.
+   */
+  private scheduleStems(ctx: AudioContext, t: number, slot: number): void {
+    if (stems === null || this.facultyThreads.size === 0) return;
+    stems.playStems(ctx, audio.ambientBus!, {
+      chord: chordFor(this.rootDegree),
+      slot,
+      at: t,
+      slotSeconds: this.slotS,
+      density: this.densityScale,
+      bed: this.bedScale,
+      threads: this.facultyThreads,
+    });
   }
 
   private tick(): void {
@@ -383,37 +642,22 @@ class AmbientEngine {
   private scheduleSlot(ctx: AudioContext, t: number, slot: number): void {
     const bus = audio.ambientBus!;
 
-    // The harmonic journey: most phrases ground on C; every Nth leans onto
-    // A, the pentatonic's minor shadow — motion without ever losing home.
-    const phrase = Math.floor(slot / SCORE.harmony.phraseSlots);
-    this.rootDegree =
-      phrase % SCORE.harmony.cycle === SCORE.harmony.cycle - 1
-        ? SCORE.harmony.minorRootDegree
-        : 0;
-
-    // The ground: root drone + slow pad, refreshed every 8 slots (~16s)
-    // with overlapping envelopes so the floor never drops out. Both route
-    // through the breath filter — the wave the whole cosmos inhales on.
+    // THE HARMONY THAT MOVES (ADR-017). The root walks the cycle one phrase at
+    // a time — C, F, A, G, and home — and the ground turns with it on the
+    // phrase boundary, never between: the drone on the root, and the pad as a
+    // chord of three voices led to the nearest tones of the next, the old chord
+    // releasing over the two seconds the new one attacks in. (A world whose
+    // phrase outlives a voice's lifetime bound re-strikes the same chord inside
+    // the phrase: `groundStrikeSlots`.) Every chord is a just triad on the
+    // mode's stable degrees, so the ground's intervals are exact ratios and
+    // lock rather than beat. (The lean this replaces set a fourth over A,
+    // degrees 9 and 14: in this tuning that is 27/20, a comma wider than 4/3,
+    // so it beat.) Both route through the breath filter — the wave the whole
+    // cosmos inhales on.
+    this.rootDegree = rootForPhrase(Math.floor(slot / SCORE.harmony.phraseSlots));
     const ground = audio.breathFilter ?? bus;
-    if (slot >= this.droneRefreshAt) {
-      this.droneRefreshAt = slot + 8;
-      playNote(ctx, ground, "glass", modeFreq(this.rootDegree, "low"), {
-        gain: this.droneGain * this.bedScale,
-        at: t,
-        attack: 2.5,
-        hold: 12,
-        release: 6,
-      });
-      // The fifth above the root when grounded, the fourth when leaning to the
-      // mode's shadow — both exact ratios, so the floor locks rather than beats.
-      playNote(
-        ctx,
-        ground,
-        "voice",
-        modeFreq(this.rootDegree + (this.rootDegree === 0 ? 7 : 5), "low"),
-        { gain: 0.05 * this.bedScale, at: t + 1.2, attack: 3, hold: 10, release: 6 }
-      );
-    }
+    const strikeSlots = groundStrikeSlots(this.slotS);
+    if (slot % strikeSlots === 0) this.strikeGround(ctx, ground, t, slot, strikeSlots);
 
     // The heartbeat: past half-awakening, a low pulse enters on each slot —
     // the stage is alive and knows it.
@@ -479,6 +723,11 @@ class AmbientEngine {
       }
     }
 
+    this.scheduleStems(ctx, t, slot);
+    // The pulse keeps the slot whether or not the choir has a voice to seat:
+    // it follows the web's awakening, not the choir's roll (M4-002).
+    this.schedulePulse(ctx, t, slot);
+
     // The choir: each thread's motif speaks with probability scaled by
     // density, thickening as the session awakens.
     const active = this.motifs.slice(-MAX_ACTIVE_MOTIFS * 2);
@@ -542,6 +791,65 @@ class AmbientEngine {
         };
         if (playNote(ctx, bus, "glass", first * 2, lift)) this.conduct(concept1, lift);
       }
+    }
+  }
+
+  /**
+   * THE PULSE UNDER THE SLOT (ADR-017).
+   *
+   * The slot's cell, from the bed's own state — how far the web has woken, the
+   * space the score is leaving, the profile it is heard at, a completed motif's
+   * second voice, a weave's fill — on the grid of the slot's sixteenths. Until
+   * the pulse has loaded, a slot has none.
+   */
+  private schedulePulse(ctx: AudioContext, t: number, slot: number): void {
+    const fill = this.fillSlots.delete(slot);
+    for (const marked of this.fillSlots) {
+      if (marked < slot) this.fillSlots.delete(marked);
+    }
+    for (const kept of this.pulseWritten.keys()) {
+      if (kept <= slot - PULSE_MEMORY_SLOTS) this.pulseWritten.delete(kept);
+    }
+    const pulse = pulseModules;
+    if (pulse === null) return;
+    const onsets = pulse.pattern.pulseCell(slot, {
+      awakening: frameState.awakening,
+      density: this.densityScale,
+      intensity: this.intensity,
+      secondVoice: slot < this.secondVoiceUntil,
+      fill,
+    });
+    this.pulseWritten.set(slot, { t, onsets });
+    this.playPulse(ctx, pulse, t, slot, onsets);
+  }
+
+  /**
+   * Each onset on its body, at its sixteenth of the slot that began at `t`, at
+   * its weight of the body's ceiling under the bed's scale, through the ambient
+   * bus that reach and space already scale. It carries no concept, so it
+   * lights nothing. An onset whose moment has passed is not played late.
+   */
+  private playPulse(
+    ctx: AudioContext,
+    pulse: PulseModules,
+    t: number,
+    slot: number,
+    onsets: readonly PulseOnset[]
+  ): void {
+    const bus = audio.ambientBus;
+    if (bus === null) return;
+    const step = this.slotS / pulse.pattern.PULSE_DIVISION;
+    for (const onset of onsets) {
+      const at = t + onset.sixteenth * step;
+      if (at < ctx.currentTime) continue;
+      pulse.bodies.playPulseBody(
+        ctx,
+        bus,
+        onset.body,
+        at,
+        onset.weight * pulse.bodies.PULSE_GAIN[onset.body] * this.bedScale,
+        `pulse:${slot}:${onset.sixteenth}`
+      );
     }
   }
 

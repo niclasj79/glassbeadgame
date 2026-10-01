@@ -104,6 +104,9 @@ describe("the first load", () => {
       "audio/scheduler.ts",
       "audio/attunement.ts",
       "audio/conclusion.ts",
+      "audio/pulse.ts",
+      "audio/pulseBodies.ts",
+      "audio/stems.ts",
     ]) {
       expect([...reached.keys()].map(name)).not.toContain(deferred);
     }
