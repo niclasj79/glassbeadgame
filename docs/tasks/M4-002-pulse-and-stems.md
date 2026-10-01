@@ -503,12 +503,13 @@ of the cycle; they cannot establish that the bed is beautiful.
   files, `validate:content`, build, `bundle:check`, `steering:check` and
   `git diff --check` pass; the CI browser set passed 18 of 18 in 4.0 minutes
   on the software renderer. Performance reference (SwiftShader, same
-  container, effective frames per second, evidence only per M0-005):
-  mobile-potato idle 4.06 and focus 2.78, measured while another browser
-  suite ran on the same four cores; M4-001's quiet numbers were 6.45 and
-  4.57, and the audio layer draws no frame in test mode, so a quiet rerun is
-  owed before this is read as a cost. The desktop profiles miss the
-  container's frame floor, as on main.
+  container, effective frames per second, evidence only per M0-005): a
+  first measurement taken while another browser suite ran on the same four
+  cores gave mobile-potato idle 4.06 and focus 2.78; the quiet rerun gave
+  8.59 and 5.60, against M4-001's 6.45 and 4.57 the same day (the audio
+  layer draws no frame in test mode, so the spread is the container's).
+  Desktop-base idle 2.89; the desktop focus profile misses the container's
+  frame floor, as on main.
 - For the headphone session: is the pulse underneath and hypnotic, or in
   front; does it ever read as a timer; do the fills answer acts and reward
   nothing; does the harmony turn without drawing attention; do the stems
