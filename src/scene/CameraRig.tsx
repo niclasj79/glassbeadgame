@@ -977,7 +977,7 @@ export function CameraRig() {
       driftGate.current,
       musicalDt
     );
-    frameState.driftApplied = musicalDt > 0 ? angle / musicalDt : 0;
+    frameState.driftApplied = frameState.attunedAnswers.driftRate * driftGate.current;
     if (angle > 0) {
       // The idle orbit's own sense of turn, so a drift that follows it does not reverse.
       driftOffset.copy(state.camera.position).sub(ctl.target).applyAxisAngle(UP, -angle);

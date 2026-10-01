@@ -73,8 +73,9 @@ export const frameState = {
    */
   musicalDt: 0,
   /**
-   * The drift the rig actually applied on its last frame, radians per second.
-   * Read by the test adapter, so "the player took the camera" is measurable.
+   * The drift the rig is turning at, radians per musical second: the answers'
+   * rate through the rig's own gate. Read by the test adapter, so "the player
+   * took the camera" is measurable.
    */
   driftApplied: 0,
   /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */
