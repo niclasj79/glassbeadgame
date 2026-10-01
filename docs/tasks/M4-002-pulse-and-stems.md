@@ -398,7 +398,7 @@ of the cycle; they cannot establish that the bed is beautiful.
   Quality Gates as the pull request's head `09fd92c` (run `36835216939`);
   its own run on `main` (`36836406904`) was cancelled by the next push to
   `main` nine minutes later, so the first Pages deployment carrying it is
-  M4-003's, of `79e9953`. The human review
+  M4-003's, of `79e9953` (run `36838330165`). The human review
   boundary is not closed by the merge: the headphone session's questions
   below stand, and the Entropy consonance exception awaits the director's
   decision (ADR-017 and §18 still claim consonance for every concept; the
