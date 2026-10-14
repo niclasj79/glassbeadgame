@@ -282,7 +282,7 @@ cadence and not a snap, and that reduced motion keeps the state legible.
 - Accepted and merged in PR #73 on 2026-10-14 by the game design director,
   after the headphone and screen session. The `main` merge commit `fbe363f`
   runs Quality Gates as run `38598319627` and Pages deployment run
-  `M6001_DEPLOY`. The session's questions below were the director's to answer
+  `38599974663`. The session's questions below were the director's to answer
   at merge; nothing in them is recorded as a further decision here.
 
 - Proposed on 2026-09-30 with ADR-018 under the director's polish mandate;
