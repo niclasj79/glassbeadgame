@@ -32,8 +32,9 @@ ADR-016 and M4-001, the conductor, merged the same day in PR #65; ADR-017
 with M4-002, the pulse and the stems, merged in PR #70 and M4-003, the
 surface, in PR #71 on 2026-10-01 for the director's live testing. The
 director accepted the Entropy consonance exception (ADR-017, amended) and
-ADR-018 and ADR-019 with PR #69 the same day, and assigned M6-001, which is
-In progress; M4-004 stays Blocked until its packet is reviewed for Ready.
+ADR-018 and ADR-019 with PR #69 the same day, and assigned M6-001, which
+merged in PR #73 on 2026-10-14; M4-004 stays Blocked until its packet is
+reviewed for Ready.
 Awaiting the director: the headphone and screen sessions of M4-002 and
 M4-003.
 
@@ -43,9 +44,7 @@ None.
 
 ## In progress
 
-1. `M6-001-attunement.md` — Attunement as the heightened state: material,
-   sky, drift and cadence under ADR-018; directly assigned on 2026-10-01;
-   branch `codex/M6-001-attunement`.
+None.
 
 ## In review
 
@@ -116,6 +115,10 @@ None.
 28. `M4-003-surface.md` — accepted for live testing and merged in PR #71;
     dither in the final pass, the dust field that answers the beads'
     light, and one pass for all screen effects.
+29. `M6-001-attunement.md` — accepted and merged in PR #73 on 2026-10-14;
+    Attunement as the heightened state: one scalar the glass, the depth, the
+    sky and the camera's drift answer, and the bed's held chord released by
+    a cadence.
 
 ## Planned but not yet Ready
 
