@@ -17,6 +17,7 @@ import {
   UNARMED_LEAD_SECONDS,
   createConductor,
   gridAhead,
+  gridPointAtOrAfter,
   lightEnvelope,
 } from "./conductor";
 
@@ -80,6 +81,30 @@ describe("the conductor's grid", () => {
       expect(at).toBeLessThan(100.2 + lead + SLOT / HAND_DIVISION);
       const steps = (at - 100.15) / (SLOT / HAND_DIVISION);
       expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-6);
+    }
+  });
+
+  it("finds a grid's first point at or after a moment by one formula, the one `next` reads", () => {
+    // Binary-exact times, so no rounding decides what is on a point.
+    expect(gridPointAtOrAfter(0, 2, 0)).toBe(0);
+    expect(gridPointAtOrAfter(0, 2, 0.25)).toBe(2);
+    expect(gridPointAtOrAfter(0, 2, 2)).toBe(2);
+    expect(gridPointAtOrAfter(0, 2, 5)).toBe(6);
+    // Before the origin as well as after it.
+    expect(gridPointAtOrAfter(10, 2, 3.5)).toBe(4);
+    // The bed's cadence and the scene's release read the slot grid through it,
+    // so the two must be the same number to the bit (ADR-018).
+    const clock = clockAt(100);
+    const c = createConductor(clock);
+    c.arm({ slotSeconds: 2.4, origin: 100.15 });
+    for (const now of [100, 100.1, 101.3, 102.5, 117.77, 263.4]) {
+      clock.set(now);
+      for (const lead of [0, 0.05, 0.3]) {
+        expect(c.next(1, lead)).toBe(gridPointAtOrAfter(100.15, 2.4, now + lead));
+        expect(c.next(HAND_DIVISION, lead)).toBe(
+          gridPointAtOrAfter(100.15, 2.4 / HAND_DIVISION, now + lead)
+        );
+      }
     }
   });
 

@@ -32,9 +32,10 @@ ADR-016 and M4-001, the conductor, merged the same day in PR #65; ADR-017
 with M4-002, the pulse and the stems, merged in PR #70 and M4-003, the
 surface, in PR #71 on 2026-10-01 for the director's live testing. The
 director accepted the Entropy consonance exception (ADR-017, amended) and
-ADR-018 and ADR-019 with PR #69 the same day; M6-001 and M4-004 stay Blocked
-until their packets are reviewed for Ready. Awaiting the director: the
-headphone and screen sessions of M4-002 and M4-003.
+ADR-018 and ADR-019 with PR #69 the same day, and assigned M6-001, which is
+In progress; M4-004 stays Blocked until its packet is reviewed for Ready.
+Awaiting the director: the headphone and screen sessions of M4-002 and
+M4-003.
 
 ## Ready queue
 
@@ -42,7 +43,9 @@ None.
 
 ## In progress
 
-None.
+1. `M6-001-attunement.md` — Attunement as the heightened state: material,
+   sky, drift and cadence under ADR-018; directly assigned on 2026-10-01;
+   branch `codex/M6-001-attunement`.
 
 ## In review
 
@@ -55,10 +58,8 @@ None.
 
 ## Blocked queue
 
-1. `M6-001-attunement.md` — Attunement as the heightened state: material,
-   sky, drift and cadence under ADR-018; blocked behind M4-002.
-2. `M4-004-payoff-by-form.md` — the commit moment scales with the form of
-   the web under ADR-019; blocked behind M4-002.
+1. `M4-004-payoff-by-form.md` — the commit moment scales with the form of
+   the web under ADR-019; awaiting review for Ready.
 
 ## Completed
 

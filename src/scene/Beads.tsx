@@ -27,6 +27,7 @@ import {
   BEAD_PROXY_SEGMENTS,
   backdropResolution,
   beadProxyScale,
+  DISPERSION_SPLIT,
   createBeadGlassMaterial,
   wovenLight,
 } from "./glass";
@@ -264,6 +265,12 @@ export function Beads() {
     [theme, profile.budget, profile.reducedMotion]
   );
   useEffect(() => () => material.dispose(), [material]);
+
+  /** The theme's depth colour, which the held state deepens from (ADR-018). */
+  const restingDepth = useMemo(
+    () => new THREE.Color(theme.palette.depth),
+    [theme.palette.depth]
+  );
 
   /**
    * THE ROOM THE BEADS ARE CARRYING
@@ -555,6 +562,16 @@ export function Beads() {
     if (positions.length < count * 3) return;
 
     (material.uniforms.uTime as { value: number }).value = frameState.clock;
+    // The held state of Attunement (ADR-018): the glass bends harder and splits
+    // wider, and the room it carries deepens exactly as the vault does, because
+    // both are drawn from the same environment.
+    const attuned = frameState.attunedAnswers;
+    (material.uniforms.uIor as { value: number }).value = theme.refraction + attuned.ior;
+    (material.uniforms.uDispersion as { value: number }).value =
+      DISPERSION_SPLIT * attuned.dispersionScale;
+    (material.uniforms.uDepth as { value: THREE.Color }).value
+      .copy(restingDepth)
+      .multiplyScalar(attuned.depthScale);
 
     camQuaternion.copy(three.camera.quaternion);
     // Down and across the screen, in world space — labels hang from beads, not

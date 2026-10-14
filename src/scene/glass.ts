@@ -114,7 +114,12 @@ export const INK_VALUE = 0.56;
  */
 export const TRANSMIT_SPAN = 4.5;
 
-/** Index split between the red and blue images. Flint glass, not a rainbow. */
+/**
+ * Index split between the red and blue images. Flint glass, not a rainbow.
+ * The rest value of the `uDispersion` uniform: the held state of Attunement
+ * widens it by at most a third (ADR-018, `attuned.ts`), through the uniform,
+ * so entering never recompiles the glass.
+ */
 export const DISPERSION_SPLIT = 0.018;
 
 /**
@@ -380,6 +385,7 @@ precision highp float;
 uniform float uTime;
 uniform float uMotion;
 uniform float uIor;
+uniform float uDispersion;
 uniform float uInkSaturation;
 uniform vec3 uGold;
 uniform vec3 uPatina;
@@ -572,12 +578,8 @@ void main() {
   // Flint glass splits the world it carries. The two indices leave the far
   // surface along different rays, so the split opens toward the rim exactly
   // where the deviation does — which is where a real bead splits it too.
-  float bendR = gbgSphereDeviation(impact, uIor * ${glslFloat(
-    1 - DISPERSION_SPLIT
-  )});
-  float bendB = gbgSphereDeviation(impact, uIor * ${glslFloat(
-    1 + DISPERSION_SPLIT
-  )});
+  float bendR = gbgSphereDeviation(impact, uIor * (1.0 - uDispersion));
+  float bendB = gbgSphereDeviation(impact, uIor * (1.0 + uDispersion));
   body.r = gbgRoomOver(exitWorld, iDir * cos(bendR) + bendAxis * sin(bendR), sky).r;
   body.b = gbgRoomOver(exitWorld, iDir * cos(bendB) + bendAxis * sin(bendB), sky).b;
 #endif
@@ -695,6 +697,7 @@ export function createBeadGlassMaterial(
       uTime: { value: 0 },
       uMotion: { value: options.reducedMotion ? 0 : 1 },
       uIor: { value: theme.refraction },
+      uDispersion: { value: DISPERSION_SPLIT },
       uInkSaturation: { value: theme.inkSaturation },
       uGround: { value: new THREE.Color(p.ground) },
       uDepth: { value: new THREE.Color(p.depth) },

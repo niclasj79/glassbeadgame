@@ -18,7 +18,6 @@ import {
 } from "./constellationReveal";
 import { idleClock, travellingLight } from "./idle";
 import { presentationProfile } from "./quality";
-import { easeToward, useAttuned } from "./skyAttunement";
 import { getHaloTexture } from "./textures";
 import { glslFloat, VAULT } from "./firmamentGeometry";
 import {
@@ -289,7 +288,6 @@ function Vault() {
   const theme = useCurrentTheme();
   const tier = useStore((s) => s.settings.qualityTier);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
-  const attuned = useAttuned();
   const profile = useMemo(
     () => presentationProfile(tier, reducedMotion),
     [tier, reducedMotion]
@@ -326,16 +324,24 @@ function Vault() {
 
   useEffect(() => () => material.dispose(), [material]);
 
-  const held = useRef(0);
+  /** The theme's depth colour, which the held state deepens from (ADR-018). */
+  const restingDepth = useMemo(
+    () => new THREE.Color(theme.palette.depth),
+    [theme.palette.depth]
+  );
 
-  useFrame((_, dt) => {
+  useFrame(() => {
     (material.uniforms.uAwakening as { value: number }).value = frameState.awakening;
     const light = travellingLight(idleClock(), profile.reducedMotion);
     (material.uniforms.uSweepLon as { value: number }).value = light.longitude;
     (material.uniforms.uSweepColat as { value: number }).value = light.colatitude;
     (material.uniforms.uSweepGain as { value: number }).value = light.gain;
-    held.current = easeToward(held.current, attuned ? 1 : 0, Math.min(dt, 1 / 20));
-    (material.uniforms.uAttuned as { value: number }).value = held.current;
+    // The held state, as `Cosmos` stepped it: the drawing comes forward and the
+    // void deepens, together with everything else that answers it.
+    (material.uniforms.uAttuned as { value: number }).value = frameState.attuned.value;
+    (material.uniforms.uDepth as { value: THREE.Color }).value
+      .copy(restingDepth)
+      .multiplyScalar(frameState.attunedAnswers.depthScale);
   });
 
   return (
@@ -357,10 +363,10 @@ void main() {
   vMagnitude = aMagnitude;
   vFigure = aFigure;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  // In Attunement the drawn figures come forward and the unaffiliated field
-  // recedes — the sky becoming individually legible, exactly as the threads
-  // become individually audible (spec §13).
-  float attend = 1.0 + uAttuned * (aFigure > 0.5 ? 0.35 : -0.25);
+  // In Attunement the unaffiliated field recedes, so the drawn figures stand
+  // out; the figures themselves keep their size and brighten only as the
+  // threads' voices enter (the fragment stage, ADR-018).
+  float attend = aFigure > 0.5 ? 1.0 : 1.0 - 0.25 * uAttuned;
   gl_PointSize = uScale * (0.6 + aMagnitude) * (1.0 + 0.3 * uFlare) * attend / max(-mv.z, 1.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -371,13 +377,16 @@ precision highp float;
 uniform vec3 uStarlight;
 uniform float uFlare;
 uniform float uAttuned;
+uniform float uFigureGain;
 varying float vMagnitude;
 varying float vFigure;
 void main() {
   vec2 d = gl_PointCoord - 0.5;
   float r = length(d) * 2.0;
   float core = 1.0 - smoothstep(0.0, 0.85, r);
-  float attend = 1.0 + uAttuned * (vFigure > 0.5 ? 0.45 : -0.45);
+  // The drawn figures brighten with the voices heard in this hold, to at most
+  // half again their rest (uFigureGain, attuned.ts); the field recedes.
+  float attend = vFigure > 0.5 ? uFigureGain : 1.0 - 0.45 * uAttuned;
   float alpha = core * (0.25 + 0.75 * vMagnitude) * (0.75 + 0.35 * uFlare) * attend;
   if (alpha < 0.004) discard;
   gl_FragColor = vec4(uStarlight, clamp(alpha, 0.0, 1.0));
@@ -429,7 +438,6 @@ function Constellations() {
   const theme = useCurrentTheme();
   const tier = useStore((s) => s.settings.qualityTier);
   const reducedMotion = useStore((s) => s.settings.reducedMotion);
-  const attuned = useAttuned();
   /**
    * Which faculties the web has joined, read from the canonical session so a
    * replayed log lights the same sky. The outcome of a thread is not read: a
@@ -497,6 +505,7 @@ function Constellations() {
           uScale: { value: 155 },
           uFlare: { value: 0 },
           uAttuned: { value: 0 },
+          uFigureGain: { value: 1 },
         },
       }),
       // The drawn sky is a shell at a fixed radius, not an object standing in
@@ -530,14 +539,13 @@ function Constellations() {
     [starGeometry, lineGeometry, starMaterial, lineMaterial]
   );
 
-  const held = useRef(0);
-
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 20);
     frameState.flare = Math.max(0, frameState.flare - dt / 1.1);
     (starMaterial.uniforms.uFlare as { value: number }).value = frameState.flare;
-    held.current = easeToward(held.current, attuned ? 1 : 0, dt);
-    (starMaterial.uniforms.uAttuned as { value: number }).value = held.current;
+    (starMaterial.uniforms.uAttuned as { value: number }).value = frameState.attuned.value;
+    const figureGain = frameState.attunedAnswers.figureGain;
+    (starMaterial.uniforms.uFigureGain as { value: number }).value = figureGain;
     // The drawn figures keep their orientation; only the unaffiliated field
     // turns, and slowly enough to be felt rather than watched.
     if (group.current && !reducedMotion) {
@@ -546,8 +554,7 @@ function Constellations() {
     const breath =
       LINE_OPACITY +
       LINE_BREATH * Math.sin(frameState.breathPhase) * frameState.breathDepth;
-    (lineMaterial.uniforms.uOpacity as { value: number }).value =
-      breath * (1 + 0.9 * held.current);
+    (lineMaterial.uniforms.uOpacity as { value: number }).value = breath * figureGain;
     // The figures assemble toward what the web has joined — a fade, not a
     // snap, and the same under reduced motion, because nothing travels.
     easeReveal(reveal.current, revealTarget, dt);

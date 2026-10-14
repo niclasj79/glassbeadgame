@@ -155,6 +155,19 @@ export function gridAhead(slotSeconds: number, nowSeconds: number): GridArming {
   return { slotSeconds, origin: nowSeconds + FIRST_SLOT_LEAD_SECONDS };
 }
 
+/**
+ * The first point of the grid of `step` seconds through `origin` that falls at
+ * or after `from`. One formula for every reader of a grid: the conductor's
+ * `next`, and the bed choosing where Attunement's cadence begins (ADR-018), so
+ * the scene and the bed computing the same moment on the same grid get the
+ * same number to the bit.
+ */
+export function gridPointAtOrAfter(origin: number, step: number, from: number): number {
+  const until = origin - from;
+  const phase = ((until % step) + step) % step;
+  return from + phase;
+}
+
 /** Shape of one light in time, from `elapsed` seconds after its onset. */
 export function lightEnvelope(
   elapsed: number,
@@ -196,14 +209,10 @@ export function createConductor(clock: ConductorClock): Conductor {
   const next = (division: GridDivision, lead = GRID_LEAD_SECONDS): number => {
     const now = clock.now();
     if (!armed) return now + UNARMED_LEAD_SECONDS;
-    const grid = slot / division;
     // Measured from the lead itself rather than from now, so that a lead longer
     // than one grid step (a sighting deferred to the end of its window) still
     // lands on the first point at or after it, not one step short of it.
-    const from = now + lead;
-    const until = origin - from;
-    const phase = ((until % grid) + grid) % grid;
-    return from + phase;
+    return gridPointAtOrAfter(origin, slot / division, now + lead);
   };
 
   const slotPhase = (now = clock.now()): number => {

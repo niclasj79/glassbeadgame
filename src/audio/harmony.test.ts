@@ -11,11 +11,14 @@ import { CASTALIA_CONCEPTS } from "@/content/castalia";
 import { aurora, castalia, ember, tide } from "@/themes/worlds";
 import { COMFORT } from "./comfort";
 import {
+  cadenceArrival,
   chordFor,
   groundStrike,
   groundStrikeSlots,
+  holdsThroughCadence,
   identityIsConsonant,
   leadVoices,
+  nextPhraseStart,
   nextVoicing,
   rootForPhrase,
   voiceChord,
@@ -297,6 +300,90 @@ describe("the ground's strike", () => {
           COMFORT.voice.maxLifetimeSeconds
         );
       }
+    }
+  });
+});
+
+describe("Attunement's cadence (ADR-018)", () => {
+  it("holds the root through the cadence and resolves the fifth and the colour, over every chord of the cycle", () => {
+    voicings(4).forEach((pad, phrase) => {
+      const root = rootForPhrase(phrase);
+      const ground = groundStrike(root, pad, 24, 0.14);
+      const holding = ground.filter((voice) => holdsThroughCadence(root, voice.degree));
+      // The drone and the pad's one voice on the root; nothing else.
+      expect(holding.map((voice) => [voice.timbre, pitchClass(voice.degree)])).toEqual([
+        ["glass", pitchClass(root)],
+        ["voice", pitchClass(root)],
+      ]);
+      const [, fifth, colour] = chordFor(root);
+      expect(
+        new Set(pad.filter((degree) => !holdsThroughCadence(root, degree)).map(pitchClass))
+      ).toEqual(new Set([fifth, colour]));
+    });
+    // By pitch class, in any octave.
+    expect(holdsThroughCadence(5, 29)).toBe(true);
+    expect(holdsThroughCadence(5, -7)).toBe(true);
+    expect(holdsThroughCadence(5, 12)).toBe(false);
+  });
+
+  it("arrives on the root an octave above the pad's, above every voice of the pad, in the pad's body and at its level", () => {
+    const slotSeconds = 2;
+    voicings(4).forEach((pad, phrase) => {
+      const root = rootForPhrase(phrase);
+      const padRoot = pad.find((degree) => pitchClass(degree) === pitchClass(root));
+      expect(padRoot).toBeDefined();
+      const arrival = cadenceArrival(root, pad, slotSeconds);
+      expect(arrival.degree).toBe((padRoot as number) + 12);
+      expect(pitchClass(arrival.degree)).toBe(pitchClass(root));
+      for (const degree of pad) expect(arrival.degree).toBeGreaterThan(degree);
+      expect(arrival.timbre).toBe("voice");
+      expect(arrival.gain).toBe(SCORE.harmony.padGain);
+      // An octave, exactly: the arrival locks with the root it doubles.
+      expect(
+        degreeFrequency(CASTALIA_MODE, arrival.degree, "low") /
+          degreeFrequency(CASTALIA_MODE, padRoot as number, "low")
+      ).toBeCloseTo(2, 12);
+    });
+    expect(voicings(4).map((pad, phrase) => cadenceArrival(rootForPhrase(phrase), pad, 2).degree)).toEqual(
+      [24, 29, 21, 19]
+    );
+  });
+
+  it("swells over the cadence's slot and hands over across the crossfade, inside the lifetime bound in every world", () => {
+    for (const world of WORLDS) {
+      const slot = world.music.slotSeconds;
+      const arrival = cadenceArrival(0, [7, 12, 16], slot);
+      // At its peak exactly on the boundary the next phrase's chord begins on.
+      expect(arrival.attack).toBe(slot);
+      expect(arrival.hold).toBe(0);
+      expect(arrival.release).toBe(SCORE.harmony.crossfadeSeconds);
+      expect(arrival.attack + arrival.hold + arrival.release).toBeLessThanOrEqual(
+        COMFORT.voice.maxLifetimeSeconds
+      );
+    }
+  });
+
+  it("takes the root from the pad's floor where a pad holds no voice on it, and the highest where it holds two", () => {
+    // The floor is G2 (7): the first C at or above it is 12, an octave up is 24.
+    expect(cadenceArrival(0, [7, 16, 19], 2).degree).toBe(24);
+    expect(cadenceArrival(0, [12, 16, 24], 2).degree).toBe(36);
+  });
+
+  it("resumes on the phrase after the one it paused in, never skipping one", () => {
+    const phrase = SCORE.harmony.phraseSlots;
+    // The harmony that has advanced 1–12 slots stands on the first phrase's
+    // chord (the twelfth slot is its last), so it resumes on the second.
+    for (const advanced of [1, 2, phrase - 1, phrase]) expect(nextPhraseStart(advanced)).toBe(phrase);
+    for (const advanced of [phrase + 1, 2 * phrase]) expect(nextPhraseStart(advanced)).toBe(2 * phrase);
+    expect(nextPhraseStart(2 * phrase + 1)).toBe(3 * phrase);
+    // A chord struck under a hold before the clock moved at all is the first
+    // phrase's, and the cadence closes it.
+    expect(nextPhraseStart(0)).toBe(phrase);
+    for (let advanced = 0; advanced <= 5 * phrase; advanced += 1) {
+      const resume = nextPhraseStart(advanced);
+      expect(resume % phrase).toBe(0);
+      // The phrase resumed on is the one after the phrase of the last advanced slot.
+      expect(resume / phrase).toBe(Math.floor(Math.max(0, advanced - 1) / phrase) + 1);
     }
   });
 });

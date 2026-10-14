@@ -1,7 +1,15 @@
+import { conductor } from "@/audio/conductor";
+import { SCORE } from "@/audio/score";
 import type { SceneStage } from "@/runtime/scene";
 import { presentationNow } from "@/runtime/testMode";
 import { useStore } from "@/state/store";
 import { currentTheme } from "@/themes/useTheme";
+import {
+  resetAttuned,
+  restingAnswers,
+  restingAttuned,
+  type AttunedAnswers,
+} from "./attuned";
 
 /**
  * Per-frame mutable state shared across scene components, deliberately outside
@@ -45,6 +53,31 @@ export const frameState = {
   lens: { x: 0.5, y: 0.5, active: false },
   /** Bead currently magnetized as the thread's landing candidate. */
   snapId: null as string | null,
+  /**
+   * The held state of Attunement (ADR-018): one scalar, stepped once a frame by
+   * `Cosmos`, and the answers computed from it there. Every reader applies the
+   * answers as written; none keeps an attuned state of its own (`attuned.ts`).
+   */
+  attuned: restingAttuned(),
+  attunedAnswers: restingAnswers() as AttunedAnswers,
+  /**
+   * What the cue said, on the conductor's clock: when this hold began (a voice
+   * heard before it is not this hold's) and the slot boundary its release is to
+   * begin on, chosen at the cue exactly as the bed chooses its cadence's.
+   */
+  attunement: { since: 0, cadenceAt: null as number | null },
+  /**
+   * Musical seconds since the last frame: the conductor's clock while the grid
+   * is armed (in test mode, the controlled clock), the frame's otherwise.
+   * Written by `Cosmos`; what is timed on the music moves on it.
+   */
+  musicalDt: 0,
+  /**
+   * The drift the rig is turning at, radians per musical second: the answers'
+   * rate through the rig's own gate. Read by the test adapter, so "the player
+   * took the camera" is measurable.
+   */
+  driftApplied: 0,
   /** Motif pulses scheduled by the ambient engine (audio-clock timestamps). */
   pulses: [] as { threadId: string; atAudioTime: number; duration: number; flip: boolean }[],
   /** Pending particle-burst spawn requests, consumed by scene/Bursts. */
@@ -111,6 +144,12 @@ export function initFramePositions(beadIds: string[], initial: Float32Array): vo
   frameState.flare = 0;
   frameState.kick = 0;
   frameState.bursts.length = 0;
+  // Nor its held state: Attunement is ephemeral, and a new Game opens at rest.
+  resetAttuned(frameState.attuned);
+  Object.assign(frameState.attunedAnswers, restingAnswers());
+  frameState.attunement.since = 0;
+  frameState.attunement.cadenceAt = null;
+  frameState.driftApplied = 0;
   frameState.cameraSettled = false;
   frameState.framesSinceLayout = 0;
   frameState.idleSince = presentationNow();
@@ -258,10 +297,23 @@ export const frameStateStage: SceneStage = Object.freeze({
   },
 
   setAttuned: (active: boolean) => {
-    // The world is held rather than decorated: time itself thins, which every
-    // shader, every drift and every particle already reads through
-    // `frameState.clock`. Nothing new is drawn to say Attunement is on.
+    // Time itself thins, which every shader, every drift and every particle
+    // already reads through `frameState.clock`.
     frameState.timeScaleTarget = active ? ATTUNED_TIME_SCALE : 1;
+    // The held state's own clock marks (ADR-018). Entering, the voices heard
+    // from now are this hold's. Releasing, the world lifts back from the first
+    // slot boundary at least the cadence's lead ahead — read here, at the cue,
+    // because the bed reads the same grid at the same cue and must choose the
+    // same boundary for its chord to resolve with the light. Without a grid the
+    // release begins at once.
+    if (active) {
+      frameState.attunement.since = conductor.now();
+      frameState.attunement.cadenceAt = null;
+    } else {
+      frameState.attunement.cadenceAt = conductor.armed()
+        ? conductor.next(1, SCORE.harmony.cadenceLeadSeconds)
+        : null;
+    }
   },
 
   touch: () => {

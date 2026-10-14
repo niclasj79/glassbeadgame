@@ -198,6 +198,21 @@ export interface AudioSink {
    * given one phrase of it (ADR-017). Optional, as `pulseFill` is.
    */
   readonly pulseSecondVoice?: (untilSlots: number) => void;
+  /**
+   * ATTUNEMENT HOLDS THE BED'S CHORD (ADR-018).
+   *
+   * While Attunement is held the bed's chord sustains without its phrase
+   * movement; released, it plays the cadence — the held chord resolves to the
+   * root of the phrase it paused in over one slot on the conductor's grid, and
+   * the phrase clock resumes at the next boundary. The director holds it before
+   * Attunement thins the space and its channels begin, releases it when
+   * Attunement ends, and releases it again when the conclusion begins, because
+   * the domain closes Attunement in the log before concluding and publishes no
+   * cue of its own for it. Asked at every intensity, silent included: muting
+   * strips the sound, never the schedule. Optional, because a sink that keeps no
+   * bed is still a lawful sink.
+   */
+  readonly holdHarmony?: (held: boolean) => void;
 }
 
 /**
@@ -732,6 +747,11 @@ export function createAudioDirector(
   };
 
   const handleAttunement = (active: boolean): AttunementPlan | null => {
+    // The bed's chord holds before the space thins and the channels begin, so
+    // they are heard over a chord that has stopped moving. Released, it plays
+    // its cadence before the space returns, so the cadence is struck at the
+    // level the chord was held at and the room rises over it (ADR-018).
+    sink.holdHarmony?.(active);
     if (!active) {
       setSpace(ATTENTION_RELEASED.densityScale, ATTENTION_RELEASED.bedGainScale);
       say(
@@ -775,6 +795,11 @@ export function createAudioDirector(
   };
 
   const handleConclusion = (performance: unknown): ConclusionAudioPlan | null => {
+    // Concluding from inside Attunement closes it in the log without a cue of
+    // its own, so the conclusion is what releases the bed's held chord — and
+    // its cadence plays as any release's does. Whether or not the performance
+    // can be read: Attunement has ended either way.
+    sink.holdHarmony?.(false);
     if (!isPerformanceScore(performance)) {
       say(
         "conclusion:invalid",

@@ -6,7 +6,8 @@
  * (`SCORE.harmony.rootCycle`), the pad is a chord of three voices led to the
  * nearest tones of the next chord, and the drone and the pad turn together on
  * the phrase boundary, the old chord releasing over the seconds the new one
- * attacks in.
+ * attacks in. Attunement holds the chord and lets it go with a cadence
+ * (ADR-018), whose plan is here too.
  *
  * Pure. No Web Audio. The bed reads it from its first slot, so it is in the
  * first load and kept small.
@@ -190,4 +191,58 @@ export function groundStrike(
       ...envelope,
     })),
   ];
+}
+
+/**
+ * ATTUNEMENT'S CADENCE (ADR-018).
+ *
+ * While Attunement is held the bed's chord sustains; released, it resolves to
+ * its root over one slot. Only the root's pitch class holds through the
+ * cadence — the drone and the pad's voice on the root carry across to the next
+ * phrase's chord — while the fifth and the colour release over the cadence's
+ * slot, so what is left at the boundary is the root the phrase stood on.
+ */
+export function holdsThroughCadence(root: number, degree: number): boolean {
+  return pitchClass(degree) === pitchClass(root);
+}
+
+/**
+ * The one voice a cadence arrives on: the root an octave above the pad's own,
+ * swelling over the cadence's slot to the boundary where the next phrase
+ * begins, and handing over to it there over the crossfade. It is the pad's
+ * body at the pad's level, so the resolution is heard as the chord's own root
+ * opening upward rather than as something new entering. Every voicing the
+ * cycle leads to has one voice on its root; a pad doubling the root is taken
+ * from its highest, and one without the root from the root's first degree at
+ * or above the pad's floor.
+ */
+export function cadenceArrival(
+  root: number,
+  pad: readonly number[],
+  slotSeconds: number
+): GroundVoice {
+  const onRoot = pad.filter((degree) => holdsThroughCadence(root, degree));
+  const { padFloor } = SCORE.harmony;
+  const padRoot =
+    onRoot.length > 0 ? Math.max(...onRoot) : padFloor + pitchClass(root - padFloor);
+  return {
+    timbre: "voice",
+    degree: padRoot + 12,
+    gain: SCORE.harmony.padGain,
+    attack: slotSeconds,
+    hold: 0,
+    release: SCORE.harmony.crossfadeSeconds,
+  };
+}
+
+/**
+ * Where the harmony resumes after a cadence: the first slot of the phrase after
+ * the one it paused in. `advanced` is how many slots the harmony had advanced,
+ * and the phrase it paused in is the one its last advanced slot belongs to —
+ * the first, if it had advanced none — so the cadence closes the phrase whose
+ * chord it resolves, never one whose chord was not yet struck.
+ */
+export function nextPhraseStart(advanced: number): number {
+  const { phraseSlots } = SCORE.harmony;
+  return Math.max(1, Math.ceil(advanced / phraseSlots)) * phraseSlots;
 }

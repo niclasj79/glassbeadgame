@@ -1,5 +1,10 @@
 import { audio } from "./engine";
-import { CHOIR_LIGHT_WEIGHT, conductor, gridAhead } from "./conductor";
+import {
+  CHOIR_LIGHT_WEIGHT,
+  conductor,
+  gridAhead,
+  gridPointAtOrAfter,
+} from "./conductor";
 import {
   noteSeconds,
   playNote,
@@ -10,11 +15,15 @@ import {
 } from "./voices";
 import { beadVoice, modeFreq } from "./theory";
 import {
+  cadenceArrival,
   chordFor,
   groundStrike,
   groundStrikeSlots,
+  holdsThroughCadence,
+  nextPhraseStart,
   nextVoicing,
   rootForPhrase,
+  type GroundVoice,
 } from "./harmony";
 import { castaliaConceptById } from "@/content/castalia";
 import { hashString, mulberry32 } from "@/lib/utils";
@@ -39,7 +48,8 @@ import type { PulseOnset } from "./pulse";
  * attention and Attunement thin the texture: they hand the score a density
  * multiplier and a bed level, and the score decides what to do with them. The
  * attention planner never reaches in and silences a particular voice — leaving
- * space is the score's own act (VERTICAL-SLICE-SPEC section 6).
+ * space is the score's own act (VERTICAL-SLICE-SPEC section 6). Attunement also
+ * holds the bed's chord, and its release is the bed's cadence (`holdHarmony`).
  */
 
 const TICK_MS = 25;
@@ -134,6 +144,34 @@ export function loadPulse(): Promise<PulseModules | null> {
  */
 const PULSE_MEMORY_SLOTS = 3;
 
+/**
+ * Two moments on the grid closer than this are the same boundary: a written
+ * slot's start is a running sum of slots, a cadence's boundary is measured from
+ * the origin, and the two may disagree in the last bits.
+ */
+const SAME_MOMENT_SECONDS = 1e-6;
+
+/** A voice of the ground as struck, so the bed can let it go: at a cadence, or when it stops. */
+interface GroundRecord {
+  readonly timbre: TimbreId;
+  readonly degree: number;
+  readonly retire: RetireVoice;
+  /** When it falls silent: its envelope's end, or its fade's once it is let go. */
+  endsAt: number;
+  /** When its fade begins, once it has been let go. */
+  letGoAt: number | null;
+}
+
+/** Attunement's cadence (ADR-018), from its release until the harmony resumes. */
+interface PendingCadence {
+  /** The slot boundary the cadence begins on, on the audio clock. */
+  readonly at: number;
+  /** One slot later: the boundary the next phrase's chord is struck on. */
+  readonly resumeAt: number;
+  /** The harmonic slot the phrase clock resumes on there. */
+  readonly resumeHarmonicSlot: number;
+}
+
 class AmbientEngine {
   private timer: number | null = null;
   private nextSlotTime = 0;
@@ -160,8 +198,22 @@ class AmbientEngine {
   private rootDegree = 0;
   /** The pad's voices as last led, in the low register; null before the first chord. */
   private padVoices: readonly number[] | null = null;
-  /** The ground still sounding, so the bed can let it go when it stops. */
-  private groundVoices: { readonly retire: RetireVoice; readonly endsAt: number }[] = [];
+  /** The ground still sounding, so the bed can let it go. */
+  private groundVoices: GroundRecord[] = [];
+  /** The grid's origin: the first slot's start, where `start()` armed the conductor. */
+  private gridOrigin = 0;
+  /**
+   * THE PHRASE CLOCK: how many slots the harmony has advanced. Without
+   * Attunement it is the bed's own slot count; a held chord has no phrase
+   * movement (ADR-018), so while Attunement holds it the clock waits.
+   */
+  private harmonicSlot = 0;
+  /** Attunement is holding the chord. */
+  private held = false;
+  /** The slot the ground was last struck in. */
+  private lastStrikeSlot = Number.NEGATIVE_INFINITY;
+  /** The cadence that released the hold, until the harmony resumes after it. */
+  private cadence: PendingCadence | null = null;
   /** The woven threads seated in each faculty: who the stems play for (ADR-017). */
   private facultyThreads = new Map<FacultyId, Set<string>>();
   /** Space the semantic layer has asked for: density and bed multipliers. */
@@ -201,6 +253,7 @@ class AmbientEngine {
     this.motifPatterns = [];
     this.rootDegree = 0;
     this.padVoices = null;
+    this.resetHarmony();
     this.densityScale = 1;
     this.bedScale = 1;
     this.slot = 0;
@@ -209,6 +262,7 @@ class AmbientEngine {
     // music (ADR-016).
     const grid = gridAhead(this.slotS, ctx.currentTime);
     this.nextSlotTime = grid.origin;
+    this.gridOrigin = grid.origin;
     conductor.arm(grid);
     // A previous session may have ended: the loop was told to stop and the bed
     // was ramped to silence. Both have to be released, or the new session opens
@@ -253,6 +307,8 @@ class AmbientEngine {
     this.motifs = [];
     this.facultyThreads = new Map();
     this.releaseGround();
+    // A hold or a cadence belongs to the composition that asked for it.
+    this.resetHarmony();
     // A previous session's completed motifs may not keep their seats in the
     // next one. `start()` already resets them, but a session that never reaches
     // `start()` — no audio context yet — would otherwise inherit an ensemble
@@ -437,6 +493,46 @@ class AmbientEngine {
     );
   }
 
+  /**
+   * ATTUNEMENT HOLDS THE CHORD, AND LETS IT GO WITH A CADENCE (ADR-018).
+   *
+   * Held, the phrase clock stops: the root and the pad's voicing stay as they
+   * are, and the ground is struck again on that same chord at its usual
+   * interval, so the chord sustains through a hold of any length while no voice
+   * outlives the comfort table's 30 s.
+   *
+   * Released, the cadence, on the first slot boundary at least the score's
+   * `cadenceLeadSeconds` ahead — the moment the scene reads from the conductor
+   * at the same cue, so the world lifts on the slot the chord resolves on.
+   * Across that slot the fifth and the colour release, the root holds, and one
+   * voice arrives on the root an octave above the pad's; on the next boundary
+   * the next phrase's chord is struck, led from the held voicing, and the clock
+   * resumes there. The cadence closes the phrase it paused in: the phrase was
+   * heard as far as Attunement let it go, and is not taken up again halfway.
+   * The cadence's slot carries no stem and no pulse: the bed's movement rests
+   * while the chord resolves, and the heartbeat keeps the slot.
+   *
+   * Held again before the cadence has closed, the cadence is taken back: the
+   * harmony stays on the phrase it paused in, and the chord the cadence had
+   * begun to let go is struck again on the first boundary the lead allows —
+   * the cadence's own, while that is still ahead, so a cadence taken back
+   * before it begins is never heard.
+   */
+  holdHarmony(held: boolean): void {
+    if (held === this.held) return;
+    this.held = held;
+    // A cadence is only ever pending while nothing holds the chord.
+    const cadence = this.cadence;
+    this.cadence = null;
+    const ctx = audio.get();
+    const ground = audio.breathFilter ?? audio.ambientBus;
+    const pad = this.padVoices;
+    // Nothing struck yet, or no bed to strike in: nothing to keep or resolve.
+    if (ctx === null || ground === null || pad === null || !this.running) return;
+    if (!held) this.beginCadence(ctx, ground, pad);
+    else if (cadence !== null) this.strikeAgain(ctx, ground, cadence);
+  }
+
   /** Camera azimuth → gentle stereo drift of the room tone. */
   setAirPan(pan: number): void {
     const ctx = audio.get();
@@ -543,10 +639,10 @@ class AmbientEngine {
   }
 
   /**
-   * One strike of the ground (`groundStrike`): on a phrase boundary the pad is
-   * first led to the new root's chord. Tuned exactly, because the chord's
-   * intervals are just ratios whose point is that they lock; seeded, so the
-   * same slot is humanised the same way on every replay.
+   * One strike of the ground (`groundStrike`) on the chord as it stands, held
+   * for `strikeSlots` slots. The pad is led to a new root's chord on the phrase
+   * boundary, before the strike; only a hold from the bed's very first slot
+   * reaches here with no chord yet, and voices it from the pad's floor.
    */
   private strikeGround(
     ctx: AudioContext,
@@ -555,27 +651,65 @@ class AmbientEngine {
     slot: number,
     strikeSlots: number
   ): void {
-    if (this.padVoices === null || slot % SCORE.harmony.phraseSlots === 0) {
-      this.padVoices = nextVoicing(this.padVoices, this.rootDegree);
-    }
+    const pad = (this.padVoices ??= nextVoicing(null, this.rootDegree));
+    this.lastStrikeSlot = slot;
+    this.playGround(
+      ctx,
+      ground,
+      t,
+      `ground:${slot}`,
+      groundStrike(this.rootDegree, pad, strikeSlots * this.slotS, this.droneGain)
+    );
+  }
+
+  /**
+   * Voices of the ground from `t`, each remembered with its body and degree so
+   * the bed can let it go. Tuned exactly, because the chord's intervals are just
+   * ratios whose point is that they lock; seeded, so the same slot is humanised
+   * the same way on every replay.
+   */
+  private playGround(
+    ctx: AudioContext,
+    ground: AudioNode,
+    t: number,
+    seed: string,
+    voices: readonly GroundVoice[]
+  ): void {
     const now = ctx.currentTime;
     this.groundVoices = this.groundVoices.filter((voice) => voice.endsAt > now);
-    const span = strikeSlots * this.slotS;
-    for (const voice of groundStrike(this.rootDegree, this.padVoices, span, this.droneGain)) {
+    for (const voice of voices) {
+      const { timbre, degree } = voice;
       const endsAt = t + voice.attack + voice.hold + voice.release;
       playVoice(ctx, ground, {
-        timbre: voice.timbre,
-        frequency: modeFreq(voice.degree, "low"),
+        timbre,
+        frequency: modeFreq(degree, "low"),
         gain: voice.gain * this.bedScale,
         at: t,
         attack: voice.attack,
         hold: voice.hold,
         release: voice.release,
-        seed: `ground:${slot}:${voice.timbre}:${voice.degree}`,
+        seed: `${seed}:${timbre}:${degree}`,
         exactTuning: true,
-        onRetire: (retire) => this.groundVoices.push({ retire, endsAt }),
+        onRetire: (retire) =>
+          this.groundVoices.push({ timbre, degree, retire, endsAt, letGoAt: null }),
       });
     }
+  }
+
+  /**
+   * Let a voice of the ground go: fade it from `at` over `fade`. Once let go, a
+   * voice is let go again only to silence it sooner from a moment before its
+   * fade begins. A fade that has begun is never restarted: taking it back would
+   * lift the voice to full before cutting it, which is a click, not a release.
+   */
+  private letGo(voice: GroundRecord, at: number, fade: number): void {
+    if (voice.endsAt <= at) return;
+    if (voice.letGoAt !== null && (at >= voice.letGoAt || at + fade >= voice.endsAt)) {
+      return;
+    }
+    voice.retire(at, fade);
+    voice.letGoAt = at;
+    voice.endsAt = Math.min(voice.endsAt, at + fade);
   }
 
   /**
@@ -588,10 +722,110 @@ class AmbientEngine {
     if (ctx !== null) {
       const now = ctx.currentTime;
       for (const voice of this.groundVoices) {
-        if (voice.endsAt > now) voice.retire(now, SCORE.harmony.crossfadeSeconds);
+        this.letGo(voice, now, SCORE.harmony.crossfadeSeconds);
       }
     }
     this.groundVoices = [];
+  }
+
+  /** Every session's harmony begins at home and unheld, its clock at the top. */
+  private resetHarmony(): void {
+    this.harmonicSlot = 0;
+    this.held = false;
+    this.lastStrikeSlot = Number.NEGATIVE_INFINITY;
+    this.cadence = null;
+  }
+
+  /**
+   * The first boundary of the bed's grid at least the cadence's lead ahead: the
+   * conductor's `next(1, cadenceLeadSeconds)` at the same moment, by the same
+   * formula from the same origin, because the scene reads it there.
+   */
+  private cadenceBoundary(ctx: AudioContext): number {
+    return gridPointAtOrAfter(
+      this.gridOrigin,
+      this.slotS,
+      ctx.currentTime + SCORE.harmony.cadenceLeadSeconds
+    );
+  }
+
+  /** The slot of the bed's grid that begins at `t`. */
+  private slotAt(t: number): number {
+    return Math.round((t - this.gridOrigin) / this.slotS);
+  }
+
+  /**
+   * THE CADENCE (ADR-018), from the release that asked for it. Whatever of it
+   * falls inside the slots already written is scheduled on them now: the
+   * ground's voices are long-held, and a voice may begin at any moment ahead.
+   * The lookahead is shorter than any world's slot, so the slot it resumes on
+   * is never one already written.
+   */
+  private beginCadence(
+    ctx: AudioContext,
+    ground: AudioNode,
+    pad: readonly number[]
+  ): void {
+    const at = this.cadenceBoundary(ctx);
+    const resumeAt = at + this.slotS;
+    const slot = this.slotAt(at);
+    const root = this.rootDegree;
+    // The fifth and the colour release across the cadence's slot; the drone and
+    // the pad's root hold to the boundary after it and hand over there to the
+    // next phrase's chord, as the ground always turns.
+    for (const voice of this.groundVoices) {
+      if (holdsThroughCadence(root, voice.degree)) {
+        this.letGo(voice, resumeAt, SCORE.harmony.crossfadeSeconds);
+      } else {
+        this.letGo(voice, at, this.slotS);
+      }
+    }
+    const voices: GroundVoice[] = [cadenceArrival(root, pad, this.slotS)];
+    // Held, the chord would have been struck again on this very slot, where its
+    // voices begin to release: the root alone is struck there instead, so it
+    // still carries the cadence to the boundary.
+    if (slot - this.lastStrikeSlot >= groundStrikeSlots(this.slotS)) {
+      voices.push(
+        ...groundStrike(root, pad, this.slotS, this.droneGain).filter((voice) =>
+          holdsThroughCadence(root, voice.degree)
+        )
+      );
+      this.lastStrikeSlot = slot;
+    }
+    this.playGround(ctx, ground, at, `cadence:${slot}`, voices);
+    // The cadence's slot takes no weave's fill either, even where it was
+    // written before the release.
+    for (const written of this.pulseWritten.keys()) {
+      if (written >= slot) this.pulseWritten.delete(written);
+    }
+    this.cadence = {
+      at,
+      resumeAt,
+      resumeHarmonicSlot: nextPhraseStart(this.harmonicSlot),
+    };
+  }
+
+  /**
+   * The cadence is taken back. What it had begun to let go hands over to the
+   * held chord, struck again on the first boundary the lead allows; a voice
+   * already fading keeps its fade, and the arrival, if it has not begun, never
+   * does. The boundary is the cadence's own or the one it resumes on wherever
+   * either is still ahead, named as the cadence named it, so the voices it
+   * scheduled are met at exactly their own moments.
+   */
+  private strikeAgain(
+    ctx: AudioContext,
+    ground: AudioNode,
+    cadence: PendingCadence
+  ): void {
+    const from = ctx.currentTime + SCORE.harmony.cadenceLeadSeconds;
+    const at =
+      [cadence.at, cadence.resumeAt].find((boundary) => boundary >= from) ??
+      this.cadenceBoundary(ctx);
+    for (const voice of this.groundVoices) {
+      this.letGo(voice, at, SCORE.harmony.crossfadeSeconds);
+    }
+    this.strikeGround(ctx, ground, at, this.slotAt(at), groundStrikeSlots(this.slotS));
   }
 
   /**
@@ -654,10 +888,40 @@ class AmbientEngine {
     // degrees 9 and 14: in this tuning that is 27/20, a comma wider than 4/3,
     // so it beat.) Both route through the breath filter — the wave the whole
     // cosmos inhales on.
-    this.rootDegree = rootForPhrase(Math.floor(slot / SCORE.harmony.phraseSlots));
+    //
+    // The phrase is counted on the harmony's own clock, not the grid's, because
+    // Attunement stops it (ADR-018). Held, the chord is struck again on itself
+    // at its usual interval, so it sustains without moving and without a voice
+    // outliving its bound; released, the cadence's slot strikes nothing, and
+    // the slot after it resumes on the next phrase.
     const ground = audio.breathFilter ?? bus;
     const strikeSlots = groundStrikeSlots(this.slotS);
-    if (slot % strikeSlots === 0) this.strikeGround(ctx, ground, t, slot, strikeSlots);
+    const cadence = this.cadence;
+    const inCadence =
+      cadence !== null && t < cadence.resumeAt - SAME_MOMENT_SECONDS;
+    if (cadence !== null && !inCadence) {
+      this.cadence = null;
+      this.harmonicSlot = cadence.resumeHarmonicSlot;
+    }
+    if (inCadence) {
+      // A fill a weave asked of this slot goes with its pulse.
+      this.fillSlots.delete(slot);
+    } else if (this.held) {
+      if (slot - this.lastStrikeSlot >= strikeSlots) {
+        this.strikeGround(ctx, ground, t, slot, strikeSlots);
+      }
+    } else {
+      const { phraseSlots } = SCORE.harmony;
+      const harmonic = this.harmonicSlot;
+      this.rootDegree = rootForPhrase(Math.floor(harmonic / phraseSlots));
+      if (harmonic % strikeSlots === 0) {
+        if (this.padVoices === null || harmonic % phraseSlots === 0) {
+          this.padVoices = nextVoicing(this.padVoices, this.rootDegree);
+        }
+        this.strikeGround(ctx, ground, t, slot, strikeSlots);
+      }
+      this.harmonicSlot = harmonic + 1;
+    }
 
     // The heartbeat: past half-awakening, a low pulse enters on each slot —
     // the stage is alive and knows it.
@@ -723,10 +987,14 @@ class AmbientEngine {
       }
     }
 
-    this.scheduleStems(ctx, t, slot);
-    // The pulse keeps the slot whether or not the choir has a voice to seat:
-    // it follows the web's awakening, not the choir's roll (M4-002).
-    this.schedulePulse(ctx, t, slot);
+    // The bed's movement rests while the cadence resolves: its slot has no stem
+    // and no pulse, and the heartbeat keeps it.
+    if (!inCadence) {
+      this.scheduleStems(ctx, t, slot);
+      // The pulse keeps the slot whether or not the choir has a voice to seat:
+      // it follows the web's awakening, not the choir's roll (M4-002).
+      this.schedulePulse(ctx, t, slot);
+    }
 
     // The choir: each thread's motif speaks with probability scaled by
     // density, thickening as the session awakens.
